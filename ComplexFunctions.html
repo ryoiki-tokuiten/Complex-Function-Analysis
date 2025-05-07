@@ -1,0 +1,683 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Advanced Complex Function Visualization</title>
+    <style>
+        body {
+            font-family: 'SF Pro Rounded', 'SF Pro Display', Geneva, Verdana, sans-serif;
+            background: linear-gradient(125deg, #101828, #0f1419, #151a27);
+            color: #ffffff;
+            position: relative;
+            margin: 0;
+            padding: 0;
+            min-height: 100vh;
+            overflow-x: hidden;
+        }
+
+        body::before {
+            content: ''; position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+            background-image: radial-gradient(#ffffff18 1px, transparent 1px), radial-gradient(#ffffff0a 1.5px, transparent 1.5px);
+            background-size: 28px 28px, 80px 80px; background-position: 0 0, 14px 14px;
+            pointer-events: none; z-index: -1;
+        }
+
+        .page-wrapper { max-width: 1800px; margin: 0 auto; padding: 20px; position: relative; z-index: 1; }
+
+        .top-row { display: flex; gap: 1.5rem; margin-bottom: 25px; align-items: flex-start; flex-wrap: wrap; }
+
+        .panel {
+            background: rgba(16, 19, 28, 0.92); padding: 15px 20px;
+            border-radius: 0.75rem;
+            z-index: 10; backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px);
+            border: 1px solid rgba(130, 130, 180, 0.15); box-shadow: 0 6px 20px rgba(0,0,0,0.25);
+        }
+        .controls-panel { 
+            flex: 1; 
+            min-width: 380px; 
+        }
+
+        .section-indicator {
+            width: 5px; height: 16px; background: linear-gradient(to bottom, #a971ff, #7facff);
+            border-radius: 3px; display: inline-block; margin-right: 0.6rem; vertical-align: middle;
+            box-shadow: 0 2px 4px rgba(168, 121, 255, 0.3);
+        }
+
+        .card {
+            margin-bottom: 1.5rem; background: rgba(16, 19, 28, 0.85);
+            backdrop-filter: blur(15px); -webkit-backdrop-filter: blur(15px);
+            border: 1px solid rgba(130, 130, 180, 0.15); border-radius: 0.75rem;
+            overflow: hidden; box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3); position: relative; z-index: 1;
+        }
+        .card::after {
+            content: ''; position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+            background-image: radial-gradient(#ffffff10 0.8px, transparent 0.8px), radial-gradient(circle at 15% 85%, rgba(168, 121, 255, 0.08), transparent 20%), radial-gradient(circle at 85% 15%, rgba(66, 133, 244, 0.06), transparent 20%);
+            background-size: 24px 24px, 100% 100%, 100% 100%; pointer-events: none; z-index: -1;
+        }
+        .card::before {
+            content: ""; position: absolute; top: 0; left: 0; right: 0; height: 1px;
+            background: linear-gradient(90deg, rgba(128, 140, 156, 0) 0%, rgba(168, 121, 255, 0.3) 25%, rgba(168, 121, 255, 0.3) 75%, rgba(128, 140, 156, 0) 100%);
+            z-index: 5;
+        }
+        .card-header {
+            background: rgba(17, 21, 30, 0.8); border-bottom: 1px solid rgba(130, 130, 180, 0.15);
+            padding: 0.85rem 1.15rem; color: #ffffff; position: relative; z-index: 1;
+            display: flex; justify-content: space-between; align-items: center;
+        }
+        .card-body { padding: 0.5rem; display: flex; justify-content: center; align-items: center; position: relative; z-index: 1; }
+        .panel-title {
+            color: #ffffff; font-weight: 500; letter-spacing: 0.01em; font-size: 1.1rem; margin-bottom: 0;
+        }
+
+        .btn {
+            display: inline-block; font-weight: 500; line-height: 1.5; text-align: center; text-decoration: none;
+            vertical-align: middle; cursor: pointer; -webkit-user-select: none; -moz-user-select: none; user-select: none;
+            background-color: transparent; border: 1px solid transparent; padding: 0.375rem 0.75rem;
+            font-size: 1rem; border-radius: 0.375rem;
+            transition: all .15s ease-in-out;
+        }
+        .btn-sm { padding: 0.3rem 0.6rem; font-size: .825rem; border-radius: 0.3rem; }
+        .me-1 { margin-right: .25rem!important; }
+        .ms-2 { margin-left: .5rem!important; }
+        .me-2 { margin-right: .5rem!important; }
+
+
+        .btn-primary { background: linear-gradient(to right, #a971ff, #8e68fd); border: none; box-shadow: 0 4px 15px rgba(168, 121, 255, 0.35); color: #ffffff; }
+        .btn-primary:hover { background: linear-gradient(to right, #b68fff, #9b7eff); transform: translateY(-2px); box-shadow: 0 6px 20px rgba(168, 121, 255, 0.45); }
+        .btn-outline-secondary { color: #e8eeff; border-color: #4d5b73; background: rgba(35, 40, 54, 0.5); backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); }
+        .btn-outline-secondary:hover { background: rgba(50, 55, 80, 0.7); color: #ffffff; border-color: #5a6478; }
+        .btn-outline-secondary.active, .btn-primary.active { background: linear-gradient(to right, #a971ff, #8e68fd); color: #ffffff; border-color: transparent; box-shadow: 0 4px 15px rgba(168, 121, 255, 0.35); }
+
+        input[type="range"] { width: 100%; margin: 8px 0; background-color: transparent; -webkit-appearance: none; appearance: none; }
+        input[type=range]:focus { outline: none; }
+        input[type=range]::-webkit-slider-runnable-track { width: 100%; height: 6px; cursor: pointer; background: #444b5e; border-radius: 3px; }
+        input[type=range]::-webkit-slider-thumb { -webkit-appearance: none; appearance: none; width: 16px; height: 16px; background: #a971ff; cursor: pointer; border-radius: 50%; border: none; margin-top: -5px; }
+        input[type=range]::-moz-range-track { width: 100%; height: 6px; cursor: pointer; background: #444b5e; border-radius: 3px; }
+        input[type=range]::-moz-range-thumb { width: 16px; height: 16px; background: #a971ff; cursor: pointer; border-radius: 50%; border: none; }
+
+        .form-label { color: #e8eeff; font-weight: 400; font-size: 0.9rem; margin-bottom: 0.1rem; display: block; } /* Reduced margin-bottom */
+        .slider-value-output { font-weight: bold; color: #7facff; display: inline; margin-left: 0.25rem;}
+        .form-select-sm, .animation-speed-selector {
+            padding: 0.3rem 1.5rem 0.3rem 0.6rem; font-size: .825rem; border-radius: 0.3rem;
+            background-color: rgba(35, 40, 54, 0.7); color: #e8eeff; border: 1px solid #4d5b73;
+            background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3e%3cpath fill='none' stroke='%23e8eeff' stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='m2 5 6 6 6-6'/%3e%3c/svg%3e");
+            background-repeat: no-repeat; background-position: right 0.6rem center; background-size: 12px 12px;
+            -webkit-appearance: none; -moz-appearance: none; appearance: none;
+        }
+        .animation-speed-selector { padding: 0.3rem 0.6rem; margin-left: 0.25rem; min-width: 60px;}
+
+
+        ::-webkit-scrollbar { width: 8px; height: 8px; }
+        ::-webkit-scrollbar-track { background: rgba(19, 23, 35, 0.5); border-radius: 4px; }
+        ::-webkit-scrollbar-thumb { background: rgba(130, 130, 180, 0.3); border-radius: 4px; }
+        ::-webkit-scrollbar-thumb:hover { background: rgba(168, 121, 255, 0.5); }
+
+        code { font-family: "Courier New", Courier, monospace; background-color: rgba(255,255,255,0.1); padding: 2px 6px; border-radius: 4px; color: #c9d1ff; }
+        .mb-2 { margin-bottom: .5rem!important; } .mb-3 { margin-bottom: 1rem!important; }
+        .mt-2 { margin-top: .5rem!important; } .mt-3 { margin-top: 1rem!important; }
+
+        .controls-section { margin-bottom: 1rem; }
+        /* .controls-section > div { margin-bottom: 0.8rem; } */ /* Let slider-row handle internal spacing */
+        
+        .slider-row { display: flex; flex-wrap: wrap; gap: 1rem; align-items: flex-start; margin-bottom: 0.8rem;} /* Increased margin-bottom for rows */
+        .slider-column { flex: 1; min-width: 220px; /* Adjusted min-width */ }
+        .slider-column .form-label { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; display: inline; } /* label display inline */
+
+
+        .slider-container { display: flex; align-items: center; margin-top: 0.2rem; /* Add small top margin */ }
+        .slider-container input[type="range"] { flex-grow: 1; }
+        .slider-container .btn-sm { flex-shrink: 0; } 
+        .slider-container .animation-speed-selector { flex-shrink: 0; }
+
+
+        .canvas-row { display: flex; flex-wrap: wrap; gap: 1.5rem; justify-content: center; }
+        .canvas-card { 
+            flex: 1 1 700px; 
+            min-width: 320px; 
+        }
+        canvas { border-radius: 4px; display: block; margin: 0 auto;}
+        .hidden { display: none !important; }
+
+        .function-btn-group div { display: flex; flex-wrap: wrap; gap: 0.25rem; }
+    </style>
+</head>
+<body class="pb-5">
+    <div class="page-wrapper">
+        <div class="top-row">
+            <div class="panel controls-panel">
+
+                <div class="controls-section function-btn-group">
+                    <label class="form-label d-block">Select Function:</label>
+                    <div>
+                        <button id="select_cos_btn" class="btn btn-sm btn-outline-secondary">w = cos(z)</button>
+                        <button id="select_sin_btn" class="btn btn-sm btn-outline-secondary">w = sin(z)</button>
+                        <button id="select_tan_btn" class="btn btn-sm btn-outline-secondary">w = tan(z)</button>
+                        <button id="select_sec_btn" class="btn btn-sm btn-outline-secondary">w = sec(z)</button>
+                        <button id="select_exp_btn" class="btn btn-sm btn-outline-secondary">w = e<sup>z</sup></button>
+                        <button id="select_ln_btn" class="btn btn-sm btn-outline-secondary">w = ln(z)</button>
+                        <button id="select_reciprocal_btn" class="btn btn-sm btn-outline-secondary">w = 1/z</button>
+                        <button id="select_mobius_btn" class="btn btn-sm btn-outline-secondary">Möbius</button>
+                        <button id="select_zeta_btn" class="btn btn-sm btn-outline-secondary">w = ζ(z)</button>
+                    </div>
+                </div>
+
+                <div class="controls-section" id="common_params_sliders">
+                    <div class="slider-row">
+                        <div class="slider-column">
+                            <label for="a0_slider" class="form-label"><span id="a0_label_desc">Real part of z (<code>a<sub>0</sub></code>):</span></label>
+                            <output id="a0_value_display" class="slider-value-output">0.80</output>
+                            <div class="slider-container">
+                                <input type="range" id="a0_slider" min="-5" max="5" step="0.05" value="0.80">
+                                <button id="play_a0_btn" class="btn btn-sm btn-outline-secondary ms-2">Play</button>
+                                <select id="speed_a0_selector" class="animation-speed-selector"><option value="0.1">0.1x</option><option value="0.5">0.5x</option><option value="1" selected>1x</option><option value="2">2x</option></select>
+                            </div>
+                        </div>
+                        <div class="slider-column">
+                            <label for="b0_slider" class="form-label"><span id="b0_label_desc">Imaginary part of z (<code>b<sub>0</sub></code>):</span></label>
+                            <output id="b0_value_display" class="slider-value-output">0.50</output>
+                            <div class="slider-container">
+                                <input type="range" id="b0_slider" min="-5" max="5" step="0.05" value="0.5">
+                                <button id="play_b0_btn" class="btn btn-sm btn-outline-secondary ms-2">Play</button>
+                                <select id="speed_b0_selector" class="animation-speed-selector"><option value="0.1">0.1x</option><option value="0.5">0.5x</option><option value="1" selected>1x</option><option value="2">2x</option></select>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="controls-section hidden" id="shape_params_sliders">
+                    <div id="circleR_slider_group" class="hidden slider-row"> <!-- Note: ID changed to circleR_slider_group -->
+                        <div class="slider-column">
+                            <label for="circleR_slider" class="form-label"><span id="circleR_label_desc">Radius (R):</span></label>
+                            <output id="circleR_value_display" class="slider-value-output">1.0</output>
+                            <div class="slider-container">
+                                <input type="range" id="circleR_slider" min="0.1" max="3" step="0.05" value="1.0">
+                                <button id="play_circleR_btn" class="btn btn-sm btn-outline-secondary ms-2">Play</button>
+                                <select id="speed_circleR_selector" class="animation-speed-selector"><option value="0.1">0.1x</option><option value="0.5">0.5x</option><option value="1" selected>1x</option><option value="2">2x</option></select>
+                            </div>
+                        </div>
+                        <div class="slider-column"></div>
+                    </div>
+                    <div id="ellipse_params_slider_group" class="hidden slider-row"> <!-- This ID can remain if it's just a grouping div -->
+                        <div class="slider-column">
+                            <label for="ellipseA_slider" class="form-label"><span id="ellipseA_label_desc">Semi-axis A:</span></label>
+                            <output id="ellipseA_value_display" class="slider-value-output">1.5</output>
+                            <div class="slider-container">
+                                <input type="range" id="ellipseA_slider" min="0.1" max="3" step="0.05" value="1.5">
+                                <button id="play_ellipseA_btn" class="btn btn-sm btn-outline-secondary ms-2">Play</button>
+                                <select id="speed_ellipseA_selector" class="animation-speed-selector"><option value="0.1">0.1x</option><option value="0.5">0.5x</option><option value="1" selected>1x</option><option value="2">2x</option></select>
+                            </div>
+                        </div>
+                        <div class="slider-column">
+                            <label for="ellipseB_slider" class="form-label"><span id="ellipseB_label_desc">Semi-axis B:</span></label>
+                            <output id="ellipseB_value_display" class="slider-value-output">0.7</output>
+                            <div class="slider-container">
+                                <input type="range" id="ellipseB_slider" min="0.1" max="3" step="0.05" value="0.7">
+                                <button id="play_ellipseB_btn" class="btn btn-sm btn-outline-secondary ms-2">Play</button>
+                                <select id="speed_ellipseB_selector" class="animation-speed-selector"><option value="0.1">0.1x</option><option value="0.5">0.5x</option><option value="1" selected>1x</option><option value="2">2x</option></select>
+                            </div>
+                        </div>
+                    </div>
+                    <div id="hyperbola_params_slider_group" class="hidden slider-row"> <!-- This ID can remain -->
+                        <div class="slider-column">
+                            <label for="hyperbolaA_slider" class="form-label"><span id="hyperbolaA_label_desc">Param A:</span></label>
+                            <output id="hyperbolaA_value_display" class="slider-value-output">1.0</output>
+                            <div class="slider-container">
+                                <input type="range" id="hyperbolaA_slider" min="0.1" max="2.5" step="0.05" value="1.0">
+                                <button id="play_hyperbolaA_btn" class="btn btn-sm btn-outline-secondary ms-2">Play</button>
+                                <select id="speed_hyperbolaA_selector" class="animation-speed-selector"><option value="0.1">0.1x</option><option value="0.5">0.5x</option><option value="1" selected>1x</option><option value="2">2x</option></select>
+                            </div>
+                        </div>
+                        <div class="slider-column">
+                             <label for="hyperbolaB_slider" class="form-label"><span id="hyperbolaB_label_desc">Param B:</span></label>
+                            <output id="hyperbolaB_value_display" class="slider-value-output">0.5</output>
+                            <div class="slider-container">
+                            <input type="range" id="hyperbolaB_slider" min="0.1" max="2.5" step="0.05" value="0.5">
+                                <button id="play_hyperbolaB_btn" class="btn btn-sm btn-outline-secondary ms-2">Play</button>
+                                <select id="speed_hyperbolaB_selector" class="animation-speed-selector"><option value="0.1">0.1x</option><option value="0.5">0.5x</option><option value="1" selected>1x</option><option value="2">2x</option></select>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="controls-section hidden" id="mobius_params_sliders">
+                    <label class="form-label d-block" style="margin-bottom: 0.5rem;">Möbius Parameters (w = (az+b)/(cz+d)):</label>
+                    <div class="slider-row">
+                        <div class="slider-column">
+                            <label for="mobiusA_slider" class="form-label"><span id="mobiusA_label_desc">a:</span></label>
+                            <output id="mobiusA_value_display" class="slider-value-output">1</output>
+                            <div class="slider-container">
+                                <input type="range" id="mobiusA_slider" min="-5" max="5" step="0.1" value="1">
+                                <button id="play_mobiusA_btn" class="btn btn-sm btn-outline-secondary ms-2">Play</button>
+                                <select id="speed_mobiusA_selector" class="animation-speed-selector"><option value="0.1">0.1x</option><option value="0.5">0.5x</option><option value="1" selected>1x</option><option value="2">2x</option></select>
+                            </div>
+                        </div>
+                        <div class="slider-column">
+                            <label for="mobiusB_slider" class="form-label"><span id="mobiusB_label_desc">b:</span></label>
+                            <output id="mobiusB_value_display" class="slider-value-output">0</output>
+                            <div class="slider-container">
+                                <input type="range" id="mobiusB_slider" min="-5" max="5" step="0.1" value="0">
+                                <button id="play_mobiusB_btn" class="btn btn-sm btn-outline-secondary ms-2">Play</button>
+                                 <select id="speed_mobiusB_selector" class="animation-speed-selector"><option value="0.1">0.1x</option><option value="0.5">0.5x</option><option value="1" selected>1x</option><option value="2">2x</option></select>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="slider-row">
+                        <div class="slider-column">
+                            <label for="mobiusC_slider" class="form-label"><span id="mobiusC_label_desc">c:</span></label>
+                             <output id="mobiusC_value_display" class="slider-value-output">0</output>
+                            <div class="slider-container">
+                                <input type="range" id="mobiusC_slider" min="-5" max="5" step="0.1" value="0">
+                                <button id="play_mobiusC_btn" class="btn btn-sm btn-outline-secondary ms-2">Play</button>
+                                <select id="speed_mobiusC_selector" class="animation-speed-selector"><option value="0.1">0.1x</option><option value="0.5">0.5x</option><option value="1" selected>1x</option><option value="2">2x</option></select>
+                            </div>
+                        </div>
+                        <div class="slider-column">
+                            <label for="mobiusD_slider" class="form-label"><span id="mobiusD_label_desc">d:</span></label>
+                            <output id="mobiusD_value_display" class="slider-value-output">1</output>
+                            <div class="slider-container">
+                                <input type="range" id="mobiusD_slider" min="-5" max="5" step="0.1" value="1">
+                                <button id="play_mobiusD_btn" class="btn btn-sm btn-outline-secondary ms-2">Play</button>
+                                <select id="speed_mobiusD_selector" class="animation-speed-selector"><option value="0.1">0.1x</option><option value="0.5">0.5x</option><option value="1" selected>1x</option><option value="2">2x</option></select>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="canvas-row">
+            <div class="card canvas-card">
+                <div class="card-header">
+                    <h5 class="panel-title mb-0"><span class="section-indicator"></span>z-plane (Input: <code>z = a + ib</code>)</h5>
+                    <div style="display: flex; align-items: center;">
+                        <label for="input_shape_selector" class="form-label" style="font-size:0.8rem; margin-bottom:0; margin-right:0.5rem; display:inline-block;">Shape:</label>
+                        <select id="input_shape_selector" class="form-select-sm">
+                            <option value="line" selected>Lines (Re/Im)</option>
+                            <option value="circle">Circle</option>
+                            <option value="ellipse">Ellipse</option>
+                            <option value="hyperbola">Hyperbola</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="card-body"><canvas id="z_plane_canvas" width="700" height="600"></canvas></div>
+            </div>
+            <div class="card canvas-card">
+                <div class="card-header"><h5 class="panel-title mb-0"><span class="section-indicator"></span>w-plane (Output: <code id="w-plane-title-func">w = cos(z)</code>)</h5></div>
+                <div class="card-body"><canvas id="w_plane_canvas" width="700" height="600"></canvas></div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // --- Constants and Global Variables ---
+        const COLOR_CANVAS_BACKGROUND = 'rgb(16, 20, 31)';
+        const COLOR_AXES = 'rgba(130, 130, 180, 0.7)';
+        const COLOR_GRID = 'rgba(130, 130, 180, 0.25)';
+        const COLOR_TEXT_ON_CANVAS = '#d0d7e2';
+        const COLOR_HORIZONTAL_LINE_OR_SHAPE = 'rgb(100,150,255)'; 
+        const COLOR_VERTICAL_LINE = 'rgb(100,255,150)';   
+        const COLOR_FOCI = 'rgb(255,100,100)';
+        const NUM_POINTS_CURVE = 250;
+        const NUM_ZETA_TERMS = 100;
+
+        const zCanvas = document.getElementById('z_plane_canvas');
+        const wCanvas = document.getElementById('w_plane_canvas');
+        const zCtx = zCanvas.getContext('2d');
+        const wCtx = wCanvas.getContext('2d');
+
+        const controls = {};
+        const sliderParamKeys = ['a0', 'b0', 'circleR', 'ellipseA', 'ellipseB', 'hyperbolaA', 'hyperbolaB', 'mobiusA', 'mobiusB', 'mobiusC', 'mobiusD'];
+        
+        sliderParamKeys.forEach(key => {
+            controls[`${key}Slider`] = document.getElementById(`${key}_slider`);
+            controls[`${key}ValueDisplay`] = document.getElementById(`${key}_value_display`);
+            controls[`${key}LabelDesc`] = document.getElementById(`${key}_label_desc`); // For descriptive part of label
+            controls[`play_${key}Btn`] = document.getElementById(`play_${key}_btn`);
+            controls[`speed_${key}Selector`] = document.getElementById(`speed_${key}_selector`);
+        });
+
+        controls.commonParamsSliders = document.getElementById('common_params_sliders');
+        controls.shapeParamsSliders = document.getElementById('shape_params_sliders');
+        controls.mobiusParamsSliders = document.getElementById('mobius_params_sliders');
+        // Grouping divs for shapes might still be useful for show/hide logic
+        controls.circleRSliderGroup = document.getElementById('circleR_slider_group'); // Corrected ID
+        controls.ellipseParamsSliderGroup = document.getElementById('ellipse_params_slider_group');
+        controls.hyperbolaParamsSliderGroup = document.getElementById('hyperbola_params_slider_group');
+
+        controls.inputShapeSelector = document.getElementById('input_shape_selector');
+        controls.funcButtons = {};
+        ['cos', 'sin', 'tan', 'sec', 'exp', 'ln', 'reciprocal', 'mobius', 'zeta'].forEach(f => {
+            controls.funcButtons[f] = document.getElementById(`select_${f}_btn`);
+        });
+        controls.wPlaneTitleFunc = document.getElementById('w-plane-title-func');
+        
+
+        // State Variables
+        let state = {
+            a0: 0.80, b0: 0.50, 
+            circleR: 1.0, ellipseA: 1.5, ellipseB: 0.7, hyperbolaA: 1.0, hyperbolaB: 0.5,
+            mobiusA: 1, mobiusB: 0, mobiusC: 0, mobiusD: 1,
+            currentFunction: 'cos',
+            currentInputShape: 'line',
+        };
+        
+        const zPlaneInitialRanges = { x: [-3.5, 3.5], y: [-3.0, 3.0] };
+        const zPlaneParams = { width: zCanvas.width, height: zCanvas.height, origin: {}, scale: {}, currentVisXRange: [...zPlaneInitialRanges.x], currentVisYRange: [...zPlaneInitialRanges.y] };
+        const wPlaneParams = { width: wCanvas.width, height: wCanvas.height, origin: {}, scale: {}, xRange: [-6.5, 6.5], yRange: [-6.5, 6.5] };
+        
+        let animationStates = {}; 
+
+        // --- Math Helpers (Same as before) ---
+        function complexAdd(z1, z2) { return { re: z1.re + z2.re, im: z1.im + z2.im }; }
+        function complexSub(z1, z2) { return { re: z1.re - z2.re, im: z1.im - z2.im }; }
+        function complexMul(z1, z2) { return { re: z1.re * z2.re - z1.im * z2.im, im: z1.re * z2.im + z1.im * z2.re }; }
+        function complexScalarMul(s, z) { return { re: s * z.re, im: s * z.im }; }
+        function cosh(x) { return (Math.exp(x) + Math.exp(-x)) / 2; }
+        function sinh(x) { return (Math.exp(x) - Math.exp(-x)) / 2; }
+        function complexCos(a, b) { return { re: Math.cos(a) * cosh(b), im: -Math.sin(a) * sinh(b) }; }
+        function complexSin(a, b) { return { re: Math.sin(a) * cosh(b), im: Math.cos(a) * sinh(b) }; }
+        function complexExp(a,b) { return { re: Math.exp(a) * Math.cos(b), im: Math.exp(a) * Math.sin(b) }; }
+        function complexDivide(num, den) {
+            const den_sq_mag = den.re * den.re + den.im * den.im;
+            if (Math.abs(den_sq_mag) < 1e-14) {
+                const large_val = 1e7; 
+                const num_mag = Math.sqrt(num.re * num.re + num.im * num.im);
+                if (num_mag < 1e-9) return { re: NaN, im: NaN}; 
+                return { re: num.re / num_mag * large_val, im: num.im / num_mag * large_val };
+            }
+            return { re: (num.re * den.re + num.im * den.im) / den_sq_mag, im: (num.im * den.re - num.re * den.im) / den_sq_mag };
+        }
+        function complexTan(a, b) { return complexDivide(complexSin(a, b), complexCos(a, b)); }
+        function complexSec(a, b) { return complexDivide({ re: 1, im: 0 }, complexCos(a, b)); }
+        function complexLn(a,b) {
+            if (a === 0 && b === 0) { return { re: -Infinity, im: NaN }; }
+            const mod = Math.sqrt(a * a + b * b);
+            const arg = Math.atan2(b, a);
+            return { re: Math.log(mod), im: arg };
+        }
+        function complexReciprocal(a,b) { return complexDivide({re:1, im:0}, {re:a, im:b}); }
+        function complexPow(base_re, base_im, exp_re, exp_im) { 
+            if (base_re === 0 && base_im === 0) return {re:0, im:0}; 
+            const logBase = complexLn(base_re, base_im); 
+            const exponent = {re: exp_re, im: exp_im};
+            const product = complexMul(exponent, logBase); 
+            return complexExp(product.re, product.im); 
+        }
+        function complexRiemannZeta(a, b, numTerms = NUM_ZETA_TERMS) { 
+            if (a === 1 && b === 0) return {re: Infinity, im: Infinity};
+            
+            let eta_s = { re: 0, im: 0 };
+            for (let n = 1; n <= numTerms; n++) {
+                const n_minus_a = Math.pow(n, -a);
+                const b_ln_n = b * Math.log(n);
+                let term_n_s = { re: n_minus_a * Math.cos(b_ln_n), im: -n_minus_a * Math.sin(b_ln_n) };
+                
+                if ((n - 1) % 2 !== 0) { 
+                    term_n_s = complexScalarMul(-1, term_n_s);
+                }
+                eta_s = complexAdd(eta_s, term_n_s);
+            }
+
+            const one_minus_s = { re: 1 - a, im: -b };
+            const two_pow_one_minus_s = complexPow(2, 0, one_minus_s.re, one_minus_s.im);
+            const denominator = complexSub({ re: 1, im: 0 }, two_pow_one_minus_s);
+
+            if (Math.abs(denominator.re) < 1e-14 && Math.abs(denominator.im) < 1e-14) {
+                if (Math.abs(eta_s.re) > 1e-9 || Math.abs(eta_s.im) > 1e-9) return {re: Infinity * Math.sign(eta_s.re), im: Infinity * Math.sign(eta_s.im)};
+                return { re: NaN, im: NaN };
+            }
+            return complexDivide(eta_s, denominator);
+        }
+        function complexMobius(z_re, z_im) { // Takes a,b,c,d from state
+            const z = {re: z_re, im: z_im};
+            const term_a = {re: state.mobiusA, im: 0}; const term_b = {re: state.mobiusB, im: 0};
+            const term_c = {re: state.mobiusC, im: 0}; const term_d = {re: state.mobiusD, im: 0};
+
+            const numerator = complexAdd(complexMul(term_a, z), term_b);
+            const denominator = complexAdd(complexMul(term_c, z), term_d);
+            return complexDivide(numerator, denominator);
+        }
+
+        const transformFunctions = { 
+            cos: complexCos, sin: complexSin, tan: complexTan, sec: complexSec, exp: complexExp, ln: complexLn,
+            reciprocal: complexReciprocal, mobius: complexMobius, zeta: complexRiemannZeta
+        };
+        // --- Drawing Functions (mapToCanvasCoords, drawAxes, drawGrid, drawZPlaneContent, drawWPlaneContent - mostly unchanged, review for state usage if any issues) ---
+        // (Re-using the drawing functions from the previous correct iteration, assuming they are fine once controls are fixed)
+        function mapToCanvasCoords(worldX, worldY, params) { return { x: params.origin.x + worldX * params.scale.x, y: params.origin.y - worldY * params.scale.y }; }
+        function drawAxes(ctx, params, xLabel, yLabel) {
+            ctx.save(); ctx.strokeStyle = COLOR_AXES; ctx.fillStyle = COLOR_TEXT_ON_CANVAS; ctx.lineWidth = 1; ctx.beginPath();
+            const yOriginCanvas = mapToCanvasCoords(0,0,params).y; ctx.moveTo(0, yOriginCanvas); ctx.lineTo(params.width, yOriginCanvas);
+            const xOriginCanvas = mapToCanvasCoords(0,0,params).x; ctx.moveTo(xOriginCanvas, 0); ctx.lineTo(xOriginCanvas, params.height); ctx.stroke();
+            ctx.font = "11px 'SF Pro Text', sans-serif"; ctx.textAlign = "left"; ctx.textBaseline = "top"; ctx.fillText(yLabel, xOriginCanvas + 5, 5);
+            ctx.textAlign = "right"; ctx.textBaseline = "bottom"; ctx.fillText(xLabel, params.width - 5, yOriginCanvas - 5);
+            ctx.font = "10px 'SF Pro Text', sans-serif"; const xTickStep = 1; const yTickStep = 1;
+            const currentXRange = params.currentVisXRange || params.xRange; const currentYRange = params.currentVisYRange || params.yRange;
+            ctx.textAlign = "center"; ctx.textBaseline = "top";
+            const xStart = Math.ceil(currentXRange[0] / xTickStep) * xTickStep; const xEnd = Math.floor(currentXRange[1] / xTickStep) * xTickStep;
+            for (let x_world = xStart; x_world <= xEnd + 1e-6; x_world += xTickStep) {
+                if (Math.abs(x_world) > Math.max(Math.abs(currentXRange[0]),Math.abs(currentXRange[1])) + xTickStep) continue;
+                const C = mapToCanvasCoords(x_world, 0, params); let label = x_world.toFixed(0); if (Math.abs(x_world) < 1e-3) label = "0"; 
+                ctx.fillText(label, C.x, C.y + 5); ctx.beginPath(); ctx.moveTo(C.x, C.y - 3); ctx.lineTo(C.x, C.y + 3); ctx.stroke();
+            }
+            ctx.textAlign = "right"; ctx.textBaseline = "middle";
+            const yStart = Math.ceil(currentYRange[0] / yTickStep) * yTickStep; const yEnd = Math.floor(currentYRange[1] / yTickStep) * yTickStep;
+            for (let y_world = yStart; y_world <= yEnd + 1e-6; y_world += yTickStep) {
+                if (Math.abs(y_world) > Math.max(Math.abs(currentYRange[0]),Math.abs(currentYRange[1])) + yTickStep) continue;
+                const C = mapToCanvasCoords(0, y_world, params); let label = y_world.toFixed(0);
+                if (Math.abs(y_world) < 1e-3 && Math.abs(xOriginCanvas - C.x) < params.width -10) label = ""; else if (Math.abs(y_world) < 1e-3) label = "0";
+                if (label !== "") { ctx.fillText(label, C.x - 5, C.y); }
+                ctx.beginPath(); ctx.moveTo(C.x - 3, C.y); ctx.lineTo(C.x + 3, C.y); ctx.stroke();
+            }
+            ctx.restore();
+        }
+        function drawGrid(ctx, params) { 
+            ctx.save(); ctx.strokeStyle = COLOR_GRID; ctx.lineWidth = 0.5; ctx.beginPath();
+            const xTickStep = 1; const yTickStep = 1; const currentXRange = params.currentVisXRange || params.xRange; const currentYRange = params.currentVisYRange || params.yRange;
+            const xStart = Math.ceil(currentXRange[0] / xTickStep) * xTickStep; const xEnd = Math.floor(currentXRange[1] / xTickStep) * xTickStep;
+            for (let x = xStart; x <= xEnd + 1e-6; x += xTickStep) {
+                 if (Math.abs(x) > Math.max(Math.abs(currentXRange[0]),Math.abs(currentXRange[1])) + xTickStep) continue;
+                const C_x = mapToCanvasCoords(x, 0, params).x; ctx.moveTo(C_x, 0); ctx.lineTo(C_x, params.height);
+            }
+            const yStart = Math.ceil(currentYRange[0] / yTickStep) * yTickStep; const yEnd = Math.floor(currentYRange[1] / yTickStep) * yTickStep;
+            for (let y = yStart; y <= yEnd + 1e-6; y += yTickStep) {
+                 if (Math.abs(y) > Math.max(Math.abs(currentYRange[0]),Math.abs(currentYRange[1])) + yTickStep) continue;
+                const C_y = mapToCanvasCoords(0, y, params).y; ctx.moveTo(0, C_y); ctx.lineTo(params.width, C_y);
+            }
+            ctx.stroke(); ctx.restore();
+        }
+        function drawZPlaneContent() {
+            zCtx.fillStyle = COLOR_CANVAS_BACKGROUND; zCtx.fillRect(0, 0, zPlaneParams.width, zPlaneParams.height);
+            drawGrid(zCtx, zPlaneParams); drawAxes(zCtx, zPlaneParams, "Re(z) = a", "Im(z) = b");
+            zCtx.save(); zCtx.lineWidth = 2.5; 
+            const shapeCenterX = state.a0; const shapeCenterY = state.b0;
+            if (state.currentInputShape === 'line') {
+                zCtx.strokeStyle = COLOR_HORIZONTAL_LINE_OR_SHAPE; zCtx.beginPath();
+                const y_b0_canvas = mapToCanvasCoords(0, state.b0, zPlaneParams).y;
+                const vis_x_min_canvas = mapToCanvasCoords(zPlaneParams.currentVisXRange[0], state.b0, zPlaneParams).x;
+                const vis_x_max_canvas = mapToCanvasCoords(zPlaneParams.currentVisXRange[1], state.b0, zPlaneParams).x;
+                zCtx.moveTo(vis_x_min_canvas, y_b0_canvas); zCtx.lineTo(vis_x_max_canvas, y_b0_canvas); zCtx.stroke();
+                zCtx.strokeStyle = COLOR_VERTICAL_LINE; zCtx.beginPath();
+                const x_a0_canvas = mapToCanvasCoords(state.a0, 0, zPlaneParams).x;
+                const vis_y_min_canvas = mapToCanvasCoords(state.a0, zPlaneParams.currentVisYRange[0], zPlaneParams).y;
+                const vis_y_max_canvas = mapToCanvasCoords(state.a0, zPlaneParams.currentVisYRange[1], zPlaneParams).y;
+                zCtx.moveTo(x_a0_canvas, vis_y_min_canvas); zCtx.lineTo(x_a0_canvas, vis_y_max_canvas); zCtx.stroke();
+            } else { 
+                zCtx.strokeStyle = COLOR_HORIZONTAL_LINE_OR_SHAPE; zCtx.beginPath(); let firstPt = true;
+                if (state.currentInputShape === 'circle') {
+                    for (let i = 0; i <= NUM_POINTS_CURVE; i++) { const t = (i / NUM_POINTS_CURVE) * 2 * Math.PI; const x = shapeCenterX + state.circleR * Math.cos(t); const y = shapeCenterY + state.circleR * Math.sin(t); const p = mapToCanvasCoords(x, y, zPlaneParams); if (firstPt) { zCtx.moveTo(p.x, p.y); firstPt = false; } else { zCtx.lineTo(p.x, p.y); } }
+                } else if (state.currentInputShape === 'ellipse') {
+                     for (let i = 0; i <= NUM_POINTS_CURVE; i++) { const t = (i / NUM_POINTS_CURVE) * 2 * Math.PI; const x = shapeCenterX + state.ellipseA * Math.cos(t); const y = shapeCenterY + state.ellipseB * Math.sin(t); const p = mapToCanvasCoords(x, y, zPlaneParams); if (firstPt) { zCtx.moveTo(p.x, p.y); firstPt = false; } else { zCtx.lineTo(p.x, p.y); } }
+                } else if (state.currentInputShape === 'hyperbola') {
+                    const U_MAX = 2.5; 
+                    for (let i = 0; i <= NUM_POINTS_CURVE / 2; i++) { const u = (i / (NUM_POINTS_CURVE / 2)) * U_MAX - U_MAX / 2; const x_rel = state.hyperbolaA * cosh(u); const y_rel = state.hyperbolaB * sinh(u); const p = mapToCanvasCoords(shapeCenterX + x_rel, shapeCenterY + y_rel, zPlaneParams); if (i === 0) { zCtx.moveTo(p.x, p.y); } else { zCtx.lineTo(p.x, p.y); } }
+                    zCtx.stroke(); zCtx.beginPath(); 
+                     for (let i = 0; i <= NUM_POINTS_CURVE / 2; i++) { const u = (i / (NUM_POINTS_CURVE / 2)) * U_MAX - U_MAX / 2; const x_rel = -state.hyperbolaA * cosh(u); const y_rel = state.hyperbolaB * sinh(u); const p = mapToCanvasCoords(shapeCenterX + x_rel, shapeCenterY + y_rel, zPlaneParams); if (i === 0) { zCtx.moveTo(p.x, p.y); } else { zCtx.lineTo(p.x, p.y); } }
+                }
+                zCtx.stroke();
+            }
+            zCtx.restore();
+        }
+        function drawWPlaneContent() {
+            wCtx.fillStyle = COLOR_CANVAS_BACKGROUND; wCtx.fillRect(0, 0, wPlaneParams.width, wPlaneParams.height);
+            drawGrid(wCtx, wPlaneParams); drawAxes(wCtx, wPlaneParams, "Re(w) = X", "Im(w) = Y");
+            const transformFunc = transformFunctions[state.currentFunction];
+            wCtx.save(); wCtx.lineWidth = 2.5;
+            if (state.currentInputShape === 'line') {
+                 if ((state.currentFunction === 'cos' || state.currentFunction === 'sin')) { wCtx.save(); wCtx.fillStyle = COLOR_FOCI; const f1_c = mapToCanvasCoords(1, 0, wPlaneParams), f2_c = mapToCanvasCoords(-1, 0, wPlaneParams); wCtx.beginPath(); wCtx.arc(f1_c.x, f1_c.y, 4, 0, 2*Math.PI); wCtx.fill(); wCtx.beginPath(); wCtx.arc(f2_c.x, f2_c.y, 4, 0, 2*Math.PI); wCtx.fill(); wCtx.font = "10px 'SF Pro Text', sans-serif"; wCtx.textAlign = "center"; wCtx.fillStyle = COLOR_TEXT_ON_CANVAS; wCtx.fillText("Foci: ±1", wPlaneParams.origin.x, f1_c.y + (f1_c.y < 20 ? 15 : -10)); wCtx.restore(); }
+                wCtx.strokeStyle = COLOR_HORIZONTAL_LINE_OR_SHAPE; wCtx.beginPath(); let firstPtH = true;
+                for (let i = 0; i <= NUM_POINTS_CURVE; i++) { const a_val = zPlaneParams.currentVisXRange[0] + i * (zPlaneParams.currentVisXRange[1] - zPlaneParams.currentVisXRange[0]) / NUM_POINTS_CURVE; const w = transformFunc(a_val, state.b0); if (isNaN(w.re) || isNaN(w.im) || Math.abs(w.re) > wPlaneParams.xRange[1]*2.1 || Math.abs(w.im) > wPlaneParams.yRange[1]*2.1) { if(!firstPtH) wCtx.stroke(); wCtx.beginPath(); firstPtH = true; continue; } const p = mapToCanvasCoords(w.re, w.im, wPlaneParams); if (firstPtH) { wCtx.moveTo(p.x, p.y); firstPtH = false; } else { wCtx.lineTo(p.x, p.y); } }
+                if(!firstPtH) wCtx.stroke();
+                wCtx.strokeStyle = COLOR_VERTICAL_LINE; wCtx.beginPath(); let firstPtV = true;
+                for (let i = 0; i <= NUM_POINTS_CURVE; i++) { const b_val = zPlaneParams.currentVisYRange[0] + i * (zPlaneParams.currentVisYRange[1] - zPlaneParams.currentVisYRange[0]) / NUM_POINTS_CURVE; const w = transformFunc(state.a0, b_val); if (isNaN(w.re) || isNaN(w.im) || Math.abs(w.re) > wPlaneParams.xRange[1]*2.1 || Math.abs(w.im) > wPlaneParams.yRange[1]*2.1) { if(!firstPtV) wCtx.stroke(); wCtx.beginPath(); firstPtV = true; continue; } const p = mapToCanvasCoords(w.re, w.im, wPlaneParams); if (firstPtV) { wCtx.moveTo(p.x, p.y); firstPtV = false; } else { wCtx.lineTo(p.x, p.y); } }
+                if(!firstPtV) wCtx.stroke();
+            } else { 
+                wCtx.strokeStyle = COLOR_HORIZONTAL_LINE_OR_SHAPE; wCtx.beginPath(); let firstPtShape = true; const shapeCenterX = state.a0; const shapeCenterY = state.b0; let z_points = [];
+                if (state.currentInputShape === 'circle') { for (let i = 0; i <= NUM_POINTS_CURVE; i++) { const t = (i / NUM_POINTS_CURVE) * 2 * Math.PI; z_points.push({a: shapeCenterX + state.circleR * Math.cos(t), b: shapeCenterY + state.circleR * Math.sin(t)}); }
+                } else if (state.currentInputShape === 'ellipse') { for (let i = 0; i <= NUM_POINTS_CURVE; i++) { const t = (i / NUM_POINTS_CURVE) * 2 * Math.PI; z_points.push({a: shapeCenterX + state.ellipseA * Math.cos(t), b: shapeCenterY + state.ellipseB * Math.sin(t)}); }
+                } else if (state.currentInputShape === 'hyperbola') { const U_MAX = 2.5; for (let i = 0; i <= NUM_POINTS_CURVE / 2; i++) { const u = (i / (NUM_POINTS_CURVE / 2)) * U_MAX - U_MAX/2; z_points.push({a: shapeCenterX + state.hyperbolaA * cosh(u), b: shapeCenterY + state.hyperbolaB * sinh(u)}); } z_points.push({a: NaN, b: NaN}); for (let i = 0; i <= NUM_POINTS_CURVE / 2; i++) { const u = (i / (NUM_POINTS_CURVE / 2)) * U_MAX - U_MAX/2; z_points.push({a: shapeCenterX - state.hyperbolaA * cosh(u), b: shapeCenterY + state.hyperbolaB * sinh(u)}); } }
+                z_points.forEach(pt_z => { if (isNaN(pt_z.a) || isNaN(pt_z.b)) { if(!firstPtShape) wCtx.stroke(); wCtx.beginPath(); firstPtShape = true; return; } const w = transformFunc(pt_z.a, pt_z.b); if (isNaN(w.re) || isNaN(w.im) || Math.abs(w.re) > wPlaneParams.xRange[1]*2.1 || Math.abs(w.im) > wPlaneParams.yRange[1]*2.1) { if(!firstPtShape) wCtx.stroke(); wCtx.beginPath(); firstPtShape = true; return; } const p = mapToCanvasCoords(w.re, w.im, wPlaneParams); if (firstPtShape) { wCtx.moveTo(p.x, p.y); firstPtShape = false; } else { wCtx.lineTo(p.x, p.y); } });
+                if (!firstPtShape) wCtx.stroke();
+            }
+            wCtx.restore();
+        }
+
+
+        // --- UI Update Functions ---
+        function updateSliderLabelsAndDisplay() {
+            const isLineMode = state.currentInputShape === 'line';
+            const isMobiusMode = state.currentFunction === 'mobius';
+            
+            controls.shapeParamsSliders.classList.toggle('hidden', isLineMode);
+            controls.mobiusParamsSliders.classList.toggle('hidden', !isMobiusMode);
+
+            controls.circleRSliderGroup.classList.toggle('hidden', state.currentInputShape !== 'circle' || isLineMode);
+            controls.ellipseParamsSliderGroup.classList.toggle('hidden', state.currentInputShape !== 'ellipse' || isLineMode);
+            controls.hyperbolaParamsSliderGroup.classList.toggle('hidden', state.currentInputShape !== 'hyperbola' || isLineMode);
+
+            // Update numerical value displays
+            sliderParamKeys.forEach(key => {
+                if (controls[`${key}ValueDisplay`] && state[key] !== undefined) {
+                    const val = state[key];
+                    const step = controls[`${key}Slider`] ? parseFloat(controls[`${key}Slider`].step) : 0.1;
+                    const precision = step.toString().includes('.') ? step.toString().split('.')[1].length : 0;
+                    controls[`${key}ValueDisplay`].textContent = val.toFixed(Math.max(precision, (key === 'a0' || key === 'b0' || key === 'circleR' ? 2 : 1) ));
+                }
+            });
+            
+            // Update descriptive label texts for a0 and b0 based on mode
+            if (isLineMode) {
+                if(controls.a0LabelDesc) controls.a0LabelDesc.innerHTML = `Re(z) (<code>a<sub>0</sub></code>):`;
+                if(controls.b0LabelDesc) controls.b0LabelDesc.innerHTML = `Im(z) (<code>b<sub>0</sub></code>):`;
+            } else { // Shape mode
+                if(controls.a0LabelDesc) controls.a0LabelDesc.innerHTML = `Center X (<code>c<sub>x</sub></code>):`;
+                if(controls.b0LabelDesc) controls.b0LabelDesc.innerHTML = `Center Y (<code>c<sub>y</sub></code>):`;
+            }
+        }
+
+
+        function updateDisplays() {
+            updateSliderLabelsAndDisplay(); 
+
+            let funcNameDisplay = state.currentFunction === 'exp' ? 'e<sup>z</sup>' : 
+                                  state.currentFunction === 'ln' ? 'ln(z)' :
+                                  state.currentFunction === 'reciprocal' ? '1/z' :
+                                  state.currentFunction === 'mobius' ? '(az+b)/(cz+d)' :
+                                  state.currentFunction === 'zeta' ? 'ζ(z)' :
+                                  `${state.currentFunction}(z)`;
+            controls.wPlaneTitleFunc.innerHTML = `w = ${funcNameDisplay}`;
+        }
+
+        function redrawAll() { 
+            updateDisplays(); 
+            drawZPlaneContent(); 
+            drawWPlaneContent(); 
+        }
+
+        // --- Generic Animation (Same as before) ---
+        function toggleAnimation(sliderElement, stateKey, playButton, speedSelector) {
+            const sliderId = sliderElement.id;
+            if (!animationStates[sliderId]) { animationStates[sliderId] = { animating: false, frameId: null, direction: 1 }; }
+            let animState = animationStates[sliderId];
+            if (animState.animating) {
+                animState.animating = false; if (animState.frameId) cancelAnimationFrame(animState.frameId);
+                playButton.textContent = 'Play'; playButton.classList.remove('btn-primary'); playButton.classList.add('btn-outline-secondary');
+            } else {
+                animState.animating = true; animState.direction = 1; 
+                if (parseFloat(sliderElement.value) >= parseFloat(sliderElement.max)) { sliderElement.value = sliderElement.min; }
+                state[stateKey] = parseFloat(sliderElement.value);
+                playButton.textContent = 'Pause'; playButton.classList.add('btn-primary'); playButton.classList.remove('btn-outline-secondary');
+                function animationLoop() {
+                    if (!animState.animating) return;
+                    let currentValue = parseFloat(sliderElement.value);
+                    const step = parseFloat(sliderElement.step); const min = parseFloat(sliderElement.min); const max = parseFloat(sliderElement.max);
+                    const speedMultiplier = parseFloat(speedSelector.value);
+                    currentValue += step * animState.direction * speedMultiplier;
+                    if (currentValue > max) { currentValue = max; animState.direction = -1; } 
+                    else if (currentValue < min) { currentValue = min; animState.direction = 1; }
+                    const precision = sliderElement.step.includes('.') ? sliderElement.step.split('.')[1].length : 0;
+                    sliderElement.value = currentValue.toFixed(precision);
+                    state[stateKey] = parseFloat(sliderElement.value); 
+                    redrawAll();
+                    animState.frameId = requestAnimationFrame(animationLoop);
+                }
+                animationLoop();
+            }
+        }
+        
+        // --- Event Listeners ---
+        sliderParamKeys.forEach(key => {
+            if (controls[`${key}Slider`]) {
+                controls[`${key}Slider`].addEventListener('input', () => { 
+                    state[key] = parseFloat(controls[`${key}Slider`].value); 
+                    redrawAll(); 
+                });
+                if (controls[`play_${key}Btn`] && controls[`speed_${key}Selector`]) {
+                    controls[`play_${key}Btn`].addEventListener('click', () => toggleAnimation(controls[`${key}Slider`], key, controls[`play_${key}Btn`], controls[`speed_${key}Selector`]));
+                }
+            }
+        });
+
+        Object.keys(controls.funcButtons).forEach(key => {
+            controls.funcButtons[key].addEventListener('click', () => {
+                state.currentFunction = key;
+                Object.keys(controls.funcButtons).forEach(k => { controls.funcButtons[k].classList.remove('active', 'btn-primary'); controls.funcButtons[k].classList.add('btn-outline-secondary'); });
+                controls.funcButtons[key].classList.add('active', 'btn-primary'); controls.funcButtons[key].classList.remove('btn-outline-secondary');
+                redrawAll();
+            });
+        });
+        
+        controls.inputShapeSelector.addEventListener('change', (e) => { state.currentInputShape = e.target.value; redrawAll(); });
+
+        // --- Initialization ---
+        function setupZPlaneUniformScale() {
+            const p = zPlaneParams; const initialXSpan = zPlaneInitialRanges.x[1] - zPlaneInitialRanges.x[0]; const initialYSpan = zPlaneInitialRanges.y[1] - zPlaneInitialRanges.y[0];
+            const scaleX = p.width / initialXSpan; const scaleY = p.height / initialYSpan;
+            p.scale.x = p.scale.y = Math.min(scaleX, scaleY); 
+            const worldViewWidth = p.width / p.scale.x; const worldViewHeight = p.height / p.scale.y;
+            const initialXCenter = (zPlaneInitialRanges.x[0] + zPlaneInitialRanges.x[1]) / 2; const initialYCenter = (zPlaneInitialRanges.y[0] + zPlaneInitialRanges.y[1]) / 2;
+            p.currentVisXRange[0] = initialXCenter - worldViewWidth / 2; p.currentVisXRange[1] = initialXCenter + worldViewWidth / 2;
+            p.currentVisYRange[0] = initialYCenter - worldViewHeight / 2; p.currentVisYRange[1] = initialYCenter + worldViewHeight / 2;
+            p.origin.x = (p.width / 2) - initialXCenter * p.scale.x; p.origin.y = (p.height / 2) + initialYCenter * p.scale.y;
+        }
+
+        function setup() {
+            setupZPlaneUniformScale(); 
+            const pW = wPlaneParams; pW.scale.x = pW.width / (pW.xRange[1] - pW.xRange[0]); pW.scale.y = pW.height / (pW.yRange[1] - pW.yRange[0]);
+            pW.origin.x = pW.width * (-pW.xRange[0] / (pW.xRange[1] - pW.xRange[0])); pW.origin.y = pW.height * (pW.yRange[1] / (pW.yRange[1] - pW.yRange[0]));
+            
+            sliderParamKeys.forEach(key => { // Initialize state from HTML slider values
+                if (controls[`${key}Slider`]) {
+                    state[key] = parseFloat(controls[`${key}Slider`].value);
+                }
+            });
+            
+            Object.keys(controls.funcButtons).forEach(k => { controls.funcButtons[k].classList.remove('active', 'btn-primary'); controls.funcButtons[k].classList.add('btn-outline-secondary'); });
+            controls.funcButtons[state.currentFunction].classList.add('active', 'btn-primary'); controls.funcButtons[state.currentFunction].classList.remove('btn-outline-secondary');
+            
+            redrawAll();
+        }
+        window.addEventListener('load', setup);
+    </script>
+</body>
+</html>
