@@ -118,18 +118,15 @@
         .mt-2 { margin-top: .5rem!important; } .mt-3 { margin-top: 1rem!important; }
 
         .controls-section { margin-bottom: 1rem; }
-        /* .controls-section > div { margin-bottom: 0.8rem; } */ /* Let slider-row handle internal spacing */
         
-        .slider-row { display: flex; flex-wrap: wrap; gap: 1rem; align-items: flex-start; margin-bottom: 0.8rem;} /* Increased margin-bottom for rows */
-        .slider-column { flex: 1; min-width: 220px; /* Adjusted min-width */ }
-        .slider-column .form-label { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; display: inline; } /* label display inline */
+        .slider-row { display: flex; flex-wrap: wrap; gap: 1rem; align-items: flex-start; margin-bottom: 0.8rem;} 
+        .slider-column { flex: 1; min-width: 220px; }
+        .slider-column .form-label { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; display: inline; } 
 
-
-        .slider-container { display: flex; align-items: center; margin-top: 0.2rem; /* Add small top margin */ }
+        .slider-container { display: flex; align-items: center; margin-top: 0.2rem; }
         .slider-container input[type="range"] { flex-grow: 1; }
         .slider-container .btn-sm { flex-shrink: 0; } 
         .slider-container .animation-speed-selector { flex-shrink: 0; }
-
 
         .canvas-row { display: flex; flex-wrap: wrap; gap: 1.5rem; justify-content: center; }
         .canvas-card { 
@@ -159,6 +156,7 @@
                         <button id="select_reciprocal_btn" class="btn btn-sm btn-outline-secondary">w = 1/z</button>
                         <button id="select_mobius_btn" class="btn btn-sm btn-outline-secondary">Möbius</button>
                         <button id="select_zeta_btn" class="btn btn-sm btn-outline-secondary">w = ζ(z)</button>
+                        <button id="select_polynomial_btn" class="btn btn-sm btn-outline-secondary">Polynomial</button>
                     </div>
                 </div>
 
@@ -186,7 +184,7 @@
                 </div>
                 
                 <div class="controls-section hidden" id="shape_params_sliders">
-                    <div id="circleR_slider_group" class="hidden slider-row"> <!-- Note: ID changed to circleR_slider_group -->
+                    <div id="circleR_slider_group" class="hidden slider-row">
                         <div class="slider-column">
                             <label for="circleR_slider" class="form-label"><span id="circleR_label_desc">Radius (R):</span></label>
                             <output id="circleR_value_display" class="slider-value-output">1.0</output>
@@ -198,7 +196,7 @@
                         </div>
                         <div class="slider-column"></div>
                     </div>
-                    <div id="ellipse_params_slider_group" class="hidden slider-row"> <!-- This ID can remain if it's just a grouping div -->
+                    <div id="ellipse_params_slider_group" class="hidden slider-row">
                         <div class="slider-column">
                             <label for="ellipseA_slider" class="form-label"><span id="ellipseA_label_desc">Semi-axis A:</span></label>
                             <output id="ellipseA_value_display" class="slider-value-output">1.5</output>
@@ -218,7 +216,7 @@
                             </div>
                         </div>
                     </div>
-                    <div id="hyperbola_params_slider_group" class="hidden slider-row"> <!-- This ID can remain -->
+                    <div id="hyperbola_params_slider_group" class="hidden slider-row">
                         <div class="slider-column">
                             <label for="hyperbolaA_slider" class="form-label"><span id="hyperbolaA_label_desc">Param A:</span></label>
                             <output id="hyperbolaA_value_display" class="slider-value-output">1.0</output>
@@ -282,6 +280,22 @@
                         </div>
                     </div>
                 </div>
+                <div class="controls-section hidden" id="polynomial_params_sliders">
+                    <label class="form-label d-block" style="margin-bottom: 0.5rem;">Polynomial: w = a<sub>0</sub>z<sup>n</sup> + a<sub>1</sub>z<sup>n-1</sup> + ... + a<sub>n</sub></label>
+                    <div class="slider-row">
+                        <div class="slider-column" style="min-width: 100%;"> <!-- Make N slider full width -->
+                            <label for="polynomialN_slider" class="form-label">Degree (n):</label>
+                            <output id="polynomialN_value_display" class="slider-value-output">2</output>
+                            <div class="slider-container">
+                                <input type="range" id="polynomialN_slider" min="0" max="5" step="1" value="2">
+                                <!-- No play button for N, it's a structural parameter -->
+                            </div>
+                        </div>
+                    </div>
+                    <div id="polynomial_coeffs_container" class="mt-2">
+                        <!-- Coefficient sliders will be dynamically inserted here -->
+                    </div>
+                </div>
             </div>
         </div>
 
@@ -319,6 +333,7 @@
         const COLOR_FOCI = 'rgb(255,100,100)';
         const NUM_POINTS_CURVE = 250;
         const NUM_ZETA_TERMS = 100;
+        const MAX_POLY_DEGREE = 5; // Max degree for polynomial
 
         const zCanvas = document.getElementById('z_plane_canvas');
         const wCanvas = document.getElementById('w_plane_canvas');
@@ -331,7 +346,7 @@
         sliderParamKeys.forEach(key => {
             controls[`${key}Slider`] = document.getElementById(`${key}_slider`);
             controls[`${key}ValueDisplay`] = document.getElementById(`${key}_value_display`);
-            controls[`${key}LabelDesc`] = document.getElementById(`${key}_label_desc`); // For descriptive part of label
+            controls[`${key}LabelDesc`] = document.getElementById(`${key}_label_desc`);
             controls[`play_${key}Btn`] = document.getElementById(`play_${key}_btn`);
             controls[`speed_${key}Selector`] = document.getElementById(`speed_${key}_selector`);
         });
@@ -339,24 +354,29 @@
         controls.commonParamsSliders = document.getElementById('common_params_sliders');
         controls.shapeParamsSliders = document.getElementById('shape_params_sliders');
         controls.mobiusParamsSliders = document.getElementById('mobius_params_sliders');
-        // Grouping divs for shapes might still be useful for show/hide logic
-        controls.circleRSliderGroup = document.getElementById('circleR_slider_group'); // Corrected ID
+        controls.polynomialParamsSliders = document.getElementById('polynomial_params_sliders');
+        controls.polynomialNSlider = document.getElementById('polynomialN_slider');
+        controls.polynomialNValueDisplay = document.getElementById('polynomialN_value_display');
+        controls.polynomialCoeffsContainer = document.getElementById('polynomial_coeffs_container');
+
+        controls.circleRSliderGroup = document.getElementById('circleR_slider_group');
         controls.ellipseParamsSliderGroup = document.getElementById('ellipse_params_slider_group');
         controls.hyperbolaParamsSliderGroup = document.getElementById('hyperbola_params_slider_group');
 
         controls.inputShapeSelector = document.getElementById('input_shape_selector');
         controls.funcButtons = {};
-        ['cos', 'sin', 'tan', 'sec', 'exp', 'ln', 'reciprocal', 'mobius', 'zeta'].forEach(f => {
+        ['cos', 'sin', 'tan', 'sec', 'exp', 'ln', 'reciprocal', 'mobius', 'zeta', 'polynomial'].forEach(f => {
             controls.funcButtons[f] = document.getElementById(`select_${f}_btn`);
         });
         controls.wPlaneTitleFunc = document.getElementById('w-plane-title-func');
         
-
         // State Variables
         let state = {
             a0: 0.80, b0: 0.50, 
             circleR: 1.0, ellipseA: 1.5, ellipseB: 0.7, hyperbolaA: 1.0, hyperbolaB: 0.5,
             mobiusA: 1, mobiusB: 0, mobiusC: 0, mobiusD: 1,
+            polynomialN: 2,
+            polynomialCoeffs: [], // Array of {re: number, im: number}
             currentFunction: 'cos',
             currentInputShape: 'line',
         };
@@ -367,7 +387,7 @@
         
         let animationStates = {}; 
 
-        // --- Math Helpers (Same as before) ---
+        // --- Math Helpers ---
         function complexAdd(z1, z2) { return { re: z1.re + z2.re, im: z1.im + z2.im }; }
         function complexSub(z1, z2) { return { re: z1.re - z2.re, im: z1.im - z2.im }; }
         function complexMul(z1, z2) { return { re: z1.re * z2.re - z1.im * z2.im, im: z1.re * z2.im + z1.im * z2.re }; }
@@ -397,7 +417,13 @@
         }
         function complexReciprocal(a,b) { return complexDivide({re:1, im:0}, {re:a, im:b}); }
         function complexPow(base_re, base_im, exp_re, exp_im) { 
-            if (base_re === 0 && base_im === 0) return {re:0, im:0}; 
+            if (base_re === 0 && base_im === 0) { // 0 to any power (except 0^0 handled by log(0) if exp_re=0, exp_im=0)
+                 // if exp_re > 0 or (exp_re == 0 and exp_im !=0), result is 0.
+                 // if exp_re < 0, result is Inf.
+                 // if exp_re == 0 and exp_im == 0 (0^0 case), complexLn(0,0) results in -Inf, NaN.
+                 // This will lead to NaN, which is fine as 0^0 is typically undefined or 1 by convention not by this formula.
+                return {re:0, im:0};
+            }
             const logBase = complexLn(base_re, base_im); 
             const exponent = {re: exp_re, im: exp_im};
             const product = complexMul(exponent, logBase); 
@@ -405,45 +431,63 @@
         }
         function complexRiemannZeta(a, b, numTerms = NUM_ZETA_TERMS) { 
             if (a === 1 && b === 0) return {re: Infinity, im: Infinity};
-            
             let eta_s = { re: 0, im: 0 };
             for (let n = 1; n <= numTerms; n++) {
-                const n_minus_a = Math.pow(n, -a);
-                const b_ln_n = b * Math.log(n);
+                const n_minus_a = Math.pow(n, -a); const b_ln_n = b * Math.log(n);
                 let term_n_s = { re: n_minus_a * Math.cos(b_ln_n), im: -n_minus_a * Math.sin(b_ln_n) };
-                
-                if ((n - 1) % 2 !== 0) { 
-                    term_n_s = complexScalarMul(-1, term_n_s);
-                }
+                if ((n - 1) % 2 !== 0) { term_n_s = complexScalarMul(-1, term_n_s); }
                 eta_s = complexAdd(eta_s, term_n_s);
             }
-
-            const one_minus_s = { re: 1 - a, im: -b };
-            const two_pow_one_minus_s = complexPow(2, 0, one_minus_s.re, one_minus_s.im);
+            const one_minus_s = { re: 1 - a, im: -b }; const two_pow_one_minus_s = complexPow(2, 0, one_minus_s.re, one_minus_s.im);
             const denominator = complexSub({ re: 1, im: 0 }, two_pow_one_minus_s);
-
             if (Math.abs(denominator.re) < 1e-14 && Math.abs(denominator.im) < 1e-14) {
                 if (Math.abs(eta_s.re) > 1e-9 || Math.abs(eta_s.im) > 1e-9) return {re: Infinity * Math.sign(eta_s.re), im: Infinity * Math.sign(eta_s.im)};
                 return { re: NaN, im: NaN };
             }
             return complexDivide(eta_s, denominator);
         }
-        function complexMobius(z_re, z_im) { // Takes a,b,c,d from state
+        function complexMobius(z_re, z_im) {
             const z = {re: z_re, im: z_im};
             const term_a = {re: state.mobiusA, im: 0}; const term_b = {re: state.mobiusB, im: 0};
             const term_c = {re: state.mobiusC, im: 0}; const term_d = {re: state.mobiusD, im: 0};
-
             const numerator = complexAdd(complexMul(term_a, z), term_b);
             const denominator = complexAdd(complexMul(term_c, z), term_d);
             return complexDivide(numerator, denominator);
         }
+        function complexPolynomial(z_re, z_im) {
+            let w = { re: 0, im: 0 };
+            const z = { re: z_re, im: z_im };
+
+            for (let k = 0; k <= state.polynomialN; k++) {
+                const coeff_k = state.polynomialCoeffs[k]; // This is {re, im}
+                const power = state.polynomialN - k; // Power of z for a_k is z^(n-k)
+                
+                let z_pow_power;
+                if (power === 0) { // z^0 = 1, even for z=0
+                    z_pow_power = { re: 1, im: 0 };
+                } else if (power === 1) { // z^1 = z
+                    z_pow_power = z;
+                } else {
+                    // For z=0 and power > 0, 0^power = 0
+                    if (z.re === 0 && z.im === 0 && power > 0) {
+                        z_pow_power = { re: 0, im: 0 };
+                    } else {
+                        z_pow_power = complexPow(z.re, z.im, power, 0);
+                    }
+                }
+                
+                const term = complexMul(coeff_k, z_pow_power);
+                w = complexAdd(w, term);
+            }
+            return w;
+        }
 
         const transformFunctions = { 
             cos: complexCos, sin: complexSin, tan: complexTan, sec: complexSec, exp: complexExp, ln: complexLn,
-            reciprocal: complexReciprocal, mobius: complexMobius, zeta: complexRiemannZeta
+            reciprocal: complexReciprocal, mobius: complexMobius, zeta: complexRiemannZeta, polynomial: complexPolynomial
         };
-        // --- Drawing Functions (mapToCanvasCoords, drawAxes, drawGrid, drawZPlaneContent, drawWPlaneContent - mostly unchanged, review for state usage if any issues) ---
-        // (Re-using the drawing functions from the previous correct iteration, assuming they are fine once controls are fixed)
+        
+        // --- Drawing Functions ---
         function mapToCanvasCoords(worldX, worldY, params) { return { x: params.origin.x + worldX * params.scale.x, y: params.origin.y - worldY * params.scale.y }; }
         function drawAxes(ctx, params, xLabel, yLabel) {
             ctx.save(); ctx.strokeStyle = COLOR_AXES; ctx.fillStyle = COLOR_TEXT_ON_CANVAS; ctx.lineWidth = 1; ctx.beginPath();
@@ -542,49 +586,173 @@
             wCtx.restore();
         }
 
-
         // --- UI Update Functions ---
+        function initializePolynomialCoeffs(n_val, preserveExisting = false) {
+            const oldCoeffs = preserveExisting ? [...state.polynomialCoeffs] : [];
+            state.polynomialCoeffs = [];
+            for (let i = 0; i <= n_val; i++) {
+                if (preserveExisting && i < oldCoeffs.length) {
+                    state.polynomialCoeffs.push(oldCoeffs[i]);
+                } else {
+                    // Default a_k term: a_0 is coeff of z^n, a_n is constant term
+                    // Default: z^n + 1  (so a_0 = 1, a_n = 1, others = 0)
+                    if (i === 0) { // Coefficient for z^n
+                        state.polynomialCoeffs.push({ re: 1, im: 0 });
+                    } else if (i === n_val && n_val > 0) { // Constant term a_n
+                        state.polynomialCoeffs.push({ re: 1, im: 0 });
+                    } else { // Intermediate terms
+                        state.polynomialCoeffs.push({ re: 0, im: 0 });
+                    }
+                }
+            }
+            // Special case for n=0: f(z) = a_0. Default a_0=1.
+            if (n_val === 0 && state.polynomialCoeffs.length > 0) {
+                 // If not preserving or if oldCoeffs was empty, set a_0 to default for n=0
+                if (!(preserveExisting && oldCoeffs.length > 0 && oldCoeffs[0] !== undefined) ) {
+                     state.polynomialCoeffs[0] = { re: 1, im: 0 };
+                }
+            }
+        }
+
+        function generatePolynomialCoeffSliders() {
+            if (!controls.polynomialCoeffsContainer) return;
+            controls.polynomialCoeffsContainer.innerHTML = ''; 
+
+            Object.keys(animationStates).forEach(key => {
+                if (key.startsWith('poly_coeff_')) {
+                    if (animationStates[key].frameId) cancelAnimationFrame(animationStates[key].frameId);
+                    delete animationStates[key];
+                }
+            });
+
+            for (let k = 0; k <= state.polynomialN; k++) {
+                const coeff = state.polynomialCoeffs[k] || {re:0, im:0}; // Fallback just in case
+                const row = document.createElement('div');
+                row.className = 'slider-row';
+
+                const reCol = document.createElement('div');
+                reCol.className = 'slider-column';
+                reCol.innerHTML = `
+                    <label for="poly_coeff_Re_${k}_slider" class="form-label">Re(a<sub>${k}</sub>):</label>
+                    <output id="poly_coeff_Re_${k}_value_display" class="slider-value-output">${coeff.re.toFixed(1)}</output>
+                    <div class="slider-container">
+                        <input type="range" id="poly_coeff_Re_${k}_slider" min="-5" max="5" step="0.1" value="${coeff.re}">
+                        <button id="play_poly_coeff_Re_${k}_btn" class="btn btn-sm btn-outline-secondary ms-2">Play</button>
+                        <select id="speed_poly_coeff_Re_${k}_selector" class="animation-speed-selector">
+                            <option value="0.1">0.1x</option><option value="0.5">0.5x</option>
+                            <option value="1" selected>1x</option><option value="2">2x</option>
+                        </select>
+                    </div>`;
+                row.appendChild(reCol);
+
+                const imCol = document.createElement('div');
+                imCol.className = 'slider-column';
+                imCol.innerHTML = `
+                    <label for="poly_coeff_Im_${k}_slider" class="form-label">Im(a<sub>${k}</sub>):</label>
+                    <output id="poly_coeff_Im_${k}_value_display" class="slider-value-output">${coeff.im.toFixed(1)}</output>
+                    <div class="slider-container">
+                        <input type="range" id="poly_coeff_Im_${k}_slider" min="-5" max="5" step="0.1" value="${coeff.im}">
+                        <button id="play_poly_coeff_Im_${k}_btn" class="btn btn-sm btn-outline-secondary ms-2">Play</button>
+                        <select id="speed_poly_coeff_Im_${k}_selector" class="animation-speed-selector">
+                            <option value="0.1">0.1x</option><option value="0.5">0.5x</option>
+                            <option value="1" selected>1x</option><option value="2">2x</option>
+                        </select>
+                    </div>`;
+                row.appendChild(imCol);
+                controls.polynomialCoeffsContainer.appendChild(row);
+
+                const reSlider = document.getElementById(`poly_coeff_Re_${k}_slider`);
+                const rePlayBtn = document.getElementById(`play_poly_coeff_Re_${k}_btn`);
+                const reSpeedSel = document.getElementById(`speed_poly_coeff_Re_${k}_selector`);
+                reSlider.addEventListener('input', () => { state.polynomialCoeffs[k].re = parseFloat(reSlider.value); redrawAll(); });
+                rePlayBtn.addEventListener('click', () => toggleAnimation(reSlider, '', rePlayBtn, reSpeedSel, true, k, 're'));
+
+                const imSlider = document.getElementById(`poly_coeff_Im_${k}_slider`);
+                const imPlayBtn = document.getElementById(`play_poly_coeff_Im_${k}_btn`);
+                const imSpeedSel = document.getElementById(`speed_poly_coeff_Im_${k}_selector`);
+                imSlider.addEventListener('input', () => { state.polynomialCoeffs[k].im = parseFloat(imSlider.value); redrawAll(); });
+                imPlayBtn.addEventListener('click', () => toggleAnimation(imSlider, '', imPlayBtn, imSpeedSel, true, k, 'im'));
+            }
+        }
+        
+        function updatePolynomialCoeffDisplays() {
+            if (state.currentFunction !== 'polynomial' || !state.polynomialCoeffs) return;
+            for (let k = 0; k <= state.polynomialN; k++) {
+                if (state.polynomialCoeffs[k]) {
+                    const reDisplay = document.getElementById(`poly_coeff_Re_${k}_value_display`);
+                    const imDisplay = document.getElementById(`poly_coeff_Im_${k}_value_display`);
+                    if (reDisplay) reDisplay.textContent = state.polynomialCoeffs[k].re.toFixed(1);
+                    if (imDisplay) imDisplay.textContent = state.polynomialCoeffs[k].im.toFixed(1);
+                }
+            }
+        }
+
         function updateSliderLabelsAndDisplay() {
             const isLineMode = state.currentInputShape === 'line';
             const isMobiusMode = state.currentFunction === 'mobius';
+            const isPolynomialMode = state.currentFunction === 'polynomial';
             
-            controls.shapeParamsSliders.classList.toggle('hidden', isLineMode);
             controls.mobiusParamsSliders.classList.toggle('hidden', !isMobiusMode);
+            controls.polynomialParamsSliders.classList.toggle('hidden', !isPolynomialMode);
+            
+            // Shape params visibility depends on not being line mode AND not polynomial mode (unless we decide polys can use shape params later)
+            // For now, polynomial mode hides dedicated shape param sliders (R, ellipseA/B, hyperbolaA/B)
+            // common_params_sliders (a0,b0) remain, interpreted as point or shape center.
+            const hideShapeSpecificSliders = isLineMode || isPolynomialMode;
+            controls.shapeParamsSliders.classList.toggle('hidden', hideShapeSpecificSliders);
+            if (!hideShapeSpecificSliders) { // Only toggle individual shape groups if shapeParamsSliders itself is visible
+                controls.circleRSliderGroup.classList.toggle('hidden', state.currentInputShape !== 'circle');
+                controls.ellipseParamsSliderGroup.classList.toggle('hidden', state.currentInputShape !== 'ellipse');
+                controls.hyperbolaParamsSliderGroup.classList.toggle('hidden', state.currentInputShape !== 'hyperbola');
+            } else { // If shape specific sliders are globally hidden, hide all subgroups
+                controls.circleRSliderGroup.classList.add('hidden');
+                controls.ellipseParamsSliderGroup.classList.add('hidden');
+                controls.hyperbolaParamsSliderGroup.classList.add('hidden');
+            }
 
-            controls.circleRSliderGroup.classList.toggle('hidden', state.currentInputShape !== 'circle' || isLineMode);
-            controls.ellipseParamsSliderGroup.classList.toggle('hidden', state.currentInputShape !== 'ellipse' || isLineMode);
-            controls.hyperbolaParamsSliderGroup.classList.toggle('hidden', state.currentInputShape !== 'hyperbola' || isLineMode);
-
-            // Update numerical value displays
             sliderParamKeys.forEach(key => {
                 if (controls[`${key}ValueDisplay`] && state[key] !== undefined) {
                     const val = state[key];
-                    const step = controls[`${key}Slider`] ? parseFloat(controls[`${key}Slider`].step) : 0.1;
+                    const sliderElem = controls[`${key}Slider`];
+                    const step = sliderElem ? parseFloat(sliderElem.step) : 0.1;
                     const precision = step.toString().includes('.') ? step.toString().split('.')[1].length : 0;
                     controls[`${key}ValueDisplay`].textContent = val.toFixed(Math.max(precision, (key === 'a0' || key === 'b0' || key === 'circleR' ? 2 : 1) ));
                 }
             });
             
-            // Update descriptive label texts for a0 and b0 based on mode
             if (isLineMode) {
                 if(controls.a0LabelDesc) controls.a0LabelDesc.innerHTML = `Re(z) (<code>a<sub>0</sub></code>):`;
                 if(controls.b0LabelDesc) controls.b0LabelDesc.innerHTML = `Im(z) (<code>b<sub>0</sub></code>):`;
-            } else { // Shape mode
+            } else { 
                 if(controls.a0LabelDesc) controls.a0LabelDesc.innerHTML = `Center X (<code>c<sub>x</sub></code>):`;
                 if(controls.b0LabelDesc) controls.b0LabelDesc.innerHTML = `Center Y (<code>c<sub>y</sub></code>):`;
             }
-        }
 
+            if (isPolynomialMode) {
+                if (controls.polynomialNValueDisplay) controls.polynomialNValueDisplay.textContent = state.polynomialN;
+                updatePolynomialCoeffDisplays();
+            }
+        }
 
         function updateDisplays() {
             updateSliderLabelsAndDisplay(); 
 
-            let funcNameDisplay = state.currentFunction === 'exp' ? 'e<sup>z</sup>' : 
-                                  state.currentFunction === 'ln' ? 'ln(z)' :
-                                  state.currentFunction === 'reciprocal' ? '1/z' :
-                                  state.currentFunction === 'mobius' ? '(az+b)/(cz+d)' :
-                                  state.currentFunction === 'zeta' ? 'ζ(z)' :
-                                  `${state.currentFunction}(z)`;
+            let funcNameDisplay;
+            if (state.currentFunction === 'polynomial') {
+                funcNameDisplay = `P(z) (deg ${state.polynomialN})`;
+            } else if (state.currentFunction === 'exp') {
+                funcNameDisplay = 'e<sup>z</sup>';
+            } else if (state.currentFunction === 'ln') {
+                funcNameDisplay = 'ln(z)';
+            } else if (state.currentFunction === 'reciprocal') {
+                funcNameDisplay = '1/z';
+            } else if (state.currentFunction === 'mobius') {
+                funcNameDisplay = '(az+b)/(cz+d)';
+            } else if (state.currentFunction === 'zeta') {
+                funcNameDisplay = 'ζ(z)';
+            } else {
+                funcNameDisplay = `${state.currentFunction}(z)`;
+            }
             controls.wPlaneTitleFunc.innerHTML = `w = ${funcNameDisplay}`;
         }
 
@@ -594,31 +762,80 @@
             drawWPlaneContent(); 
         }
 
-        // --- Generic Animation (Same as before) ---
-        function toggleAnimation(sliderElement, stateKey, playButton, speedSelector) {
+        // --- Generic Animation ---
+        function toggleAnimation(sliderElement, stateKey, playButton, speedSelector, 
+                                 isPolyCoeff = false, polyCoeffIndex = -1, polyCoeffPart = '') {
             const sliderId = sliderElement.id;
-            if (!animationStates[sliderId]) { animationStates[sliderId] = { animating: false, frameId: null, direction: 1 }; }
+            if (!animationStates[sliderId]) {
+                animationStates[sliderId] = { 
+                    animating: false, 
+                    frameId: null, 
+                    direction: 1, 
+                    currentAnimatedValue: parseFloat(sliderElement.value) 
+                };
+            }
             let animState = animationStates[sliderId];
+
             if (animState.animating) {
-                animState.animating = false; if (animState.frameId) cancelAnimationFrame(animState.frameId);
-                playButton.textContent = 'Play'; playButton.classList.remove('btn-primary'); playButton.classList.add('btn-outline-secondary');
+                animState.animating = false; 
+                if (animState.frameId) cancelAnimationFrame(animState.frameId);
+                playButton.textContent = 'Play'; 
+                playButton.classList.remove('btn-primary', 'active'); 
+                playButton.classList.add('btn-outline-secondary');
             } else {
-                animState.animating = true; animState.direction = 1; 
-                if (parseFloat(sliderElement.value) >= parseFloat(sliderElement.max)) { sliderElement.value = sliderElement.min; }
-                state[stateKey] = parseFloat(sliderElement.value);
-                playButton.textContent = 'Pause'; playButton.classList.add('btn-primary'); playButton.classList.remove('btn-outline-secondary');
+                animState.animating = true;
+                animState.currentAnimatedValue = parseFloat(sliderElement.value); // Initialize/re-initialize high-precision value from slider
+                
+                const min = parseFloat(sliderElement.min);
+                const max = parseFloat(sliderElement.max);
+
+                if (animState.currentAnimatedValue >= max) {
+                    animState.direction = -1; 
+                } else if (animState.currentAnimatedValue <= min) {
+                    animState.direction = 1;  
+                } else {
+                    animState.direction = animState.direction || 1; // Keep current direction or default to 1
+                }
+                
+                playButton.textContent = 'Pause'; 
+                playButton.classList.add('btn-primary', 'active'); 
+                playButton.classList.remove('btn-outline-secondary');
+
                 function animationLoop() {
                     if (!animState.animating) return;
-                    let currentValue = parseFloat(sliderElement.value);
-                    const step = parseFloat(sliderElement.step); const min = parseFloat(sliderElement.min); const max = parseFloat(sliderElement.max);
+                    
+                    let internalValue = animState.currentAnimatedValue;
+                    const stepSize = parseFloat(sliderElement.step);
+                    const currentMin = parseFloat(sliderElement.min); // Re-fetch in case they change, though unlikely for these sliders
+                    const currentMax = parseFloat(sliderElement.max);
                     const speedMultiplier = parseFloat(speedSelector.value);
-                    currentValue += step * animState.direction * speedMultiplier;
-                    if (currentValue > max) { currentValue = max; animState.direction = -1; } 
-                    else if (currentValue < min) { currentValue = min; animState.direction = 1; }
+
+                    internalValue += stepSize * animState.direction * speedMultiplier;
+
+                    if (internalValue >= currentMax) {
+                        internalValue = currentMax;
+                        animState.direction = -1;
+                    } else if (internalValue <= currentMin) {
+                        internalValue = currentMin;
+                        animState.direction = 1;
+                    }
+                    animState.currentAnimatedValue = internalValue;
+
                     const precision = sliderElement.step.includes('.') ? sliderElement.step.split('.')[1].length : 0;
-                    sliderElement.value = currentValue.toFixed(precision);
-                    state[stateKey] = parseFloat(sliderElement.value); 
-                    redrawAll();
+                    const displayValue = internalValue.toFixed(precision);
+                    
+                    sliderElement.value = displayValue;
+                    const numericDisplayValue = parseFloat(displayValue);
+
+                    if (isPolyCoeff) {
+                        if (state.polynomialCoeffs[polyCoeffIndex]) {
+                           state.polynomialCoeffs[polyCoeffIndex][polyCoeffPart] = numericDisplayValue;
+                        }
+                    } else {
+                        state[stateKey] = numericDisplayValue;
+                    }
+                    
+                    redrawAll(); // This updates output tags via updateSliderLabelsAndDisplay
                     animState.frameId = requestAnimationFrame(animationLoop);
                 }
                 animationLoop();
@@ -649,6 +866,16 @@
         
         controls.inputShapeSelector.addEventListener('change', (e) => { state.currentInputShape = e.target.value; redrawAll(); });
 
+        if (controls.polynomialNSlider) {
+            controls.polynomialNSlider.addEventListener('input', () => {
+                const newN = parseInt(controls.polynomialNSlider.value);
+                state.polynomialN = newN;
+                initializePolynomialCoeffs(newN, true); // Preserve existing coeffs
+                generatePolynomialCoeffSliders(); 
+                redrawAll();
+            });
+        }
+
         // --- Initialization ---
         function setupZPlaneUniformScale() {
             const p = zPlaneParams; const initialXSpan = zPlaneInitialRanges.x[1] - zPlaneInitialRanges.x[0]; const initialYSpan = zPlaneInitialRanges.y[1] - zPlaneInitialRanges.y[0];
@@ -666,12 +893,16 @@
             const pW = wPlaneParams; pW.scale.x = pW.width / (pW.xRange[1] - pW.xRange[0]); pW.scale.y = pW.height / (pW.yRange[1] - pW.yRange[0]);
             pW.origin.x = pW.width * (-pW.xRange[0] / (pW.xRange[1] - pW.xRange[0])); pW.origin.y = pW.height * (pW.yRange[1] / (pW.yRange[1] - pW.yRange[0]));
             
-            sliderParamKeys.forEach(key => { // Initialize state from HTML slider values
+            sliderParamKeys.forEach(key => { 
                 if (controls[`${key}Slider`]) {
                     state[key] = parseFloat(controls[`${key}Slider`].value);
                 }
             });
             
+            state.polynomialN = parseInt(controls.polynomialNSlider.value);
+            initializePolynomialCoeffs(state.polynomialN, false); // Initialize with defaults
+            generatePolynomialCoeffSliders();
+
             Object.keys(controls.funcButtons).forEach(k => { controls.funcButtons[k].classList.remove('active', 'btn-primary'); controls.funcButtons[k].classList.add('btn-outline-secondary'); });
             controls.funcButtons[state.currentFunction].classList.add('active', 'btn-primary'); controls.funcButtons[state.currentFunction].classList.remove('btn-outline-secondary');
             
