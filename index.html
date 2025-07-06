@@ -1,0 +1,738 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Advanced Complex Function Visualization</title>
+    <link rel="stylesheet" href="css/styles.css">
+    <!-- Plotly.js for interactive plotting (updated version) -->
+    <script src="https://cdn.plot.ly/plotly-2.29.1.min.js"></script>
+</head>
+<body class="pb-5">
+    <div id="preloader"><div class="spinner"></div></div>
+    <div class="background-container"><div class="background-gradient"></div><div class="background-noise"></div></div>
+    <main>
+        <section id="controls_options_section">
+            <div id="function-controls-panel">
+                <div class="control-group">
+                    <div>
+                        <button id="select_cos_btn" data-tooltip="Select w = cos(z) function">w = cos(z)</button>
+                        <button id="select_sin_btn" data-tooltip="Select w = sin(z) function">w = sin(z)</button>
+                        <button id="select_tan_btn" data-tooltip="Select w = tan(z) function">w = tan(z)</button>
+                        <button id="select_sec_btn" data-tooltip="Select w = sec(z) function">w = sec(z)</button>
+                        <button id="select_exp_btn" data-tooltip="Select w = e^z function">w = e<sup>z</sup></button>
+                        <button id="select_ln_btn" data-tooltip="Select w = ln(z) function">w = ln(z)</button>
+                        <button id="select_reciprocal_btn" data-tooltip="Select w = 1/z function">w = 1/z</button>
+                        <button id="select_mobius_btn" data-tooltip="Select w = (az+b)/(cz+d) Möbius transformation">Möbius</button>
+                        <button id="select_zeta_btn" data-tooltip="Select w = ζ(z) Riemann Zeta function">w = ζ(z)</button>
+                        <button id="select_polynomial_btn" data-tooltip="Select w = P(z) polynomial function">Polynomial</button>
+                        <button id="select_poincare_btn" data-tooltip="Select Poincare Disk transformation">Poincare</button>
+                    </div>
+                </div>
+                
+                <div id="zeta_specific_controls" class="control-group dependent-settings-block hidden">
+                    <button id="toggle_zeta_continuation_btn" data-tooltip="Toggle analytic continuation for ζ(z) beyond Re(z) > 1">Enable Analytic Continuation</button>
+                </div>
+
+                <div id="common_params_sliders">
+                    <div class="control-group">
+                        <label for="a0_slider">
+                            Real part of z (<code>a<sub>0</sub></code>):
+                            <output id="a0_value_display">0.80</output>
+                        </label>
+                        <div class="slider-container">
+                            <input type="range" id="a0_slider" name="a0_slider" min="-5" max="5" step="0.05" value="0.0" data-tooltip="Adjusts real part (a0) of z for line input, or center for shapes">
+                            <button id="play_a0_btn" data-tooltip="Animate the real part (a0)">Play</button>
+                            <select id="speed_a0_selector" class="animation-speed-selector" data-tooltip="Select animation speed for real part (a0)"><option value="0.01">0.01x</option><option value="0.1">0.1x</option><option value="0.5">0.5x</option><option value="1" selected>1x</option><option value="2">2x</option></select>
+                        </div>
+                    </div>
+                    <div class="control-group">
+                        <label for="b0_slider">
+                            Imaginary part of z (<code>b<sub>0</sub></code>):
+                            <output id="b0_value_display">0.50</output>
+                        </label>
+                        <div class="slider-container">
+                            <input type="range" id="b0_slider" name="b0_slider" min="-5" max="5" step="0.05" value="0.0" data-tooltip="Adjusts imaginary part (b0) of z for line input, or center for shapes">
+                            <button id="play_b0_btn" data-tooltip="Animate the imaginary part (b0)">Play</button>
+                            <select id="speed_b0_selector" class="animation-speed-selector" data-tooltip="Select animation speed for imaginary part (b0)"><option value="0.01">0.01x</option><option value="0.1">0.1x</option><option value="0.5">0.5x</option><option value="1" selected>1x</option><option value="2">2x</option></select>
+                        </div>
+                    </div>
+                </div>
+                
+                <div id="shape_params_sliders" class="dependent-settings-block hidden">
+                    <div id="circleR_slider_group" class="hidden control-group">
+                        <label for="circleR_slider">
+                            Radius (R):
+                            <output id="circleR_value_display">1.0</output>
+                        </label>
+                        <div class="slider-container">
+                            <input type="range" id="circleR_slider" name="circleR_slider" min="0.1" max="10" step="0.05" value="1.0" data-tooltip="Adjusts radius (R) of the circle input shape">
+                            <button id="play_circleR_btn" data-tooltip="Animate circle radius (R)">Play</button>
+                            <select id="speed_circleR_selector" class="animation-speed-selector" data-tooltip="Select animation speed for circle radius (R)"><option value="0.01">0.01x</option><option value="0.1">0.1x</option><option value="0.5">0.5x</option><option value="1" selected>1x</option><option value="2">2x</option></select>
+                        </div>
+                    </div>
+                    <div id="ellipse_params_slider_group" class="hidden">
+                        <div class="control-group">
+                            <label for="ellipseA_slider">
+                                Semi-axis A:
+                                <output id="ellipseA_value_display">1.5</output>
+                            </label>
+                            <div class="slider-container">
+                                <input type="range" id="ellipseA_slider" name="ellipseA_slider" min="0.1" max="3" step="0.05" value="1.5" data-tooltip="Adjusts semi-axis A for the ellipse input shape">
+                                <button id="play_ellipseA_btn" data-tooltip="Animate ellipse semi-axis A">Play</button>
+                                <select id="speed_ellipseA_selector" class="animation-speed-selector" data-tooltip="Select animation speed for ellipse semi-axis A"><option value="0.01">0.01x</option><option value="0.1">0.1x</option><option value="0.5">0.5x</option><option value="1" selected>1x</option><option value="2">2x</option></select>
+                            </div>
+                        </div>
+                        <div class="control-group">
+                            <label for="ellipseB_slider">
+                                Semi-axis B:
+                                <output id="ellipseB_value_display">0.7</output>
+                            </label>
+                            <div class="slider-container">
+                                <input type="range" id="ellipseB_slider" name="ellipseB_slider" min="0.1" max="3" step="0.05" value="0.7" data-tooltip="Adjusts semi-axis B for the ellipse input shape">
+                                <button id="play_ellipseB_btn" data-tooltip="Animate ellipse semi-axis B">Play</button>
+                                <select id="speed_ellipseB_selector" class="animation-speed-selector" data-tooltip="Select animation speed for ellipse semi-axis B"><option value="0.01">0.01x</option><option value="0.1">0.1x</option><option value="0.5">0.5x</option><option value="1" selected>1x</option><option value="2">2x</option></select>
+                            </div>
+                        </div>
+                    </div>
+                    <div id="hyperbola_params_slider_group" class="hidden">
+                        <div class="control-group">
+                            <label for="hyperbolaA_slider">
+                                Param A:
+                                <output id="hyperbolaA_value_display">1.0</output>
+                            </label>
+                            <div class="slider-container">
+                                <input type="range" id="hyperbolaA_slider" name="hyperbolaA_slider" min="0.1" max="2.5" step="0.05" value="1.0" data-tooltip="Adjusts parameter A for the hyperbola input shape">
+                                <button id="play_hyperbolaA_btn" data-tooltip="Animate hyperbola parameter A">Play</button>
+                                <select id="speed_hyperbolaA_selector" class="animation-speed-selector" data-tooltip="Select animation speed for hyperbola parameter A"><option value="0.01">0.01x</option><option value="0.1">0.1x</option><option value="0.5">0.5x</option><option value="1" selected>1x</option><option value="2">2x</option></select>
+                            </div>
+                        </div>
+                        <div class="control-group">
+                             <label for="hyperbolaB_slider">
+                                Param B:
+                                <output id="hyperbolaB_value_display">0.5</output>
+                            </label>
+                            <div class="slider-container">
+                            <input type="range" id="hyperbolaB_slider" name="hyperbolaB_slider" min="0.1" max="2.5" step="0.05" value="0.5" data-tooltip="Adjusts parameter B for the hyperbola input shape">
+                                <button id="play_hyperbolaB_btn" data-tooltip="Animate hyperbola parameter B">Play</button>
+                                <select id="speed_hyperbolaB_selector" class="animation-speed-selector" data-tooltip="Select animation speed for hyperbola parameter B"><option value="0.01">0.01x</option><option value="0.1">0.1x</option><option value="0.5">0.5x</option><option value="1" selected>1x</option><option value="2">2x</option></select>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div id="strip_horizontal_params_sliders" class="dependent-settings-block hidden">
+                    <div class="control-group">
+                        <label>Horizontal Strip Parameters:</label>
+                    </div>
+                    <div class="control-group">
+                        <label for="stripY1_slider">
+                            y<sub>1</sub>:
+                            <output id="stripY1_value_display">-0.5</output>
+                        </label>
+                        <div class="slider-container"><input type="range" id="stripY1_slider" name="stripY1_slider" min="-5" max="5" step="0.1" value="-0.5" data-tooltip="Lower y-boundary for horizontal strip input shape"></div>
+                    </div>
+                    <div class="control-group">
+                        <label for="stripY2_slider">
+                            y<sub>2</sub>:
+                            <output id="stripY2_value_display">0.5</output>
+                        </label>
+                        <div class="slider-container"><input type="range" id="stripY2_slider" name="stripY2_slider" min="-5" max="5" step="0.1" value="0.5" data-tooltip="Upper y-boundary for horizontal strip input shape"></div>
+                    </div>
+                </div>
+                
+                <div id="sector_angular_params_sliders" class="dependent-settings-block hidden">
+                    <div class="control-group">
+                        <label>Angular Sector Parameters:</label>
+                    </div>
+                    <div class="control-group">
+                        <label for="sectorAngle1_slider">
+                            θ<sub>1</sub> (deg):
+                            <output id="sectorAngle1_value_display">0</output>
+                        </label>
+                        <div class="slider-container"><input type="range" id="sectorAngle1_slider" name="sectorAngle1_slider" min="0" max="360" step="1" value="0" data-tooltip="Start angle (degrees) for angular sector input shape"></div>
+                    </div>
+                    <div class="control-group">
+                        <label for="sectorAngle2_slider">
+                            θ<sub>2</sub> (deg):
+                            <output id="sectorAngle2_value_display">45</output>
+                        </label>
+                        <div class="slider-container"><input type="range" id="sectorAngle2_slider" name="sectorAngle2_slider" min="0" max="360" step="1" value="45" data-tooltip="End angle (degrees) for angular sector input shape"></div>
+                    </div>
+                    <div class="control-group">
+                        <label for="sectorRMin_slider">
+                            R<sub>min</sub>:
+                            <output id="sectorRMin_value_display">0.5</output>
+                        </label>
+                        <div class="slider-container"><input type="range" id="sectorRMin_slider" name="sectorRMin_slider" min="0" max="5" step="0.1" value="0.5" data-tooltip="Minimum radius (Rmin) for angular sector input shape"></div>
+                    </div>
+                    <div class="control-group">
+                        <label for="sectorRMax_slider">
+                            R<sub>max</sub>:
+                            <output id="sectorRMax_value_display">2.0</output>
+                        </label>
+                        <div class="slider-container"><input type="range" id="sectorRMax_slider" name="sectorRMax_slider" min="0.1" max="10" step="0.1" value="2.0" data-tooltip="Maximum radius (Rmax) for angular sector input shape"></div>
+                    </div>
+                </div>
+
+                <div id="mobius_params_sliders" class="dependent-settings-block hidden">
+                    <div class="control-group">
+                        <label>Möbius Parameters (w = (az+b)/(cz+d)):</label>
+                    </div>
+                    <div class="mobius-coeff-row">
+                        <div class="control-group">
+                            <label for="mobiusA_re_slider">Re(a): <output id="mobiusA_re_value_display">1.0</output></label>
+                            <div class="slider-container">
+                                <input type="range" id="mobiusA_re_slider" min="-5" max="5" step="0.1" value="1" data-tooltip="Real part of coefficient 'a' for Möbius transformation">
+                                <button id="play_mobiusA_re_btn" data-tooltip="Animate Re(a) for Möbius">Play</button>
+                                <select id="speed_mobiusA_re_selector" class="animation-speed-selector" data-tooltip="Select animation speed for Re(a) of Möbius"><option value="0.01">0.01x</option><option value="0.1">0.1x</option><option value="0.5">0.5x</option><option value="1" selected>1x</option><option value="2">2x</option></select>
+                            </div>
+                        </div>
+                        <div class="control-group">
+                            <label for="mobiusA_im_slider">Im(a): <output id="mobiusA_im_value_display">0.0</output></label>
+                            <div class="slider-container">
+                                <input type="range" id="mobiusA_im_slider" min="-5" max="5" step="0.1" value="0" data-tooltip="Imaginary part of coefficient 'a' for Möbius transformation">
+                                <button id="play_mobiusA_im_btn" data-tooltip="Animate Im(a) for Möbius">Play</button>
+                                <select id="speed_mobiusA_im_selector" class="animation-speed-selector" data-tooltip="Select animation speed for Im(a) of Möbius"><option value="0.01">0.01x</option><option value="0.1">0.1x</option><option value="0.5">0.5x</option><option value="1" selected>1x</option><option value="2">2x</option></select>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="mobius-coeff-row">
+                        <div class="control-group">
+                            <label for="mobiusB_re_slider">Re(b): <output id="mobiusB_re_value_display">0.0</output></label>
+                            <div class="slider-container">
+                                <input type="range" id="mobiusB_re_slider" min="-5" max="5" step="0.1" value="0" data-tooltip="Real part of coefficient 'b' for Möbius transformation">
+                                <button id="play_mobiusB_re_btn" data-tooltip="Animate Re(b) for Möbius">Play</button>
+                                <select id="speed_mobiusB_re_selector" class="animation-speed-selector" data-tooltip="Select animation speed for Re(b) of Möbius"><option value="0.01">0.01x</option><option value="0.1">0.1x</option><option value="0.5">0.5x</option><option value="1" selected>1x</option><option value="2">2x</option></select>
+                            </div>
+                        </div>
+                        <div class="control-group">
+                            <label for="mobiusB_im_slider">Im(b): <output id="mobiusB_im_value_display">0.0</output></label>
+                            <div class="slider-container">
+                                <input type="range" id="mobiusB_im_slider" min="-5" max="5" step="0.1" value="0" data-tooltip="Imaginary part of coefficient 'b' for Möbius transformation">
+                                <button id="play_mobiusB_im_btn" data-tooltip="Animate Im(b) for Möbius">Play</button>
+                                <select id="speed_mobiusB_im_selector" class="animation-speed-selector" data-tooltip="Select animation speed for Im(b) of Möbius"><option value="0.01">0.01x</option><option value="0.1">0.1x</option><option value="0.5">0.5x</option><option value="1" selected>1x</option><option value="2">2x</option></select>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="mobius-coeff-row">
+                        <div class="control-group">
+                            <label for="mobiusC_re_slider">Re(c): <output id="mobiusC_re_value_display">0.0</output></label>
+                            <div class="slider-container">
+                                <input type="range" id="mobiusC_re_slider" min="-5" max="5" step="0.1" value="0" data-tooltip="Real part of coefficient 'c' for Möbius transformation">
+                                <button id="play_mobiusC_re_btn" data-tooltip="Animate Re(c) for Möbius">Play</button>
+                                <select id="speed_mobiusC_re_selector" class="animation-speed-selector" data-tooltip="Select animation speed for Re(c) of Möbius"><option value="0.01">0.01x</option><option value="0.1">0.1x</option><option value="0.5">0.5x</option><option value="1" selected>1x</option><option value="2">2x</option></select>
+                            </div>
+                        </div>
+                        <div class="control-group">
+                            <label for="mobiusC_im_slider">Im(c): <output id="mobiusC_im_value_display">0.0</output></label>
+                            <div class="slider-container">
+                                <input type="range" id="mobiusC_im_slider" min="-5" max="5" step="0.1" value="0" data-tooltip="Imaginary part of coefficient 'c' for Möbius transformation">
+                                <button id="play_mobiusC_im_btn" data-tooltip="Animate Im(c) for Möbius">Play</button>
+                                <select id="speed_mobiusC_im_selector" class="animation-speed-selector" data-tooltip="Select animation speed for Im(c) of Möbius"><option value="0.01">0.01x</option><option value="0.1">0.1x</option><option value="0.5">0.5x</option><option value="1" selected>1x</option><option value="2">2x</option></select>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="mobius-coeff-row">
+                        <div class="control-group">
+                            <label for="mobiusD_re_slider">Re(d): <output id="mobiusD_re_value_display">1.0</output></label>
+                            <div class="slider-container">
+                                <input type="range" id="mobiusD_re_slider" min="-5" max="5" step="0.1" value="1" data-tooltip="Real part of coefficient 'd' for Möbius transformation">
+                                <button id="play_mobiusD_re_btn" data-tooltip="Animate Re(d) for Möbius">Play</button>
+                                <select id="speed_mobiusD_re_selector" class="animation-speed-selector" data-tooltip="Select animation speed for Re(d) of Möbius"><option value="0.01">0.01x</option><option value="0.1">0.1x</option><option value="0.5">0.5x</option><option value="1" selected>1x</option><option value="2">2x</option></select>
+                            </div>
+                        </div>
+                        <div class="control-group">
+                            <label for="mobiusD_im_slider">Im(d): <output id="mobiusD_im_value_display">0.0</output></label>
+                            <div class="slider-container">
+                                <input type="range" id="mobiusD_im_slider" min="-5" max="5" step="0.1" value="0" data-tooltip="Imaginary part of coefficient 'd' for Möbius transformation">
+                                <button id="play_mobiusD_im_btn" data-tooltip="Animate Im(d) for Möbius">Play</button>
+                                <select id="speed_mobiusD_im_selector" class="animation-speed-selector" data-tooltip="Select animation speed for Im(d) of Möbius"><option value="0.01">0.01x</option><option value="0.1">0.1x</option><option value="0.5">0.5x</option><option value="1" selected>1x</option><option value="2">2x</option></select>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div id="polynomial_params_sliders" class="dependent-settings-block hidden">
+                    <div class="control-group">
+                        <label>Polynomial: w = a<sub>0</sub>z<sup>n</sup> + ... + a<sub>n-1</sub>z + a<sub>n</sub></label>
+                    </div>
+                    <div class="control-group" style="min-width: 100%;">
+                        <label for="polynomialN_slider">
+                            Degree (n):
+                            <output id="polynomialN_value_display">2</output>
+                        </label>
+                        <div class="slider-container">
+                            <input type="range" id="polynomialN_slider" name="polynomialN_slider" min="0" max="10" step="1" value="2" data-tooltip="Degree (n) of the polynomial P(z)">
+                        </div>
+                    </div>
+                    <div id="polynomial_coeffs_container"></div>
+                </div>
+            </div>
+            
+            <div id="visualization-options-panel">
+                <div class="slider-row">
+                    <div class="control-group">
+                        <label for="grid_density_slider">
+                            Grid Density:
+                            <output id="grid_density_value_display">15</output>
+                        </label>
+                        <div class="slider-container">
+                            <input type="range" id="grid_density_slider" name="grid_density_slider" min="5" max="30" step="1" value="15" data-tooltip="Number of lines in the z-plane input grid">
+                        </div>
+                    </div>
+                    <div class="control-group"> <!-- Probe (r_local) -->
+                        <label for="neighborhood_size_slider">
+                            Probe (r<sub>local</sub>):
+                            <output id="neighborhood_size_value_display">0.2</output>
+                        </label>
+                        <div class="slider-container">
+                            <input type="range" id="neighborhood_size_slider" name="neighborhood_size_slider" min="0.05" max="0.5" step="0.01" value="0.2" data-tooltip="Probe radius (r_local) for f'(z) and local properties">
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="slider-row">
+                    <div class="control-group">
+                        <label for="z_plane_zoom_slider">
+                            Z-Plane Zoom:
+                            <output id="z_plane_zoom_value_display">1.00</output>x
+                        </label>
+                        <div class="slider-container">
+                            <input type="range" id="z_plane_zoom_slider" name="z_plane_zoom_slider" min="0.2" max="5" step="0.05" value="1.0" data-tooltip="Zoom level for the z-plane view">
+                        </div>
+                    </div>
+                    <div class="control-group"> <!-- W-Plane Zoom -->
+                        <label for="w_plane_zoom_slider">
+                            W-Plane Zoom:
+                            <output id="w_plane_zoom_value_display">1.00</output>x
+                        </label>
+                        <div class="slider-container">
+                            <input type="range" id="w_plane_zoom_slider" name="w_plane_zoom_slider" min="0.2" max="5" step="0.05" value="1.0" data-tooltip="Zoom level for the w-plane view">
+                        </div>
+                    </div>
+                </div>
+
+                <hr class="panel-separator">
+
+                <!-- Global View Options Section -->
+                <div class="control-group">
+                    <label for="enable_domain_coloring_cb" class="control-label tooltip-label">
+                        <input type="checkbox" id="enable_domain_coloring_cb" class="control-checkbox" data-tooltip="Toggle domain coloring visualization (color indicates argument, lightness indicates magnitude)">
+                        <span class="custom-checkbox-visual"></span>
+                        Domain Coloring
+                    </label>
+                </div>
+                <div id="domain_coloring_options_div" class="dependent-settings-block hidden">
+                    <div class="control-group">
+                        <label for="domain_brightness_slider" style="font-size:0.8rem;">
+                            Brightness:
+                            <output id="domain_brightness_value_display">1.0</output>
+                        </label>
+                        <div class="slider-container">
+                            <input type="range" id="domain_brightness_slider" name="domain_brightness_slider" min="0.5" max="1.5" step="0.05" value="1.0" data-tooltip="Adjust overall brightness of the domain coloring">
+                        </div>
+                    </div>
+                    <div class="control-group">
+                        <label for="domain_contrast_slider" style="font-size:0.8rem;">
+                            Contrast:
+                            <output id="domain_contrast_value_display">1.0</output>
+                        </label>
+                        <div class="slider-container">
+                            <input type="range" id="domain_contrast_slider" name="domain_contrast_slider" min="0.5" max="2.0" step="0.05" value="1.0" data-tooltip="Adjust contrast of the domain coloring">
+                        </div>
+                    </div>
+                    <div class="control-group">
+                        <label for="domain_saturation_slider" style="font-size:0.8rem;">
+                            Saturation:
+                            <output id="domain_saturation_value_display">1.0</output>
+                        </label>
+                        <div class="slider-container">
+                            <input type="range" id="domain_saturation_slider" name="domain_saturation_slider" min="0.0" max="1.0" step="0.05" value="1.0" data-tooltip="Adjust color saturation of the domain coloring">
+                        </div>
+                    </div>
+                    <div class="control-group">
+                        <label for="domain_lightness_cycles_slider" style="font-size:0.8rem;">
+                            Lightness Cycles:
+                            <output id="domain_lightness_cycles_value_display">1.0</output>
+                        </label>
+                        <div class="slider-container">
+                            <input type="range" id="domain_lightness_cycles_slider" name="domain_lightness_cycles_slider" min="0.25" max="4.0" step="0.25" value="1.0" data-tooltip="Adjust frequency of lightness cycles (magnitude bands) in domain coloring">
+                        </div>
+                    </div>
+                </div>
+
+                <div class="control-group">
+                    <label for="show_zeros_poles_cb" class="control-label tooltip-label">
+                        <input type="checkbox" id="show_zeros_poles_cb" class="control-checkbox" data-tooltip="Show detected zeros (roots) and poles (singularities) of f(z)">
+                        <span class="custom-checkbox-visual"></span>
+                        Show Zeros/Poles
+                    </label>
+                </div>
+
+                <div class="control-group">
+                    <label for="show_critical_points_cb" class="control-label tooltip-label">
+                        <input type="checkbox" id="show_critical_points_cb" class="control-checkbox" data-tooltip="Show detected critical points (where f'(z) = 0 or is undefined)">
+                        <span class="custom-checkbox-visual"></span>
+                        Show Critical Points f'(z)=0
+                    </label>
+                </div>
+
+                <div class="control-group">
+                    <label for="enable_radial_discrete_steps_cb" class="control-label tooltip-label">
+                        <input type="checkbox" id="enable_radial_discrete_steps_cb" class="control-checkbox" data-tooltip="Toggle radial discrete steps visualization">
+                        <span class="custom-checkbox-visual"></span>
+                        Radial Discrete steps
+                    </label>
+                </div>
+                <div id="radial_discrete_steps_options_div" class="dependent-settings-block hidden">
+                    <div class="control-group">
+                        <label for="radial_discrete_steps_count_slider">
+                            Discrete steps:
+                            <output id="radial_discrete_steps_count_value_display">200</output>
+                        </label>
+                        <div class="slider-container">
+                            <input type="range" id="radial_discrete_steps_count_slider" name="radial_discrete_steps_count_slider" min="0" max="800" step="1" value="200" data-tooltip="Adjust the number of discrete radial steps">
+                        </div>
+                    </div>
+                </div>
+
+                <div class="control-group">
+                    <label for="enable_cauchy_integral_mode_cb" class="control-label tooltip-label">
+                        <input type="checkbox" id="enable_cauchy_integral_mode_cb" class="control-checkbox" data-tooltip="Enable Cauchy Integral mode: draw a contour on z-plane to visualize its image and related integral values on w-plane">
+                        <span class="custom-checkbox-visual"></span>
+                        Cauchy Integral/Residue
+                    </label>
+                </div>
+
+                <div class="control-group">
+                    <label for="enable_taylor_series_cb" class="control-label tooltip-label">
+                        <input type="checkbox" id="enable_taylor_series_cb" class="control-checkbox" data-tooltip="Toggle Taylor series approximation of f(z) in the w-plane, centered at origin or mouse probe. Shows disk of convergence on z-plane.">
+                        <span class="custom-checkbox-visual"></span>
+                        Taylor Series Approximation
+                    </label>
+                </div>
+                <div id="taylor_series_options_detail_div" class="dependent-settings-block hidden taylor-series-panel">
+                    <div class="control-group taylor-series-control-group taylor-series-slider-group">
+                        <label for="taylor_series_order_slider" class="taylor-series-label">
+                            Taylor Series Terms:
+                            <output id="taylor_series_order_value_display">3</output>
+                        </label>
+                        <div class="slider-container">
+                            <input type="range" id="taylor_series_order_slider" name="taylor_series_order_slider" min="1" max="8" step="1" value="3" data-tooltip="Number of terms (0 to N) in the Taylor series approximation. Higher order is more accurate but computationally intensive." class="taylor-series-slider">
+                        </div>
+                    </div>
+                    <div class="control-group taylor-series-control-group taylor-series-toggle-group">
+                        <label for="enable_taylor_series_custom_center_cb" class="control-label tooltip-label taylor-series-checkbox-label">
+                            <input type="checkbox" id="enable_taylor_series_custom_center_cb" class="control-checkbox taylor-series-checkbox" data-tooltip="Use a custom complex number as the center for Taylor series expansion. Overrides mouse probe/origin.">
+                            <span class="custom-checkbox-visual"></span>
+                            Custom Expansion Center
+                        </label>
+                    </div>
+                    <div id="taylor_series_custom_center_inputs_div" class="control-group dependent-settings-block hidden taylor-series-control-group taylor-series-input-group">
+                        <label for="taylor_series_custom_center_re_input" class="taylor-series-input-label">
+                            Center Re(z₀):
+                            <input type="text" id="taylor_series_custom_center_re_input" value="0.0" class="small-number-input taylor-series-text-input">
+                        </label>
+                        <label for="taylor_series_custom_center_im_input" style="margin-left: 10px;" class="taylor-series-input-label">
+                            Center Im(z₀):
+                            <input type="text" id="taylor_series_custom_center_im_input" value="0.0" class="small-number-input taylor-series-text-input">
+                        </label>
+                    </div>
+                </div>
+
+                <div class="control-group">
+                    <label for="enable_riemann_sphere_cb" class="control-label tooltip-label">
+                        <input type="checkbox" id="enable_riemann_sphere_cb" class="control-checkbox" data-tooltip="Toggle Riemann Sphere projection options">
+                        <span class="custom-checkbox-visual"></span>
+                        Riemann Sphere
+                    </label>
+                </div>
+                <div id="riemann_sphere_options_div" class="dependent-settings-block hidden control-group-indent">
+                    <div class="control-group">
+                        <label for="enable_plotly_3d_cb" class="control-label tooltip-label">
+                            <input type="checkbox" id="enable_plotly_3d_cb" class="control-checkbox" data-tooltip="Toggle interactive 3D Riemann Sphere rendering using Plotly for the w-plane">
+                            <span class="custom-checkbox-visual"></span>
+                            3D Rendering (Plotly for w-sphere)
+                        </label>
+                    </div>
+                    <div id="plotly_3d_options_div" class="dependent-settings-block hidden control-group-indent">
+                        <div class="control-group">
+                            <label for="toggle_sphere_axes_grid_cb" class="control-label tooltip-label">
+                                <input type="checkbox" id="toggle_sphere_axes_grid_cb" class="control-checkbox" data-tooltip="Toggle visibility of axes and grid lines in the 3D sphere view">
+                                <span class="custom-checkbox-visual"></span>
+                                Show Axes & Grid (3D)
+                            </label>
+                        </div>
+                        <div class="control-group">
+                            <label for="plotly_sphere_opacity_slider">
+                                Sphere Opacity:
+                                <output id="plotly_sphere_opacity_value_display">0.10</output>
+                            </label>
+                            <div class="slider-container">
+                                <input type="range" id="plotly_sphere_opacity_slider" name="plotly_sphere_opacity_slider" min="0" max="1" step="0.05" value="0.10" data-tooltip="Adjust opacity of the base Riemann sphere mesh in 3D Plotly view">
+                            </div>
+                        </div>
+                        <div class="control-group">
+                            <label for="plotly_grid_density_slider">
+                                Sphere Grid Density:
+                                <output id="plotly_grid_density_value_display">12</output>
+                            </label>
+                            <div class="slider-container">
+                                <input type="range" id="plotly_grid_density_slider" name="plotly_grid_density_slider" min="4" max="30" step="1" value="12" data-tooltip="Adjust density of grid lines on the 3D Plotly sphere surface">
+                            </div>
+                        </div>
+                        <div class="control-group">
+                            <label for="toggle_plotly_sphere_grid_cb" class="control-label tooltip-label">
+                                <input type="checkbox" id="toggle_plotly_sphere_grid_cb" class="control-checkbox" checked data-tooltip="Toggle visibility of the latitude/longitude grid lines on the sphere surface">
+                                <span class="custom-checkbox-visual"></span>
+                                Show Sphere Surface Grid
+                            </label>
+                        </div>
+                    </div>
+                    <div class="control-group">
+                        <label for="enable_split_view_cb" class="control-label tooltip-label">
+                            <input type="checkbox" id="enable_split_view_cb" class="control-checkbox" data-tooltip="Show z-plane as planar and w-plane as Riemann Sphere side-by-side">
+                            <span class="custom-checkbox-visual"></span>
+                            Split View (z-Plane | w-Sphere)
+                        </label>
+                    </div>
+                </div>
+                <div id="sphere_view_controls_div" class="dependent-settings-block hidden">
+                    <label>Sphere Default Views:</label>
+                    <div>
+                        <button id="sphere_view_north_btn" data-tooltip="View Riemann sphere from North Pole">North</button>
+                        <button id="sphere_view_south_btn" data-tooltip="View Riemann sphere from South Pole">South</button>
+                        <button id="sphere_view_east_btn" data-tooltip="View Riemann sphere from East">East</button>
+                        <button id="sphere_view_west_btn" data-tooltip="View Riemann sphere from West">West</button>
+                        <button id="sphere_view_front_btn" data-tooltip="View Riemann sphere from Front (default perspective)">Front</button>
+                        <button id="sphere_view_reset_btn" data-tooltip="Reset Riemann sphere rotation to initial view">Reset</button>
+                    </div>
+                </div>
+                <!-- Vector Field & Flow Visualization Section -->
+                <div class="control-group">
+                    <label for="show_vector_field_panel_cb" class="control-label tooltip-label">
+                        <input type="checkbox" id="show_vector_field_panel_cb" class="control-checkbox" data-tooltip="Show/hide all Vector Field & Flow Visualization options">
+                        <span class="custom-checkbox-visual"></span>
+                        Show Vector Field Panel
+                    </label>
+                </div>
+                <div id="vector_flow_options_content" class="dependent-settings-block hidden">
+                        <div class="control-group">
+                            <label for="enable_vector_field_cb" class="control-label tooltip-label">
+                                <input type="checkbox" id="enable_vector_field_cb" class="control-checkbox" data-tooltip="Overlay a vector field on the z-plane based on selected function">
+                                <span class="custom-checkbox-visual"></span>
+                                Vector Field on z-plane
+                            </label>
+                        </div>
+                        <div id="vector_field_options_div" class="dependent-settings-block hidden">
+                            <div class="control-group" style="flex-basis: 55%; min-width: 180px;">
+                                <label for="vector_field_function_selector" style="font-size:0.8rem;">Vector Function:</label>
+                                <select id="vector_field_function_selector" data-tooltip="Select function for the z-plane vector field (f(z), 1/f(z), or f'(z))">
+                                    <option value="f(z)" selected>f(z)</option>
+                                    <option value="1/f(z)">1/f(z)</option>
+                                    <option value="f'(z)">f'(z)</option>
+                                </select>
+                            </div>
+                            <div class="control-group" style="flex-basis: 40%; min-width: 180px;">
+                                <label for="vector_field_scale_slider" style="font-size:0.8rem;">
+                                    Vector Scale:
+                                    <output id="vector_field_scale_value_display">0.10</output>
+                                </label>
+                                <div class="slider-container">
+                                    <input type="range" id="vector_field_scale_slider" name="vector_field_scale_slider" min="0.01" max="1.0" step="0.01" value="0.1" data-tooltip="Adjust the display scale/length of vectors in the field">
+                                </div>
+                            </div>
+                            <div class="control-group" style="flex-basis: 48%; min-width: 180px;">
+                                <label for="vector_arrow_thickness_slider" style="font-size:0.8rem;">
+                                    Arrow Thickness:
+                                    <output id="vector_arrow_thickness_value_display">1.5</output>
+                                </label>
+                                <div class="slider-container">
+                                    <input type="range" id="vector_arrow_thickness_slider" name="vector_arrow_thickness_slider" min="0.5" max="5" step="0.1" value="1.5" data-tooltip="Adjust thickness of the vector arrows">
+                                </div>
+                            </div>
+                            <div class="control-group" style="flex-basis: 48%; min-width: 180px;">
+                                <label for="vector_arrow_head_size_slider" style="font-size:0.8rem;">
+                                    Arrow Head Size:
+                                    <output id="vector_arrow_head_size_value_display">6</output>
+                                </label>
+                                <div class="slider-container">
+                                    <input type="range" id="vector_arrow_head_size_slider" name="vector_arrow_head_size_slider" min="2" max="15" step="0.5" value="6" data-tooltip="Adjust size of the vector arrow heads">
+                                </div>
+                            </div>
+                        </div> <!-- vector_field_options_div ends here -->
+
+                        <div class="control-group"> <!-- Streamline Flow Toggle -->
+                            <label for="enable_streamline_flow_cb" class="control-label tooltip-label">
+                                <input type="checkbox" id="enable_streamline_flow_cb" class="control-checkbox" data-tooltip="Toggle streamline flow visualization for the vector field">
+                                <span class="custom-checkbox-visual"></span>
+                                Streamline Flow
+                            </label>
+                        </div>
+                        <div id="streamline_options_details_div" class="dependent-settings-block hidden"> <!-- New wrapper for streamline details -->
+                            <div class="control-group-detail" id="streamline_details_div">
+                                 <button id="clear_manual_seeds_btn" class="control-button" data-tooltip="Clear all manually added seed points for streamlines">Clear Manual Seeds</button>
+                            </div>
+                            <div class="control-group">
+                                <label for="streamline_step_size_slider" style="font-size:0.8rem;">
+                                    Integration Step Size:
+                                    <output id="streamline_step_size_value_display">0.02</output>
+                                </label>
+                                <div class="slider-container">
+                                    <input type="range" id="streamline_step_size_slider" name="streamline_step_size_slider" min="0.001" max="0.1" step="0.001" value="0.02" data-tooltip="Adjust integration step size for streamlines (smaller is more accurate but slower)">
+                                </div>
+                            </div>
+                            <div class="control-group">
+                                <label for="streamline_max_length_slider" style="font-size:0.8rem;">
+                                    Max Length (steps):
+                                    <output id="streamline_max_length_value_display">100</output>
+                                </label>
+                                <div class="slider-container">
+                                    <input type="range" id="streamline_max_length_slider" name="streamline_max_length_slider" min="20" max="500" step="10" value="100" data-tooltip="Adjust maximum number of steps for a streamline">
+                                </div>
+                            </div>
+                            <div class="control-group">
+                                <label for="streamline_thickness_slider" style="font-size:0.8rem;">
+                                    Streamline Thickness:
+                                    <output id="streamline_thickness_value_display">1.0</output>
+                                </label>
+                                <div class="slider-container">
+                                    <input type="range" id="streamline_thickness_slider" name="streamline_thickness_slider" min="0.5" max="3.0" step="0.1" value="1.0" data-tooltip="Adjust thickness of streamline paths">
+                                </div>
+                            </div>
+                            <div class="control-group">
+                                <label for="streamline_seed_density_factor_slider" style="font-size:0.8rem;">
+                                    Seed Density Factor:
+                                    <output id="streamline_seed_density_factor_value_display">0.5</output>
+                                </label>
+                                <div class="slider-container">
+                                    <input type="range" id="streamline_seed_density_factor_slider" name="streamline_seed_density_factor_slider" min="0.1" max="1.5" step="0.05" value="0.5" data-tooltip="Adjusts streamline seed density relative to grid density. Default 0.5">
+                                </div>
+                            </div>
+                        </div>
+                        <hr class="sub-panel-separator"> <!-- This separator should be AFTER streamline_options_details_div -->
+                        <div class="control-group" id="particle_animation_options_div">
+                                <label for="enable_particle_animation_cb" class="control-label tooltip-label">
+                                    <input type="checkbox" id="enable_particle_animation_cb" class="control-checkbox">
+                                    Enable Particle Animation
+                                    <span class="tooltip-text">Show animated particles moving along the vector field.</span>
+                                </label>
+                            </div>
+                            <div class="control-group-detail hidden" id="particle_animation_details_div">
+                                <div class="slider-group">
+                                    <label for="particle_density_slider" class="slider-label">Particle Density:</label>
+                                    <input type="range" id="particle_density_slider" class="control-slider" min="10" max="500" step="10" value="50">
+                                    <span id="particle_density_value_display" class="slider-value-display">50</span>
+                                </div>
+                                <div class="slider-group">
+                                    <label for="particle_speed_slider" class="slider-label">Particle Speed:</label>
+                                    <input type="range" id="particle_speed_slider" class="control-slider" min="0.001" max="0.05" step="0.001" value="0.01">
+                                    <span id="particle_speed_value_display" class="slider-value-display">0.01</span>
+                                </div>
+                                <div class="slider-group">
+                                    <label for="particle_max_lifetime_slider" class="slider-label">Particle Max Lifetime (frames):</label>
+                                    <input type="range" id="particle_max_lifetime_slider" class="control-slider" min="50" max="1000" step="50" value="200">
+                                    <span id="particle_max_lifetime_value_display" class="slider-value-display">200</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+            </div>
+        </section>
+
+        <section id="canvases_section">
+        <div class="canvas-row two-column-layout">
+            <div id="z_plane_column">
+                <div class="canvas-header-line">
+                    <h2 class="section-title"><span id="z-plane-title">z-plane (Input: <code>z = a + ib</code>)</span></h2>
+                    <div class="canvas-header-controls">
+                        <label for="input_shape_selector">Shape:</label>
+                        <select id="input_shape_selector" data-tooltip="Select the input shape/grid to draw on the z-plane">
+                            <option value="grid_cartesian" selected>Grid (Cartesian)</option>
+                            <option value="grid_polar">Grid (Polar)</option>
+                            <option value="grid_logpolar">Grid (Log-Polar)</option>
+                            <option value="empty_grid">Grid (Empty)</option>
+                            <option value="line">Lines (Re/Im Fixed)</option>
+                            <option value="circle">Circle</option>
+                            <option value="ellipse">Ellipse</option>
+                            <option value="hyperbola">Hyperbola</option>
+                            <option value="strip_horizontal">Strip (Horizontal)</option>
+                            <option value="sector_angular">Sector (Angular)</option>
+                        </select>
+                        <button id="toggle_fullscreen_z_btn" data-tooltip="Toggle fullscreen view for z-plane">Fullscreen</button>
+                    </div>
+                </div>
+                <div>
+                    <canvas id="z_plane_canvas"></canvas>
+                    <div id="z_plane_probe_info" class="probe-info-overlay hidden"></div>
+                    <div id="domain_coloring_key" class="domain-coloring-key hidden">
+                        <strong>Domain Coloring Key:</strong><br>
+                        - Hue (Color) maps to Argument (Angle):<br>
+                        &nbsp;&nbsp;&nbsp;<span style="color:cyan;">Cyan</span>: Arg = 0° (Positive Real)<br>
+                        &nbsp;&nbsp;&nbsp;<span style="color:blue;">Blue</span>: Arg = 90° (Positive Imaginary)<br>
+                        &nbsp;&nbsp;&nbsp;<span style="color:red;">Red</span>: Arg = 180° (Negative Real)<br>
+                        &nbsp;&nbsp;&nbsp;<span style="color:lime;">Green</span>: Arg = -90° (Negative Imaginary)<br>
+                        - Lightness maps to Magnitude (Log-scaled, cyclic bands).
+                    </div>
+                </div>
+            </div>
+            <div id="w_plane_column">
+                <div class="canvas-header-line">
+                    <h2 class="section-title"><span id="w-plane-title">w-plane (Output: <code id="w-plane-title-func">w = cos(z)</code>)</span></h2>
+                    <div class="canvas-header-controls">
+                        <div id="w_plane_analysis_info"></div>
+                        <button id="toggle_fullscreen_w_btn" data-tooltip="Toggle fullscreen view for w-plane">Fullscreen</button>
+                    </div>
+                </div>
+                <div>
+                    <canvas id="w_plane_canvas"></canvas>
+                    <div id="w_plane_plotly_container" class="hidden" style="width: 100%; height: 100%;"></div>
+                    <div id="w_plane_probe_info" class="probe-info-overlay hidden"></div>
+                    <div id="cauchy_integral_results_info" class="cauchy-info-overlay hidden" style="font-size: 0.8rem; line-height:1.3;"></div> 
+                </div>
+            </div>
+        </section>
+    </main>
+    
+    <!-- Core Libraries -->
+    <script src="js/config.js"></script>
+    <script src="js/math-utils.js"></script>
+
+    <!-- Utilities -->
+    <script src="js/utils/canvas-utils.js"></script>
+    <script src="js/utils/dom-utils.js"></script>
+
+    <!-- Analysis Modules -->
+    <script src="js/analysis/feature-detection.js"></script>
+    <script src="js/analysis/streamline.js"></script>
+    <script src="js/analysis/root-finding.js"></script>
+    <script src="js/analysis/cauchy.js"></script>
+
+    <!-- Rendering Modules -->
+    <script src="js/rendering/domain-coloring.js"></script>
+    <script src="js/rendering/draw-primitives.js"></script>
+    <script src="js/rendering/draw-planar.js"></script>
+    <script src="js/rendering/draw-sphere.js"></script>
+    <script src="js/rendering/draw-plotly-sphere.js"></script> <!-- Added this line -->
+    <script src="js/rendering/renderer.js"></script>
+
+    <!-- UI Modules -->
+    <script src="js/ui/polynomial-ui.js"></script>
+    <script src="js/ui/ui-updates.js"></script>
+    <script src="js/ui/animation.js"></script>
+    <script src="js/ui/event-listeners.js"></script>
+    <script src="js/ui/section-animations.js"></script>
+    <script src="js/ui/tooltip.js"></script>
+
+    <!-- Main Application Logic -->
+    <script src="js/main.js"></script>
+
+    <div id="tooltip"></div>
+    <div id="fullscreen_container" class="hidden">
+
+    </div>
+    <button id="close_fullscreen_btn" class="hidden">✖</button>
+</body>
+</html>
