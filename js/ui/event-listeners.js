@@ -120,33 +120,33 @@ window.setupEventListeners = function() {
         });
     }
 
-    if (controls.togglePlotlySphereGridCb) { // New
+    if (controls.togglePlotlySphereGridCb) { 
         controls.togglePlotlySphereGridCb.addEventListener('change', (e) => {
             try {
                 state.showPlotlySphereGrid = e.target.checked;
-                requestRedrawAll(); // Redraw to show/hide sphere surface grid
+                requestRedrawAll(); 
             } catch (error) {
                 console.error("Error in togglePlotlySphereGridCb change listener:", error);
             }
         });
     }
 
-    if (controls.plotlyGridDensitySlider) { // New
+    if (controls.plotlyGridDensitySlider) { 
         controls.plotlyGridDensitySlider.addEventListener('input', () => {
             try {
                 state.plotlyGridDensity = parseInt(controls.plotlyGridDensitySlider.value, 10);
-                requestRedrawAll(); // Redraw to update Plotly sphere grid
+                requestRedrawAll(); 
             } catch (error) {
                 console.error("Error in plotlyGridDensitySlider input listener:", error);
             }
         });
     }
 
-    if (controls.plotlySphereOpacitySlider) { // New
+    if (controls.plotlySphereOpacitySlider) { 
         controls.plotlySphereOpacitySlider.addEventListener('input', () => {
             try {
                 state.plotlySphereOpacity = parseFloat(controls.plotlySphereOpacitySlider.value);
-                requestRedrawAll(); // Redraw to update Plotly sphere opacity
+                requestRedrawAll(); 
             } catch (error) {
                 console.error("Error in plotlySphereOpacitySlider input listener:", error);
             }
@@ -409,16 +409,16 @@ window.setupEventListeners = function() {
         controls.enableRiemannSphereCb.addEventListener('change', (e) => {
             try {
                 state.riemannSphereViewEnabled = e.target.checked;
-                // Toggle visibility of the main Riemann sphere options container
+                
                 if (controls.riemannSphereOptionsDiv) {
                     controls.riemannSphereOptionsDiv.classList.toggle('hidden', !state.riemannSphereViewEnabled);
                 }
-                // If Riemann sphere is disabled, also hide Plotly 3D options
+                
                 if (!state.riemannSphereViewEnabled && controls.plotly3DOptionsDiv) {
                     controls.plotly3DOptionsDiv.classList.add('hidden');
                 }
                 domainColoringDirty = true;
-                requestRedrawAll(); // This will also call updateTitlesAndGlobalUI
+                requestRedrawAll(); 
             } catch (error) {
                 console.error("Error in enableRiemannSphereCb change listener:", error);
             }
@@ -429,11 +429,11 @@ window.setupEventListeners = function() {
         controls.enablePlotly3DCb.addEventListener('change', (e) => {
             try {
                 state.plotly3DEnabled = e.target.checked;
-                // Toggle visibility of the Plotly specific options (like axes/grid toggle)
+                
                 if (controls.plotly3DOptionsDiv) {
                     controls.plotly3DOptionsDiv.classList.toggle('hidden', !state.plotly3DEnabled);
                 }
-                requestRedrawAll(); // This will also call updateTitlesAndGlobalUI
+                requestRedrawAll(); 
             } catch (error) {
                 console.error("Error in enablePlotly3DCb change listener:", error);
             }
@@ -831,7 +831,7 @@ window.setupEventListeners = function() {
         controls.toggleSphereAxesGridCb.addEventListener('change', (e) => {
             try {
                 state.showSphereAxesAndGrid = e.target.checked;
-                requestRedrawAll(); // Trigger a redraw to update Plotly layout
+                requestRedrawAll(); 
             } catch (error) {
                 console.error("Error in toggleSphereAxesGridCb change listener:", error);
             }
@@ -839,27 +839,27 @@ window.setupEventListeners = function() {
     }
 }
 
-// Helper function to attempt Plotly resize with retries
+
 function attemptPlotlyResize(plotlyDiv, maxAttempts = 3, delay = 100, currentAttempt = 1) {
     if (!plotlyDiv) return;
 
-    // Ensure styles are applied and layout is computed.
-    // Reading offsetWidth/Height forces a reflow.
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    
+    
+    
     const width = plotlyDiv.offsetWidth;
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    
     const height = plotlyDiv.offsetHeight;
 
     if (width > 0 && height > 0) {
         try {
             Plotly.Plots.resize(plotlyDiv);
-            // console.log(`Plotly resize successful on attempt ${currentAttempt} for:`, plotlyDiv.id, `New dims: ${width}x${height}`);
+            
         } catch (resizeError) {
             console.error(`Error during Plotly.Plots.resize (attempt ${currentAttempt}):`, resizeError);
         }
     } else {
         if (currentAttempt < maxAttempts) {
-            // console.warn(`Plotly container ${plotlyDiv.id} has zero dimensions (w:${width},h:${height}, attempt ${currentAttempt}). Retrying in ${delay}ms...`);
+            
             setTimeout(() => {
                 attemptPlotlyResize(plotlyDiv, maxAttempts, delay, currentAttempt + 1);
             }, delay);
@@ -929,11 +929,11 @@ function handleFullScreenToggle(planeType) {
         const isZPlane = planeType === 'z';
         let currentElement;
         let isPlotlyCase = false;
-        const wPlotlyContainer = document.getElementById('w_plane_plotly_container'); // Get fresh reference
+        const wPlotlyContainer = document.getElementById('w_plane_plotly_container'); 
 
         if (isZPlane) {
             currentElement = zCanvas;
-        } else { // W-plane
+        } else { 
             if (state.plotly3DEnabled && state.riemannSphereViewEnabled && wPlotlyContainer) {
                 currentElement = wPlotlyContainer;
                 isPlotlyCase = true;
@@ -948,7 +948,7 @@ function handleFullScreenToggle(planeType) {
         }
 
         const canvasCard = isZPlane ? controls.zCanvasCard : controls.wCanvasCard;
-        const fullscreenContainer = controls.fullscreenContainer; // This is <div id="fullscreen_container" class="hidden"></div>
+        const fullscreenContainer = controls.fullscreenContainer; 
         const toggleButton = isZPlane ? controls.toggleFullscreenZBtn : controls.toggleFullscreenWBtn;
 
         let isNowFullScreenGlobalState;
@@ -961,7 +961,7 @@ function handleFullScreenToggle(planeType) {
         }
 
         if (isNowFullScreenGlobalState) {
-            // Store original parent and style
+            
             if (isZPlane) {
                 state.originalZParent = currentElement.parentElement;
                 state.originalZStyle = { width: currentElement.style.width, height: currentElement.style.height };
@@ -970,14 +970,14 @@ function handleFullScreenToggle(planeType) {
                 state.originalWStyle = { width: currentElement.style.width, height: currentElement.style.height };
             }
 
-            // Style fullscreenContainer to take full viewport
+            
             fullscreenContainer.style.position = 'fixed';
             fullscreenContainer.style.top = '0';
             fullscreenContainer.style.left = '0';
             fullscreenContainer.style.width = '100vw';
             fullscreenContainer.style.height = '100vh';
-            fullscreenContainer.style.zIndex = '1000'; // Ensure it's on top
-            fullscreenContainer.style.backgroundColor = 'var(--color-background-dark)'; // Match theme
+            fullscreenContainer.style.zIndex = '1000'; 
+            fullscreenContainer.style.backgroundColor = 'var(--color-background-dark)'; 
 
             controls.closeFullscreenBtn.onclick = () => { try { handleFullScreenToggle(planeType); } catch (e) { console.error("Error in closeFullscreenBtn onclick handler:", e); } };
             fullscreenContainer.appendChild(controls.closeFullscreenBtn);
@@ -992,26 +992,26 @@ function handleFullScreenToggle(planeType) {
             if (isPlotlyCase) {
                 if (wCanvas) wCanvas.classList.add('hidden');
                 currentElement.classList.remove('hidden');
-                // Explicitly set Plotly container to fill fullscreenContainer
+                
                 currentElement.style.width = '100%';
                 currentElement.style.height = '100%';
-            } else { // For canvas elements
+            } else { 
                 currentElement.style.width = '100%';
                 currentElement.style.height = '100%';
             }
 
             toggleButton.textContent = "✖ Exit";
 
-        } else { // Exiting fullscreen
+        } else { 
             const originalParent = isZPlane ? state.originalZParent : state.originalWParent;
             const originalStyle = isZPlane ? state.originalZStyle : state.originalWStyle;
 
             if (originalParent) {
                 originalParent.appendChild(currentElement);
-                if (originalStyle) { // Restore original inline styles if they existed
+                if (originalStyle) { 
                     currentElement.style.width = originalStyle.width;
                     currentElement.style.height = originalStyle.height;
-                } else { // If no specific style was stored, clear to allow CSS to take over
+                } else { 
                     currentElement.style.width = '';
                     currentElement.style.height = '';
                 }
@@ -1032,7 +1032,7 @@ function handleFullScreenToggle(planeType) {
             }
             if(canvasCard) canvasCard.classList.remove('hidden-visually');
 
-            // Reset fullscreenContainer styles
+            
             fullscreenContainer.style.position = '';
             fullscreenContainer.style.top = '';
             fullscreenContainer.style.left = '';
@@ -1044,31 +1044,31 @@ function handleFullScreenToggle(planeType) {
             toggleButton.textContent = "Fullscreen";
         }
 
-        // Crucial: Call setupVisualParameters to resize canvases/Plotly container
-        // It should now use the new dimensions of fullscreenContainer or the original parent
-        setupVisualParameters(true, true); // Force update for both, ensures correct context
+        
+        
+        setupVisualParameters(true, true); 
 
         if (isPlotlyCase) {
             const plotlyDivToResize = currentElement;
 
-            // Delay Plotly resize slightly to ensure DOM updates and dimensions are stable
+            
             requestAnimationFrame(() => {
                 setTimeout(() => {
-                    if (isNowFullScreenGlobalState) { // Entering fullscreen
+                    if (isNowFullScreenGlobalState) { 
                         plotlyDivToResize.classList.remove('hidden');
-                        // Ensure Plotly div itself is also 100% width/height of its parent (fullscreenContainer)
+                        
                         plotlyDivToResize.style.width = '100%';
                         plotlyDivToResize.style.height = '100%';
-                        attemptPlotlyResize(plotlyDivToResize, 5, 150); // More attempts, slightly longer delay
-                    } else { // Exiting fullscreen
-                        // Let setupVisualParameters and normal CSS handle sizing
+                        attemptPlotlyResize(plotlyDivToResize, 5, 150); 
+                    } else { 
+                        
                         attemptPlotlyResize(plotlyDivToResize, 3, 100);
                     }
-                }, isNowFullScreenGlobalState ? 100 : 50); // Slightly longer delay when entering fullscreen
+                }, isNowFullScreenGlobalState ? 100 : 50); 
             });
-        } else { // For regular canvases
-            // setupVisualParameters should handle their resize.
-            // If canvases are directly styled 100% width/height, their parent's size dictates theirs.
+        } else { 
+            
+            
         }
 
         domainColoringDirty = true;

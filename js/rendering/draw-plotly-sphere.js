@@ -1,47 +1,47 @@
-// Ensure complexToSphere is accessible. For this example, we'll define it locally
-// if it's not already globally available or imported.
-// It's defined in js/math-utils.js, which should be loaded before this.
-// function complexToSphere(re, im) {
-//     const den = 1 + re * re + im * im;
-//     if (den === 0) return { x: NaN, y: NaN, z: NaN }; // Should not happen with finite re, im
-//     // Standard stereographic projection formula (from South Pole (0,0,-1) to plane z=0)
-//     // const x = 2 * re / den;
-//     // const y = 2 * im / den;
-//     // const z = (re * re + im * im - 1) / den;
-//     // The existing project uses North Pole (0,0,1) to plane z=0, so:
-//      const x = 2 * re / (1 + re * re + im * im);
-//      const y = 2 * im / (1 + re * re + im * im);
-//      const z = (-1 + re * re + im * im) / (1 + re * re + im * im);
-//     return { x, y, z };
-// }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 function getPlotlyMappedData(transformFunc) {
     const traces = [];
     const currentInputShape = state.currentInputShape;
 
-    // Use the actual, current zPlaneParams to ensure synchronization.
-    // zPlaneParams is a global variable reflecting the z-plane's current view.
-    const currentZPlaneParams = zPlaneParams; // Use the global zPlaneParams
+    
+    
+    const currentZPlaneParams = zPlaneParams; 
 
-    // Determine center and radius for getSphereSourcePoints based on the current z-plane view.
-    // This logic should ideally mirror what drawSphereGridAndShape uses or be consistent.
+    
+    
     const centerRe = (currentZPlaneParams.currentVisXRange[0] + currentZPlaneParams.currentVisXRange[1]) / 2;
     const centerIm = (currentZPlaneParams.currentVisYRange[0] + currentZPlaneParams.currentVisYRange[1]) / 2;
-    // Calculate a radius that encompasses the current view.
+    
     const radiusX = (currentZPlaneParams.currentVisXRange[1] - currentZPlaneParams.currentVisXRange[0]) / 2;
     const radiusY = (currentZPlaneParams.currentVisYRange[1] - currentZPlaneParams.currentVisYRange[0]) / 2;
-    const viewRadius = Math.sqrt(radiusX * radiusX + radiusY * radiusY); // A characteristic radius of the current view
-    // Fallback if ranges are zero or very small.
+    const viewRadius = Math.sqrt(radiusX * radiusX + radiusY * radiusY); 
+    
     const inputRadius = Math.max(viewRadius, 0.1);
 
 
     const sourcePointSets = getSphereSourcePoints(
         currentInputShape,
-        currentZPlaneParams, // Pass the full, current zPlaneParams
-        centerRe,           // Pass center derived from current zPlaneParams
-        centerIm,           // Pass center derived from current zPlaneParams
-        inputRadius         // Pass radius derived from current zPlaneParams
+        currentZPlaneParams, 
+        centerRe,           
+        centerIm,           
+        inputRadius         
     );
 
     sourcePointSets.forEach(set => {
@@ -50,12 +50,12 @@ function getPlotlyMappedData(transformFunc) {
         const xCoords = [];
         const yCoords = [];
         const zCoords = [];
-        const textCoords = []; // For hover text
+        const textCoords = []; 
         let segmentActive = false;
 
         for (const z_orig of set.points) {
             if (!z_orig || z_orig.re === undefined || z_orig.im === undefined) {
-                if (segmentActive) { // End current line segment
+                if (segmentActive) { 
                     traces.push({
                         type: 'scatter3d', mode: 'lines',
                         x: [...xCoords], y: [...yCoords], z: [...zCoords], text: [...textCoords],
@@ -70,13 +70,13 @@ function getPlotlyMappedData(transformFunc) {
 
             let transformedPoint = { re: NaN, im: NaN };
             if (state.currentFunction === 'zeta' && !state.zetaContinuationEnabled && z_orig.re <= ZETA_REFLECTION_POINT_RE) {
-                // Skip, transformedPoint remains NaN
+                
             } else {
                 transformedPoint = transformFunc ? transformFunc(z_orig.re, z_orig.im) : z_orig;
             }
 
             if (isNaN(transformedPoint.re) || isNaN(transformedPoint.im) || !isFinite(transformedPoint.re) || !isFinite(transformedPoint.im)) {
-                if (segmentActive) { // End current line segment due to discontinuity
+                if (segmentActive) { 
                     traces.push({
                         type: 'scatter3d', mode: 'lines',
                         x: [...xCoords], y: [...yCoords], z: [...zCoords], text: [...textCoords],
@@ -89,7 +89,7 @@ function getPlotlyMappedData(transformFunc) {
                 continue;
             }
 
-            // complexToSphere is globally available from math-utils.js
+            
             const spherePoint = complexToSphere(transformedPoint.re, transformedPoint.im);
             xCoords.push(spherePoint.x);
             yCoords.push(spherePoint.y);
@@ -98,7 +98,7 @@ function getPlotlyMappedData(transformFunc) {
             segmentActive = true;
         }
 
-        if (segmentActive && xCoords.length > 1) { // Add any remaining segment
+        if (segmentActive && xCoords.length > 1) { 
             traces.push({
                 type: 'scatter3d', mode: 'lines',
                 x: xCoords, y: yCoords, z: zCoords, text: textCoords,
@@ -108,12 +108,12 @@ function getPlotlyMappedData(transformFunc) {
         }
     });
 
-    // Add probe and neighborhood if active
+    
     if (state.probeActive && state.probeZ) {
         const sourceProbeZ = state.probeZ;
         const neighborhoodSize = state.probeNeighborhoodSize;
 
-        // Transform center point
+        
         const wProbeCenter = transformFunc(sourceProbeZ.re, sourceProbeZ.im);
         if (!isNaN(wProbeCenter.re) && !isNaN(wProbeCenter.im) && isFinite(wProbeCenter.re) && isFinite(wProbeCenter.im)) {
             const sphereProbeCenter = complexToSphere(wProbeCenter.re, wProbeCenter.im);
@@ -125,7 +125,7 @@ function getPlotlyMappedData(transformFunc) {
             });
         }
 
-        // Neighborhood circle
+        
         const n_pts_circle = 30;
         const circle_x = [], circle_y = [], circle_z = [];
         for (let i = 0; i <= n_pts_circle; i++) {
@@ -140,18 +140,18 @@ function getPlotlyMappedData(transformFunc) {
                 circle_x.push(sphere_w_pt.x);
                 circle_y.push(sphere_w_pt.y);
                 circle_z.push(sphere_w_pt.z);
-            } else { // Break line if discontinuity
+            } else { 
                 if (circle_x.length > 1) traces.push({ type: 'scatter3d', mode: 'lines', x: [...circle_x], y: [...circle_y], z: [...circle_z], name: 'Probe Neighborhood', line: { color: COLOR_PROBE_NEIGHBORHOOD, width: 2 }, hoverinfo: 'name' });
                 circle_x.length = 0; circle_y.length = 0; circle_z.length = 0;
             }
         }
         if (circle_x.length > 1) traces.push({ type: 'scatter3d', mode: 'lines', x: circle_x, y: circle_y, z: circle_z, name: 'Probe Neighborhood', line: { color: COLOR_PROBE_NEIGHBORHOOD, width: 2 }, hoverinfo: 'name' });
 
-        // Crosshairs (simplified for 3D, could be more elaborate)
-        // Horizontal line in z-plane
+        
+        
         const horz_x = [], horz_y = [], horz_z = [];
         const h_segment = neighborhoodSize / PROBE_CROSSHAIR_SIZE_FACTOR;
-        for(let i = -1; i <= 1; i+=0.1) { // Sample points along the line
+        for(let i = -1; i <= 1; i+=0.1) { 
             const z_h_pt = { re: sourceProbeZ.re + i * h_segment, im: sourceProbeZ.im };
             const w_h_pt = transformFunc(z_h_pt.re, z_h_pt.im);
              if (!isNaN(w_h_pt.re) && !isNaN(w_h_pt.im) && isFinite(w_h_pt.re) && isFinite(w_h_pt.im)) {
@@ -164,9 +164,9 @@ function getPlotlyMappedData(transformFunc) {
         }
         if (horz_x.length > 1) traces.push({ type: 'scatter3d', mode: 'lines', x: horz_x, y: horz_y, z: horz_z, name: 'Probe Crosshair (Horizontal)', line: { color: COLOR_PROBE_CONFORMAL_LINE_W_H, width: 2 }, hoverinfo: 'name' });
 
-        // Vertical line in z-plane
+        
         const vert_x = [], vert_y = [], vert_z = [];
-         for(let i = -1; i <= 1; i+=0.1) { // Sample points along the line
+         for(let i = -1; i <= 1; i+=0.1) { 
             const z_v_pt = { re: sourceProbeZ.re, im: sourceProbeZ.im + i * h_segment };
             const w_v_pt = transformFunc(z_v_pt.re, z_v_pt.im);
              if (!isNaN(w_v_pt.re) && !isNaN(w_v_pt.im) && isFinite(w_v_pt.re) && isFinite(w_v_pt.im)) {
@@ -194,16 +194,16 @@ function renderPlotlyRiemannSphere(transformFunc) {
         return;
     }
 
-    // Basic sphere data (parametric)
-    const n = 300; // Significantly increased number of points for sphere generation (was 80)
+    
+    const n = 300; 
     const xSphere = [], ySphere = [], zSphere = [];
     const iSphere = [], jSphere = [], kSphere = [];
 
     for (let lat = 0; lat <= n; lat++) {
-        const phi = Math.PI * (-0.5 + lat / n); // -PI/2 to PI/2
+        const phi = Math.PI * (-0.5 + lat / n); 
         const cosPhi = Math.cos(phi);
         for (let lon = 0; lon <= n; lon++) {
-            const theta = 2 * Math.PI * (-0.5 + lon / n); // -PI to PI
+            const theta = 2 * Math.PI * (-0.5 + lon / n); 
             xSphere.push(cosPhi * Math.cos(theta));
             ySphere.push(cosPhi * Math.sin(theta));
             zSphere.push(Math.sin(phi));
@@ -228,35 +228,35 @@ function renderPlotlyRiemannSphere(transformFunc) {
         i: iSphere,
         j: jSphere,
         k: kSphere,
-        opacity: state.plotlySphereOpacity !== undefined ? state.plotlySphereOpacity : 0.10, // Updated fallback default
+        opacity: state.plotlySphereOpacity !== undefined ? state.plotlySphereOpacity : 0.10, 
         color: '#32325c',
-        flatshading: false, // Set to false for a smoother surface
+        flatshading: false, 
         lighting: {
-            ambient: 0.5,    // Further adjusted lighting
-            diffuse: 1.0,    // Further adjusted lighting
-            specular: 0.7,   // Further adjusted lighting
-            roughness: 0.3,  // Further adjusted lighting
-            fresnel: 0.8     // Further adjusted lighting (highlights edges more)
+            ambient: 0.5,    
+            diffuse: 1.0,    
+            specular: 0.7,   
+            roughness: 0.3,  
+            fresnel: 0.8     
         },
-        lightposition: {x: 50, y: 200, z: 100}, // Further adjusted light position
-        hoverinfo: 'none' // No hover info for the base sphere
+        lightposition: {x: 50, y: 200, z: 100}, 
+        hoverinfo: 'none' 
     };
 
     const mappedTraces = getPlotlyMappedData(transformFunc);
 
     const layout = {
-        // title: 'Interactive 3D Riemann Sphere (w-plane)',
+        
         autosize: true,
         margin: { l: 0, r: 0, b: 0, t: 0, pad:0 },
-        showlegend: false, // Hide trace list/legend
+        showlegend: false, 
         scene: {
             camera: {
                 eye: {x: 1.25, y: 1.25, z: 1.25}
             },
             xaxis: {
-                title: 'Re(w)', // Or X
-                visible: state.showSphereAxesAndGrid, // Controlled by new state
-                showgrid: true, // Keep sub-properties, visibility is parent controlled
+                title: 'Re(w)', 
+                visible: state.showSphereAxesAndGrid, 
+                showgrid: true, 
                 zeroline: true,
                 backgroundcolor: "rgba(10,12,16,0.9)",
                 gridcolor: "rgba(100,100,150,0.3)",
@@ -265,8 +265,8 @@ function renderPlotlyRiemannSphere(transformFunc) {
                 titlefont: { color: 'rgba(200,200,220,0.7)'}
             },
             yaxis: {
-                title: 'Im(w)', // Or Y
-                visible: state.showSphereAxesAndGrid, // Controlled by new state
+                title: 'Im(w)', 
+                visible: state.showSphereAxesAndGrid, 
                 showgrid: true,
                 zeroline: true,
                 backgroundcolor: "rgba(10,12,16,0.9)",
@@ -276,8 +276,8 @@ function renderPlotlyRiemannSphere(transformFunc) {
                 titlefont: { color: 'rgba(200,200,220,0.7)'}
             },
             zaxis: {
-                title: 'Z (Sphere axis)', // Or Z
-                visible: state.showSphereAxesAndGrid, // Controlled by new state
+                title: 'Z (Sphere axis)', 
+                visible: state.showSphereAxesAndGrid, 
                 showgrid: true,
                 zeroline: true,
                 backgroundcolor: "rgba(10,12,16,0.9)",
@@ -286,15 +286,15 @@ function renderPlotlyRiemannSphere(transformFunc) {
                 tickfont: { color: 'rgba(200,200,220,0.7)'},
                 titlefont: { color: 'rgba(200,200,220,0.7)'}
             },
-            aspectmode: 'cube', // Ensures the sphere looks like a sphere
-            bgcolor: "rgba(10,12,16,1.0)" // Match canvas background
+            aspectmode: 'cube', 
+            bgcolor: "rgba(10,12,16,1.0)" 
         },
-        paper_bgcolor: 'rgba(0,0,0,0)', // Transparent paper
-        plot_bgcolor: 'rgba(0,0,0,0)'   // Transparent plot area
+        paper_bgcolor: 'rgba(0,0,0,0)', 
+        plot_bgcolor: 'rgba(0,0,0,0)'   
     };
 
     let dynamicGridTraces = [];
-    // Default to true if state.showPlotlySphereGrid is undefined (e.g. before main.js initializes it from checkbox)
+    
     const showGrid = state.showPlotlySphereGrid === undefined ? true : state.showPlotlySphereGrid;
     if (showGrid) {
         dynamicGridTraces = getPlotlyDynamicGridTraces();
@@ -304,48 +304,48 @@ function renderPlotlyRiemannSphere(transformFunc) {
     Plotly.react(containerId, plotData, layout, {responsive: true, displaylogo: false});
 }
 
-// Function to generate dynamic grid lines for the Riemann sphere
+
 function getPlotlyDynamicGridTraces() {
     const traces = [];
-    const numPointsPerLine = 250; // Increased for smoother lines
+    const numPointsPerLine = 250; 
     const gridColor = 'rgba(150, 150, 180, 0.4)';
     const gridLineWidth = 1;
 
     const baseGridDensity = state.plotlyGridDensity !== undefined ? state.plotlyGridDensity : 12;
 
-    // Dynamically adjust grid density based on z-plane zoom
+    
     let dynamicFactor = 1.0;
     if (zPlaneParams && zPlaneParams.currentVisXRange && zPlaneParams.currentVisYRange) {
         const currentWidth = zPlaneParams.currentVisXRange[1] - zPlaneParams.currentVisXRange[0];
-        // Assuming an initial/reference width of around 4.0 units for the z-plane view
+        
         const referenceWidth = 4.0;
         if (currentWidth > 0 && referenceWidth > 0) {
-            // When zoomed in (currentWidth is small), factor increases -> more lines
-            // When zoomed out (currentWidth is large), factor decreases -> fewer lines
+            
+            
             dynamicFactor = referenceWidth / currentWidth;
         }
     }
 
-    // Apply logarithmic scaling to the factor to make changes less extreme, and clamp it
-    // For example, Math.sqrt makes the change less aggressive.
-    // Or Math.log2(dynamicFactor + 1) for very zoomed states.
-    // Let's use a gentle sqrt scaling for now.
-    if (dynamicFactor < 0) dynamicFactor = 1; // Should not happen if currentWidth > 0
+    
+    
+    
+    
+    if (dynamicFactor < 0) dynamicFactor = 1; 
     let scaledDynamicFactor = Math.sqrt(dynamicFactor);
 
-    // Clamp the effective grid density to reasonable limits
-    const minEffectiveDensity = 4;  // Minimum lines for parallels/meridians
-    const maxEffectiveDensity = 40; // Maximum lines to avoid clutter
+    
+    const minEffectiveDensity = 4;  
+    const maxEffectiveDensity = 40; 
 
     let effectiveGridDensity = Math.round(baseGridDensity * scaledDynamicFactor);
     effectiveGridDensity = Math.max(minEffectiveDensity, Math.min(maxEffectiveDensity, effectiveGridDensity));
 
-    // Parallels (circles |w| = R in the complex plane)
-    // Number of parallels (excluding poles, effectively lines of latitude)
-    const numParallels = Math.max(2, Math.floor(effectiveGridDensity / 2)); // Ensure at least a few
+    
+    
+    const numParallels = Math.max(2, Math.floor(effectiveGridDensity / 2)); 
     for (let k = 1; k <= numParallels; k++) {
         const R = Math.tan((k / (numParallels + 1)) * (Math.PI / 2));
-        if (R > 100) continue; // Avoid extremely large radii which are too close to North Pole
+        if (R > 100) continue; 
 
         const xCoords = [], yCoords = [], zCoords = [];
         for (let i = 0; i <= numPointsPerLine; i++) {
@@ -366,9 +366,9 @@ function getPlotlyDynamicGridTraces() {
         });
     }
 
-    // Meridians (lines arg(w) = alpha in the complex plane)
-    const numMeridians = Math.max(4, effectiveGridDensity); // Number of lines of longitude
-    const maxMeridianRadius = 20; // How far out the radial lines go in the w-plane
+    
+    const numMeridians = Math.max(4, effectiveGridDensity); 
+    const maxMeridianRadius = 20; 
     for (let j = 0; j < numMeridians; j++) {
         const alpha = (j / numMeridians) * 2 * Math.PI;
         const xCoords = [], yCoords = [], zCoords = [];
@@ -392,20 +392,20 @@ function getPlotlyDynamicGridTraces() {
     return traces;
 }
 
-// Placeholder for data transformation logic
-// function getPlotlyMappedData(transformFunc) {
-//     // This will be similar to how data is prepared for drawMappedLineSetOnSphere
-//     // but instead of 2D projection, it will use complexToSphere
-//     // and format it for Plotly (e.g., {type: 'scatter3d', mode: 'lines', x: [], y: [], z: [], line: {color: ...}})
-//     return { traces: [] }; // Return an array of Plotly traces
-// }
 
-// Ensure complexToSphere is accessible or redefined here if it's not global
-// For now, assume complexToSphere is available globally from another script.
-// If not, it would need to be imported or passed.
-// function complexToSphere(re, im) { // simplified from existing code
-//     const x = 2 * re / (1 + re * re + im * im);
-//     const y = 2 * im / (1 + re * re + im * im);
-//     const z = (-1 + re * re + im * im) / (1 + re * re + im * im);
-//     return { x, y, z };
-// }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
