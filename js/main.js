@@ -175,6 +175,15 @@ function setup() {
         state.radialDiscreteStepsEnabled = false;
     }
 
+    // Initialize Fourier Transform state
+    if (controls.fourierFrequencySlider) state.fourierFrequency = parseFloat(controls.fourierFrequencySlider.value);
+    if (controls.fourierAmplitudeSlider) state.fourierAmplitude = parseFloat(controls.fourierAmplitudeSlider.value);
+    if (controls.fourierTimeWindowSlider) state.fourierTimeWindow = parseFloat(controls.fourierTimeWindowSlider.value);
+    if (controls.fourierSamplesSlider) state.fourierSamples = parseInt(controls.fourierSamplesSlider.value);
+    if (controls.fourierFunctionSelector) state.fourierFunction = controls.fourierFunctionSelector.value;
+    if (controls.fourierWindingFrequencySlider) state.fourierWindingFrequency = parseFloat(controls.fourierWindingFrequencySlider.value);
+    if (controls.fourierWindingTimeSlider) state.fourierWindingTime = parseFloat(controls.fourierWindingTimeSlider.value);
+
     state.polynomialN = parseInt(controls.polynomialNSlider.value);
     initializePolynomialCoeffs(state.polynomialN, false); 
     generatePolynomialCoeffSliders(); 

@@ -83,6 +83,22 @@ window.setupEventListeners = function() {
         controls.funcButtons[key].addEventListener('click', () => {
             try {
                 state.currentFunction = key;
+                
+                // Handle Fourier mode
+                if (key === 'fourier') {
+                    state.fourierModeEnabled = true;
+                    if (controls.fourierSpecificControlsDiv) {
+                        controls.fourierSpecificControlsDiv.classList.remove('hidden');
+                    }
+                    // Update Fourier transform on mode entry
+                    updateFourierTransform();
+                } else {
+                    state.fourierModeEnabled = false;
+                    if (controls.fourierSpecificControlsDiv) {
+                        controls.fourierSpecificControlsDiv.classList.add('hidden');
+                    }
+                }
+                
                 Object.keys(controls.funcButtons).forEach(k => {
                     controls.funcButtons[k].classList.remove('active');
                 });
@@ -530,6 +546,89 @@ window.setupEventListeners = function() {
             console.error("Error in toggleZetaContinuationBtn click listener:", error);
         }
     });
+
+    // Fourier Transform event listeners
+    if (controls.fourierFunctionSelector) {
+        controls.fourierFunctionSelector.addEventListener('change', (e) => {
+            try {
+                state.fourierFunction = e.target.value;
+                updateFourierTransform();
+                requestRedrawAll();
+            } catch (error) {
+                console.error("Error in fourierFunctionSelector change listener:", error);
+            }
+        });
+    }
+
+    if (controls.fourierFrequencySlider) {
+        controls.fourierFrequencySlider.addEventListener('input', () => {
+            try {
+                state.fourierFrequency = parseFloat(controls.fourierFrequencySlider.value);
+                updateFourierTransform();
+                requestRedrawAll();
+            } catch (error) {
+                console.error("Error in fourierFrequencySlider input listener:", error);
+            }
+        });
+    }
+
+    if (controls.fourierAmplitudeSlider) {
+        controls.fourierAmplitudeSlider.addEventListener('input', () => {
+            try {
+                state.fourierAmplitude = parseFloat(controls.fourierAmplitudeSlider.value);
+                updateFourierTransform();
+                requestRedrawAll();
+            } catch (error) {
+                console.error("Error in fourierAmplitudeSlider input listener:", error);
+            }
+        });
+    }
+
+    if (controls.fourierTimeWindowSlider) {
+        controls.fourierTimeWindowSlider.addEventListener('input', () => {
+            try {
+                state.fourierTimeWindow = parseFloat(controls.fourierTimeWindowSlider.value);
+                updateFourierTransform();
+                requestRedrawAll();
+            } catch (error) {
+                console.error("Error in fourierTimeWindowSlider input listener:", error);
+            }
+        });
+    }
+
+    if (controls.fourierSamplesSlider) {
+        controls.fourierSamplesSlider.addEventListener('input', () => {
+            try {
+                state.fourierSamples = parseInt(controls.fourierSamplesSlider.value);
+                updateFourierTransform();
+                requestRedrawAll();
+            } catch (error) {
+                console.error("Error in fourierSamplesSlider input listener:", error);
+            }
+        });
+    }
+
+    if (controls.fourierWindingFrequencySlider) {
+        controls.fourierWindingFrequencySlider.addEventListener('input', () => {
+            try {
+                state.fourierWindingFrequency = parseFloat(controls.fourierWindingFrequencySlider.value);
+                requestRedrawAll();
+            } catch (error) {
+                console.error("Error in fourierWindingFrequencySlider input listener:", error);
+            }
+        });
+    }
+
+    if (controls.fourierWindingTimeSlider) {
+        controls.fourierWindingTimeSlider.addEventListener('input', () => {
+            try {
+                state.fourierWindingTime = parseFloat(controls.fourierWindingTimeSlider.value);
+                requestRedrawAll();
+            } catch (error) {
+                console.error("Error in fourierWindingTimeSlider input listener:", error);
+            }
+        });
+    }
 
     
     const sphereViewButtonActions = {

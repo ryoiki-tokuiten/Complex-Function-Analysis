@@ -1,6 +1,13 @@
 function drawZPlaneContent(){
     zCtx.fillStyle=COLOR_CANVAS_BACKGROUND;
     zCtx.fillRect(0,0,zPlaneParams.width,zPlaneParams.height);
+    
+    // Handle Fourier Transform mode
+    if (state.fourierModeEnabled) {
+        drawTimeDomainSignal(zCtx, state.fourierTimeDomainSignal, zPlaneParams);
+        return;
+    }
+    
     const curFunc=transformFunctions[state.currentFunction];
     const drawZAsSphere = state.riemannSphereViewEnabled && !state.splitViewEnabled;
 
@@ -102,6 +109,12 @@ function drawZPlaneContent(){
 }
 
 function drawWPlaneContent() {
+    // Handle Fourier Transform mode - use WINDING visualization!
+    if (state.fourierModeEnabled) {
+        drawWindingVisualization(wCtx, state.fourierTimeDomainSignal, wPlaneParams);
+        return;
+    }
+    
     const curFunc = transformFunctions[state.currentFunction];
     const isRiemannW = state.riemannSphereViewEnabled || state.splitViewEnabled;
 

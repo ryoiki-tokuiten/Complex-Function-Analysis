@@ -15,6 +15,7 @@
             <div id="function-controls-panel">
                 <div class="control-group">
                     <div>
+                        <button id="select_fourier_btn" data-tooltip="Fourier Transform: Visualize time domain and frequency domain">Fourier Transform</button>
                         <button id="select_cos_btn" data-tooltip="Select w = cos(z) function">w = cos(z)</button>
                         <button id="select_sin_btn" data-tooltip="Select w = sin(z) function">w = sin(z)</button>
                         <button id="select_tan_btn" data-tooltip="Select w = tan(z) function">w = tan(z)</button>
@@ -31,6 +32,134 @@
                 
                 <div id="zeta_specific_controls" class="control-group dependent-settings-block hidden">
                     <button id="toggle_zeta_continuation_btn" data-tooltip="Toggle analytic continuation for ζ(z) beyond Re(z) > 1">Enable Analytic Continuation</button>
+                </div>
+
+                <div id="fourier_specific_controls" class="hidden" style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; width: 100%;">
+                    
+                    <!-- Signal Configuration Section -->
+                    <div style="background: linear-gradient(135deg, rgba(100,150,255,0.08), rgba(150,100,255,0.08)); padding: 14px; border-radius: 10px; border: 1px solid rgba(120,140,255,0.25);">
+                        <div style="color: rgba(150,200,255,1); font-weight: 700; font-size: 11px; text-transform: uppercase; letter-spacing: 0.8px; margin-bottom: 12px; opacity: 0.9; display: flex; align-items: center;">
+                            <div style="width: 3px; height: 14px; background: rgba(100,150,255,0.6); border-radius: 2px; margin-right: 8px;"></div>
+                            Signal Configuration
+                        </div>
+                        
+                        <div class="control-group" style="margin-bottom: 8px;">
+                            <label for="fourier_function_selector" style="font-size: 10px; color: rgba(200,220,255,0.95); font-weight: 500;">Waveform Type</label>
+                            <select id="fourier_function_selector" name="fourier_function_selector" class="control-select" data-tooltip="Select the time domain signal type" style="margin-top: 3px; background: rgba(20,25,35,0.8); border: 1px solid rgba(100,150,255,0.3); color: rgba(200,220,255,1); padding: 5px 8px; border-radius: 5px; font-size: 11px;">
+                                <optgroup label="Basic Waves">
+                                    <option value="sine">Sine Wave</option>
+                                    <option value="cosine">Cosine Wave</option>
+                                    <option value="square">Square Wave</option>
+                                    <option value="sawtooth">Sawtooth Wave</option>
+                                    <option value="triangle">Triangle Wave</option>
+                                </optgroup>
+                                <optgroup label="Modulated Signals">
+                                    <option value="am">AM Signal (Amplitude Modulation)</option>
+                                    <option value="fm">FM Signal (Frequency Modulation)</option>
+                                    <option value="chirp">Chirp (Frequency Sweep)</option>
+                                </optgroup>
+                                <optgroup label="Transient Signals">
+                                    <option value="damped_sine">Damped Sine Wave</option>
+                                    <option value="exponential">Exponential Decay</option>
+                                    <option value="gaussian">Gaussian Pulse</option>
+                                    <option value="pulse">Rectangular Pulse</option>
+                                </optgroup>
+                                <optgroup label="Complex Waveforms">
+                                    <option value="harmonics">Harmonic Series</option>
+                                    <option value="beat">Beat Frequency</option>
+                                    <option value="noise">White Noise</option>
+                                </optgroup>
+                            </select>
+                        </div>
+                        
+                        <div class="control-group" style="margin-bottom: 6px;">
+                            <label for="fourier_frequency_slider" style="font-size: 10px; color: rgba(180,200,240,0.9);">
+                                Frequency: 
+                                <output id="fourier_frequency_value_display" style="color: rgba(150,200,255,1); font-weight: 600; font-size: 11px;">1.0</output> Hz
+                            </label>
+                            <div class="slider-container">
+                                <input type="range" id="fourier_frequency_slider" name="fourier_frequency_slider" min="0.1" max="10" step="0.1" value="1.0" data-tooltip="Frequency of the signal" style="accent-color: #6c9aff;">
+                            </div>
+                        </div>
+                        
+                        <div class="control-group" style="margin-bottom: 0;">
+                            <label for="fourier_amplitude_slider" style="font-size: 10px; color: rgba(180,200,240,0.9);">
+                                Amplitude: 
+                                <output id="fourier_amplitude_value_display" style="color: rgba(150,200,255,1); font-weight: 600; font-size: 11px;">1.0</output>
+                            </label>
+                            <div class="slider-container">
+                                <input type="range" id="fourier_amplitude_slider" name="fourier_amplitude_slider" min="0.1" max="5" step="0.1" value="1.0" data-tooltip="Signal amplitude" style="accent-color: #6c9aff;">
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Sampling Parameters Section -->
+                    <div style="background: linear-gradient(135deg, rgba(100,180,200,0.06), rgba(100,200,180,0.06)); padding: 14px; border-radius: 10px; border: 1px solid rgba(100,180,200,0.2);">
+                        <div style="color: rgba(150,220,240,1); font-weight: 700; font-size: 11px; text-transform: uppercase; letter-spacing: 0.8px; margin-bottom: 12px; opacity: 0.9; display: flex; align-items: center;">
+                            <div style="width: 3px; height: 14px; background: rgba(100,180,200,0.6); border-radius: 2px; margin-right: 8px;"></div>
+                            Sampling Parameters
+                        </div>
+                        
+                        <div class="control-group" style="margin-bottom: 6px;">
+                            <label for="fourier_time_window_slider" style="font-size: 10px; color: rgba(180,220,240,0.9);">
+                                Time Window: 
+                                <output id="fourier_time_window_value_display" style="color: rgba(150,220,240,1); font-weight: 600; font-size: 11px;">4.0</output> s
+                            </label>
+                            <div class="slider-container">
+                                <input type="range" id="fourier_time_window_slider" name="fourier_time_window_slider" min="1" max="10" step="0.5" value="4.0" data-tooltip="Duration of signal to analyze" style="accent-color: #5fb4cc;">
+                            </div>
+                        </div>
+                        
+                        <div class="control-group" style="margin-bottom: 0;">
+                            <label for="fourier_samples_slider" style="font-size: 10px; color: rgba(180,220,240,0.9);">
+                                Samples: 
+                                <output id="fourier_samples_value_display" style="color: rgba(150,220,240,1); font-weight: 600; font-size: 11px;">128</output>
+                            </label>
+                            <div class="slider-container">
+                                <input type="range" id="fourier_samples_slider" name="fourier_samples_slider" min="32" max="512" step="32" value="128" data-tooltip="Number of sample points (higher = more accurate)" style="accent-color: #5fb4cc;">
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Winding Analysis Section (The KEY Section!) -->
+                    <div style="background: linear-gradient(135deg, rgba(255,220,100,0.12), rgba(255,180,100,0.12)); padding: 14px; border-radius: 10px; border: 2px solid rgba(255,200,100,0.35); box-shadow: 0 0 15px rgba(255,200,100,0.15);">
+                        <div style="display: flex; align-items: center; margin-bottom: 12px;">
+                            <div style="width: 3px; height: 14px; background: linear-gradient(180deg, rgba(255,220,100,1), rgba(255,180,100,1)); border-radius: 2px; margin-right: 8px;"></div>
+                            <div style="color: rgba(255,230,180,1); font-weight: 700; font-size: 11px; text-transform: uppercase; letter-spacing: 0.8px;">
+                                Winding Analysis
+                            </div>
+                        </div>
+                        
+                        <div style="background: rgba(0,0,0,0.25); padding: 8px; border-radius: 6px; margin-bottom: 10px; border-left: 2px solid rgba(255,220,100,0.5);">
+                            <div style="font-size: 9px; color: rgba(255,240,200,0.8); line-height: 1.4;">
+                                Watch the <strong style="color: rgba(255,220,100,1);">golden center of mass</strong> jump when winding frequency matches signal frequency!
+                            </div>
+                        </div>
+                        
+                        <div class="control-group" style="margin-bottom: 8px;">
+                            <label for="fourier_winding_frequency_slider" style="font-size: 11px; color: rgba(255, 230, 180, 1); font-weight: 600;">
+                                Winding Freq: 
+                                <output id="fourier_winding_frequency_value_display" style="color: rgba(255, 245, 200, 1); font-weight: 700; font-size: 12px;">1.0</output> Hz
+                            </label>
+                            <div class="slider-container">
+                                <input type="range" id="fourier_winding_frequency_slider" name="fourier_winding_frequency_slider" min="0.1" max="10" step="0.1" value="1.0" data-tooltip="Test frequency - when this matches signal frequency, magic happens!" style="accent-color: #ffdc64; cursor: pointer;">
+                            </div>
+                            <div style="display: flex; justify-content: space-between; margin-top: 3px; font-size: 8px; color: rgba(255,220,150,0.5);">
+                                <span>0.1</span>
+                                <span>10</span>
+                            </div>
+                        </div>
+                        
+                        <div class="control-group" style="margin-bottom: 0;">
+                            <label for="fourier_winding_time_slider" style="font-size: 10px; color: rgba(255,220,180,0.9);">
+                                Progress: 
+                                <output id="fourier_winding_time_value_display" style="color: rgba(255,230,180,1); font-weight: 600; font-size: 11px;">100</output>%
+                            </label>
+                            <div class="slider-container">
+                                <input type="range" id="fourier_winding_time_slider" name="fourier_winding_time_slider" min="0" max="1" step="0.01" value="1.0" data-tooltip="Control how much of the signal to show" style="accent-color: #ffb464;">
+                            </div>
+                        </div>
+                    </div>
                 </div>
 
                 <div id="common_params_sliders">
@@ -708,9 +837,11 @@
     <script src="js/analysis/streamline.js"></script>
     <script src="js/analysis/root-finding.js"></script>
     <script src="js/analysis/cauchy.js"></script>
+    <script src="js/analysis/fourier-transform.js"></script>
 
     <!-- Rendering Modules -->
     <script src="js/rendering/domain-coloring.js"></script>
+    <script src="js/rendering/draw-fourier-winding.js"></script>
     <script src="js/rendering/draw-primitives.js"></script>
     <script src="js/rendering/draw-planar.js"></script>
     <script src="js/rendering/draw-sphere.js"></script>

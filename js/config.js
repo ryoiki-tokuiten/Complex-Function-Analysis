@@ -187,6 +187,18 @@ let state = {
     globalViewOptionsEnabled: false,
     plotly3DEnabled: false,
     showSphereAxesAndGrid: false, // Default to hidden
+
+    // Fourier Transform state
+    fourierModeEnabled: false,
+    fourierFunction: 'sine',
+    fourierFrequency: 1.0,
+    fourierAmplitude: 1.0,
+    fourierTimeWindow: 4.0,
+    fourierSamples: 128,
+    fourierTimeDomainSignal: [],
+    fourierDFTResult: [],
+    fourierWindingFrequency: 1.0, // The frequency we're testing (KEY CONTROL!)
+    fourierWindingTime: 1.0, // How far along in time (0 to 1, for animation)
 };
 
 

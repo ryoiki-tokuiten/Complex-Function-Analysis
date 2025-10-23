@@ -60,9 +60,25 @@ function setupDOMReferences() {
 
     controls.inputShapeSelector = document.getElementById('input_shape_selector');
     controls.funcButtons = {};
-    ['cos', 'sin', 'tan', 'sec', 'exp', 'ln', 'reciprocal', 'mobius', 'zeta', 'polynomial', 'poincare'].forEach(f => { 
+    ['fourier', 'cos', 'sin', 'tan', 'sec', 'exp', 'ln', 'reciprocal', 'mobius', 'zeta', 'polynomial', 'poincare'].forEach(f => { 
         controls.funcButtons[f] = document.getElementById(`select_${f}_btn`);
     });
+    
+    // Fourier Transform controls
+    controls.fourierSpecificControlsDiv = document.getElementById('fourier_specific_controls');
+    controls.fourierFunctionSelector = document.getElementById('fourier_function_selector');
+    controls.fourierFrequencySlider = document.getElementById('fourier_frequency_slider');
+    controls.fourierFrequencyValueDisplay = document.getElementById('fourier_frequency_value_display');
+    controls.fourierAmplitudeSlider = document.getElementById('fourier_amplitude_slider');
+    controls.fourierAmplitudeValueDisplay = document.getElementById('fourier_amplitude_value_display');
+    controls.fourierTimeWindowSlider = document.getElementById('fourier_time_window_slider');
+    controls.fourierTimeWindowValueDisplay = document.getElementById('fourier_time_window_value_display');
+    controls.fourierSamplesSlider = document.getElementById('fourier_samples_slider');
+    controls.fourierSamplesValueDisplay = document.getElementById('fourier_samples_value_display');
+    controls.fourierWindingFrequencySlider = document.getElementById('fourier_winding_frequency_slider');
+    controls.fourierWindingFrequencyValueDisplay = document.getElementById('fourier_winding_frequency_value_display');
+    controls.fourierWindingTimeSlider = document.getElementById('fourier_winding_time_slider');
+    controls.fourierWindingTimeValueDisplay = document.getElementById('fourier_winding_time_value_display');
     controls.wPlaneTitleFunc = document.getElementById('w-plane-title-func');
     controls.zPlaneTitle = document.getElementById('z-plane-title');
     controls.wPlaneTitle = document.getElementById('w-plane-title');
