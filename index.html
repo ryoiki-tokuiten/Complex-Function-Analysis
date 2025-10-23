@@ -16,6 +16,7 @@
                 <div class="control-group">
                     <div>
                         <button id="select_fourier_btn" data-tooltip="Fourier Transform: Visualize time domain and frequency domain">Fourier Transform</button>
+                        <button id="select_laplace_btn" data-tooltip="Laplace Transform: Visualize s-plane, poles/zeros, and 3D surface">Laplace Transform</button>
                         <button id="select_cos_btn" data-tooltip="Select w = cos(z) function">w = cos(z)</button>
                         <button id="select_sin_btn" data-tooltip="Select w = sin(z) function">w = sin(z)</button>
                         <button id="select_tan_btn" data-tooltip="Select w = tan(z) function">w = tan(z)</button>
@@ -158,6 +159,165 @@
                             <div class="slider-container">
                                 <input type="range" id="fourier_winding_time_slider" name="fourier_winding_time_slider" min="0" max="1" step="0.01" value="1.0" data-tooltip="Control how much of the signal to show" style="accent-color: #ffb464;">
                             </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Laplace Transform Controls -->
+                <div id="laplace_specific_controls" class="hidden" style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; width: 100%;">
+                    
+                    <!-- Signal Configuration Section -->
+                    <div style="background: linear-gradient(135deg, rgba(255,100,150,0.08), rgba(255,150,100,0.08)); padding: 14px; border-radius: 10px; border: 1px solid rgba(255,120,150,0.25);">
+                        <div style="color: rgba(255,180,200,1); font-weight: 700; font-size: 11px; text-transform: uppercase; letter-spacing: 0.8px; margin-bottom: 12px; opacity: 0.9; display: flex; align-items: center;">
+                            <div style="width: 3px; height: 14px; background: rgba(255,100,150,0.6); border-radius: 2px; margin-right: 8px;"></div>
+                            Signal Configuration
+                        </div>
+                        
+                        <div class="control-group" style="margin-bottom: 8px;">
+                            <label for="laplace_function_selector" style="font-size: 10px; color: rgba(255,200,220,0.95); font-weight: 500;">Waveform Type</label>
+                            <select id="laplace_function_selector" class="control-select" data-tooltip="Select the time domain signal type" style="margin-top: 3px; background: rgba(20,25,35,0.8); border: 1px solid rgba(255,100,150,0.3); color: rgba(255,200,220,1); padding: 5px 8px; border-radius: 5px; font-size: 11px;">
+                                <optgroup label="Basic Signals">
+                                    <option value="step">Unit Step u(t)</option>
+                                    <option value="exponential">Exponential e^(-at)</option>
+                                    <option value="sine">Sine Wave</option>
+                                    <option value="cosine">Cosine Wave</option>
+                                    <option value="damped_sine" selected>Damped Sine</option>
+                                </optgroup>
+                                <optgroup label="Advanced">
+                                    <option value="ramp">Ramp t·u(t)</option>
+                                    <option value="impulse">Impulse δ(t)</option>
+                                    <option value="damped_cosine">Damped Cosine</option>
+                                    <option value="exponential_sine">e^(at)·sin(ωt)</option>
+                                </optgroup>
+                                <optgroup label="System Responses">
+                                    <option value="underdamped">Underdamped System</option>
+                                    <option value="critically_damped">Critically Damped</option>
+                                    <option value="overdamped">Overdamped System</option>
+                                </optgroup>
+                            </select>
+                        </div>
+                        
+                        <div class="control-group" style="margin-bottom: 6px;">
+                            <label for="laplace_frequency_slider" style="font-size: 10px; color: rgba(255,180,200,0.9);">
+                                Frequency: 
+                                <output id="laplace_frequency_value_display" style="color: rgba(255,150,180,1); font-weight: 600; font-size: 11px;">2.0</output> Hz
+                            </label>
+                            <div class="slider-container">
+                                <input type="range" id="laplace_frequency_slider" min="0.5" max="10" step="0.1" value="2.0" data-tooltip="Oscillation frequency" style="accent-color: #ff6b9d;">
+                            </div>
+                        </div>
+                        
+                        <div class="control-group" style="margin-bottom: 0;">
+                            <label for="laplace_damping_slider" style="font-size: 10px; color: rgba(255,180,200,0.9);">
+                                Damping σ: 
+                                <output id="laplace_damping_value_display" style="color: rgba(255,150,180,1); font-weight: 600; font-size: 11px;">0.5</output>
+                            </label>
+                            <div class="slider-container">
+                                <input type="range" id="laplace_damping_slider" min="0.1" max="5" step="0.1" value="0.5" data-tooltip="Damping factor (decay rate)" style="accent-color: #ff6b9d;">
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- s-Plane Exploration Section -->
+                    <div style="background: linear-gradient(135deg, rgba(100,200,150,0.08), rgba(100,220,180,0.08)); padding: 14px; border-radius: 10px; border: 2px solid rgba(100,200,150,0.3); box-shadow: 0 0 15px rgba(100,220,150,0.1);">
+                        <div style="color: rgba(150,255,200,1); font-weight: 700; font-size: 11px; text-transform: uppercase; letter-spacing: 0.8px; margin-bottom: 12px; opacity: 0.9; display: flex; align-items: center;">
+                            <div style="width: 3px; height: 14px; background: rgba(100,220,150,0.6); border-radius: 2px; margin-right: 8px;"></div>
+                            s-Plane Exploration
+                        </div>
+                        
+                        <div class="control-group" style="margin-bottom: 6px;">
+                            <label for="laplace_sigma_slider" style="font-size: 11px; color: rgba(150,255,200,1); font-weight: 600;">
+                                σ (Real): 
+                                <output id="laplace_sigma_value_display" style="color: rgba(180,255,220,1); font-weight: 700; font-size: 12px;">0.0</output>
+                            </label>
+                            <div class="slider-container">
+                                <input type="range" id="laplace_sigma_slider" min="-5" max="5" step="0.1" value="0.0" data-tooltip="Real part of s = σ + jω" style="accent-color: #64dc96;">
+                            </div>
+                        </div>
+                        
+                        <div class="control-group" style="margin-bottom: 6px;">
+                            <label for="laplace_omega_slider" style="font-size: 10px; color: rgba(180,240,200,0.9);">
+                                ω (Imaginary): 
+                                <output id="laplace_omega_value_display" style="color: rgba(150,255,200,1); font-weight: 600; font-size: 11px;">1.0</output>
+                            </label>
+                            <div class="slider-container">
+                                <input type="range" id="laplace_omega_slider" min="-10" max="10" step="0.1" value="1.0" data-tooltip="Imaginary part of s = σ + jω" style="accent-color: #64dc96;">
+                            </div>
+                        </div>
+                        
+                        <div class="control-group" style="margin-bottom: 0;">
+                            <label style="font-size: 10px; color: rgba(180,240,200,0.9);">
+                                <input type="checkbox" id="laplace_show_roc_cb" checked style="margin-right: 5px;">
+                                Show ROC (Region of Convergence)
+                            </label>
+                        </div>
+                    </div>
+
+                    <!-- 3D Visualization Options Section -->
+                    <div style="background: linear-gradient(135deg, rgba(150,100,255,0.08), rgba(200,100,255,0.08)); padding: 14px; border-radius: 10px; border: 1px solid rgba(180,100,255,0.25);">
+                        <div style="color: rgba(200,150,255,1); font-weight: 700; font-size: 11px; text-transform: uppercase; letter-spacing: 0.8px; margin-bottom: 12px; opacity: 0.9; display: flex; align-items: center;">
+                            <div style="width: 3px; height: 14px; background: rgba(180,100,255,0.6); border-radius: 2px; margin-right: 8px;"></div>
+                            3D Visualization
+                        </div>
+                        
+                        <div class="control-group" style="margin-bottom: 8px;">
+                            <label for="laplace_viz_mode_selector" style="font-size: 10px; color: rgba(220,200,255,0.95); font-weight: 500;">Display Mode</label>
+                            <select id="laplace_viz_mode_selector" class="control-select" style="margin-top: 3px; background: rgba(20,25,35,0.8); border: 1px solid rgba(180,100,255,0.3); color: rgba(220,200,255,1); padding: 5px 8px; border-radius: 5px; font-size: 11px;">
+                                <option value="magnitude" selected>Magnitude |F(s)|</option>
+                                <option value="phase">Phase ∠F(s)</option>
+                                <option value="combined">Combined (Mag+Phase)</option>
+                            </select>
+                        </div>
+                        
+                        <div class="control-group" style="margin-bottom: 6px;">
+                            <label for="laplace_clip_height_slider" style="font-size: 10px; color: rgba(200,180,240,0.9);">
+                                Clip Height: 
+                                <output id="laplace_clip_height_value_display" style="color: rgba(200,150,255,1); font-weight: 600; font-size: 11px;">10</output>
+                            </label>
+                            <div class="slider-container">
+                                <input type="range" id="laplace_clip_height_slider" min="1" max="50" step="1" value="10" data-tooltip="Maximum height for poles (prevents infinite spikes)" style="accent-color: #b478ff;">
+                            </div>
+                        </div>
+                        
+                        <div class="control-group" style="margin-bottom: 0;">
+                            <label style="font-size: 10px; color: rgba(200,180,240,0.9);">
+                                <input type="checkbox" id="laplace_show_poles_zeros_cb" checked style="margin-right: 5px;">
+                                Show Poles & Zeros
+                            </label>
+                        </div>
+                    </div>
+
+                    <!-- Analytical Features Section -->
+                    <div style="background: linear-gradient(135deg, rgba(255,200,100,0.12), rgba(255,150,80,0.12)); padding: 14px; border-radius: 10px; border: 2px solid rgba(255,180,100,0.35); box-shadow: 0 0 15px rgba(255,180,100,0.15);">
+                        <div style="color: rgba(255,220,150,1); font-weight: 700; font-size: 11px; text-transform: uppercase; letter-spacing: 0.8px; margin-bottom: 12px; opacity: 0.9; display: flex; align-items: center;">
+                            <div style="width: 3px; height: 14px; background: linear-gradient(180deg, rgba(255,220,100,1), rgba(255,150,80,1)); border-radius: 2px; margin-right: 8px;"></div>
+                            Analytical Features
+                        </div>
+                        
+                        <div style="margin-bottom: 6px;">
+                            <button id="laplace_find_poles_zeros_btn" data-tooltip="Automatically detect poles and zeros" style="width: 100%; background: rgba(255,150,100,0.2); border: 1px solid rgba(255,180,100,0.4); color: rgba(255,220,180,1); padding: 6px 10px; border-radius: 5px; font-size: 10px; cursor: pointer; font-weight: 600;">
+                                Find Poles/Zeros
+                            </button>
+                        </div>
+                        
+                        <div style="margin-bottom: 6px;">
+                            <button id="laplace_stability_analysis_btn" data-tooltip="Check if system is stable" style="width: 100%; background: rgba(100,255,150,0.2); border: 1px solid rgba(100,220,150,0.4); color: rgba(180,255,200,1); padding: 6px 10px; border-radius: 5px; font-size: 10px; cursor: pointer; font-weight: 600;">
+                                Stability Analysis
+                            </button>
+                        </div>
+                        
+                        <div style="background: rgba(0,0,0,0.3); padding: 6px; border-radius: 4px; border-left: 2px solid rgba(255,220,100,0.5);">
+                            <div style="font-size: 9px; color: rgba(255,240,200,0.7); margin-bottom: 2px;">System Status:</div>
+                            <div id="laplace_stability_display" style="font-size: 10px; color: rgba(100,255,150,1); font-weight: 700;">
+                                Analyzing...
+                            </div>
+                        </div>
+                        
+                        <div class="control-group" style="margin-bottom: 0; margin-top: 8px;">
+                            <label style="font-size: 10px; color: rgba(255,220,180,0.9);">
+                                <input type="checkbox" id="laplace_show_fourier_line_cb" style="margin-right: 5px;">
+                                Highlight Fourier (σ=0)
+                            </label>
                         </div>
                     </div>
                 </div>
@@ -821,6 +981,17 @@
                     <div id="cauchy_integral_results_info" class="cauchy-info-overlay hidden" style="font-size: 0.8rem; line-height:1.3;"></div> 
                 </div>
             </div>
+            <div id="laplace_3d_column" class="hidden" style="flex: 1; display: flex; flex-direction: column;">
+                <div class="canvas-header-line">
+                    <h2 class="section-title"><span>3D Surface: |F(s)| Magnitude</span></h2>
+                    <div class="canvas-header-controls">
+                        <button id="toggle_fullscreen_laplace_3d_btn" data-tooltip="Toggle fullscreen view for 3D surface">Fullscreen</button>
+                    </div>
+                </div>
+                <div style="flex: 1; position: relative;">
+                    <div id="laplace_3d_container" style="width: 100%; height: 100%;"></div>
+                </div>
+            </div>
         </section>
     </main>
     
@@ -838,10 +1009,13 @@
     <script src="js/analysis/root-finding.js"></script>
     <script src="js/analysis/cauchy.js"></script>
     <script src="js/analysis/fourier-transform.js"></script>
+    <script src="js/analysis/laplace-transform.js"></script>
 
     <!-- Rendering Modules -->
     <script src="js/rendering/domain-coloring.js"></script>
     <script src="js/rendering/draw-fourier-winding.js"></script>
+    <script src="js/rendering/draw-laplace-panels.js"></script>
+    <script src="js/rendering/laplace-3d-surface.js"></script>
     <script src="js/rendering/draw-primitives.js"></script>
     <script src="js/rendering/draw-planar.js"></script>
     <script src="js/rendering/draw-sphere.js"></script>

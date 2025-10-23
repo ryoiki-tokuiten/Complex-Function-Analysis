@@ -8,6 +8,12 @@ function drawZPlaneContent(){
         return;
     }
     
+    // Handle Laplace Transform mode - LEFT panel (time domain)
+    if (state.laplaceModeEnabled) {
+        drawLaplaceTimeDomain(zCtx, state.laplaceTimeDomainSignal, zPlaneParams);
+        return;
+    }
+    
     const curFunc=transformFunctions[state.currentFunction];
     const drawZAsSphere = state.riemannSphereViewEnabled && !state.splitViewEnabled;
 
@@ -112,6 +118,13 @@ function drawWPlaneContent() {
     // Handle Fourier Transform mode - use WINDING visualization!
     if (state.fourierModeEnabled) {
         drawWindingVisualization(wCtx, state.fourierTimeDomainSignal, wPlaneParams);
+        return;
+    }
+    
+    // Handle Laplace Transform mode - MIDDLE panel uses winding visualization
+    if (state.laplaceModeEnabled) {
+        // Use the same beautiful winding function as Fourier!
+        drawLaplaceWindingVisualization(wCtx, state.laplaceTimeDomainSignal, wPlaneParams);
         return;
     }
     

@@ -312,7 +312,7 @@ hr.panel-separator {
     align-items: stretch; /* Ensure columns stretch to the same height if content differs, default is stretch */
 }
 
-#z_plane_column, #w_plane_column {
+#z_plane_column, #w_plane_column, #laplace_3d_column {
     display: flex;
     flex-direction: column;
     min-height: 0;
@@ -320,9 +320,10 @@ hr.panel-separator {
     overflow: hidden; /* Crucial to prevent canvas from expanding its column */
 }
 
-/* Styling for the direct container of the canvas (child of #z_plane_column/#w_plane_column) */
+/* Styling for the direct container of the canvas (child of #z_plane_column/#w_plane_column/#laplace_3d_column) */
 #z_plane_column > div:not(.canvas-header-line),
-#w_plane_column > div:not(.canvas-header-line) {
+#w_plane_column > div:not(.canvas-header-line),
+#laplace_3d_column > div:not(.canvas-header-line) {
     flex-grow: 1; /* Allows this container to take up available space in the column */
     min-height: 0; /* Essential for descendant flex items (like canvas) to scale correctly */
     position: relative; /* For positioning overlays like probe_info */
@@ -331,7 +332,7 @@ hr.panel-separator {
 }
 
 
-#z_plane_column .section-title, #w_plane_column .section-title {
+#z_plane_column .section-title, #w_plane_column .section-title, #laplace_3d_column .section-title {
     flex-shrink: 0;
     /* margin-bottom: 0.75rem; from .section-title */
 }
@@ -524,6 +525,13 @@ input[type="range"]:focus::-moz-range-thumb {
     gap: 1.5rem; /* Was 2.5rem, then 1.5rem, ensure it's the desired final value, let's assume 1.5rem is fine */
     align-items: start; /* This is for the grid items (.control-group) themselves */
 }
+
+/* Three-column layout for Laplace mode */
+.two-column-layout:has(#laplace_3d_column:not(.hidden)) {
+    grid-template-columns: 1fr 1fr 1fr;
+    gap: 1rem;
+}
+
 @media (max-width: 800px) { .two-column-layout { grid-template-columns: 1fr; } }
 
 /* .slider-pair-row is renamed to .slider-row and styled above */

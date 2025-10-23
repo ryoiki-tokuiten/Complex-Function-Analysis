@@ -99,6 +99,21 @@ window.setupEventListeners = function() {
                     }
                 }
                 
+                // Handle Laplace mode
+                if (key === 'laplace') {
+                    state.laplaceModeEnabled = true;
+                    if (controls.laplaceSpecificControlsDiv) {
+                        controls.laplaceSpecificControlsDiv.classList.remove('hidden');
+                    }
+                    // Update Laplace transform on mode entry
+                    updateLaplaceTransform();
+                } else {
+                    state.laplaceModeEnabled = false;
+                    if (controls.laplaceSpecificControlsDiv) {
+                        controls.laplaceSpecificControlsDiv.classList.add('hidden');
+                    }
+                }
+                
                 Object.keys(controls.funcButtons).forEach(k => {
                     controls.funcButtons[k].classList.remove('active');
                 });
@@ -626,6 +641,182 @@ window.setupEventListeners = function() {
                 requestRedrawAll();
             } catch (error) {
                 console.error("Error in fourierWindingTimeSlider input listener:", error);
+            }
+        });
+    }
+
+    // Laplace Transform event listeners
+    if (controls.laplaceFunctionSelector) {
+        controls.laplaceFunctionSelector.addEventListener('change', (e) => {
+            try {
+                state.laplaceFunction = e.target.value;
+                updateLaplaceTransform();
+                requestRedrawAll();
+            } catch (error) {
+                console.error("Error in laplaceFunctionSelector change listener:", error);
+            }
+        });
+    }
+
+    if (controls.laplaceFrequencySlider) {
+        controls.laplaceFrequencySlider.addEventListener('input', () => {
+            try {
+                state.laplaceFrequency = parseFloat(controls.laplaceFrequencySlider.value);
+                if (controls.laplaceFrequencyValueDisplay) {
+                    controls.laplaceFrequencyValueDisplay.textContent = state.laplaceFrequency.toFixed(1);
+                }
+                updateLaplaceTransform();
+                requestRedrawAll();
+            } catch (error) {
+                console.error("Error in laplaceFrequencySlider input listener:", error);
+            }
+        });
+    }
+
+    if (controls.laplaceDampingSlider) {
+        controls.laplaceDampingSlider.addEventListener('input', () => {
+            try {
+                state.laplaceDamping = parseFloat(controls.laplaceDampingSlider.value);
+                if (controls.laplaceDampingValueDisplay) {
+                    controls.laplaceDampingValueDisplay.textContent = state.laplaceDamping.toFixed(1);
+                }
+                updateLaplaceTransform();
+                requestRedrawAll();
+            } catch (error) {
+                console.error("Error in laplaceDampingSlider input listener:", error);
+            }
+        });
+    }
+
+    if (controls.laplaceSigmaSlider) {
+        controls.laplaceSigmaSlider.addEventListener('input', () => {
+            try {
+                state.laplaceSigma = parseFloat(controls.laplaceSigmaSlider.value);
+                if (controls.laplaceSigmaValueDisplay) {
+                    controls.laplaceSigmaValueDisplay.textContent = state.laplaceSigma.toFixed(1);
+                }
+                // Fast update - only recompute winding path and eval point, not 3D surface
+                updateLaplaceEvaluationPoint();
+                requestRedrawAll();
+            } catch (error) {
+                console.error("Error in laplaceSigmaSlider input listener:", error);
+            }
+        });
+    }
+
+    if (controls.laplaceOmegaSlider) {
+        controls.laplaceOmegaSlider.addEventListener('input', () => {
+            try {
+                state.laplaceOmega = parseFloat(controls.laplaceOmegaSlider.value);
+                if (controls.laplaceOmegaValueDisplay) {
+                    controls.laplaceOmegaValueDisplay.textContent = state.laplaceOmega.toFixed(1);
+                }
+                // Fast update - only recompute winding path and eval point, not 3D surface
+                updateLaplaceEvaluationPoint();
+                requestRedrawAll();
+            } catch (error) {
+                console.error("Error in laplaceOmegaSlider input listener:", error);
+            }
+        });
+    }
+
+    if (controls.laplaceShowROCCb) {
+        controls.laplaceShowROCCb.addEventListener('change', (e) => {
+            try {
+                state.laplaceShowROC = e.target.checked;
+                requestRedrawAll();
+            } catch (error) {
+                console.error("Error in laplaceShowROCCb change listener:", error);
+            }
+        });
+    }
+
+    if (controls.laplaceVizModeSelector) {
+        controls.laplaceVizModeSelector.addEventListener('change', (e) => {
+            try {
+                state.laplaceVizMode = e.target.value;
+                updateLaplace3DSurface();
+                requestRedrawAll();
+            } catch (error) {
+                console.error("Error in laplaceVizModeSelector change listener:", error);
+            }
+        });
+    }
+
+    if (controls.laplaceClipHeightSlider) {
+        controls.laplaceClipHeightSlider.addEventListener('input', () => {
+            try {
+                state.laplaceClipHeight = parseFloat(controls.laplaceClipHeightSlider.value);
+                if (controls.laplaceClipHeightValueDisplay) {
+                    controls.laplaceClipHeightValueDisplay.textContent = state.laplaceClipHeight.toFixed(0);
+                }
+                updateLaplace3DSurface();
+                requestRedrawAll();
+            } catch (error) {
+                console.error("Error in laplaceClipHeightSlider input listener:", error);
+            }
+        });
+    }
+
+    if (controls.laplaceShowPolesZerosCb) {
+        controls.laplaceShowPolesZerosCb.addEventListener('change', (e) => {
+            try {
+                state.laplaceShowPolesZeros = e.target.checked;
+                updateLaplace3DSurface();
+                requestRedrawAll();
+            } catch (error) {
+                console.error("Error in laplaceShowPolesZerosCb change listener:", error);
+            }
+        });
+    }
+
+    if (controls.laplaceFindPolesZerosBtn) {
+        controls.laplaceFindPolesZerosBtn.addEventListener('click', () => {
+            try {
+                // Trigger pole-zero finding
+                if (state.laplaceModeEnabled) {
+                    const pz = findPolesZeros(state.laplaceFunction || 'damped_sine', {
+                        frequency: state.laplaceFrequency || 2.0,
+                        damping: state.laplaceDamping || 0.5,
+                        amplitude: 1.0
+                    });
+                    state.laplacePoles = pz.poles;
+                    state.laplaceZeros = pz.zeros;
+                    requestRedrawAll();
+                }
+            } catch (error) {
+                console.error("Error in laplaceFindPolesZerosBtn click listener:", error);
+            }
+        });
+    }
+
+    if (controls.laplaceStabilityAnalysisBtn) {
+        controls.laplaceStabilityAnalysisBtn.addEventListener('click', () => {
+            try {
+                // Perform stability analysis
+                if (state.laplaceModeEnabled && state.laplacePoles) {
+                    const stability = analyzeStability(state.laplacePoles);
+                    state.laplaceStability = stability;
+                    
+                    // Update display
+                    if (controls.laplaceStabilityDisplay) {
+                        controls.laplaceStabilityDisplay.textContent = stability.message;
+                        controls.laplaceStabilityDisplay.style.color = stability.color || 'rgba(200, 220, 255, 1)';
+                    }
+                }
+            } catch (error) {
+                console.error("Error in laplaceStabilityAnalysisBtn click listener:", error);
+            }
+        });
+    }
+
+    if (controls.laplaceShowFourierLineCb) {
+        controls.laplaceShowFourierLineCb.addEventListener('change', (e) => {
+            try {
+                state.laplaceShowFourierLine = e.target.checked;
+                requestRedrawAll();
+            } catch (error) {
+                console.error("Error in laplaceShowFourierLineCb change listener:", error);
             }
         });
     }

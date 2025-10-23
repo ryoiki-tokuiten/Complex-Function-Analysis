@@ -13,6 +13,23 @@ function requestRedrawAll(){
                 drawZPlaneContent();
                 drawWPlaneContent();
                 updateTitlesAndGlobalUI();
+                
+                // Handle Laplace 3D surface rendering
+                if (state.laplaceModeEnabled) {
+                    const laplace3DColumn = document.getElementById('laplace_3d_column');
+                    if (laplace3DColumn) {
+                        laplace3DColumn.classList.remove('hidden');
+                        // Trigger 3D surface render
+                        if (typeof drawLaplace3DSurface === 'function') {
+                            drawLaplace3DSurface('laplace_3d_container');
+                        }
+                    }
+                } else {
+                    const laplace3DColumn = document.getElementById('laplace_3d_column');
+                    if (laplace3DColumn) {
+                        laplace3DColumn.classList.add('hidden');
+                    }
+                }
 
                 domainColoringDirty = false;
                 redrawRequest = null;
@@ -40,6 +57,23 @@ function redrawAll(){
         drawZPlaneContent();
         drawWPlaneContent();
         updateTitlesAndGlobalUI();
+        
+        // Handle Laplace 3D surface rendering
+        if (state.laplaceModeEnabled) {
+            const laplace3DColumn = document.getElementById('laplace_3d_column');
+            if (laplace3DColumn) {
+                laplace3DColumn.classList.remove('hidden');
+                if (typeof drawLaplace3DSurface === 'function') {
+                    drawLaplace3DSurface('laplace_3d_container');
+                }
+            }
+        } else {
+            const laplace3DColumn = document.getElementById('laplace_3d_column');
+            if (laplace3DColumn) {
+                laplace3DColumn.classList.add('hidden');
+            }
+        }
+        
         domainColoringDirty = false;
     } catch (error) {
         console.error("Error during redraw (direct call):", error);
@@ -183,6 +217,24 @@ function setup() {
     if (controls.fourierFunctionSelector) state.fourierFunction = controls.fourierFunctionSelector.value;
     if (controls.fourierWindingFrequencySlider) state.fourierWindingFrequency = parseFloat(controls.fourierWindingFrequencySlider.value);
     if (controls.fourierWindingTimeSlider) state.fourierWindingTime = parseFloat(controls.fourierWindingTimeSlider.value);
+
+    // Initialize Laplace Transform state
+    if (controls.laplaceFrequencySlider) state.laplaceFrequency = parseFloat(controls.laplaceFrequencySlider.value);
+    if (controls.laplaceDampingSlider) state.laplaceDamping = parseFloat(controls.laplaceDampingSlider.value);
+    if (controls.laplaceSigmaSlider) state.laplaceSigma = parseFloat(controls.laplaceSigmaSlider.value);
+    if (controls.laplaceOmegaSlider) state.laplaceOmega = parseFloat(controls.laplaceOmegaSlider.value);
+    if (controls.laplaceFunctionSelector) state.laplaceFunction = controls.laplaceFunctionSelector.value;
+    if (controls.laplaceShowROCCb) state.laplaceShowROC = controls.laplaceShowROCCb.checked;
+    if (controls.laplaceVizModeSelector) state.laplaceVizMode = controls.laplaceVizModeSelector.value;
+    if (controls.laplaceClipHeightSlider) state.laplaceClipHeight = parseFloat(controls.laplaceClipHeightSlider.value);
+    if (controls.laplaceShowPolesZerosCb) state.laplaceShowPolesZeros = controls.laplaceShowPolesZerosCb.checked;
+    if (controls.laplaceShowFourierLineCb) state.laplaceShowFourierLine = controls.laplaceShowFourierLineCb.checked;
+    state.laplaceAmplitude = 1.0;
+    state.laplaceModeEnabled = false;
+    state.laplaceTimeDomainSignal = [];
+    state.laplaceSurface = [];
+    state.laplacePoles = [];
+    state.laplaceZeros = [];
 
     state.polynomialN = parseInt(controls.polynomialNSlider.value);
     initializePolynomialCoeffs(state.polynomialN, false); 

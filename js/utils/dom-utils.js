@@ -60,7 +60,7 @@ function setupDOMReferences() {
 
     controls.inputShapeSelector = document.getElementById('input_shape_selector');
     controls.funcButtons = {};
-    ['fourier', 'cos', 'sin', 'tan', 'sec', 'exp', 'ln', 'reciprocal', 'mobius', 'zeta', 'polynomial', 'poincare'].forEach(f => { 
+    ['fourier', 'laplace', 'cos', 'sin', 'tan', 'sec', 'exp', 'ln', 'reciprocal', 'mobius', 'zeta', 'polynomial', 'poincare'].forEach(f => { 
         controls.funcButtons[f] = document.getElementById(`select_${f}_btn`);
     });
     
@@ -79,6 +79,28 @@ function setupDOMReferences() {
     controls.fourierWindingFrequencyValueDisplay = document.getElementById('fourier_winding_frequency_value_display');
     controls.fourierWindingTimeSlider = document.getElementById('fourier_winding_time_slider');
     controls.fourierWindingTimeValueDisplay = document.getElementById('fourier_winding_time_value_display');
+    
+    // Laplace Transform controls
+    controls.laplaceSpecificControlsDiv = document.getElementById('laplace_specific_controls');
+    controls.laplaceFunctionSelector = document.getElementById('laplace_function_selector');
+    controls.laplaceFrequencySlider = document.getElementById('laplace_frequency_slider');
+    controls.laplaceFrequencyValueDisplay = document.getElementById('laplace_frequency_value_display');
+    controls.laplaceDampingSlider = document.getElementById('laplace_damping_slider');
+    controls.laplaceDampingValueDisplay = document.getElementById('laplace_damping_value_display');
+    controls.laplaceSigmaSlider = document.getElementById('laplace_sigma_slider');
+    controls.laplaceSigmaValueDisplay = document.getElementById('laplace_sigma_value_display');
+    controls.laplaceOmegaSlider = document.getElementById('laplace_omega_slider');
+    controls.laplaceOmegaValueDisplay = document.getElementById('laplace_omega_value_display');
+    controls.laplaceShowROCCb = document.getElementById('laplace_show_roc_cb');
+    controls.laplaceVizModeSelector = document.getElementById('laplace_viz_mode_selector');
+    controls.laplaceClipHeightSlider = document.getElementById('laplace_clip_height_slider');
+    controls.laplaceClipHeightValueDisplay = document.getElementById('laplace_clip_height_value_display');
+    controls.laplaceShowPolesZerosCb = document.getElementById('laplace_show_poles_zeros_cb');
+    controls.laplaceFindPolesZerosBtn = document.getElementById('laplace_find_poles_zeros_btn');
+    controls.laplaceStabilityAnalysisBtn = document.getElementById('laplace_stability_analysis_btn');
+    controls.laplaceStabilityDisplay = document.getElementById('laplace_stability_display');
+    controls.laplaceShowFourierLineCb = document.getElementById('laplace_show_fourier_line_cb');
+    
     controls.wPlaneTitleFunc = document.getElementById('w-plane-title-func');
     controls.zPlaneTitle = document.getElementById('z-plane-title');
     controls.wPlaneTitle = document.getElementById('w-plane-title');

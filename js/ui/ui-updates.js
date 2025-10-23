@@ -1,16 +1,17 @@
 function updateSliderLabelsAndDisplay() {
     try {
         const isFourierMode = state.fourierModeEnabled;
+        const isLaplaceMode = state.laplaceModeEnabled;
         
-        // If in Fourier mode, hide all complex function-related controls
-        if (isFourierMode) {
+        // If in Fourier or Laplace mode, hide all complex function-related controls
+        if (isFourierMode || isLaplaceMode) {
             controls.commonParamsSliders.classList.add('hidden');
             controls.mobiusParamsSliders.classList.add('hidden');
             controls.polynomialParamsSliders.classList.add('hidden');
             controls.shapeParamsSliders.classList.add('hidden');
             controls.stripHorizontalParamsSliders.classList.add('hidden');
             controls.sectorAngularParamsSliders.classList.add('hidden');
-            // Don't return yet - we still need to update Fourier-specific displays
+            // Don't return yet - we still need to update transform-specific displays
         } else {
             // Normal complex function mode
             const isLine = state.currentInputShape === 'line';
@@ -73,8 +74,8 @@ function updateSliderLabelsAndDisplay() {
             if (isPolyFunc) { if (controls.polynomialNValueDisplay) controls.polynomialNValueDisplay.textContent = state.polynomialN; updatePolynomialCoeffDisplays(); }
         } // End else block for normal complex function mode
 
-    // Only update and show these controls if NOT in Fourier mode
-    if (!isFourierMode) {
+    // Only update and show these controls if NOT in Fourier or Laplace mode
+    if (!isFourierMode && !isLaplaceMode) {
         if (controls.gridDensityValueDisplay) controls.gridDensityValueDisplay.textContent = state.gridDensity;
         if (controls.neighborhoodSizeValueDisplay) controls.neighborhoodSizeValueDisplay.textContent = state.probeNeighborhoodSize.toFixed(2);
         if (controls.zPlaneZoomValueDisplay) controls.zPlaneZoomValueDisplay.textContent = state.zPlaneZoom.toFixed(2);
@@ -175,23 +176,46 @@ function updateSliderLabelsAndDisplay() {
     }
 
     // Fourier Transform display updates
-    if (controls.fourierFrequencyValueDisplay) {
-        controls.fourierFrequencyValueDisplay.textContent = state.fourierFrequency.toFixed(2);
+    if (controls.fourierFrequencyValueDisplay && state.fourierFrequency !== undefined) {
+        controls.fourierFrequencyValueDisplay.textContent = state.fourierFrequency.toFixed(1);
     }
-    if (controls.fourierAmplitudeValueDisplay) {
-        controls.fourierAmplitudeValueDisplay.textContent = state.fourierAmplitude.toFixed(2);
+    if (controls.fourierAmplitudeValueDisplay && state.fourierAmplitude !== undefined) {
+        controls.fourierAmplitudeValueDisplay.textContent = state.fourierAmplitude.toFixed(1);
     }
-    if (controls.fourierTimeWindowValueDisplay) {
-        controls.fourierTimeWindowValueDisplay.textContent = state.fourierTimeWindow.toFixed(2);
+    if (controls.fourierTimeWindowValueDisplay && state.fourierTimeWindow !== undefined) {
+        controls.fourierTimeWindowValueDisplay.textContent = state.fourierTimeWindow.toFixed(1);
     }
-    if (controls.fourierSamplesValueDisplay) {
+    if (controls.fourierSamplesValueDisplay && state.fourierSamples !== undefined) {
         controls.fourierSamplesValueDisplay.textContent = state.fourierSamples;
     }
-    if (controls.fourierWindingFrequencyValueDisplay) {
+    if (controls.fourierWindingFrequencyValueDisplay && state.fourierWindingFrequency !== undefined) {
         controls.fourierWindingFrequencyValueDisplay.textContent = state.fourierWindingFrequency.toFixed(1);
     }
-    if (controls.fourierWindingTimeValueDisplay) {
+    if (controls.fourierWindingTimeValueDisplay && state.fourierWindingTime !== undefined) {
         controls.fourierWindingTimeValueDisplay.textContent = Math.round(state.fourierWindingTime * 100);
+    }
+
+    // Laplace Transform display updates
+    if (controls.laplaceFrequencyValueDisplay && state.laplaceFrequency !== undefined) {
+        controls.laplaceFrequencyValueDisplay.textContent = state.laplaceFrequency.toFixed(1);
+    }
+    if (controls.laplaceDampingValueDisplay && state.laplaceDamping !== undefined) {
+        controls.laplaceDampingValueDisplay.textContent = state.laplaceDamping.toFixed(1);
+    }
+    if (controls.laplaceSigmaValueDisplay && state.laplaceSigma !== undefined) {
+        controls.laplaceSigmaValueDisplay.textContent = state.laplaceSigma.toFixed(1);
+    }
+    if (controls.laplaceOmegaValueDisplay && state.laplaceOmega !== undefined) {
+        controls.laplaceOmegaValueDisplay.textContent = state.laplaceOmega.toFixed(1);
+    }
+    if (controls.laplaceClipHeightValueDisplay && state.laplaceClipHeight !== undefined) {
+        controls.laplaceClipHeightValueDisplay.textContent = state.laplaceClipHeight.toFixed(0);
+    }
+    if (controls.laplaceStabilityDisplay && state.laplaceStability) {
+        controls.laplaceStabilityDisplay.textContent = state.laplaceStability.message || 'Analyzing...';
+        if (state.laplaceStability.color) {
+            controls.laplaceStabilityDisplay.style.color = state.laplaceStability.color;
+        }
     }
 
     
@@ -205,8 +229,8 @@ function updateProbeInfo(){
         const zIsPlanar = !state.riemannSphereViewEnabled || state.splitViewEnabled;
         
     if(state.probeActive && zIsPlanar && !state.panStateZ.isPanning && !state.panStateW.isPanning){
-        // Skip probe info in Fourier mode
-        if (state.fourierModeEnabled) {
+        // Skip probe info in Fourier or Laplace mode
+        if (state.fourierModeEnabled || state.laplaceModeEnabled) {
             controls.zPlaneProbeInfo.classList.add('hidden');
             controls.wPlaneProbeInfo.classList.add('hidden');
             return;
@@ -276,7 +300,46 @@ function updateTitlesAndGlobalUI() {
         return; // Skip rest of title updates
     }
     
-    // If not in Fourier mode, ensure visualization panel is visible
+    // Handle Laplace Transform mode
+    if (state.laplaceModeEnabled) {
+        controls.zPlaneTitle.innerHTML = 'Time Domain (Signal)';
+        controls.wPlaneTitle.innerHTML = 'Complex Frequency Domain (Winding)';
+        controls.inputShapeSelector.disabled = true;
+        
+        // Update 3D panel title based on visualization mode
+        const laplace3DTitle = document.querySelector('#laplace_3d_column .section-title span');
+        if (laplace3DTitle) {
+            const vizMode = state.laplaceVizMode || 'magnitude';
+            if (vizMode === 'magnitude') {
+                laplace3DTitle.innerHTML = '3D Surface: |F(s)| Magnitude';
+            } else if (vizMode === 'phase') {
+                laplace3DTitle.innerHTML = '3D Surface: ∠F(s) Phase';
+            } else {
+                laplace3DTitle.innerHTML = '3D Surface: Combined View';
+            }
+        }
+        
+        // Hide ALL visualization option panels/containers
+        if (controls.visualizationOptionsPanel) {
+            controls.visualizationOptionsPanel.classList.add('hidden');
+        }
+        if (controls.zetaSpecificControlsDiv) {
+            controls.zetaSpecificControlsDiv.classList.add('hidden');
+        }
+        if (controls.riemannSphereOptionsDiv) {
+            controls.riemannSphereOptionsDiv.classList.add('hidden');
+        }
+        if (controls.sphereViewControlsDiv) {
+            controls.sphereViewControlsDiv.classList.add('hidden');
+        }
+        if (controls.vectorFlowOptionsContent) {
+            controls.vectorFlowOptionsContent.classList.add('hidden');
+        }
+        
+        return; // Skip rest of title updates
+    }
+    
+    // If not in Fourier or Laplace mode, ensure visualization panel is visible
     if (controls.visualizationOptionsPanel) {
         controls.visualizationOptionsPanel.classList.remove('hidden');
     }
