@@ -231,6 +231,11 @@ function setup() {
     if (controls.laplaceShowFourierLineCb) state.laplaceShowFourierLine = controls.laplaceShowFourierLineCb.checked;
     state.laplaceAmplitude = 1.0;
     state.laplaceModeEnabled = false;
+    state.laplaceAnimationTime = 1.0;  // Full spiral shown by default (0 to 1)
+    state.laplaceAnimationPlaying = false;
+    state.laplaceAnimationSpeed = 3.0;  // Seconds to complete one animation
+    state.laplaceAnimationLoop = true;  // Loop animation by default
+    state.laplaceNeedViewportReset = true;  // Reset viewport on first render
     state.laplaceTimeDomainSignal = [];
     state.laplaceSurface = [];
     state.laplacePoles = [];

@@ -287,37 +287,47 @@
                         </div>
                     </div>
 
-                    <!-- Analytical Features Section -->
+                    <!-- Animation Controls Section -->
                     <div style="background: linear-gradient(135deg, rgba(255,200,100,0.12), rgba(255,150,80,0.12)); padding: 14px; border-radius: 10px; border: 2px solid rgba(255,180,100,0.35); box-shadow: 0 0 15px rgba(255,180,100,0.15);">
                         <div style="color: rgba(255,220,150,1); font-weight: 700; font-size: 11px; text-transform: uppercase; letter-spacing: 0.8px; margin-bottom: 12px; opacity: 0.9; display: flex; align-items: center;">
                             <div style="width: 3px; height: 14px; background: linear-gradient(180deg, rgba(255,220,100,1), rgba(255,150,80,1)); border-radius: 2px; margin-right: 8px;"></div>
-                            Analytical Features
+                            Integral Animation
                         </div>
                         
-                        <div style="margin-bottom: 6px;">
-                            <button id="laplace_find_poles_zeros_btn" data-tooltip="Automatically detect poles and zeros" style="width: 100%; background: rgba(255,150,100,0.2); border: 1px solid rgba(255,180,100,0.4); color: rgba(255,220,180,1); padding: 6px 10px; border-radius: 5px; font-size: 10px; cursor: pointer; font-weight: 600;">
-                                Find Poles/Zeros
+                        <!-- Animation buttons -->
+                        <div style="margin-bottom: 6px; display: grid; grid-template-columns: 1fr 1fr; gap: 6px;">
+                            <button id="laplace_play_pause_btn" onclick="toggleLaplaceAnimation()" data-tooltip="Play/Pause animation" style="background: rgba(100,255,150,0.25); border: 1px solid rgba(100,220,150,0.5); color: rgba(180,255,200,1); padding: 8px; border-radius: 6px; font-size: 11px; cursor: pointer; font-weight: 700;">
+                                ▶ Play
+                            </button>
+                            <button id="laplace_reset_btn" onclick="resetLaplaceAnimation()" data-tooltip="Reset to beginning" style="background: rgba(255,150,100,0.2); border: 1px solid rgba(255,180,100,0.4); color: rgba(255,220,180,1); padding: 8px; border-radius: 6px; font-size: 11px; cursor: pointer; font-weight: 700;">
+                                ↺ Reset
                             </button>
                         </div>
                         
-                        <div style="margin-bottom: 6px;">
-                            <button id="laplace_stability_analysis_btn" data-tooltip="Check if system is stable" style="width: 100%; background: rgba(100,255,150,0.2); border: 1px solid rgba(100,220,150,0.4); color: rgba(180,255,200,1); padding: 6px 10px; border-radius: 5px; font-size: 10px; cursor: pointer; font-weight: 600;">
-                                Stability Analysis
-                            </button>
-                        </div>
-                        
-                        <div style="background: rgba(0,0,0,0.3); padding: 6px; border-radius: 4px; border-left: 2px solid rgba(255,220,100,0.5);">
-                            <div style="font-size: 9px; color: rgba(255,240,200,0.7); margin-bottom: 2px;">System Status:</div>
-                            <div id="laplace_stability_display" style="font-size: 10px; color: rgba(100,255,150,1); font-weight: 700;">
-                                Analyzing...
+                        <!-- Animation speed -->
+                        <div class="control-group" style="margin-bottom: 8px;">
+                            <label for="laplace_animation_speed_slider" style="font-size: 10px; color: rgba(255,220,180,0.9);">
+                                Speed: 
+                                <output id="laplace_animation_speed_display" style="color: rgba(255,200,150,1); font-weight: 600; font-size: 11px;">3.0</output>s
+                            </label>
+                            <div class="slider-container">
+                                <input type="range" id="laplace_animation_speed_slider" min="0.5" max="10" step="0.5" value="3.0" data-tooltip="Animation duration in seconds" style="accent-color: #ffb478;">
                             </div>
                         </div>
                         
-                        <div class="control-group" style="margin-bottom: 0; margin-top: 8px;">
+                        <!-- Animation loop -->
+                        <div class="control-group" style="margin-bottom: 6px;">
                             <label style="font-size: 10px; color: rgba(255,220,180,0.9);">
-                                <input type="checkbox" id="laplace_show_fourier_line_cb" style="margin-right: 5px;">
-                                Highlight Fourier (σ=0)
+                                <input type="checkbox" id="laplace_animation_loop_cb" checked style="margin-right: 5px;">
+                                Loop Animation
                             </label>
+                        </div>
+                        
+                        <!-- Show full spiral button -->
+                        <div style="margin-bottom: 0;">
+                            <button id="laplace_show_full_btn" onclick="showFullLaplaceSpiral()" data-tooltip="Show complete spiral (no animation)" style="width: 100%; background: rgba(255,200,100,0.15); border: 1px solid rgba(255,180,100,0.3); color: rgba(255,220,180,0.9); padding: 6px; border-radius: 5px; font-size: 10px; cursor: pointer; font-weight: 600;">
+                                Show Full Spiral
+                            </button>
                         </div>
                     </div>
                 </div>
@@ -1015,6 +1025,9 @@
     <script src="js/rendering/domain-coloring.js"></script>
     <script src="js/rendering/draw-fourier-winding.js"></script>
     <script src="js/rendering/draw-laplace-panels.js"></script>
+    <script src="js/rendering/draw-laplace-subpanels.js"></script>
+    <script src="js/rendering/draw-laplace-winding-3b1b.js"></script>
+    <script src="js/rendering/laplace-animation.js"></script>
     <script src="js/rendering/laplace-3d-surface.js"></script>
     <script src="js/rendering/draw-primitives.js"></script>
     <script src="js/rendering/draw-planar.js"></script>

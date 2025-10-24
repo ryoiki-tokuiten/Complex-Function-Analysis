@@ -758,6 +758,49 @@ window.setupEventListeners = function() {
         });
     }
 
+    // Animation controls
+    const laplaceAnimSpeedSlider = document.getElementById('laplace_animation_speed_slider');
+    const laplaceAnimSpeedDisplay = document.getElementById('laplace_animation_speed_display');
+    const laplaceAnimLoopCb = document.getElementById('laplace_animation_loop_cb');
+    const laplacePlayPauseBtn = document.getElementById('laplace_play_pause_btn');
+
+    if (laplaceAnimSpeedSlider) {
+        laplaceAnimSpeedSlider.addEventListener('input', () => {
+            state.laplaceAnimationSpeed = parseFloat(laplaceAnimSpeedSlider.value);
+            if (laplaceAnimSpeedDisplay) {
+                laplaceAnimSpeedDisplay.textContent = state.laplaceAnimationSpeed.toFixed(1);
+            }
+        });
+    }
+
+    if (laplaceAnimLoopCb) {
+        laplaceAnimLoopCb.addEventListener('change', () => {
+            state.laplaceAnimationLoop = laplaceAnimLoopCb.checked;
+        });
+    }
+
+    // Update play/pause button text and ensure animation starts when entering Laplace mode
+    if (laplacePlayPauseBtn) {
+        setInterval(() => {
+            if (state.laplaceModeEnabled && laplacePlayPauseBtn) {
+                laplacePlayPauseBtn.innerHTML = state.laplaceAnimationPlaying ? '⏸ Pause' : '▶ Play';
+            }
+        }, 100);
+    }
+    
+    // Auto-start animation when Laplace mode is enabled
+    const originalLaplaceBtn = document.getElementById('laplace_mode_btn');
+    if (originalLaplaceBtn) {
+        originalLaplaceBtn.addEventListener('click', () => {
+            // Wait a frame for mode to be enabled
+            setTimeout(() => {
+                if (state.laplaceModeEnabled && typeof showFullLaplaceSpiral === 'function') {
+                    showFullLaplaceSpiral(); // Start with full spiral visible
+                }
+            }, 100);
+        });
+    }
+
     if (controls.laplaceShowPolesZerosCb) {
         controls.laplaceShowPolesZerosCb.addEventListener('change', (e) => {
             try {

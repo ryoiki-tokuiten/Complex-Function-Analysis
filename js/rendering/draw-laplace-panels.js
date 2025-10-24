@@ -211,47 +211,11 @@ function drawLaplaceTimeDomain(ctx, signal, planeParams) {
 }
 
 /**
- * Draw MIDDLE PANEL: Winding visualization using Fourier's proven renderer
- * Adapts Laplace data to work with the beautiful Fourier winding function
+ * Draw MIDDLE PANEL: Premium 3b1b-quality winding visualization
  */
 function drawLaplaceWindingVisualization(ctx, signal, planeParams) {
-    if (!signal || signal.length === 0) {
-        ctx.save();
-        ctx.fillStyle = COLOR_TEXT_ON_CANVAS;
-        ctx.font = '16px "SF Pro Text", sans-serif';
-        ctx.textAlign = 'center';
-        ctx.fillText('No signal data available', planeParams.width / 2, planeParams.height / 2);
-        ctx.restore();
-        return;
-    }
-    
-    // Save original Fourier state
-    const savedFourierState = {
-        windingFrequency: state.fourierWindingFrequency,
-        windingTime: state.fourierWindingTime,
-        timeWindow: state.fourierTimeWindow
-    };
-    
-    // Map Laplace parameters to Fourier winding parameters for visualization
-    // σ + jω → winding at frequency ω/(2π), with exponential damping σ
-    const sigma = state.laplaceSigma || 0;
-    const omega = state.laplaceOmega || 1;
-    
-    // Set up temporary state for winding visualization
-    state.fourierWindingFrequency = omega / (2 * Math.PI);  // Convert angular frequency to Hz
-    state.fourierWindingTime = 1.0;  // Show full signal
-    state.fourierTimeWindow = 5.0;   // Match Laplace time window
-    
-    // Call the proven Fourier winding function!
-    drawWindingVisualization(ctx, signal, planeParams);
-    
-    // Restore original state
-    state.fourierWindingFrequency = savedFourierState.windingFrequency;
-    state.fourierWindingTime = savedFourierState.windingTime;
-    state.fourierTimeWindow = savedFourierState.timeWindow;
-    
-    // Now overlay Laplace-specific info panel
-    drawLaplaceInfoOverlay(ctx, sigma, omega, planeParams);
+    // Use the new premium renderer
+    drawLaplaceWindingPremium(ctx, signal, planeParams);
 }
 
 /**
