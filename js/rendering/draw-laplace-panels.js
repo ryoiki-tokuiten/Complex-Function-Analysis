@@ -216,6 +216,132 @@ function drawLaplaceTimeDomain(ctx, signal, planeParams) {
 function drawLaplaceWindingVisualization(ctx, signal, planeParams) {
     // Use the new premium renderer
     drawLaplaceWindingPremium(ctx, signal, planeParams);
+    
+    // Draw poles and zeros overlay on top
+    drawPolesAndZerosOverlay(ctx, planeParams);
+    
+    // Get current s value for info overlay
+    const sigma = state.laplaceSigma || 0;
+    const omega = state.laplaceOmega || 1;
+    
+    // Draw info overlay on top of everything
+    drawLaplaceInfoOverlay(ctx, sigma, omega, planeParams);
+}
+
+/**
+ * Draw poles (×) and zeros (○) on the s-plane with 3b1b quality
+ */
+function drawPolesAndZerosOverlay(ctx, planeParams) {
+    // Check if user wants to see poles/zeros
+    const showPolesZeros = state.laplaceShowPolesZeros !== false;
+    const showROC = state.laplaceShowROC !== false;
+    
+    if (!showPolesZeros && !showROC) return;
+    if (!state.laplacePoles && !state.laplaceZeros && !state.laplaceROC) return;
+    
+    ctx.save();
+    
+    // Draw ROC (Region of Convergence) first as subtle background
+    if (showROC && state.laplaceROC && state.laplaceROC.boundary !== null) {
+        const sigma_boundary = state.laplaceROC.boundary;
+        const boundaryCanvas = mapToCanvasCoords(sigma_boundary, 0, planeParams);
+        
+        // Shade the ROC region
+        ctx.fillStyle = 'rgba(100, 255, 150, 0.08)';
+        ctx.fillRect(boundaryCanvas.x, 0, planeParams.width - boundaryCanvas.x, planeParams.height);
+        
+        // Draw ROC boundary line
+        ctx.strokeStyle = 'rgba(100, 255, 150, 0.4)';
+        ctx.lineWidth = 2;
+        ctx.setLineDash([8, 4]);
+        ctx.beginPath();
+        ctx.moveTo(boundaryCanvas.x, 0);
+        ctx.lineTo(boundaryCanvas.x, planeParams.height);
+        ctx.stroke();
+        ctx.setLineDash([]);
+        
+        // ROC label
+        ctx.fillStyle = 'rgba(100, 255, 150, 0.9)';
+        ctx.font = 'italic 11px "SF Pro Text", sans-serif';
+        ctx.textAlign = 'left';
+        ctx.fillText('ROC', boundaryCanvas.x + 8, 20);
+    }
+    
+    // Draw ZEROS (○) - less emphasis
+    if (showPolesZeros && state.laplaceZeros && state.laplaceZeros.length > 0) {
+        for (const zero of state.laplaceZeros) {
+            const canvas = mapToCanvasCoords(zero.sigma, zero.omega, planeParams);
+            
+            // Outer glow
+            ctx.beginPath();
+            ctx.arc(canvas.x, canvas.y, 12, 0, 2 * Math.PI);
+            ctx.fillStyle = 'rgba(100, 200, 255, 0.15)';
+            ctx.fill();
+            
+            // Circle marker
+            ctx.beginPath();
+            ctx.arc(canvas.x, canvas.y, 8, 0, 2 * Math.PI);
+            ctx.strokeStyle = 'rgba(100, 200, 255, 0.9)';
+            ctx.lineWidth = 2.5;
+            ctx.stroke();
+            
+            // Label if provided
+            if (zero.label) {
+                ctx.fillStyle = 'rgba(150, 220, 255, 0.9)';
+                ctx.font = '10px "SF Mono", monospace';
+                ctx.textAlign = 'center';
+                ctx.fillText(zero.label, canvas.x, canvas.y + 20);
+            }
+        }
+    }
+    
+    // Draw POLES (×) - more emphasis
+    if (showPolesZeros && state.laplacePoles && state.laplacePoles.length > 0) {
+        for (const pole of state.laplacePoles) {
+            const canvas = mapToCanvasCoords(pole.sigma, pole.omega, planeParams);
+            
+            // Large glow for poles
+            ctx.beginPath();
+            ctx.arc(canvas.x, canvas.y, 18, 0, 2 * Math.PI);
+            const poleGlow = ctx.createRadialGradient(canvas.x, canvas.y, 0, canvas.x, canvas.y, 18);
+            poleGlow.addColorStop(0, 'rgba(255, 150, 100, 0.4)');
+            poleGlow.addColorStop(1, 'rgba(255, 150, 100, 0)');
+            ctx.fillStyle = poleGlow;
+            ctx.fill();
+            
+            // X marker (two diagonal lines)
+            const size = 10;
+            ctx.strokeStyle = 'rgba(255, 150, 100, 1)';
+            ctx.lineWidth = 3;
+            ctx.lineCap = 'round';
+            
+            ctx.beginPath();
+            ctx.moveTo(canvas.x - size, canvas.y - size);
+            ctx.lineTo(canvas.x + size, canvas.y + size);
+            ctx.stroke();
+            
+            ctx.beginPath();
+            ctx.moveTo(canvas.x + size, canvas.y - size);
+            ctx.lineTo(canvas.x - size, canvas.y + size);
+            ctx.stroke();
+            
+            // Label if provided
+            if (pole.label) {
+                // Background for readability
+                ctx.font = '10px "SF Mono", monospace';
+                const labelWidth = ctx.measureText(pole.label).width;
+                ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
+                ctx.fillRect(canvas.x - labelWidth/2 - 2, canvas.y + 16, labelWidth + 4, 14);
+                
+                // Label text
+                ctx.fillStyle = 'rgba(255, 180, 120, 1)';
+                ctx.textAlign = 'center';
+                ctx.fillText(pole.label, canvas.x, canvas.y + 26);
+            }
+        }
+    }
+    
+    ctx.restore();
 }
 
 /**
@@ -272,337 +398,16 @@ function drawLaplaceInfoOverlay(ctx, sigma, omega, planeParams) {
         ctx.fillText(`F(s) = ${state.laplaceCurrentValue.magnitude.toFixed(3)}`, panelX + 12, panelY + 93);
     }
     
-    // Hint
-    ctx.fillStyle = 'rgba(150, 180, 255, 0.7)';
-    ctx.font = 'italic 10px "SF Pro Text", sans-serif';
-    ctx.fillText('Tip: The center of mass shows the Laplace transform value!', panelX + 12, panelY + 110);
-    
-    ctx.restore();
-}
-
-/**
- * DEPRECATED - keeping for reference, replaced by drawLaplaceWindingVisualization
- */
-function drawLaplaceSPlane_OLD(ctx, planeParams) {
-    ctx.save();
-    
-    // Clear canvas with darker background
-    ctx.fillStyle = 'rgba(8, 10, 18, 1)';
-    ctx.fillRect(0, 0, planeParams.width, planeParams.height);
-    
-    // Get current s value
-    const s_sigma = state.laplaceSigma || 0;
-    const s_omega = state.laplaceOmega || 1;
-    
-    // Compute winding spiral first: f(t) * e^(-st) for t ∈ [0, T]
-    const windingPath = computeWindingPath(s_sigma, s_omega);
-    
-    // Initialize coordinate system if not already set (first time or after reset)
-    const needsInit = !planeParams.scale || !planeParams.origin;
-    
-    if (needsInit) {
-        // Set up coordinate system based on winding path
-        if (windingPath && windingPath.length >= 2) {
-            // Auto-scale to fit the spiral
-            const xRange = computeWindingRange(windingPath, 'real');
-            const yRange = computeWindingRange(windingPath, 'imag');
-            planeParams.currentVisXRange = xRange;
-            planeParams.currentVisYRange = yRange;
-        } else {
-            // Default ranges
-            planeParams.currentVisXRange = [-2, 2];
-            planeParams.currentVisYRange = [-2, 2];
-        }
-        
-        // Update scale and origin based on ranges
-        const xRange = planeParams.currentVisXRange;
-        const yRange = planeParams.currentVisYRange;
-        const xSpan = xRange[1] - xRange[0];
-        const ySpan = yRange[1] - yRange[0];
-        
-        planeParams.scale = {
-            x: planeParams.width / xSpan,
-            y: planeParams.height / ySpan
-        };
-        planeParams.origin = {
-            x: -xRange[0] * planeParams.scale.x,
-            y: planeParams.height + yRange[0] * planeParams.scale.y
-        };
-    }
-    
-    // Always update viewport ranges based on current scale/origin (for pan/zoom)
-    updatePlaneViewportRanges(planeParams);
-    
-    // Draw axes in complex plane (Re horizontal, Im vertical)
-    drawAxes(ctx, planeParams, "Real", "Imaginary");
-    
-    if (windingPath && windingPath.length >= 2) {
-        
-        // Draw grid for reference
-        drawGrid(ctx, planeParams);
-        
-        // Draw the winding spiral path
-        drawWindingSpiral(ctx, windingPath, planeParams);
-        
-        // Draw center of mass (the integral result - THE key insight!)
-        const centerOfMass = computeCenterOfMass(windingPath);
-        if (centerOfMass) {
-            drawCenterOfMass(ctx, centerOfMass, planeParams);
-        }
+    // Stability status (if available) - 3b1b style system analysis
+    if (state.laplaceStability) {
+        ctx.fillStyle = state.laplaceStability.color || 'rgba(150, 180, 255, 0.9)';
+        ctx.font = 'bold 10px "SF Pro Text", sans-serif';
+        ctx.fillText(state.laplaceStability.message, panelX + 12, panelY + 110);
     } else {
-        // Draw grid anyway
-        drawGrid(ctx, planeParams);
-        
-        ctx.fillStyle = 'rgba(200, 220, 255, 0.6)';
-        ctx.font = '13px "SF Pro Text", sans-serif';
-        ctx.textAlign = 'center';
-        ctx.fillText('Generating winding visualization...', planeParams.width / 2, planeParams.height / 2);
-    }
-    
-    // Beautiful info panel matching Fourier style
-    const panelX = 15, panelY = 15, panelW = 380, panelH = 125;
-    
-    // Panel background with gradient
-    const panelGradient = ctx.createLinearGradient(panelX, panelY, panelX, panelY + panelH);
-    panelGradient.addColorStop(0, 'rgba(15, 18, 25, 0.95)');
-    panelGradient.addColorStop(1, 'rgba(10, 12, 20, 0.95)');
-    ctx.fillStyle = panelGradient;
-    ctx.fillRect(panelX, panelY, panelW, panelH);
-    
-    // Gradient border
-    const borderGradient = ctx.createLinearGradient(panelX, panelY, panelX + panelW, panelY);
-    borderGradient.addColorStop(0, 'rgba(100, 220, 180, 0.4)');
-    borderGradient.addColorStop(0.5, 'rgba(120, 240, 200, 0.6)');
-    borderGradient.addColorStop(1, 'rgba(100, 220, 180, 0.4)');
-    ctx.strokeStyle = borderGradient;
-    ctx.lineWidth = 2;
-    ctx.strokeRect(panelX, panelY, panelW, panelH);
-    
-    // Title
-    ctx.fillStyle = 'rgba(150, 255, 200, 1)';
-    ctx.font = 'bold 15px "SF Pro Display", sans-serif';
-    ctx.textAlign = 'left';
-    ctx.textBaseline = 'top';
-    ctx.fillText('Complex Frequency Domain: Winding Visualization', panelX + 12, panelY + 12);
-    
-    // Formula
-    ctx.fillStyle = 'rgba(200, 220, 255, 0.9)';
-    ctx.font = '13px "SF Mono", monospace';
-    ctx.fillText('f(t) · e^(-st)', panelX + 12, panelY + 35);
-    
-    ctx.fillStyle = 'rgba(180, 200, 240, 0.8)';
-    ctx.font = '11px "SF Pro Text", sans-serif';
-    ctx.fillText('Signal weighted by complex exponential', panelX + 12, panelY + 55);
-    
-    // Evaluation point with highlighting
-    ctx.fillStyle = 'rgba(255, 240, 150, 1)';
-    ctx.font = 'bold 12px "SF Pro Text", sans-serif';
-    ctx.fillText(`s = ${s_sigma.toFixed(2)} + ${s_omega.toFixed(2)}j`, panelX + 12, panelY + 75);
-    
-    // Result with color coding
-    if (state.laplaceCurrentValue) {
-        const magColor = state.laplaceCurrentValue.magnitude > 1 ? 'rgba(255, 180, 100, 1)' : 'rgba(100, 255, 180, 1)';
-        ctx.fillStyle = magColor;
-        ctx.font = 'bold 11px "SF Pro Text", sans-serif';
-        ctx.fillText(`F(s) = ${state.laplaceCurrentValue.magnitude.toFixed(3)}`, panelX + 12, panelY + 93);
-    }
-    
-    // Hint
-    ctx.fillStyle = 'rgba(150, 180, 255, 0.7)';
-    ctx.font = 'italic 10px "SF Pro Text", sans-serif';
-    ctx.fillText('Tip: The center of mass shows the Laplace transform value!', panelX + 12, panelY + 110);
-    
-    ctx.restore();
-}
-
-/**
- * Compute winding path: f(t) · e^(-st) as parametric curve in complex plane
- */
-function computeWindingPath(sigma, omega) {
-    if (!state.laplaceTimeDomainSignal || state.laplaceTimeDomainSignal.length === 0) {
-        return [];
-    }
-    
-    const path = [];
-    const signal = state.laplaceTimeDomainSignal;
-    
-    for (const point of signal) {
-        const t = point.t;
-        const ft_real = point.value;
-        const ft_imag = 0; // Real-valued signal
-        
-        // Compute e^(-st) = e^(-(σ + jω)t) = e^(-σt) · e^(-jωt)
-        const exp_sigma_t = Math.exp(-sigma * t);
-        const cos_omega_t = Math.cos(-omega * t);
-        const sin_omega_t = Math.sin(-omega * t);
-        
-        // f(t) · e^(-st) in complex plane
-        const real = ft_real * exp_sigma_t * cos_omega_t - ft_imag * exp_sigma_t * sin_omega_t;
-        const imag = ft_real * exp_sigma_t * sin_omega_t + ft_imag * exp_sigma_t * cos_omega_t;
-        
-        path.push({ t, real, imag, value: point.value });
-    }
-    
-    return path;
-}
-
-/**
- * Compute range for winding path auto-scaling
- */
-function computeWindingRange(path, component) {
-    if (!path || path.length === 0) return [-1, 1];
-    
-    const values = path.map(p => p[component]);
-    const min = Math.min(...values);
-    const max = Math.max(...values);
-    const padding = (max - min) * 0.15 || 0.5;
-    
-    return [min - padding, max + padding];
-}
-
-/**
- * Draw the winding spiral with beautiful gradient
- */
-function drawWindingSpiral(ctx, path, planeParams) {
-    if (path.length < 2) return;
-    
-    ctx.save();
-    
-    // Draw the spiral path with gradient based on time
-    for (let i = 0; i < path.length - 1; i++) {
-        const p1 = path[i];
-        const p2 = path[i + 1];
-        
-        const canvas1 = mapToCanvasCoords(p1.real, p1.imag, planeParams);
-        const canvas2 = mapToCanvasCoords(p2.real, p2.imag, planeParams);
-        
-        // Color gradient: blue → cyan → pink based on time progress
-        const progress = i / (path.length - 1);
-        const hue = 200 + progress * 100; // Blue to pink
-        const alpha = 0.6 + progress * 0.4;
-        
-        ctx.strokeStyle = `hsla(${hue}, 70%, 65%, ${alpha})`;
-        ctx.lineWidth = 2.5;
-        ctx.lineCap = 'round';
-        
-        ctx.beginPath();
-        ctx.moveTo(canvas1.x, canvas1.y);
-        ctx.lineTo(canvas2.x, canvas2.y);
-        ctx.stroke();
-    }
-    
-    // Draw sample points along the path
-    const skipPoints = Math.max(1, Math.floor(path.length / 60));
-    for (let i = 0; i < path.length; i += skipPoints) {
-        const p = path[i];
-        const canvas = mapToCanvasCoords(p.real, p.imag, planeParams);
-        const progress = i / (path.length - 1);
-        
-        ctx.beginPath();
-        ctx.arc(canvas.x, canvas.y, 2, 0, 2 * Math.PI);
-        ctx.fillStyle = `hsla(${200 + progress * 100}, 80%, 70%, 0.8)`;
-        ctx.fill();
-    }
-    
-    ctx.restore();
-}
-
-/**
- * Compute center of mass (the integral result!)
- */
-function computeCenterOfMass(path) {
-    if (!path || path.length === 0) return null;
-    
-    let sumReal = 0;
-    let sumImag = 0;
-    
-    for (const p of path) {
-        sumReal += p.real;
-        sumImag += p.imag;
-    }
-    
-    return {
-        real: sumReal / path.length,
-        imag: sumImag / path.length
-    };
-}
-
-/**
- * Draw center of mass - the KEY insight!
- */
-function drawCenterOfMass(ctx, center, planeParams) {
-    const canvas = mapToCanvasCoords(center.real, center.imag, planeParams);
-    
-    ctx.save();
-    
-    // Large glow
-    ctx.beginPath();
-    ctx.arc(canvas.x, canvas.y, 25, 0, 2 * Math.PI);
-    const glow = ctx.createRadialGradient(canvas.x, canvas.y, 0, canvas.x, canvas.y, 25);
-    glow.addColorStop(0, 'rgba(255, 235, 100, 0.4)');
-    glow.addColorStop(1, 'rgba(255, 235, 100, 0)');
-    ctx.fillStyle = glow;
-    ctx.fill();
-    
-    // Center marker
-    ctx.beginPath();
-    ctx.arc(canvas.x, canvas.y, 6, 0, 2 * Math.PI);
-    ctx.fillStyle = 'rgba(255, 240, 120, 1)';
-    ctx.fill();
-    ctx.strokeStyle = 'rgba(255, 255, 255, 0.9)';
-    ctx.lineWidth = 2.5;
-    ctx.stroke();
-    
-    // Label
-    ctx.fillStyle = 'rgba(255, 250, 180, 1)';
-    ctx.font = 'bold 11px "SF Pro Text", sans-serif';
-    ctx.textAlign = 'left';
-    ctx.fillText('Center of Mass', canvas.x + 12, canvas.y - 8);
-    ctx.font = '10px "SF Mono", monospace';
-    ctx.fillText(`(${center.real.toFixed(3)}, ${center.imag.toFixed(3)})`, canvas.x + 12, canvas.y + 6);
-    
-    ctx.restore();
-}
-
-/**
- * Draw simple grid for reference
- */
-function drawGrid(ctx, planeParams) {
-    const xRange = planeParams.currentVisXRange || [-1, 1];
-    const yRange = planeParams.currentVisYRange || [-1, 1];
-    
-    ctx.save();
-    ctx.strokeStyle = 'rgba(80, 100, 130, 0.15)';
-    ctx.lineWidth = 0.5;
-    
-    // Draw subtle grid lines at integer intervals
-    const xStart = Math.floor(xRange[0]);
-    const xEnd = Math.ceil(xRange[1]);
-    const yStart = Math.floor(yRange[0]);
-    const yEnd = Math.ceil(yRange[1]);
-    
-    // Vertical grid lines
-    for (let x = xStart; x <= xEnd; x++) {
-        if (x === 0) continue; // Skip axes
-        const canvas = mapToCanvasCoords(x, 0, planeParams);
-        if (canvas.x >= 0 && canvas.x <= planeParams.width) {
-            ctx.beginPath();
-            ctx.moveTo(canvas.x, 0);
-            ctx.lineTo(canvas.x, planeParams.height);
-            ctx.stroke();
-        }
-    }
-    
-    // Horizontal grid lines  
-    for (let y = yStart; y <= yEnd; y++) {
-        if (y === 0) continue; // Skip axes
-        const canvas = mapToCanvasCoords(0, y, planeParams);
-        if (canvas.y >= 0 && canvas.y <= planeParams.height) {
-            ctx.beginPath();
-            ctx.moveTo(0, canvas.y);
-            ctx.lineTo(planeParams.width, canvas.y);
-            ctx.stroke();
-        }
+        // Hint about center of mass interpretation
+        ctx.fillStyle = 'rgba(150, 180, 255, 0.7)';
+        ctx.font = 'italic 10px "SF Pro Text", sans-serif';
+        ctx.fillText('Tip: The center of mass shows the Laplace transform value!', panelX + 12, panelY + 110);
     }
     
     ctx.restore();

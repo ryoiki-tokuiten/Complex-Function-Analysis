@@ -66,7 +66,7 @@ function drawLaplaceWindingPremium(ctx, signal, planeParams) {
         state.laplaceNeedViewportReset = false;
     }
     
-    // TOP PANEL - uses SAME planeParams as other panels (no custom adaptation!)
+    // TOP PANEL - Show f(t)·e^(-st) winding spiral (3b1b style!)
     ctx.save();
     ctx.beginPath();
     ctx.rect(0, 0, topParams.width, topParams.height);
@@ -86,17 +86,19 @@ function drawLaplaceWindingPremium(ctx, signal, planeParams) {
     
     drawEnhancedGrid(ctx, topViewParams);
     drawEnhancedAxes(ctx, topViewParams);
-    drawEnhancedSpiral(ctx, expData, topViewParams, {r: 100, g: 200, b: 255});
+    // Draw the weighted spiral (this is what winds!)
+    drawEnhancedSpiral(ctx, windingData, topViewParams, {r: 150, g: 200, b: 255});
     
-    // Title
-    ctx.fillStyle = 'rgba(255, 230, 100, 1)';
-    ctx.font = 'bold 14px sans-serif';
+    // Title - the key formula with better typography
+    ctx.fillStyle = 'rgba(255, 200, 150, 1)';
+    ctx.font = 'bold 16px "STIX Two Math", "Cambria Math", serif';
     ctx.textAlign = 'center';
-    ctx.fillText('e⁻ˢᵗ', topParams.width / 2, 20);
+    ctx.textBaseline = 'top';
+    ctx.fillText('f(t) · e⁻ˢᵗ', topParams.width / 2, 18);
     
     ctx.restore();
     
-    // BOTTOM PANEL - uses SAME planeParams
+    // BOTTOM PANEL - Show tip-to-tail integration (how it sums to center of mass)
     ctx.save();
     ctx.beginPath();
     ctx.rect(0, bottomParams.offsetY, bottomParams.width, bottomParams.height);
@@ -116,13 +118,26 @@ function drawLaplaceWindingPremium(ctx, signal, planeParams) {
     
     drawEnhancedGrid(ctx, bottomViewParams);
     drawEnhancedAxes(ctx, bottomViewParams);
+    // Draw tip-to-tail vectors showing integration
     drawTipToTailVectorsEnhanced(ctx, windingData, bottomViewParams);
     
-    // Title
-    ctx.fillStyle = 'rgba(255, 150, 200, 1)';
-    ctx.font = 'bold 14px sans-serif';
+    // Title - simplified for reliability (component rendering can be flaky)
+    ctx.save();
     ctx.textAlign = 'center';
-    ctx.fillText('f(t) · e⁻ˢᵗ', bottomParams.width / 2, bottomParams.offsetY + 20);
+    ctx.textBaseline = 'top';
+    const titleY = bottomParams.offsetY + 18;
+    const centerX = bottomParams.width / 2;
+    
+    // Use a single, clear title with proper Unicode
+    ctx.font = 'bold 15px "STIX Two Math", "Cambria Math", serif';
+    ctx.fillStyle = 'rgba(150, 255, 180, 1)';
+    ctx.fillText('∫₀ᵀ f(τ)e⁻ˢᵗ dτ', centerX - 50, titleY);
+    
+    // Explanation label
+    ctx.font = 'italic 13px "SF Pro Text", sans-serif';
+    ctx.fillStyle = 'rgba(180, 220, 255, 0.85)';
+    ctx.fillText('(Tip-to-Tail Sum)', centerX + 50, titleY + 2);
+    ctx.restore();
     
     ctx.restore();
     
@@ -434,13 +449,35 @@ function drawWindingAxes(ctx, planeParams) {
 }
 
 /**
- * Draw the winding spiral path with progressive coloring
+ * Draw the winding spiral path with progressive coloring (3b1b style!)
+ * Uses perceptually uniform color gradient showing time evolution
  */
 function drawWindingSpiral(ctx, windingData, planeParams) {
     const points = windingData.points;
     if (points.length < 2) return;
     
     const origin = mapToCanvasCoords(0, 0, planeParams);
+    
+    // Draw sample points first (so path draws over them)
+    const sampleInterval = Math.max(1, Math.floor(points.length / 40));
+    for (let i = 0; i < points.length; i += sampleInterval) {
+        const pt = points[i];
+        const canvas = mapToCanvasCoords(pt.real, pt.imag, planeParams);
+        const progress = i / points.length;
+        
+        // Outer glow for sample points
+        ctx.beginPath();
+        ctx.arc(canvas.x, canvas.y, 5, 0, 2 * Math.PI);
+        const glowHue = 180 + progress * 60;
+        ctx.fillStyle = `hsla(${glowHue}, 70%, 60%, 0.15)`;
+        ctx.fill();
+        
+        // Inner point
+        ctx.beginPath();
+        ctx.arc(canvas.x, canvas.y, 2.5, 0, 2 * Math.PI);
+        ctx.fillStyle = `hsla(${glowHue}, 80%, 70%, 0.9)`;
+        ctx.fill();
+    }
     
     // Draw each segment with individual coloring (Riemann sum visualization)
     for (let i = 1; i < points.length; i++) {
@@ -450,14 +487,16 @@ function drawWindingSpiral(ctx, windingData, planeParams) {
         const canvas0 = mapToCanvasCoords(pt0.real, pt0.imag, planeParams);
         const canvas1 = mapToCanvasCoords(pt1.real, pt1.imag, planeParams);
         
-        // Color based on progress through animation
+        // 3b1b-style color: Blue → Cyan → Teal gradient (perceptually smooth)
         const progress = i / points.length;
-        const hue = 200 + progress * 80; // Blue to purple gradient
-        const alpha = 0.3 + progress * 0.5; // Fade in as we progress
+        const hue = 180 + progress * 60; // Cyan to blue
+        const lightness = 55 + progress * 10; // Slight brightness increase
+        const alpha = 0.5 + progress * 0.4; // More visible as we progress
         
-        // Draw segment
-        ctx.strokeStyle = `hsla(${hue}, 70%, 60%, ${alpha})`;
-        ctx.lineWidth = 2;
+        // Draw segment with thickness variation
+        ctx.strokeStyle = `hsla(${hue}, 75%, ${lightness}%, ${alpha})`;
+        ctx.lineWidth = 2 + progress * 0.5; // Slight thickness increase
+        ctx.lineCap = 'round';
         ctx.beginPath();
         ctx.moveTo(canvas0.x, canvas0.y);
         ctx.lineTo(canvas1.x, canvas1.y);
@@ -547,16 +586,36 @@ function drawWindingVectors(ctx, windingData, planeParams) {
 }
 
 /**
- * Draw running integral accumulation (progressive Riemann sum)
+ * Draw CENTER OF MASS - THE KEY INSIGHT! (3b1b emphasis)
+ * This is what makes the Laplace transform intuitive
  */
 function drawIntegralResult(ctx, windingData, planeParams) {
     const points = windingData.points;
     if (points.length === 0) return;
     
     const origin = mapToCanvasCoords(0, 0, planeParams);
+    const integral = windingData.integral;
+    const resultCanvas = mapToCanvasCoords(integral.real, integral.imag, planeParams);
     
-    // Draw partial sums building up (show every Nth segment's contribution)
-    const segmentSkip = Math.max(1, Math.floor(points.length / 20));
+    // STEP 1: Show the spiral "balances" around this point
+    // Draw subtle connection lines from sample points to center of mass
+    const connectionInterval = Math.max(1, Math.floor(points.length / 12));
+    for (let i = 0; i < points.length; i += connectionInterval) {
+        const pt = points[i];
+        const ptCanvas = mapToCanvasCoords(pt.real, pt.imag, planeParams);
+        
+        ctx.strokeStyle = 'rgba(100, 255, 180, 0.08)';
+        ctx.lineWidth = 0.5;
+        ctx.setLineDash([2, 4]);
+        ctx.beginPath();
+        ctx.moveTo(ptCanvas.x, ptCanvas.y);
+        ctx.lineTo(resultCanvas.x, resultCanvas.y);
+        ctx.stroke();
+    }
+    ctx.setLineDash([]);
+    
+    // STEP 2: Draw partial sums building up (optional, subtle)
+    const segmentSkip = Math.max(1, Math.floor(points.length / 15));
     let runningReal = 0;
     let runningImag = 0;
     
@@ -564,43 +623,39 @@ function drawIntegralResult(ctx, windingData, planeParams) {
     
     for (let i = 0; i < points.length; i += segmentSkip) {
         const pt = points[i];
-        
-        // Add this segment to running sum
         runningReal += pt.real * dt;
         runningImag += pt.imag * dt;
         
         const runningCanvas = mapToCanvasCoords(runningReal, runningImag, planeParams);
-        
-        // Draw faint line from origin to this partial sum
         const progress = i / points.length;
-        const alpha = 0.1 + progress * 0.3;
-        ctx.strokeStyle = `rgba(100, 200, 255, ${alpha})`;
-        ctx.lineWidth = 1;
-        ctx.setLineDash([2, 2]);
-        ctx.beginPath();
-        ctx.moveTo(origin.x, origin.y);
-        ctx.lineTo(runningCanvas.x, runningCanvas.y);
-        ctx.stroke();
-        ctx.setLineDash([]);
         
-        // Small dot at partial sum
-        ctx.fillStyle = `rgba(150, 220, 255, ${alpha * 2})`;
+        // Tiny dots showing accumulation
+        ctx.fillStyle = `rgba(100, 255, 180, ${0.2 + progress * 0.3})`;
         ctx.beginPath();
         ctx.arc(runningCanvas.x, runningCanvas.y, 2, 0, 2 * Math.PI);
         ctx.fill();
     }
     
-    // Final integral result (BIG emphasis!)
-    const integral = windingData.integral;
-    const resultCanvas = mapToCanvasCoords(integral.real, integral.imag, planeParams);
+    // STEP 3: CENTER OF MASS MARKER - Maximum emphasis!
+    // This is THE visualization that makes Laplace transform click
     
-    // Outer glow
-    const glowGradient = ctx.createRadialGradient(resultCanvas.x, resultCanvas.y, 0, resultCanvas.x, resultCanvas.y, 35);
-    glowGradient.addColorStop(0, 'rgba(100, 255, 150, 0.4)');
-    glowGradient.addColorStop(1, 'rgba(100, 255, 150, 0)');
-    ctx.fillStyle = glowGradient;
+    // Outermost glow (large, subtle)
     ctx.beginPath();
-    ctx.arc(resultCanvas.x, resultCanvas.y, 35, 0, 2 * Math.PI);
+    ctx.arc(resultCanvas.x, resultCanvas.y, 50, 0, 2 * Math.PI);
+    const outerGlow = ctx.createRadialGradient(resultCanvas.x, resultCanvas.y, 0, resultCanvas.x, resultCanvas.y, 50);
+    outerGlow.addColorStop(0, 'rgba(100, 255, 150, 0.25)');
+    outerGlow.addColorStop(0.5, 'rgba(100, 255, 150, 0.12)');
+    outerGlow.addColorStop(1, 'rgba(100, 255, 150, 0)');
+    ctx.fillStyle = outerGlow;
+    ctx.fill();
+    
+    // Middle glow (brighter)
+    ctx.beginPath();
+    ctx.arc(resultCanvas.x, resultCanvas.y, 30, 0, 2 * Math.PI);
+    const midGlow = ctx.createRadialGradient(resultCanvas.x, resultCanvas.y, 0, resultCanvas.x, resultCanvas.y, 30);
+    midGlow.addColorStop(0, 'rgba(150, 255, 180, 0.5)');
+    midGlow.addColorStop(1, 'rgba(100, 255, 150, 0)');
+    ctx.fillStyle = midGlow;
     ctx.fill();
     
     // Vector from origin to final integral
@@ -655,20 +710,40 @@ function drawIntegralResult(ctx, windingData, planeParams) {
     ctx.arc(resultCanvas.x, resultCanvas.y, 12, 0, 2 * Math.PI);
     ctx.stroke();
     
-    // Label with integral notation
+    // Label: CENTER OF MASS emphasis (3b1b style)
     const magnitude = Math.sqrt(integral.real * integral.real + integral.imag * integral.imag);
     
-    ctx.fillStyle = 'rgba(150, 255, 180, 1)';
+    // Title banner with background
+    const labelX = resultCanvas.x + 20;
+    const labelY = resultCanvas.y - 12;
+    const labelText = 'Center of Mass';
     ctx.font = 'bold 13px "SF Pro Display", sans-serif';
-    ctx.textAlign = 'left';
-    ctx.shadowColor = 'rgba(0, 0, 0, 0.5)';
-    ctx.shadowBlur = 4;
-    ctx.fillText('∫ f(t)e^(-st) dt', resultCanvas.x + 18, resultCanvas.y - 10);
-    ctx.shadowBlur = 0;
+    const textWidth = ctx.measureText(labelText).width;
     
-    ctx.fillStyle = 'rgba(200, 255, 220, 1)';
+    // Dark background for readability
+    ctx.fillStyle = 'rgba(0, 0, 0, 0.75)';
+    ctx.fillRect(labelX - 4, labelY - 14, textWidth + 8, 40);
+    
+    // Border
+    ctx.strokeStyle = 'rgba(100, 255, 150, 0.6)';
+    ctx.lineWidth = 1.5;
+    ctx.strokeRect(labelX - 4, labelY - 14, textWidth + 8, 40);
+    
+    // Main label
+    ctx.fillStyle = 'rgba(150, 255, 180, 1)';
+    ctx.textAlign = 'left';
+    ctx.textBaseline = 'top';
+    ctx.fillText(labelText, labelX, labelY);
+    
+    // Integral notation
+    ctx.fillStyle = 'rgba(180, 220, 255, 0.95)';
+    ctx.font = '11px "SF Mono", monospace';
+    ctx.fillText('∫ f(t)e⁻ˢᵗ dt', labelX, labelY + 16);
+    
+    // Magnitude
+    ctx.fillStyle = 'rgba(255, 255, 150, 1)';
     ctx.font = 'bold 11px "SF Mono", monospace';
-    ctx.fillText(`= ${magnitude.toFixed(3)}`, resultCanvas.x + 18, resultCanvas.y + 6);
+    ctx.fillText(`|F(s)| = ${magnitude.toFixed(3)}`, resultCanvas.x + 20, resultCanvas.y + 30);
 }
 
 /**

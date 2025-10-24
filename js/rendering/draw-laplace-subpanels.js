@@ -264,6 +264,11 @@ function drawTipToTailVectorsEnhanced(ctx, windingData, params) {
     const animTime = windingData.animTime || 1.0;
     const maxIndex = Math.floor(points.length * animTime);
     
+    // Determine if we should show labels based on zoom level
+    // Show labels ONLY when significantly zoomed in (vectors are well separated)
+    const avgScale = (params.scale.x + params.scale.y) / 2;
+    const showLabels = avgScale > 800; // Very high threshold - labels hidden by default, only show when really zoomed
+    
     // Draw faint connecting line from origin to current sum first
     if (maxIndex > 0) {
         let sumReal = 0, sumImag = 0;
@@ -344,22 +349,73 @@ function drawTipToTailVectorsEnhanced(ctx, windingData, params) {
         ctx.closePath();
         ctx.fill();
         
-        // Time label (every other vector)
-        if (i % (step * 2) === 0 && pt.t > 0) {
+        // 3b1b-style integral label with limits (only when zoomed in, show for ALL vectors)
+        if (showLabels && pt.t > 0.1) {
             const midX = (startX + endX) / 2;
             const midY = (startY + endY) / 2;
             
-            // Background
-            ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
-            const labelText = `t=${pt.t.toFixed(1)}`;
-            ctx.font = '9px "SF Mono", monospace';
-            const textWidth = ctx.measureText(labelText).width;
-            ctx.fillRect(midX - textWidth/2 - 2, midY - 10, textWidth + 4, 12);
+            // Use proper mathematical notation with better spacing
+            const t_val = pt.t.toFixed(1);
+            // Build label with proper spacing: ∫ from 0 to t
+            const integralSymbol = '∫';
+            const subscript = '₀';
+            const superscript = t_val;
+            const mainText = `f(τ)e`;
+            const exponent = '⁻ˢᵗ';
+            const differential = 'dτ';
             
-            // Text
-            ctx.fillStyle = 'rgba(255, 220, 180, 1)';
-            ctx.textAlign = 'center';
-            ctx.fillText(labelText, midX, midY);
+            // Measure components for proper layout
+            // Use slightly smaller font size when showing many labels
+            const fontSize = numVectors > 8 ? 11 : 13;
+            ctx.font = `bold ${fontSize}px "STIX Two Math", "Cambria Math", "Latin Modern Math", serif`;
+            
+            // Draw background
+            const totalText = `${integralSymbol}${subscript} ${mainText}${exponent} ${differential}`;
+            const estimatedWidth = ctx.measureText(totalText).width + 15; // Extra space for superscript
+            
+            ctx.fillStyle = 'rgba(0, 0, 0, 0.9)';
+            ctx.fillRect(midX - estimatedWidth/2 - 5, midY - 12, estimatedWidth + 10, 24);
+            
+            ctx.strokeStyle = 'rgba(150, 255, 180, 0.5)';
+            ctx.lineWidth = 1.5;
+            ctx.strokeRect(midX - estimatedWidth/2 - 5, midY - 12, estimatedWidth + 10, 24);
+            
+            // Draw text components with proper positioning
+            ctx.textAlign = 'left';
+            ctx.textBaseline = 'middle';
+            ctx.fillStyle = 'rgba(180, 255, 200, 1)';
+            
+            let currentX = midX - estimatedWidth/2;
+            
+            // Integral symbol (larger)
+            ctx.font = `bold ${fontSize + 3}px "STIX Two Math", "Cambria Math", serif`;
+            ctx.fillText(integralSymbol, currentX, midY);
+            currentX += ctx.measureText(integralSymbol).width;
+            
+            // Subscript 0 (smaller)
+            ctx.font = `bold ${fontSize - 3}px "STIX Two Math", "Cambria Math", serif`;
+            ctx.fillText(subscript, currentX - 3, midY + 4);
+            
+            // Superscript t value (slightly smaller)
+            ctx.font = `bold ${fontSize - 2}px "STIX Two Math", "Cambria Math", serif`;
+            ctx.fillStyle = 'rgba(255, 255, 150, 1)';
+            ctx.fillText(superscript, currentX, midY - 6);
+            currentX += Math.max(ctx.measureText(subscript).width, ctx.measureText(superscript).width) + 3;
+            
+            // Main expression
+            ctx.font = `bold ${fontSize}px "STIX Two Math", "Cambria Math", serif`;
+            ctx.fillStyle = 'rgba(180, 255, 200, 1)';
+            ctx.fillText(mainText, currentX, midY);
+            currentX += ctx.measureText(mainText).width;
+            
+            // Exponent (slightly smaller)
+            ctx.font = `bold ${fontSize - 2}px "STIX Two Math", "Cambria Math", serif`;
+            ctx.fillText(exponent, currentX, midY - 2);
+            currentX += ctx.measureText(exponent).width + 2;
+            
+            // Differential
+            ctx.font = `bold ${fontSize}px "STIX Two Math", "Cambria Math", serif`;
+            ctx.fillText(differential, currentX, midY);
         }
         
         // Dot at tip (larger and brighter)
@@ -384,8 +440,20 @@ function drawTipToTailVectorsEnhanced(ctx, windingData, params) {
     
     // Only draw if we have visible vectors
     if (Math.abs(lastVisibleReal) > 0.001 || Math.abs(lastVisibleImag) > 0.001) {
+        // Draw glowing line from origin to final sum
+        ctx.strokeStyle = 'rgba(100, 255, 150, 0.6)';
+        ctx.lineWidth = 4;
+        ctx.shadowColor = 'rgba(100, 255, 150, 0.5)';
+        ctx.shadowBlur = 10;
+        ctx.beginPath();
+        ctx.moveTo(originX, originY);
+        ctx.lineTo(visibleSumX, visibleSumY);
+        ctx.stroke();
+        ctx.shadowBlur = 0;
+        
+        // White outline for final vector
         ctx.strokeStyle = 'rgba(255, 255, 255, 0.9)';
-        ctx.lineWidth = 3;
+        ctx.lineWidth = 2.5;
         ctx.beginPath();
         ctx.moveTo(originX, originY);
         ctx.lineTo(visibleSumX, visibleSumY);
@@ -450,20 +518,76 @@ function drawTipToTailVectorsEnhanced(ctx, windingData, params) {
     ctx.arc(resultX, resultY, 7, 0, 2 * Math.PI);
     ctx.stroke();
     
-    // Label with background
+    // Label with FULL integral notation (3b1b style!) - MUCH MORE READABLE
     const mag = Math.sqrt(integral.real * integral.real + integral.imag * integral.imag);
-    const labelText = `F(s)=${mag.toFixed(2)}`;
-    ctx.font = 'bold 11px sans-serif';
-    const textWidth = ctx.measureText(labelText).width;
+    const maxT = points[points.length - 1].t;
     
-    // Dark background
-    ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
-    ctx.fillRect(resultX + 11, resultY - 9, textWidth + 6, 16);
+    // Build readable integral notation
+    const boxWidth = 180;
+    const boxHeight = 44;
     
-    // Bright text
-    ctx.fillStyle = 'rgba(200, 255, 220, 1)';
+    // Dark background with glowing border
+    ctx.fillStyle = 'rgba(0, 0, 0, 0.92)';
+    ctx.fillRect(resultX + 14, resultY - 20, boxWidth, boxHeight);
+    
+    ctx.strokeStyle = 'rgba(100, 255, 150, 0.7)';
+    ctx.lineWidth = 2;
+    ctx.strokeRect(resultX + 14, resultY - 20, boxWidth, boxHeight);
+    
+    // LINE 1: Integral with limits
+    let currentX = resultX + 20;
+    let currentY = resultY - 8;
+    
     ctx.textAlign = 'left';
-    ctx.fillText(labelText, resultX + 14, resultY + 3);
+    ctx.textBaseline = 'middle';
+    
+    // Integral symbol (large)
+    ctx.font = 'bold 18px "STIX Two Math", "Cambria Math", serif';
+    ctx.fillStyle = 'rgba(180, 255, 200, 1)';
+    ctx.fillText('∫', currentX, currentY);
+    currentX += 12;
+    
+    // Lower limit: 0
+    ctx.font = 'bold 11px "STIX Two Math", serif';
+    ctx.fillText('0', currentX - 6, currentY + 6);
+    
+    // Upper limit: T
+    ctx.font = 'bold 12px "STIX Two Math", serif';
+    ctx.fillStyle = 'rgba(255, 255, 150, 1)';
+    ctx.fillText(maxT.toFixed(1), currentX - 3, currentY - 8);
+    currentX += 12;
+    
+    // Function notation f(τ)
+    ctx.font = 'bold 14px "STIX Two Math", "Cambria Math", serif';
+    ctx.fillStyle = 'rgba(180, 255, 200, 1)';
+    ctx.fillText('f(τ)', currentX, currentY);
+    currentX += ctx.measureText('f(τ)').width + 2;
+    
+    // e with exponent
+    ctx.fillText('e', currentX, currentY);
+    currentX += ctx.measureText('e').width;
+    
+    ctx.font = 'bold 11px "STIX Two Math", serif';
+    ctx.fillText('⁻ˢᵗ', currentX, currentY - 3);
+    currentX += ctx.measureText('⁻ˢᵗ').width + 3;
+    
+    // Differential dτ
+    ctx.font = 'bold 14px "STIX Two Math", serif';
+    ctx.fillText('dτ', currentX, currentY);
+    
+    // LINE 2: Equals and result
+    currentX = resultX + 20;
+    currentY = resultY + 10;
+    
+    ctx.font = 'bold 15px "SF Pro Display", sans-serif';
+    ctx.fillStyle = 'rgba(150, 255, 180, 1)';
+    ctx.fillText('= 𝐹(s)', currentX, currentY);
+    currentX += ctx.measureText('= 𝐹(s)').width + 8;
+    
+    // Magnitude with better styling
+    ctx.font = 'bold 12px "SF Mono", monospace';
+    ctx.fillStyle = 'rgba(255, 255, 150, 1)';
+    ctx.fillText(`≈ ${mag.toFixed(3)}`, currentX, currentY);
 }
 
 /**
