@@ -6,6 +6,10 @@ function setupDOMReferences() {
     wCtx = wCanvas.getContext('2d');
     wCtx.imageSmoothingEnabled = true;
     wCtx.imageSmoothingQuality = 'high';
+
+    if (typeof initializeWebGLLineSupport === 'function') {
+        initializeWebGLLineSupport();
+    }
     controls.zCanvasCard = document.getElementById('z_plane_column'); 
     controls.wCanvasCard = document.getElementById('w_plane_column'); 
     controls.toggleFullscreenZBtn = document.getElementById('toggle_fullscreen_z_btn'); controls.toggleFullscreenWBtn = document.getElementById('toggle_fullscreen_w_btn');
