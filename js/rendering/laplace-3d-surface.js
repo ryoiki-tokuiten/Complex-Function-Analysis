@@ -11,7 +11,12 @@ function drawLaplace3DSurface(containerId) {
         const container = document.getElementById(containerId);
         if (container) {
             container.innerHTML = '<div style="display: flex; align-items: center; justify-content: center; height: 100%; color: rgba(200, 220, 255, 0.8); font-family: SF Pro Text, sans-serif;">Computing surface...</div>';
+            container.dataset.laplacePlotlyReady = '0';
         }
+        return;
+    }
+
+    if (typeof Plotly === 'undefined') {
         return;
     }
     
@@ -245,7 +250,23 @@ function drawLaplace3DSurface(containerId) {
     // Render the plot
     const container = document.getElementById(containerId);
     if (container) {
-        Plotly.newPlot(container, traces, layout, config);
+        const useReact = container.dataset.laplacePlotlyReady === '1';
+        const plotPromise = useReact
+            ? Plotly.react(container, traces, layout, config)
+            : Plotly.newPlot(container, traces, layout, config);
+
+        if (plotPromise && typeof plotPromise.then === 'function') {
+            plotPromise
+                .then(() => {
+                    container.dataset.laplacePlotlyReady = '1';
+                })
+                .catch((error) => {
+                    console.warn('Laplace 3D plot render failed:', error);
+                    container.dataset.laplacePlotlyReady = '0';
+                });
+        } else {
+            container.dataset.laplacePlotlyReady = '1';
+        }
     }
 }
 

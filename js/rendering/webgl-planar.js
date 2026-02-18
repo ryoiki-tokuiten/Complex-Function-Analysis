@@ -190,16 +190,19 @@ function getWebGLSupersampleScale() {
         ? WEBGL_SUPERSAMPLE_FACTOR
         : 1.5;
     const baseScale = Math.max(1, configured);
+    const qualityBoost = (state && (state.currentFunction === 'zeta' || state.radialDiscreteStepsEnabled)) ? 1.2 : 1;
     const deviceScale = (typeof window !== 'undefined' && window.devicePixelRatio)
         ? Math.min(1.25, Math.max(1, window.devicePixelRatio))
         : 1;
-    return Math.min(2.5, baseScale * deviceScale);
+    return Math.min(3.5, baseScale * qualityBoost * deviceScale);
 }
 
-function ensureWebGLRendererSize(renderer, width, height) {
+function ensureWebGLRendererSize(renderer, width, height, renderScaleOverride = null) {
     if (!renderer || !renderer.canvas || width <= 0 || height <= 0) return;
 
-    const renderScale = getWebGLSupersampleScale();
+    const renderScale = (typeof renderScaleOverride === 'number' && Number.isFinite(renderScaleOverride) && renderScaleOverride > 0)
+        ? renderScaleOverride
+        : getWebGLSupersampleScale();
     const internalWidth = Math.max(1, Math.round(width * renderScale));
     const internalHeight = Math.max(1, Math.round(height * renderScale));
 
@@ -498,7 +501,7 @@ function renderWebGLPolylineBatches(renderer, width, height, batches) {
     if (!renderer || !renderer.gl || !Array.isArray(batches)) return false;
 
     const gl = renderer.gl;
-    ensureWebGLRendererSize(renderer, width, height);
+    ensureWebGLRendererSize(renderer, width, height, 1);
 
     gl.clearColor(0, 0, 0, 0);
     gl.clear(gl.COLOR_BUFFER_BIT);
@@ -533,9 +536,10 @@ function renderWebGLPolylineBatches(renderer, width, height, batches) {
             continue;
         }
 
-        const halfWidth = Math.max(0.75, ((batch.lineWidth || 1) * renderer.renderScale) * 0.5);
-        const featherWidth = Math.max(0.6, renderer.renderScale * 0.45);
-        const outerTriangles = buildPolylineTriangles(batch.points, halfWidth + featherWidth);
+        const halfWidth = Math.max(0.5, ((batch.lineWidth || 1) * renderer.renderScale) * 0.5);
+        const useFeather = halfWidth >= 1.0;
+        const featherWidth = useFeather ? Math.max(0.2, renderer.renderScale * 0.18) : 0;
+        const outerTriangles = useFeather ? buildPolylineTriangles(batch.points, halfWidth + featherWidth) : null;
         const innerTriangles = buildPolylineTriangles(batch.points, halfWidth);
         if ((!outerTriangles || outerTriangles.length < 6) && (!innerTriangles || innerTriangles.length < 6)) continue;
 
@@ -549,7 +553,7 @@ function renderWebGLPolylineBatches(renderer, width, height, batches) {
                 rgba[0],
                 rgba[1],
                 rgba[2],
-                Math.max(0, Math.min(1, rgba[3] * 0.28))
+                Math.max(0, Math.min(1, rgba[3] * 0.16))
             );
             gl.bufferData(gl.ARRAY_BUFFER, outerTriangles, gl.STREAM_DRAW);
             gl.drawArrays(gl.TRIANGLES, 0, outerTriangles.length / 2);
@@ -637,21 +641,21 @@ function ensureRasterCanvasSize(renderer, width, height) {
     if (!renderer.rasterCtx) {
         renderer.rasterCtx = renderer.rasterCanvas.getContext('2d');
         if (!renderer.rasterCtx) return null;
-        renderer.rasterCtx.imageSmoothingEnabled = true;
-        renderer.rasterCtx.imageSmoothingQuality = 'high';
     }
     if (renderer.rasterCanvas.width !== width || renderer.rasterCanvas.height !== height) {
         renderer.rasterCanvas.width = width;
         renderer.rasterCanvas.height = height;
     }
+    renderer.rasterCtx.imageSmoothingEnabled = true;
+    if (renderer.rasterCtx.imageSmoothingQuality !== undefined) {
+        renderer.rasterCtx.imageSmoothingQuality = 'high';
+    }
     return renderer.rasterCtx;
 }
 
-function renderCapturedBatchesToCanvas(ctx, batches) {
-    if (!ctx || !Array.isArray(batches)) return false;
-    if (batches.length === 0) return true;
+function replayCapturedBatches(ctx, batches) {
+    if (!ctx || !Array.isArray(batches) || batches.length === 0) return false;
 
-    ctx.save();
     ctx.lineJoin = 'round';
     ctx.lineCap = 'round';
 
@@ -684,7 +688,39 @@ function renderCapturedBatchesToCanvas(ctx, batches) {
         ctx.stroke();
     }
 
+    return true;
+}
+
+function renderCapturedBatchesToCanvas(ctx, batches) {
+    if (!ctx || !Array.isArray(batches)) return false;
+    if (batches.length === 0) return true;
+    ctx.save();
+    const rendered = replayCapturedBatches(ctx, batches);
     ctx.restore();
+    return rendered;
+}
+
+function renderCapturedBatchesViaWebGLRaster(renderer, targetCtx, width, height, batches) {
+    if (!renderer || !targetCtx || !Array.isArray(batches)) return false;
+
+    ensureWebGLRendererSize(renderer, width, height);
+    const rasterCtx = ensureRasterCanvasSize(renderer, renderer.canvas.width, renderer.canvas.height);
+    if (!rasterCtx) return false;
+
+    rasterCtx.setTransform(1, 0, 0, 1, 0, 0);
+    rasterCtx.clearRect(0, 0, renderer.rasterCanvas.width, renderer.rasterCanvas.height);
+    rasterCtx.globalAlpha = 1;
+    rasterCtx.globalCompositeOperation = 'source-over';
+    rasterCtx.setTransform(renderer.renderScale, 0, 0, renderer.renderScale, 0, 0);
+
+    replayCapturedBatches(rasterCtx, batches);
+
+    const textured = renderCanvasTextureToWebGL(renderer, renderer.rasterCanvas, width, height);
+    if (textured) {
+        compositeWebGLToCanvas(targetCtx, renderer, width, height);
+    } else {
+        compositeRasterToCanvas(targetCtx, renderer.rasterCanvas, width, height);
+    }
     return true;
 }
 
@@ -700,6 +736,7 @@ function renderCanvasTextureToWebGL(renderer, sourceCanvas, width, height) {
 
     gl.bindTexture(gl.TEXTURE_2D, renderer.texture);
     gl.pixelStorei(gl.UNPACK_PREMULTIPLY_ALPHA_WEBGL, true);
+    gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, true);
     gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, sourceCanvas);
 
     gl.bindBuffer(gl.ARRAY_BUFFER, renderer.textureQuadBuffer);
@@ -765,6 +802,9 @@ function drawWithWebGLCapture(ctx, planeParams, planeKey, drawCallback) {
 
         const rendered = renderWebGLPolylineBatches(renderer, planeParams.width, planeParams.height, batches);
         if (!rendered) {
+            if (renderCapturedBatchesViaWebGLRaster(renderer, ctx, planeParams.width, planeParams.height, batches)) {
+                return true;
+            }
             return renderCapturedBatchesToCanvas(ctx, batches);
         }
 
@@ -773,6 +813,9 @@ function drawWithWebGLCapture(ctx, planeParams, planeKey, drawCallback) {
     } catch (error) {
         console.warn('WebGL capture path failed; falling back to 2D canvas:', error);
         if (batches && batches.length > 0) {
+            if (renderCapturedBatchesViaWebGLRaster(renderer, ctx, planeParams.width, planeParams.height, batches)) {
+                return true;
+            }
             return renderCapturedBatchesToCanvas(ctx, batches);
         }
         return false;

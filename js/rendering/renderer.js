@@ -20,9 +20,8 @@ function drawPlaneLayer(ctx, planeParams, planeKey, drawCallback, mode = 'captur
         return;
     }
 
-    if (typeof drawWithWebGLCapture === 'function' && drawWithWebGLCapture(ctx, planeParams, planeKey, drawCallback)) {
-        return;
-    }
+    if (typeof drawWithWebGLCapture === 'function' && drawWithWebGLCapture(ctx, planeParams, planeKey, drawCallback)) return;
+    if (typeof drawWithWebGLRaster === 'function' && drawWithWebGLRaster(ctx, planeParams, planeKey, drawCallback)) return;
     drawCallback(ctx);
 }
 
@@ -163,16 +162,11 @@ function drawZPlaneContent(){
         }, 'raster');
         drawPlaneLayer(zCtx, zPlaneParams, 'z', (layerCtx) => {
             drawRiemannSphereBase(layerCtx, cSP, zPlaneParams);
-        }, 'capture');
-
-        drawPlaneLayer(zCtx, zPlaneParams, 'z', (layerCtx) => {
             drawSphereGridAndShape(layerCtx, cSP, zPlaneParams, false);
-        }, 'capture');
-        if (state.probeActive) {
-            drawPlaneLayer(zCtx, zPlaneParams, 'z', (layerCtx) => {
+            if (state.probeActive) {
                 drawSphereProbeAndNeighborhood(layerCtx, cSP, state.probeZ, state.probeNeighborhoodSize, null);
-            }, 'capture');
-        }
+            }
+        }, 'raster');
     }else{ 
         
         if(state.domainColoringEnabled && domainColoringDirty){renderPlanarDomainColoring(zDomainColorCtx,zPlaneParams,false,curFunc);} 
@@ -240,7 +234,7 @@ function drawZPlaneContent(){
         if (state.particleAnimationEnabled) {
             drawPlaneLayer(zCtx, zPlaneParams, 'z', (layerCtx) => {
                 updateAndDrawParticles(layerCtx, zPlaneParams, state);
-            }, 'capture');
+            }, 'raster');
         }
     }
 }
@@ -310,11 +304,8 @@ function drawWPlaneContent() {
                 }, 'raster');
                 drawPlaneLayer(wCtx, wPlaneParams, 'w', (layerCtx) => {
                     drawRiemannSphereBase(layerCtx, cSP, wPlaneParams);
-                }, 'capture');
-
-                drawPlaneLayer(wCtx, wPlaneParams, 'w', (layerCtx) => {
                     drawSphereGridAndShape(layerCtx, cSP, wPlaneParams, true, curFunc);
-                }, 'capture');
+                }, 'raster');
             } else { // Planar w-plane view
                 drawPlaneLayer(wCtx, wPlaneParams, 'w', (layerCtx) => {
                     drawAxes(layerCtx, wPlaneParams, 'Re(w)', 'Im(w)');
@@ -360,7 +351,7 @@ function drawWPlaneContent() {
                 const cSP = sphereViewParams.w;
                 drawPlaneLayer(wCtx, wPlaneParams, 'w', (layerCtx) => {
                     drawSphereProbeAndNeighborhood(layerCtx, cSP, state.probeZ, state.probeNeighborhoodSize, curFunc);
-                }, 'capture');
+                }, 'raster');
             } else { // Planar W-plane
                 drawPlaneLayer(wCtx, wPlaneParams, 'w', (layerCtx) => {
                     drawPlanarTransformedProbe(layerCtx, wPlaneParams, curFunc);
