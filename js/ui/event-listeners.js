@@ -1,5 +1,5 @@
 
-window.setupEventListeners = function() {
+window.setupEventListeners = function () {
     sliderParamKeys.forEach(key => {
         if (controls[`${key}Slider`]) {
             controls[`${key}Slider`].addEventListener('input', () => {
@@ -16,7 +16,7 @@ window.setupEventListeners = function() {
                     try {
                         toggleAnimation(
                             controls[`${key}Slider`],
-                            (value) => { state[key] = value; }, 
+                            (value) => { state[key] = value; },
                             controls[`play_${key}Btn`],
                             controls[`speed_${key}Selector`]
                         );
@@ -28,21 +28,21 @@ window.setupEventListeners = function() {
         }
     });
 
-    
+
     ['A', 'B', 'C', 'D'].forEach(param => {
         ['re', 'im'].forEach(part => {
             const sliderId = `mobius${param}_${part}_slider`;
             const playBtnId = `play_mobius${param}_${part}_btn`;
             const speedSelectorId = `speed_mobius${param}_${part}_selector`;
-            
+
 
             if (controls[sliderId]) {
                 controls[sliderId].addEventListener('input', () => {
                     try {
-                        
+
                         let baseParam = state[`mobius${param}`];
-                        if (!baseParam) { 
-                            state[`mobius${param}`] = {re: 0, im: 0};
+                        if (!baseParam) {
+                            state[`mobius${param}`] = { re: 0, im: 0 };
                             baseParam = state[`mobius${param}`];
                         }
                         baseParam[part] = parseFloat(controls[sliderId].value);
@@ -59,10 +59,10 @@ window.setupEventListeners = function() {
                         try {
                             toggleAnimation(
                                 controls[sliderId],
-                                (value) => { 
+                                (value) => {
                                     if (state[`mobius${param}`]) {
                                         state[`mobius${param}`][part] = value;
-                                    } else { 
+                                    } else {
                                         state[`mobius${param}`] = { re: 0, im: 0 };
                                         state[`mobius${param}`][part] = value;
                                     }
@@ -83,7 +83,7 @@ window.setupEventListeners = function() {
         controls.funcButtons[key].addEventListener('click', () => {
             try {
                 state.currentFunction = key;
-                
+
                 // Handle Fourier mode
                 if (key === 'fourier') {
                     state.fourierModeEnabled = true;
@@ -98,13 +98,19 @@ window.setupEventListeners = function() {
                         controls.fourierSpecificControlsDiv.classList.add('hidden');
                     }
                 }
-                
+
                 // Handle Laplace mode
                 if (key === 'laplace') {
                     state.laplaceModeEnabled = true;
+                    // Reset per-panel viewports on mode entry so they auto-fit fresh data
+                    state.laplaceTopVP = null;
+                    state.lapaceBotVP = null;
                     if (controls.laplaceSpecificControlsDiv) {
                         controls.laplaceSpecificControlsDiv.classList.remove('hidden');
                     }
+                    // Show sync button
+                    const syncBtn = document.getElementById('laplace_winding_sync_btn');
+                    if (syncBtn) syncBtn.style.display = 'block';
                     // Update Laplace transform on mode entry
                     updateLaplaceTransform();
                 } else {
@@ -112,8 +118,11 @@ window.setupEventListeners = function() {
                     if (controls.laplaceSpecificControlsDiv) {
                         controls.laplaceSpecificControlsDiv.classList.add('hidden');
                     }
+                    // Hide sync button
+                    const syncBtn = document.getElementById('laplace_winding_sync_btn');
+                    if (syncBtn) syncBtn.style.display = 'none';
                 }
-                
+
                 Object.keys(controls.funcButtons).forEach(k => {
                     controls.funcButtons[k].classList.remove('active');
                 });
@@ -151,33 +160,33 @@ window.setupEventListeners = function() {
         });
     }
 
-    if (controls.togglePlotlySphereGridCb) { 
+    if (controls.togglePlotlySphereGridCb) {
         controls.togglePlotlySphereGridCb.addEventListener('change', (e) => {
             try {
                 state.showPlotlySphereGrid = e.target.checked;
-                requestRedrawAll(); 
+                requestRedrawAll();
             } catch (error) {
                 console.error("Error in togglePlotlySphereGridCb change listener:", error);
             }
         });
     }
 
-    if (controls.plotlyGridDensitySlider) { 
+    if (controls.plotlyGridDensitySlider) {
         controls.plotlyGridDensitySlider.addEventListener('input', () => {
             try {
                 state.plotlyGridDensity = parseInt(controls.plotlyGridDensitySlider.value, 10);
-                requestRedrawAll(); 
+                requestRedrawAll();
             } catch (error) {
                 console.error("Error in plotlyGridDensitySlider input listener:", error);
             }
         });
     }
 
-    if (controls.plotlySphereOpacitySlider) { 
+    if (controls.plotlySphereOpacitySlider) {
         controls.plotlySphereOpacitySlider.addEventListener('input', () => {
             try {
                 state.plotlySphereOpacity = parseFloat(controls.plotlySphereOpacitySlider.value);
-                requestRedrawAll(); 
+                requestRedrawAll();
             } catch (error) {
                 console.error("Error in plotlySphereOpacitySlider input listener:", error);
             }
@@ -190,7 +199,7 @@ window.setupEventListeners = function() {
             if (controls.domainColoringOptionsDiv) {
                 controls.domainColoringOptionsDiv.classList.toggle('hidden', !state.domainColoringEnabled);
             }
-            if (controls.domainColoringKeyDiv) { 
+            if (controls.domainColoringKeyDiv) {
                 controls.domainColoringKeyDiv.classList.toggle('hidden', !state.domainColoringEnabled);
             }
             domainColoringDirty = true;
@@ -200,15 +209,15 @@ window.setupEventListeners = function() {
         }
     });
 
-    
+
     const domainControlSliderIds = ['domainBrightness', 'domainContrast', 'domainSaturation', 'domainLightnessCycles'];
     domainControlSliderIds.forEach(id => {
         const slider = controls[`${id}Slider`];
         if (slider) {
             slider.addEventListener('input', () => {
                 try {
-                    state[id.replace('domain', '').toLowerCase()] = parseFloat(slider.value); 
-                    
+                    state[id.replace('domain', '').toLowerCase()] = parseFloat(slider.value);
+
                     if (id === 'domainBrightness') state.domainBrightness = parseFloat(slider.value);
                     else if (id === 'domainContrast') state.domainContrast = parseFloat(slider.value);
                     else if (id === 'domainSaturation') state.domainSaturation = parseFloat(slider.value);
@@ -260,7 +269,7 @@ window.setupEventListeners = function() {
             }
         });
     }
-     if (controls.enableSplitViewCb) {
+    if (controls.enableSplitViewCb) {
         controls.enableSplitViewCb.addEventListener('change', (e) => {
             try {
                 state.splitViewEnabled = e.target.checked;
@@ -302,13 +311,13 @@ window.setupEventListeners = function() {
         }
     });
 
-    
-    if(controls.stripY1Slider) controls.stripY1Slider.addEventListener('input',()=>{ try { state.stripY1=parseFloat(controls.stripY1Slider.value); requestRedrawAll(); } catch(e){ console.error("Error in stripY1Slider listener", e);}});
-    if(controls.stripY2Slider) controls.stripY2Slider.addEventListener('input',()=>{ try { state.stripY2=parseFloat(controls.stripY2Slider.value); requestRedrawAll(); } catch(e){ console.error("Error in stripY2Slider listener", e);}});
-    if(controls.sectorAngle1Slider) controls.sectorAngle1Slider.addEventListener('input',()=>{ try { state.sectorAngle1=parseFloat(controls.sectorAngle1Slider.value); requestRedrawAll(); } catch(e){ console.error("Error in sectorAngle1Slider listener", e);}});
-    if(controls.sectorAngle2Slider) controls.sectorAngle2Slider.addEventListener('input',()=>{ try { state.sectorAngle2=parseFloat(controls.sectorAngle2Slider.value); requestRedrawAll(); } catch(e){ console.error("Error in sectorAngle2Slider listener", e);}});
-    if(controls.sectorRMinSlider) controls.sectorRMinSlider.addEventListener('input',()=>{ try { state.sectorRMin=parseFloat(controls.sectorRMinSlider.value); requestRedrawAll(); } catch(e){ console.error("Error in sectorRMinSlider listener", e);}});
-    if(controls.sectorRMaxSlider) controls.sectorRMaxSlider.addEventListener('input',()=>{ try { state.sectorRMax=parseFloat(controls.sectorRMaxSlider.value); requestRedrawAll(); } catch(e){ console.error("Error in sectorRMaxSlider listener", e);}});
+
+    if (controls.stripY1Slider) controls.stripY1Slider.addEventListener('input', () => { try { state.stripY1 = parseFloat(controls.stripY1Slider.value); requestRedrawAll(); } catch (e) { console.error("Error in stripY1Slider listener", e); } });
+    if (controls.stripY2Slider) controls.stripY2Slider.addEventListener('input', () => { try { state.stripY2 = parseFloat(controls.stripY2Slider.value); requestRedrawAll(); } catch (e) { console.error("Error in stripY2Slider listener", e); } });
+    if (controls.sectorAngle1Slider) controls.sectorAngle1Slider.addEventListener('input', () => { try { state.sectorAngle1 = parseFloat(controls.sectorAngle1Slider.value); requestRedrawAll(); } catch (e) { console.error("Error in sectorAngle1Slider listener", e); } });
+    if (controls.sectorAngle2Slider) controls.sectorAngle2Slider.addEventListener('input', () => { try { state.sectorAngle2 = parseFloat(controls.sectorAngle2Slider.value); requestRedrawAll(); } catch (e) { console.error("Error in sectorAngle2Slider listener", e); } });
+    if (controls.sectorRMinSlider) controls.sectorRMinSlider.addEventListener('input', () => { try { state.sectorRMin = parseFloat(controls.sectorRMinSlider.value); requestRedrawAll(); } catch (e) { console.error("Error in sectorRMinSlider listener", e); } });
+    if (controls.sectorRMaxSlider) controls.sectorRMaxSlider.addEventListener('input', () => { try { state.sectorRMax = parseFloat(controls.sectorRMaxSlider.value); requestRedrawAll(); } catch (e) { console.error("Error in sectorRMaxSlider listener", e); } });
 
 
     controls.enableVectorFieldCb.addEventListener('change', (e) => {
@@ -363,7 +372,7 @@ window.setupEventListeners = function() {
         streamlineFlowCheckbox.addEventListener('change', (event) => {
             try {
                 state.streamlineFlowEnabled = event.target.checked;
-                
+
                 requestRedrawAll();
             } catch (error) {
                 console.error("Error in enableStreamlineFlowCb change listener:", error);
@@ -415,8 +424,8 @@ window.setupEventListeners = function() {
         controls.enableRadialDiscreteStepsCb.addEventListener('change', (e) => {
             try {
                 state.radialDiscreteStepsEnabled = e.target.checked;
-                
-                
+
+
                 requestRedrawAll();
             } catch (error) {
                 console.error("Error in enableRadialDiscreteStepsCb change listener:", error);
@@ -435,21 +444,21 @@ window.setupEventListeners = function() {
         });
     }
 
-    
+
     if (controls.enableRiemannSphereCb) {
         controls.enableRiemannSphereCb.addEventListener('change', (e) => {
             try {
                 state.riemannSphereViewEnabled = e.target.checked;
-                
+
                 if (controls.riemannSphereOptionsDiv) {
                     controls.riemannSphereOptionsDiv.classList.toggle('hidden', !state.riemannSphereViewEnabled);
                 }
-                
+
                 if (!state.riemannSphereViewEnabled && controls.plotly3DOptionsDiv) {
                     controls.plotly3DOptionsDiv.classList.add('hidden');
                 }
                 domainColoringDirty = true;
-                requestRedrawAll(); 
+                requestRedrawAll();
             } catch (error) {
                 console.error("Error in enableRiemannSphereCb change listener:", error);
             }
@@ -460,23 +469,23 @@ window.setupEventListeners = function() {
         controls.enablePlotly3DCb.addEventListener('change', (e) => {
             try {
                 state.plotly3DEnabled = e.target.checked;
-                
+
                 if (controls.plotly3DOptionsDiv) {
                     controls.plotly3DOptionsDiv.classList.toggle('hidden', !state.plotly3DEnabled);
                 }
-                requestRedrawAll(); 
+                requestRedrawAll();
             } catch (error) {
                 console.error("Error in enablePlotly3DCb change listener:", error);
             }
         });
     }
 
-    
+
     if (controls.enableTaylorSeriesCb) {
         controls.enableTaylorSeriesCb.addEventListener('change', (e) => {
             try {
                 state.taylorSeriesEnabled = e.target.checked;
-                if (controls.taylorSeriesOptionsDetailDiv) { 
+                if (controls.taylorSeriesOptionsDetailDiv) {
                     controls.taylorSeriesOptionsDetailDiv.classList.toggle('hidden', !state.taylorSeriesEnabled);
                 }
                 domainColoringDirty = true;
@@ -491,7 +500,7 @@ window.setupEventListeners = function() {
         controls.taylorSeriesOrderSlider.addEventListener('input', () => {
             try {
                 state.taylorSeriesOrder = parseInt(controls.taylorSeriesOrderSlider.value, 10);
-                
+
                 requestRedrawAll();
             } catch (error) {
                 console.error("Error in taylorSeriesOrderSlider input listener:", error);
@@ -503,7 +512,7 @@ window.setupEventListeners = function() {
         controls.enableTaylorSeriesCustomCenterCb.addEventListener('change', (e) => {
             try {
                 state.taylorSeriesCustomCenterEnabled = e.target.checked;
-                if (controls.taylorSeriesCustomCenterInputsDiv) { 
+                if (controls.taylorSeriesCustomCenterInputsDiv) {
                     controls.taylorSeriesCustomCenterInputsDiv.classList.toggle('hidden', !state.taylorSeriesCustomCenterEnabled);
                 }
                 requestRedrawAll();
@@ -517,7 +526,7 @@ window.setupEventListeners = function() {
         controls.taylorSeriesCustomCenterReInput.addEventListener('input', () => {
             try {
                 state.taylorSeriesCustomCenter.re = parseFloat(controls.taylorSeriesCustomCenterReInput.value) || 0;
-                
+
             } catch (error) {
                 console.error("Error in taylorSeriesCustomCenterReInput input listener:", error);
             }
@@ -525,7 +534,7 @@ window.setupEventListeners = function() {
         controls.taylorSeriesCustomCenterReInput.addEventListener('change', () => {
             try {
                 state.taylorSeriesCustomCenter.re = parseFloat(controls.taylorSeriesCustomCenterReInput.value) || 0;
-                requestRedrawAll(); 
+                requestRedrawAll();
             } catch (error) {
                 console.error("Error in taylorSeriesCustomCenterReInput change listener:", error);
             }
@@ -535,7 +544,7 @@ window.setupEventListeners = function() {
         controls.taylorSeriesCustomCenterImInput.addEventListener('input', () => {
             try {
                 state.taylorSeriesCustomCenter.im = parseFloat(controls.taylorSeriesCustomCenterImInput.value) || 0;
-                
+
             } catch (error) {
                 console.error("Error in taylorSeriesCustomCenterImInput input listener:", error);
             }
@@ -543,14 +552,14 @@ window.setupEventListeners = function() {
         controls.taylorSeriesCustomCenterImInput.addEventListener('change', () => {
             try {
                 state.taylorSeriesCustomCenter.im = parseFloat(controls.taylorSeriesCustomCenterImInput.value) || 0;
-                requestRedrawAll(); 
+                requestRedrawAll();
             } catch (error) {
                 console.error("Error in taylorSeriesCustomCenterImInput change listener:", error);
             }
         });
     }
 
-    
+
 
     controls.toggleZetaContinuationBtn.addEventListener('click', () => {
         try {
@@ -787,7 +796,7 @@ window.setupEventListeners = function() {
             }
         }, 100);
     }
-    
+
     // Auto-start animation when Laplace mode is enabled
     const originalLaplaceBtn = document.getElementById('laplace_mode_btn');
     if (originalLaplaceBtn) {
@@ -840,7 +849,7 @@ window.setupEventListeners = function() {
                 if (state.laplaceModeEnabled && state.laplacePoles) {
                     const stability = analyzeStability(state.laplacePoles);
                     state.laplaceStability = stability;
-                    
+
                     // Update display
                     if (controls.laplaceStabilityDisplay) {
                         controls.laplaceStabilityDisplay.textContent = stability.message;
@@ -864,12 +873,12 @@ window.setupEventListeners = function() {
         });
     }
 
-    
+
     const sphereViewButtonActions = {
-        'sphere_view_north_btn': { rotX: -Math.PI / 2 + 0.01, rotY: 0 }, 
+        'sphere_view_north_btn': { rotX: -Math.PI / 2 + 0.01, rotY: 0 },
         'sphere_view_south_btn': { rotX: Math.PI / 2 - 0.01, rotY: 0 },
-        'sphere_view_east_btn':  { rotX: 0, rotY: -Math.PI / 2 },
-        'sphere_view_west_btn':  { rotX: 0, rotY: Math.PI / 2 },
+        'sphere_view_east_btn': { rotX: 0, rotY: -Math.PI / 2 },
+        'sphere_view_west_btn': { rotX: 0, rotY: Math.PI / 2 },
         'sphere_view_front_btn': { rotX: 0, rotY: 0 },
         'sphere_view_reset_btn': { rotX: SPHERE_INITIAL_ROT_X, rotY: SPHERE_INITIAL_ROT_Y }
     };
@@ -901,12 +910,33 @@ window.setupEventListeners = function() {
         canvas.addEventListener('mousemove', (e) => {
             try {
                 const isSphereActive = (isZCanvas && (state.riemannSphereViewEnabled && !state.splitViewEnabled)) ||
-                                       (!isZCanvas && (state.riemannSphereViewEnabled || state.splitViewEnabled));
-                if (isSphereActive) return; 
+                    (!isZCanvas && (state.riemannSphereViewEnabled || state.splitViewEnabled));
+                if (isSphereActive) return;
 
                 const rect = canvas.getBoundingClientRect();
                 const mouseX = e.clientX - rect.left;
                 const mouseY = e.clientY - rect.top;
+
+                // --- Laplace winding mode: per-panel panning ---
+                if (!isZCanvas && state.laplaceModeEnabled && state.laplaceDragging) {
+                    const drag = state.laplaceDragging;
+                    const vp = drag.panel === 'top' ? state.laplaceTopVP : state.lapaceBotVP;
+                    if (vp) {
+                        const dx = mouseX - drag.startX;
+                        const dy = mouseY - drag.startY;
+                        vp.origin.x = drag.startOrigin.x + dx;
+                        vp.origin.y = drag.startOrigin.y + dy;
+
+                        // Update ranges for grid drawing
+                        const originWorldX = -vp.origin.x / vp.scale.x;
+                        const originWorldY = (vp.origin.y - vp.offsetY - vp.height / 2) / vp.scale.y;
+                        vp.currentVisXRange = [originWorldX, originWorldX + vp.width / vp.scale.x];
+                        vp.currentVisYRange = [originWorldY - vp.height / (2 * vp.scale.y), originWorldY + vp.height / (2 * vp.scale.y)];
+
+                        requestRedrawAll();
+                    }
+                    return;
+                }
 
                 if (statePanInfo.isPanning) {
                     const dx = mouseX - statePanInfo.panStart.x;
@@ -920,8 +950,9 @@ window.setupEventListeners = function() {
                     const worldCoords = mapCanvasToWorldCoords(mouseX, mouseY, planeParams);
                     state.probeZ = { re: worldCoords.x, im: worldCoords.y };
                     state.probeActive = true;
-                    
                     requestRedrawAll();
+                } else if (!isZCanvas && state.laplaceModeEnabled && !state.laplaceDragging) {
+                    // Hover effect or probe for Laplace if needed (optional)
                 }
             } catch (error) {
                 console.error(`Error in canvas (${planeType}) mousemove listener:`, error);
@@ -930,40 +961,55 @@ window.setupEventListeners = function() {
         canvas.addEventListener('mousedown', (e) => {
             try {
                 const isSphereActive = (isZCanvas && (state.riemannSphereViewEnabled && !state.splitViewEnabled)) ||
-                                       (!isZCanvas && (state.riemannSphereViewEnabled || state.splitViewEnabled));
-                if (isSphereActive) return; 
+                    (!isZCanvas && (state.riemannSphereViewEnabled || state.splitViewEnabled));
+                if (isSphereActive) return;
+
+                const rect = canvas.getBoundingClientRect();
+                const mouseX = e.clientX - rect.left;
+                const mouseY = e.clientY - rect.top;
+
+                // --- Laplace winding mode: per-panel panning start ---
+                if (!isZCanvas && state.laplaceModeEnabled && state.laplaceTopVP && state.lapaceBotVP) {
+                    if (e.button === 0) {
+                        const topH = state.laplaceTopVP.height;
+                        const isTop = mouseY < topH; // Simple hit test since panels are top/bottom
+                        const vp = isTop ? state.laplaceTopVP : state.lapaceBotVP;
+
+                        state.laplaceDragging = {
+                            panel: isTop ? 'top' : 'bot',
+                            startX: mouseX,
+                            startY: mouseY,
+                            startOrigin: { x: vp.origin.x, y: vp.origin.y }
+                        };
+                        canvas.style.cursor = 'grabbing';
+                        return;
+                    }
+                }
 
                 if (isZCanvas) {
-                    
-                    
+
+
                     if (e.button === 0 && state.streamlineFlowEnabled) {
-                        const rect = zCanvas.getBoundingClientRect(); 
-                        const mouseX = e.clientX - rect.left;
-                        const mouseY = e.clientY - rect.top;
-
-                        
                         const worldCoords = mapCanvasToWorldCoords(mouseX, mouseY, planeParams);
-
                         if (worldCoords) {
                             state.manualSeedPoints.push({ re: worldCoords.x, im: worldCoords.y });
-                            
+
                             requestRedrawAll();
-                            e.stopPropagation(); 
-                            return; 
+                            e.stopPropagation();
+                            return;
                         }
                     }
                 }
 
-                
+
                 if (e.button === 0) {
                     statePanInfo.isPanning = true;
-                    const rect = canvas.getBoundingClientRect();
-                    statePanInfo.panStart.x = e.clientX - rect.left;
-                    statePanInfo.panStart.y = e.clientY - rect.top;
+                    statePanInfo.panStart.x = mouseX;
+                    statePanInfo.panStart.y = mouseY;
                     statePanInfo.panStartOrigin.x = planeParams.origin.x;
                     statePanInfo.panStartOrigin.y = planeParams.origin.y;
                     canvas.style.cursor = 'grabbing';
-                    if (isZCanvas) state.probeActive = false; 
+                    if (isZCanvas) state.probeActive = false;
                     requestRedrawAll();
                 }
             } catch (error) {
@@ -973,26 +1019,32 @@ window.setupEventListeners = function() {
         canvas.addEventListener('mouseup', (e) => {
             try {
                 const isSphereActive = (isZCanvas && (state.riemannSphereViewEnabled && !state.splitViewEnabled)) ||
-                                       (!isZCanvas && (state.riemannSphereViewEnabled || state.splitViewEnabled));
+                    (!isZCanvas && (state.riemannSphereViewEnabled || state.splitViewEnabled));
                 if (isSphereActive) return;
+
+                // --- Laplace winding mode: panning end ---
+                if (!isZCanvas && state.laplaceDragging) {
+                    state.laplaceDragging = null;
+                    canvas.style.cursor = 'crosshair';
+                    return;
+                }
 
                 if (e.button === 0 && statePanInfo.isPanning) {
                     statePanInfo.isPanning = false;
                     canvas.style.cursor = 'crosshair';
-                    if (isZCanvas) { 
+                    if (isZCanvas) {
                         const rect = canvas.getBoundingClientRect();
                         const mouseX = e.clientX - rect.left;
                         const mouseY = e.clientY - rect.top;
-                        if(mouseX >= 0 && mouseX <= canvas.width && mouseY >= 0 && mouseY <= canvas.height){
-                           const worldCoords = mapCanvasToWorldCoords(mouseX,mouseY,planeParams);
-                           state.probeZ = {re: worldCoords.x, im: worldCoords.y};
-                           state.probeActive = true;
+                        if (mouseX >= 0 && mouseX <= canvas.width && mouseY >= 0 && mouseY <= canvas.height) {
+                            const worldCoords = mapCanvasToWorldCoords(mouseX, mouseY, planeParams);
+                            state.probeZ = { re: worldCoords.x, im: worldCoords.y };
+                            state.probeActive = true;
                         } else {
                             state.probeActive = false;
                         }
+                        requestRedrawAll();
                     }
-                    domainColoringDirty = true;
-                    requestRedrawAll();
                 }
             } catch (error) {
                 console.error(`Error in canvas (${planeType}) mouseup listener:`, error);
@@ -1001,16 +1053,22 @@ window.setupEventListeners = function() {
         canvas.addEventListener('mouseleave', () => {
             try {
                 const isSphereActive = (isZCanvas && (state.riemannSphereViewEnabled && !state.splitViewEnabled)) ||
-                                       (!isZCanvas && (state.riemannSphereViewEnabled || state.splitViewEnabled));
+                    (!isZCanvas && (state.riemannSphereViewEnabled || state.splitViewEnabled));
                 if (isSphereActive) return;
+
+                // --- Laplace winding mode: panning end ---
+                if (!isZCanvas && state.laplaceDragging) {
+                    state.laplaceDragging = null;
+                    canvas.style.cursor = 'crosshair';
+                }
 
                 if (statePanInfo.isPanning) {
                     statePanInfo.isPanning = false;
                     canvas.style.cursor = 'crosshair';
                     domainColoringDirty = true;
-                    
+
                 }
-                if (isZCanvas) { 
+                if (isZCanvas) {
                     state.probeActive = false;
                 }
                 requestRedrawAll();
@@ -1021,10 +1079,73 @@ window.setupEventListeners = function() {
         canvas.addEventListener('wheel', (e) => {
             try {
                 const isSphereActive = (isZCanvas && (state.riemannSphereViewEnabled && !state.splitViewEnabled)) ||
-                                       (!isZCanvas && (state.riemannSphereViewEnabled || state.splitViewEnabled));
-                if (isSphereActive) return; 
+                    (!isZCanvas && (state.riemannSphereViewEnabled || state.splitViewEnabled));
+                if (isSphereActive) return;
 
                 e.preventDefault();
+
+                // --- Laplace winding mode: per-panel zoom ---
+                if (!isZCanvas && state.laplaceModeEnabled && state.laplaceTopVP && state.lapaceBotVP) {
+                    const rect = canvas.getBoundingClientRect();
+                    const mouseX = e.clientX - rect.left;
+                    const mouseY = e.clientY - rect.top;
+                    const zoomFactor = e.deltaY < 0 ? ZOOM_IN_FACTOR : ZOOM_OUT_FACTOR;
+
+                    const H = rect.height;
+                    const gap = 4;
+                    const topH = Math.floor((H - gap) / 2);
+                    const inTop = mouseY < topH;
+
+                    function zoomPanel(vp, mx, my) {
+                        // Convert canvas coords to world coords before zoom
+                        const worldX = (mx - vp.origin.x) / vp.scale.x;
+                        const worldY = (vp.origin.y - my) / vp.scale.y;
+                        vp.scale.x *= zoomFactor;
+                        vp.scale.y *= zoomFactor;
+                        // Keep world point under mouse
+                        vp.origin.x = mx - worldX * vp.scale.x;
+                        vp.origin.y = my + worldY * vp.scale.y;
+                        // Update visible ranges
+                        const halfW = vp.width / 2 / vp.scale.x;
+                        const halfH = vp.height / 2 / vp.scale.y;
+                        const cRe = (mx - vp.origin.x) / vp.scale.x - vp.width / 2 / vp.scale.x + halfW;
+                        const cIm = (vp.origin.y - my) / vp.scale.y - vp.height / 2 / vp.scale.y + halfH;
+                        // Simpler: derive from origin
+                        const originWorldX = -vp.origin.x / vp.scale.x;
+                        const originWorldY = (vp.origin.y - vp.offsetY - vp.height / 2) / vp.scale.y;
+                        vp.currentVisXRange = [originWorldX, originWorldX + vp.width / vp.scale.x];
+                        vp.currentVisYRange = [originWorldY - vp.height / (2 * vp.scale.y), originWorldY + vp.height / (2 * vp.scale.y)];
+                    }
+
+                    function zoomPanelCentered(vp, factor) {
+                        // Zoom centered on panel center (for sync, no mouse-tracking)
+                        const cx = vp.width / 2;
+                        const cy = vp.offsetY + vp.height / 2;
+                        const worldX = (cx - vp.origin.x) / vp.scale.x;
+                        const worldY = (vp.origin.y - cy) / vp.scale.y;
+                        vp.scale.x *= factor;
+                        vp.scale.y *= factor;
+                        vp.origin.x = cx - worldX * vp.scale.x;
+                        vp.origin.y = cy + worldY * vp.scale.y;
+                        vp.currentVisXRange = [worldX - vp.width / (2 * vp.scale.x), worldX + vp.width / (2 * vp.scale.x)];
+                        vp.currentVisYRange = [worldY - vp.height / (2 * vp.scale.y), worldY + vp.height / (2 * vp.scale.y)];
+                    }
+
+                    const syncOn = state.laplaceWindingSyncZoom !== false; // default true
+
+                    if (inTop) {
+                        zoomPanel(state.laplaceTopVP, mouseX, mouseY);
+                        if (syncOn) zoomPanelCentered(state.lapaceBotVP, zoomFactor);
+                    } else {
+                        zoomPanel(state.lapaceBotVP, mouseX, mouseY);
+                        if (syncOn) zoomPanelCentered(state.laplaceTopVP, zoomFactor);
+                    }
+
+                    requestRedrawAll();
+                    return;
+                }
+
+                // --- Generic zoom for all other modes ---
                 const rect = canvas.getBoundingClientRect();
                 const mouseX = e.clientX - rect.left;
                 const mouseY = e.clientY - rect.top;
@@ -1054,7 +1175,7 @@ window.setupEventListeners = function() {
         });
     });
 
-    
+
     zCanvas.addEventListener('mousedown', (e) => { try { handleSphereMouseDown(e, 'z'); } catch (err) { console.error("Error in zCanvas sphere mousedown:", err); } });
     zCanvas.addEventListener('mousemove', (e) => { try { handleSphereMouseMove(e, 'z'); } catch (err) { console.error("Error in zCanvas sphere mousemove:", err); } });
     zCanvas.addEventListener('mouseup', () => { try { handleSphereMouseUp('z'); } catch (err) { console.error("Error in zCanvas sphere mouseup:", err); } });
@@ -1065,21 +1186,118 @@ window.setupEventListeners = function() {
     wCanvas.addEventListener('mouseup', () => { try { handleSphereMouseUp('w'); } catch (err) { console.error("Error in wCanvas sphere mouseup:", err); } });
     wCanvas.addEventListener('mouseleave', () => { try { handleSphereMouseUp('w'); } catch (err) { console.error("Error in wCanvas sphere mouseleave:", err); } });
 
-    controls.toggleFullscreenZBtn.addEventListener('click', () => { try { handleFullScreenToggle('z'); } catch (e) { console.error("Error in toggleFullscreenZBtn listener:", e); }});
-    controls.toggleFullscreenWBtn.addEventListener('click', () => { try { handleFullScreenToggle('w'); } catch (e) { console.error("Error in toggleFullscreenWBtn listener:", e); }});
+    controls.toggleFullscreenZBtn.addEventListener('click', () => { try { handleFullScreenToggle('z'); } catch (e) { console.error("Error in toggleFullscreenZBtn listener:", e); } });
+    controls.toggleFullscreenWBtn.addEventListener('click', () => { try { handleFullScreenToggle('w'); } catch (e) { console.error("Error in toggleFullscreenWBtn listener:", e); } });
 
-    
+    // Laplace winding sync zoom button
+    const laplaceWindingSyncBtn = document.getElementById('laplace_winding_sync_btn');
+    if (laplaceWindingSyncBtn) {
+        // Default: sync on
+        state.laplaceWindingSyncZoom = true;
+        laplaceWindingSyncBtn.addEventListener('click', () => {
+            state.laplaceWindingSyncZoom = !state.laplaceWindingSyncZoom;
+            laplaceWindingSyncBtn.textContent = state.laplaceWindingSyncZoom ? 'Sync Zoom: On' : 'Sync Zoom: Off';
+            laplaceWindingSyncBtn.style.color = state.laplaceWindingSyncZoom
+                ? 'rgba(150, 200, 255, 0.9)'
+                : 'rgba(180, 180, 180, 0.6)';
+            laplaceWindingSyncBtn.style.borderColor = state.laplaceWindingSyncZoom
+                ? 'rgba(80, 120, 180, 0.5)'
+                : 'rgba(80, 80, 80, 0.4)';
+        });
+    }
+
+    // 3D surface fullscreen
+    const laplace3dFsBtn = document.getElementById('toggle_fullscreen_laplace_3d_btn');
+    if (laplace3dFsBtn) {
+        laplace3dFsBtn.addEventListener('click', () => {
+            try {
+                const container3d = document.getElementById('laplace_3d_container');
+                const column3d = document.getElementById('laplace_3d_column');
+                if (!container3d) return;
+
+                state.isLaplace3DFullScreen = !state.isLaplace3DFullScreen;
+                const fullscreenContainer = controls.fullscreenContainer;
+
+                if (state.isLaplace3DFullScreen) {
+                    state.originalLaplace3DParent = container3d.parentElement;
+
+                    fullscreenContainer.style.position = 'fixed';
+                    fullscreenContainer.style.top = '0';
+                    fullscreenContainer.style.left = '0';
+                    fullscreenContainer.style.width = '100vw';
+                    fullscreenContainer.style.height = '100vh';
+                    fullscreenContainer.style.zIndex = '1000';
+                    fullscreenContainer.style.backgroundColor = '#000';
+
+                    controls.closeFullscreenBtn.onclick = () => { laplace3dFsBtn.click(); };
+                    fullscreenContainer.appendChild(controls.closeFullscreenBtn);
+                    controls.closeFullscreenBtn.classList.remove('hidden');
+
+                    container3d.style.width = '100%';
+                    container3d.style.height = '100%';
+                    fullscreenContainer.appendChild(container3d);
+                    document.body.appendChild(fullscreenContainer);
+                    fullscreenContainer.classList.remove('hidden');
+                    if (column3d) column3d.classList.add('hidden-visually');
+
+                    laplace3dFsBtn.textContent = '✖ Exit';
+
+                    // Resize Plotly after layout settles
+                    requestAnimationFrame(() => {
+                        setTimeout(() => {
+                            try { Plotly.Plots.resize(container3d); } catch (e) { }
+                        }, 150);
+                    });
+                } else {
+                    const origParent = state.originalLaplace3DParent;
+                    if (origParent) origParent.appendChild(container3d);
+                    container3d.style.width = '100%';
+                    container3d.style.height = '100%';
+
+                    fullscreenContainer.classList.add('hidden');
+                    if (fullscreenContainer.parentElement === document.body) {
+                        document.body.removeChild(fullscreenContainer);
+                    }
+                    if (controls.closeFullscreenBtn.parentElement === fullscreenContainer) {
+                        fullscreenContainer.removeChild(controls.closeFullscreenBtn);
+                        controls.closeFullscreenBtn.classList.add('hidden');
+                    }
+                    if (column3d) column3d.classList.remove('hidden-visually');
+
+                    fullscreenContainer.style.position = '';
+                    fullscreenContainer.style.top = '';
+                    fullscreenContainer.style.left = '';
+                    fullscreenContainer.style.width = '';
+                    fullscreenContainer.style.height = '';
+                    fullscreenContainer.style.zIndex = '';
+                    fullscreenContainer.style.backgroundColor = '';
+
+                    laplace3dFsBtn.textContent = 'Fullscreen';
+
+                    requestAnimationFrame(() => {
+                        setTimeout(() => {
+                            try { Plotly.Plots.resize(container3d); } catch (e) { }
+                        }, 100);
+                    });
+                }
+            } catch (e) {
+                console.error('Error in laplace 3D fullscreen toggle:', e);
+            }
+        });
+    }
+
+
     if (controls.enableParticleAnimationCb) {
         controls.enableParticleAnimationCb.addEventListener('change', (e) => {
             try {
                 state.particleAnimationEnabled = e.target.checked;
-                if (controls.particleAnimationDetailsDiv) { 
+                if (controls.particleAnimationDetailsDiv) {
                     controls.particleAnimationDetailsDiv.classList.toggle('hidden', !state.particleAnimationEnabled);
                 }
                 if (!state.particleAnimationEnabled) {
-                    state.particles = []; 
+                    state.particles = [];
                 }
-                
+
                 requestRedrawAll();
             } catch (error) {
                 console.error("Error in enableParticleAnimationCb change listener:", error);
@@ -1090,7 +1308,7 @@ window.setupEventListeners = function() {
         controls.particleDensitySlider.addEventListener('input', () => {
             try {
                 state.particleDensity = parseInt(controls.particleDensitySlider.value);
-                state.particles = []; 
+                state.particles = [];
                 requestRedrawAll();
             } catch (error) {
                 console.error("Error in particleDensitySlider input listener:", error);
@@ -1117,11 +1335,11 @@ window.setupEventListeners = function() {
             }
         });
     }
-    
-    
-    
-    
-    if (controls.clearManualSeedsBtn && !controls.clearManualSeedsBtn.dataset.listenerAttached) { 
+
+
+
+
+    if (controls.clearManualSeedsBtn && !controls.clearManualSeedsBtn.dataset.listenerAttached) {
         controls.clearManualSeedsBtn.addEventListener('click', () => {
             try {
                 state.manualSeedPoints = [];
@@ -1130,23 +1348,23 @@ window.setupEventListeners = function() {
                 console.error("Error in clearManualSeedsBtn click listener:", error);
             }
         });
-        controls.clearManualSeedsBtn.dataset.listenerAttached = 'true'; 
+        controls.clearManualSeedsBtn.dataset.listenerAttached = 'true';
     }
 
-    
-    if (controls.showVectorFieldPanelCb && controls.vectorFlowOptionsContent) { 
+
+    if (controls.showVectorFieldPanelCb && controls.vectorFlowOptionsContent) {
         controls.showVectorFieldPanelCb.addEventListener('change', (e) => {
             try {
-                state.showVectorFieldPanelEnabled = e.target.checked; 
-                controls.vectorFlowOptionsContent.classList.toggle('hidden', !state.showVectorFieldPanelEnabled); 
+                state.showVectorFieldPanelEnabled = e.target.checked;
+                controls.vectorFlowOptionsContent.classList.toggle('hidden', !state.showVectorFieldPanelEnabled);
             } catch (error) {
                 console.error("Error in showVectorFieldPanelCb change listener:", error);
             }
         });
-        
+
     }
 
-    
+
 
 
     document.addEventListener('keydown', (e) => {
@@ -1154,6 +1372,10 @@ window.setupEventListeners = function() {
             if (e.key === 'Escape') {
                 if (state.isZFullScreen) handleFullScreenToggle('z');
                 if (state.isWFullScreen) handleFullScreenToggle('w');
+                if (state.isLaplace3DFullScreen) {
+                    const btn = document.getElementById('toggle_fullscreen_laplace_3d_btn');
+                    if (btn) btn.click();
+                }
             }
         } catch (error) {
             console.error("Error in document keydown listener for Escape key:", error);
@@ -1164,7 +1386,7 @@ window.setupEventListeners = function() {
         controls.toggleSphereAxesGridCb.addEventListener('change', (e) => {
             try {
                 state.showSphereAxesAndGrid = e.target.checked;
-                requestRedrawAll(); 
+                requestRedrawAll();
             } catch (error) {
                 console.error("Error in toggleSphereAxesGridCb change listener:", error);
             }
@@ -1176,23 +1398,23 @@ window.setupEventListeners = function() {
 function attemptPlotlyResize(plotlyDiv, maxAttempts = 3, delay = 100, currentAttempt = 1) {
     if (!plotlyDiv) return;
 
-    
-    
-    
+
+
+
     const width = plotlyDiv.offsetWidth;
-    
+
     const height = plotlyDiv.offsetHeight;
 
     if (width > 0 && height > 0) {
         try {
             Plotly.Plots.resize(plotlyDiv);
-            
+
         } catch (resizeError) {
             console.error(`Error during Plotly.Plots.resize (attempt ${currentAttempt}):`, resizeError);
         }
     } else {
         if (currentAttempt < maxAttempts) {
-            
+
             setTimeout(() => {
                 attemptPlotlyResize(plotlyDiv, maxAttempts, delay, currentAttempt + 1);
             }, delay);
@@ -1207,7 +1429,7 @@ function handleSphereMouseDown(e, planeType) {
     try {
         const sphereParams = planeType === 'z' ? sphereViewParams.z : sphereViewParams.w;
         const isActiveSphere = (planeType === 'z' && state.riemannSphereViewEnabled && !state.splitViewEnabled) ||
-                               (planeType === 'w' && (state.riemannSphereViewEnabled || state.splitViewEnabled));
+            (planeType === 'w' && (state.riemannSphereViewEnabled || state.splitViewEnabled));
         if (!isActiveSphere) return;
 
         sphereParams.dragging = true;
@@ -1223,7 +1445,7 @@ function handleSphereMouseMove(e, planeType) {
     try {
         const sphereParams = planeType === 'z' ? sphereViewParams.z : sphereViewParams.w;
         const isActiveSphere = (planeType === 'z' && state.riemannSphereViewEnabled && !state.splitViewEnabled) ||
-                               (planeType === 'w' && (state.riemannSphereViewEnabled || state.splitViewEnabled));
+            (planeType === 'w' && (state.riemannSphereViewEnabled || state.splitViewEnabled));
         if (!isActiveSphere) return;
 
         if (sphereParams.dragging) {
@@ -1231,7 +1453,7 @@ function handleSphereMouseMove(e, planeType) {
             const dy = e.clientY - sphereParams.lastMouseY;
             sphereParams.rotY += dx * SPHERE_SENSITIVITY;
             sphereParams.rotX += dy * SPHERE_SENSITIVITY;
-            sphereParams.rotX = Math.max(-Math.PI / 2 + 0.01, Math.min(Math.PI / 2 - 0.01, sphereParams.rotX)); 
+            sphereParams.rotX = Math.max(-Math.PI / 2 + 0.01, Math.min(Math.PI / 2 - 0.01, sphereParams.rotX));
             sphereParams.lastMouseX = e.clientX;
             sphereParams.lastMouseY = e.clientY;
             domainColoringDirty = true;
@@ -1245,8 +1467,8 @@ function handleSphereMouseUp(planeType) {
     try {
         const sphereParams = planeType === 'z' ? sphereViewParams.z : sphereViewParams.w;
         const isActiveSphere = (planeType === 'z' && state.riemannSphereViewEnabled && !state.splitViewEnabled) ||
-                               (planeType === 'w' && (state.riemannSphereViewEnabled || state.splitViewEnabled));
-        if (!isActiveSphere && !sphereParams.dragging) return; 
+            (planeType === 'w' && (state.riemannSphereViewEnabled || state.splitViewEnabled));
+        if (!isActiveSphere && !sphereParams.dragging) return;
 
         sphereParams.dragging = false;
         const canvas = planeType === 'z' ? zCanvas : wCanvas;
@@ -1262,11 +1484,11 @@ function handleFullScreenToggle(planeType) {
         const isZPlane = planeType === 'z';
         let currentElement;
         let isPlotlyCase = false;
-        const wPlotlyContainer = document.getElementById('w_plane_plotly_container'); 
+        const wPlotlyContainer = document.getElementById('w_plane_plotly_container');
 
         if (isZPlane) {
             currentElement = zCanvas;
-        } else { 
+        } else {
             if (state.plotly3DEnabled && state.riemannSphereViewEnabled && wPlotlyContainer) {
                 currentElement = wPlotlyContainer;
                 isPlotlyCase = true;
@@ -1281,7 +1503,7 @@ function handleFullScreenToggle(planeType) {
         }
 
         const canvasCard = isZPlane ? controls.zCanvasCard : controls.wCanvasCard;
-        const fullscreenContainer = controls.fullscreenContainer; 
+        const fullscreenContainer = controls.fullscreenContainer;
         const toggleButton = isZPlane ? controls.toggleFullscreenZBtn : controls.toggleFullscreenWBtn;
 
         let isNowFullScreenGlobalState;
@@ -1294,7 +1516,7 @@ function handleFullScreenToggle(planeType) {
         }
 
         if (isNowFullScreenGlobalState) {
-            
+
             if (isZPlane) {
                 state.originalZParent = currentElement.parentElement;
                 state.originalZStyle = { width: currentElement.style.width, height: currentElement.style.height };
@@ -1303,14 +1525,14 @@ function handleFullScreenToggle(planeType) {
                 state.originalWStyle = { width: currentElement.style.width, height: currentElement.style.height };
             }
 
-            
+
             fullscreenContainer.style.position = 'fixed';
             fullscreenContainer.style.top = '0';
             fullscreenContainer.style.left = '0';
             fullscreenContainer.style.width = '100vw';
             fullscreenContainer.style.height = '100vh';
-            fullscreenContainer.style.zIndex = '1000'; 
-            fullscreenContainer.style.backgroundColor = 'var(--color-background-dark)'; 
+            fullscreenContainer.style.zIndex = '1000';
+            fullscreenContainer.style.backgroundColor = 'var(--color-background-dark)';
 
             controls.closeFullscreenBtn.onclick = () => { try { handleFullScreenToggle(planeType); } catch (e) { console.error("Error in closeFullscreenBtn onclick handler:", e); } };
             fullscreenContainer.appendChild(controls.closeFullscreenBtn);
@@ -1320,37 +1542,47 @@ function handleFullScreenToggle(planeType) {
             document.body.appendChild(fullscreenContainer);
             fullscreenContainer.classList.remove('hidden');
 
-            if(canvasCard) canvasCard.classList.add('hidden-visually');
+            if (canvasCard) canvasCard.classList.add('hidden-visually');
 
             if (isPlotlyCase) {
                 if (wCanvas) wCanvas.classList.add('hidden');
                 currentElement.classList.remove('hidden');
-                
+
                 currentElement.style.width = '100%';
                 currentElement.style.height = '100%';
-            } else { 
+            } else {
                 currentElement.style.width = '100%';
                 currentElement.style.height = '100%';
             }
 
+            // Move sync button if w-plane
+            if (!isZPlane) {
+                const syncBtn = document.getElementById('laplace_winding_sync_btn');
+                if (syncBtn) {
+                    fullscreenContainer.appendChild(syncBtn);
+                    syncBtn.style.top = '50px'; // Move down a bit to avoid close button
+                    syncBtn.style.right = '20px';
+                }
+            }
+
             toggleButton.textContent = "✖ Exit";
 
-        } else { 
+        } else {
             const originalParent = isZPlane ? state.originalZParent : state.originalWParent;
             const originalStyle = isZPlane ? state.originalZStyle : state.originalWStyle;
 
             if (originalParent) {
                 originalParent.appendChild(currentElement);
-                if (originalStyle) { 
+                if (originalStyle) {
                     currentElement.style.width = originalStyle.width;
                     currentElement.style.height = originalStyle.height;
-                } else { 
+                } else {
                     currentElement.style.width = '';
                     currentElement.style.height = '';
                 }
             } else {
                 if (canvasCard && canvasCard.querySelector('div')) {
-                     canvasCard.querySelector('div').appendChild(currentElement);
+                    canvasCard.querySelector('div').appendChild(currentElement);
                 }
                 console.warn("Original parent for fullscreen element was not found, attempting fallback restoration.");
             }
@@ -1363,9 +1595,19 @@ function handleFullScreenToggle(planeType) {
                 fullscreenContainer.removeChild(controls.closeFullscreenBtn);
                 controls.closeFullscreenBtn.classList.add('hidden');
             }
-            if(canvasCard) canvasCard.classList.remove('hidden-visually');
+            if (canvasCard) canvasCard.classList.remove('hidden-visually');
 
-            
+            // Move sync button back if w-plane
+            if (!isZPlane) {
+                const syncBtn = document.getElementById('laplace_winding_sync_btn');
+                // state.originalWParent should be the div wrapper where the button belongs
+                if (syncBtn && state.originalWParent) {
+                    state.originalWParent.appendChild(syncBtn);
+                    syncBtn.style.top = '8px';
+                    syncBtn.style.right = '8px';
+                }
+            }
+
             fullscreenContainer.style.position = '';
             fullscreenContainer.style.top = '';
             fullscreenContainer.style.left = '';
@@ -1377,31 +1619,31 @@ function handleFullScreenToggle(planeType) {
             toggleButton.textContent = "Fullscreen";
         }
 
-        
-        
-        setupVisualParameters(true, true); 
+
+
+        setupVisualParameters(true, true);
 
         if (isPlotlyCase) {
             const plotlyDivToResize = currentElement;
 
-            
+
             requestAnimationFrame(() => {
                 setTimeout(() => {
-                    if (isNowFullScreenGlobalState) { 
+                    if (isNowFullScreenGlobalState) {
                         plotlyDivToResize.classList.remove('hidden');
-                        
+
                         plotlyDivToResize.style.width = '100%';
                         plotlyDivToResize.style.height = '100%';
-                        attemptPlotlyResize(plotlyDivToResize, 5, 150); 
-                    } else { 
-                        
+                        attemptPlotlyResize(plotlyDivToResize, 5, 150);
+                    } else {
+
                         attemptPlotlyResize(plotlyDivToResize, 3, 100);
                     }
-                }, isNowFullScreenGlobalState ? 100 : 50); 
+                }, isNowFullScreenGlobalState ? 100 : 50);
             });
-        } else { 
-            
-            
+        } else {
+
+
         }
 
         domainColoringDirty = true;
