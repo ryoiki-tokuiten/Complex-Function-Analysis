@@ -188,13 +188,19 @@ function createWebGLLineRenderer() {
 function getWebGLSupersampleScale() {
     const configured = (typeof WEBGL_SUPERSAMPLE_FACTOR === 'number' && Number.isFinite(WEBGL_SUPERSAMPLE_FACTOR))
         ? WEBGL_SUPERSAMPLE_FACTOR
-        : 1.5;
-    const baseScale = Math.max(1, configured);
-    const qualityBoost = (state && (state.currentFunction === 'zeta' || state.radialDiscreteStepsEnabled)) ? 1.2 : 1;
+        : 1.15;
+    const baseScale = Math.max(1, Math.min(1.25, configured));
+    const isInteracting = !!(state && (
+        (state.panStateZ && state.panStateZ.isPanning) ||
+        (state.panStateW && state.panStateW.isPanning) ||
+        state.particleAnimationEnabled
+    ));
+    if (isInteracting) return 1;
+    const qualityBoost = (state && (state.fourierModeEnabled || state.laplaceModeEnabled || state.streamlineFlowEnabled)) ? 1.06 : 1;
     const deviceScale = (typeof window !== 'undefined' && window.devicePixelRatio)
-        ? Math.min(1.25, Math.max(1, window.devicePixelRatio))
+        ? Math.min(1.04, Math.max(1, window.devicePixelRatio))
         : 1;
-    return Math.min(3.5, baseScale * qualityBoost * deviceScale);
+    return Math.min(1.32, baseScale * qualityBoost * deviceScale);
 }
 
 function ensureWebGLRendererSize(renderer, width, height, renderScaleOverride = null) {
@@ -703,7 +709,7 @@ function renderCapturedBatchesToCanvas(ctx, batches) {
 function renderCapturedBatchesViaWebGLRaster(renderer, targetCtx, width, height, batches) {
     if (!renderer || !targetCtx || !Array.isArray(batches)) return false;
 
-    ensureWebGLRendererSize(renderer, width, height);
+    ensureWebGLRendererSize(renderer, width, height, 1);
     const rasterCtx = ensureRasterCanvasSize(renderer, renderer.canvas.width, renderer.canvas.height);
     if (!rasterCtx) return false;
 
@@ -714,6 +720,11 @@ function renderCapturedBatchesViaWebGLRaster(renderer, targetCtx, width, height,
     rasterCtx.setTransform(renderer.renderScale, 0, 0, renderer.renderScale, 0, 0);
 
     replayCapturedBatches(rasterCtx, batches);
+
+    if (renderer.renderScale <= 1.001) {
+        compositeRasterToCanvas(targetCtx, renderer.rasterCanvas, width, height);
+        return true;
+    }
 
     const textured = renderCanvasTextureToWebGL(renderer, renderer.rasterCanvas, width, height);
     if (textured) {
@@ -735,7 +746,10 @@ function renderCanvasTextureToWebGL(renderer, sourceCanvas, width, height) {
     gl.useProgram(renderer.textureProgram);
 
     gl.bindTexture(gl.TEXTURE_2D, renderer.texture);
-    gl.pixelStorei(gl.UNPACK_PREMULTIPLY_ALPHA_WEBGL, true);
+    const textureFilter = renderer.renderScale > 1.001 ? gl.LINEAR : gl.NEAREST;
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, textureFilter);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, textureFilter);
+    gl.pixelStorei(gl.UNPACK_PREMULTIPLY_ALPHA_WEBGL, false);
     gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, true);
     gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, sourceCanvas);
 
@@ -749,8 +763,8 @@ function renderCanvasTextureToWebGL(renderer, sourceCanvas, width, height) {
     gl.bindTexture(gl.TEXTURE_2D, renderer.texture);
     gl.uniform1i(renderer.uTexture, 0);
 
-    gl.enable(gl.BLEND);
-    gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
+    // Preserve raster luminance/alpha exactly for full-screen texture compositing.
+    gl.disable(gl.BLEND);
     gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
     return true;
 }
@@ -822,7 +836,7 @@ function drawWithWebGLCapture(ctx, planeParams, planeKey, drawCallback) {
     }
 }
 
-function drawWithWebGLRaster(ctx, planeParams, planeKey, drawCallback) {
+function drawWithWebGLRaster(ctx, planeParams, planeKey, drawCallback, options = null) {
     if (!state.webglLineRenderingEnabled || !webglSupport.available) return false;
     if (!ctx || !planeParams || typeof drawCallback !== 'function') return false;
 
@@ -832,7 +846,18 @@ function drawWithWebGLRaster(ctx, planeParams, planeKey, drawCallback) {
     let rasterCtx = null;
     let callbackDrawn = false;
     try {
-        ensureWebGLRendererSize(renderer, planeParams.width, planeParams.height);
+        const renderScaleOverride = (options && typeof options === 'object' && Number.isFinite(options.renderScaleOverride))
+            ? options.renderScaleOverride
+            : null;
+        const requestedRenderScale = (typeof renderScaleOverride === 'number' && renderScaleOverride > 0)
+            ? renderScaleOverride
+            : getWebGLSupersampleScale();
+        const directDrawIfNativeScale = !(options && typeof options === 'object' && options.directDrawIfNativeScale === false);
+        if (directDrawIfNativeScale && requestedRenderScale <= 1.001) {
+            drawCallback(ctx);
+            return true;
+        }
+        ensureWebGLRendererSize(renderer, planeParams.width, planeParams.height, requestedRenderScale);
 
         rasterCtx = ensureRasterCanvasSize(renderer, renderer.canvas.width, renderer.canvas.height);
         if (!rasterCtx) return false;
@@ -873,6 +898,13 @@ function canUseWebGLForPlanarInputShape() {
 }
 
 function drawPlanarTransformedShapeHybrid(ctx, planeParams, tf, planeKey) {
+    if (planeKey === 'w') {
+        const renderedByNativeRaster = drawWithWebGLRaster(ctx, planeParams, planeKey, (rasterCtx) => {
+            drawPlanarTransformedShape(rasterCtx, planeParams, tf);
+        }, { renderScaleOverride: 1 });
+        if (renderedByNativeRaster) return true;
+    }
+
     const captureDisabledByRadialSteps = state.radialDiscreteStepsEnabled && state.currentFunction !== 'poincare';
     const captureDisabledByLineMode = state.currentInputShape === 'line' && (state.currentFunction === 'cos' || state.currentFunction === 'sin');
     const canUseCapture = !captureDisabledByRadialSteps && !captureDisabledByLineMode;
@@ -886,7 +918,7 @@ function drawPlanarTransformedShapeHybrid(ctx, planeParams, tf, planeKey) {
 
     return drawWithWebGLRaster(ctx, planeParams, planeKey, (rasterCtx) => {
         drawPlanarTransformedShape(rasterCtx, planeParams, tf);
-    });
+    }, { renderScaleOverride: 1 });
 }
 
 function drawPlanarInputShapeHybrid(ctx, planeParams, planeKey) {
@@ -899,5 +931,5 @@ function drawPlanarInputShapeHybrid(ctx, planeParams, planeKey) {
 
     return drawWithWebGLRaster(ctx, planeParams, planeKey, (rasterCtx) => {
         drawPlanarInputShape(rasterCtx, planeParams);
-    });
+    }, { renderScaleOverride: 1 });
 }

@@ -170,6 +170,11 @@ function drawZPlaneContent(){
     }else{ 
         
         if(state.domainColoringEnabled && domainColoringDirty){renderPlanarDomainColoring(zDomainColorCtx,zPlaneParams,false,curFunc);} 
+        const drawReferenceGrid =
+            !state.vectorFieldEnabled &&
+            (state.currentInputShape === 'grid_cartesian' ||
+            state.currentInputShape === 'grid_polar' ||
+            state.currentInputShape === 'grid_logpolar');
         drawPlaneLayer(zCtx, zPlaneParams, 'z', (layerCtx) => {
             if (state.domainColoringEnabled) {
                 layerCtx.drawImage(zDomainColorCanvas, 0, 0);
@@ -179,14 +184,10 @@ function drawZPlaneContent(){
             }
             drawAxes(layerCtx, zPlaneParams, 'Re(z)', 'Im(z)');
             drawZetaUndefinedRegionOverlay(layerCtx, zPlaneParams);
-        }, 'raster');
-        if (!(state.currentInputShape === 'empty_grid' || state.vectorFieldEnabled)) { 
-            if (state.currentInputShape === 'grid_cartesian' || state.currentInputShape === 'grid_polar' || state.currentInputShape === 'grid_logpolar') {
-                drawPlaneLayer(zCtx, zPlaneParams, 'z', (layerCtx) => {
-                    drawGridLines(layerCtx, zPlaneParams);
-                }, 'capture');
+            if (drawReferenceGrid) {
+                drawGridLines(layerCtx, zPlaneParams);
             }
-        }
+        }, 'raster');
         if (state.vectorFieldEnabled) {
             if (state.streamlineFlowEnabled) {
                 drawPlaneLayer(zCtx, zPlaneParams, 'z', (layerCtx) => {
@@ -273,10 +274,25 @@ function drawWPlaneContent() {
         if (wCanvas) wCanvas.classList.remove('hidden'); // Use global wCanvas
         if (controls.wPlanePlotlyContainer) controls.wPlanePlotlyContainer.classList.add('hidden');
 
-        drawPlaneLayer(wCtx, wPlaneParams, 'w', (layerCtx) => {
-            layerCtx.fillStyle = COLOR_CANVAS_BACKGROUND;
-            layerCtx.fillRect(0, 0, wPlaneParams.width, wPlaneParams.height);
-        }, 'raster');
+        if (!isRiemannW) {
+            const drawReferenceGrid =
+                state.currentInputShape !== 'empty_grid' &&
+                (state.currentInputShape === 'grid_cartesian' ||
+                state.currentInputShape === 'grid_polar' ||
+                state.currentInputShape === 'grid_logpolar');
+            drawPlaneLayer(wCtx, wPlaneParams, 'w', (layerCtx) => {
+                layerCtx.fillStyle = COLOR_CANVAS_BACKGROUND;
+                layerCtx.fillRect(0, 0, wPlaneParams.width, wPlaneParams.height);
+                if (!state.taylorSeriesEnabled) {
+                    drawAxes(layerCtx, wPlaneParams, 'Re(w)', 'Im(w)');
+                    drawPolynomialOriginMarkerOverlay(layerCtx, wPlaneParams);
+                    drawWOriginGlowOverlay(layerCtx, wPlaneParams);
+                    if (drawReferenceGrid) {
+                        drawGridLines(layerCtx, wPlaneParams);
+                    }
+                }
+            }, 'raster');
+        }
 
         if (state.taylorSeriesEnabled && !isRiemannW) {
             drawPlaneLayer(wCtx, wPlaneParams, 'w', (layerCtx) => {
@@ -307,21 +323,6 @@ function drawWPlaneContent() {
                     drawSphereGridAndShape(layerCtx, cSP, wPlaneParams, true, curFunc);
                 }, 'raster');
             } else { // Planar w-plane view
-                drawPlaneLayer(wCtx, wPlaneParams, 'w', (layerCtx) => {
-                    drawAxes(layerCtx, wPlaneParams, 'Re(w)', 'Im(w)');
-                    drawPolynomialOriginMarkerOverlay(layerCtx, wPlaneParams);
-                    drawWOriginGlowOverlay(layerCtx, wPlaneParams);
-                }, 'raster');
-                if (state.currentInputShape !== 'empty_grid') {
-                    if (state.currentInputShape === 'grid_cartesian' ||
-                        state.currentInputShape === 'grid_polar' ||
-                        state.currentInputShape === 'grid_logpolar') {
-                        drawPlaneLayer(wCtx, wPlaneParams, 'w', (layerCtx) => {
-                            drawGridLines(layerCtx, wPlaneParams);
-                        }, 'capture');
-                    }
-                }
-
                 const renderedByWebGL = (typeof drawPlanarTransformedShapeHybrid === 'function')
                     ? drawPlanarTransformedShapeHybrid(wCtx, wPlaneParams, curFunc, 'w')
                     : false;
