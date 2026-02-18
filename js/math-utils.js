@@ -202,6 +202,55 @@ function complexRiemannZeta_EtaSeries(a, b, numTerms) {
     return complexDivide(eta_s, denominator);
 }
 
+const zetaHasseBinomialRowsCache = {};
+function getZetaHasseBinomialRows(maxLevel) {
+    if (zetaHasseBinomialRowsCache[maxLevel]) {
+        return zetaHasseBinomialRowsCache[maxLevel];
+    }
+
+    const rows = new Array(maxLevel);
+    for (let n = 0; n < maxLevel; n++) {
+        const row = new Array(n + 1);
+        row[0] = 1;
+        for (let k = 1; k <= n; k++) {
+            row[k] = row[k - 1] * (n - k + 1) / k;
+        }
+        rows[n] = row;
+    }
+    zetaHasseBinomialRowsCache[maxLevel] = rows;
+    return rows;
+}
+
+function complexRiemannZeta_HasseSeries(a, b, numLevels) {
+    if (a === 1 && b === 0) return { re: Infinity, im: NaN };
+
+    const denom = complexSub({ re: 1, im: 0 }, complexPow(2, 0, 1 - a, -b));
+    if (Math.abs(denom.re) < 1e-14 && Math.abs(denom.im) < 1e-14) {
+        return complexRiemannZeta_EtaSeries(a, b, NUM_ZETA_TERMS_ETA_SERIES);
+    }
+
+    const hasseRows = getZetaHasseBinomialRows(numLevels);
+    let outerSum = { re: 0, im: 0 };
+
+    for (let n = 0; n < numLevels; n++) {
+        const row = hasseRows[n];
+        let innerSum = { re: 0, im: 0 };
+
+        for (let k = 0; k <= n; k++) {
+            const coeff = ((k % 2 === 0) ? 1 : -1) * row[k];
+            const term = complexPow(k + 1, 0, -a, -b);
+            innerSum.re += coeff * term.re;
+            innerSum.im += coeff * term.im;
+        }
+
+        const outerScale = Math.pow(2, -n - 1);
+        outerSum.re += outerScale * innerSum.re;
+        outerSum.im += outerScale * innerSum.im;
+    }
+
+    return complexDivide(outerSum, denom);
+}
+
 function complexRiemannZeta(a,b){
     const s = {re: a, im: b};
 
@@ -214,42 +263,11 @@ function complexRiemannZeta(a,b){
     }
 
     
-    if(s.re === 1 && s.im === 0) return {re: Infinity, im: NaN}; 
-    if(s.re === 0 && s.im === 0) return {re: -0.5, im: 0};    
-    if(s.im === 0 && s.re < 0 && s.re % 2 === 0) return {re: 0, im: 0}; 
+    if(s.re === 1 && s.im === 0) return {re: Infinity, im: NaN};
+    if(s.re === 0 && s.im === 0) return {re: -0.5, im: 0};
+    if(s.im === 0 && s.re < 0 && s.re % 2 === 0) return {re: 0, im: 0};
 
-    
-    
-    
-    if(s.re < 0.5){ 
-        const one_minus_s = {re: 1 - s.re, im: -s.im};
-        
-        let zeta_one_minus_s = complexRiemannZeta_EtaSeries(one_minus_s.re, one_minus_s.im, NUM_ZETA_TERMS_FOR_FE);
-        if(isNaN(zeta_one_minus_s.re) || isNaN(zeta_one_minus_s.im)) return {re: NaN, im: NaN};
-
-        
-        const two_pow_s = complexPow(2, 0, s.re, s.im);
-        const pi_pow_s_minus_1 = complexPow(Math.PI, 0, s.re - 1, s.im);
-
-        const pi_s_div_2 = {re: Math.PI * s.re / 2, im: Math.PI * s.im / 2};
-        const sin_term = complexSin(pi_s_div_2.re, pi_s_div_2.im);
-
-        const gamma_term = complexGamma(one_minus_s.re, one_minus_s.im);
-
-        let result = complexMul(two_pow_s, pi_pow_s_minus_1);
-        result = complexMul(result, sin_term);
-        result = complexMul(result, gamma_term);
-        result = complexMul(result, zeta_one_minus_s);
-
-        
-        if((isNaN(result.re) || isNaN(result.im)) && (s.re > 0 && Number.isInteger(s.re) && s.im === 0) ){
-            return complexRiemannZeta_EtaSeries(s.re, s.im, NUM_ZETA_TERMS_ETA_SERIES);
-        }
-        return result;
-    } else {
-        
-        return complexRiemannZeta_EtaSeries(s.re, s.im, NUM_ZETA_TERMS_ETA_SERIES);
-    }
+    return complexRiemannZeta_HasseSeries(s.re, s.im, NUM_ZETA_HASSE_LEVELS);
 }
 
 
