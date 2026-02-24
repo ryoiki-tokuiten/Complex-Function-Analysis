@@ -25,6 +25,169 @@ function drawPlaneLayer(ctx, planeParams, planeKey, drawCallback, mode = 'captur
     drawCallback(ctx);
 }
 
+const wPlanarTransformedLayerCache = {
+    key: null,
+    canvas: null,
+    ctx: null
+};
+const zPlanarInputLayerCache = {
+    key: null,
+    canvas: null,
+    ctx: null
+};
+
+function toCacheKeyNumber(value) {
+    if (!Number.isFinite(value)) return `${value}`;
+    return value.toFixed(6);
+}
+
+function appendPointToCacheKey(parts, prefix, point) {
+    if (!point) {
+        parts.push(`${prefix}:none`);
+        return;
+    }
+    parts.push(`${prefix}r:${toCacheKeyNumber(point.re)}`);
+    parts.push(`${prefix}i:${toCacheKeyNumber(point.im)}`);
+}
+
+function buildWPlanarTransformedLayerCacheKey() {
+    const keyParts = [
+        `f:${state.currentFunction}`,
+        `shape:${state.currentInputShape}`,
+        `grid:${state.gridDensity}`,
+        `zetaC:${state.zetaContinuationEnabled ? 1 : 0}`,
+        `radialD:${state.radialDiscreteStepsEnabled ? 1 : 0}`,
+        `radialN:${state.radialDiscreteStepsCount}`,
+        `a0:${toCacheKeyNumber(state.a0)}`,
+        `b0:${toCacheKeyNumber(state.b0)}`,
+        `circleR:${toCacheKeyNumber(state.circleR)}`,
+        `ellipseA:${toCacheKeyNumber(state.ellipseA)}`,
+        `ellipseB:${toCacheKeyNumber(state.ellipseB)}`,
+        `hyperbolaA:${toCacheKeyNumber(state.hyperbolaA)}`,
+        `hyperbolaB:${toCacheKeyNumber(state.hyperbolaB)}`,
+        `stripY1:${toCacheKeyNumber(state.stripY1)}`,
+        `stripY2:${toCacheKeyNumber(state.stripY2)}`,
+        `sectorA1:${toCacheKeyNumber(state.sectorAngle1)}`,
+        `sectorA2:${toCacheKeyNumber(state.sectorAngle2)}`,
+        `sectorRMin:${toCacheKeyNumber(state.sectorRMin)}`,
+        `sectorRMax:${toCacheKeyNumber(state.sectorRMax)}`,
+        `zX0:${toCacheKeyNumber(zPlaneParams.currentVisXRange[0])}`,
+        `zX1:${toCacheKeyNumber(zPlaneParams.currentVisXRange[1])}`,
+        `zY0:${toCacheKeyNumber(zPlaneParams.currentVisYRange[0])}`,
+        `zY1:${toCacheKeyNumber(zPlaneParams.currentVisYRange[1])}`,
+        `wOx:${toCacheKeyNumber(wPlaneParams.origin.x)}`,
+        `wOy:${toCacheKeyNumber(wPlaneParams.origin.y)}`,
+        `wSx:${toCacheKeyNumber(wPlaneParams.scale.x)}`,
+        `wSy:${toCacheKeyNumber(wPlaneParams.scale.y)}`,
+        `wW:${wPlaneParams.width}`,
+        `wH:${wPlaneParams.height}`
+    ];
+
+    appendPointToCacheKey(keyParts, 'mA', state.mobiusA);
+    appendPointToCacheKey(keyParts, 'mB', state.mobiusB);
+    appendPointToCacheKey(keyParts, 'mC', state.mobiusC);
+    appendPointToCacheKey(keyParts, 'mD', state.mobiusD);
+
+    const polyDegree = Math.max(0, Math.min(MAX_POLY_DEGREE, Number.isFinite(state.polynomialN) ? state.polynomialN : 0));
+    keyParts.push(`polyN:${polyDegree}`);
+    for (let i = 0; i <= polyDegree; i++) {
+        appendPointToCacheKey(keyParts, `p${i}`, (state.polynomialCoeffs && state.polynomialCoeffs[i]) ? state.polynomialCoeffs[i] : null);
+    }
+    return keyParts.join('|');
+}
+
+function shouldUseWPlanarTransformedLayerCache() {
+    if (state.taylorSeriesEnabled) return false;
+    if (state.riemannSphereViewEnabled || state.splitViewEnabled) return false;
+    if (state.panStateZ && state.panStateZ.isPanning) return false;
+    if (state.panStateW && state.panStateW.isPanning) return false;
+    return true;
+}
+
+function ensureWPlanarTransformedLayerCacheCanvas(width, height) {
+    if (width <= 0 || height <= 0) return null;
+    if (!wPlanarTransformedLayerCache.canvas) {
+        wPlanarTransformedLayerCache.canvas = document.createElement('canvas');
+        wPlanarTransformedLayerCache.ctx = wPlanarTransformedLayerCache.canvas.getContext('2d');
+        if (!wPlanarTransformedLayerCache.ctx) {
+            wPlanarTransformedLayerCache.canvas = null;
+            return null;
+        }
+    }
+    if (
+        wPlanarTransformedLayerCache.canvas.width !== width ||
+        wPlanarTransformedLayerCache.canvas.height !== height
+    ) {
+        wPlanarTransformedLayerCache.canvas.width = width;
+        wPlanarTransformedLayerCache.canvas.height = height;
+        wPlanarTransformedLayerCache.key = null;
+    }
+    return wPlanarTransformedLayerCache.canvas;
+}
+
+function buildZPlanarInputLayerCacheKey() {
+    const keyParts = [
+        `f:${state.currentFunction}`,
+        `shape:${state.currentInputShape}`,
+        `grid:${state.gridDensity}`,
+        `zetaC:${state.zetaContinuationEnabled ? 1 : 0}`,
+        `radialD:${state.radialDiscreteStepsEnabled ? 1 : 0}`,
+        `radialN:${state.radialDiscreteStepsCount}`,
+        `a0:${toCacheKeyNumber(state.a0)}`,
+        `b0:${toCacheKeyNumber(state.b0)}`,
+        `circleR:${toCacheKeyNumber(state.circleR)}`,
+        `ellipseA:${toCacheKeyNumber(state.ellipseA)}`,
+        `ellipseB:${toCacheKeyNumber(state.ellipseB)}`,
+        `hyperbolaA:${toCacheKeyNumber(state.hyperbolaA)}`,
+        `hyperbolaB:${toCacheKeyNumber(state.hyperbolaB)}`,
+        `stripY1:${toCacheKeyNumber(state.stripY1)}`,
+        `stripY2:${toCacheKeyNumber(state.stripY2)}`,
+        `sectorA1:${toCacheKeyNumber(state.sectorAngle1)}`,
+        `sectorA2:${toCacheKeyNumber(state.sectorAngle2)}`,
+        `sectorRMin:${toCacheKeyNumber(state.sectorRMin)}`,
+        `sectorRMax:${toCacheKeyNumber(state.sectorRMax)}`,
+        `zX0:${toCacheKeyNumber(zPlaneParams.currentVisXRange[0])}`,
+        `zX1:${toCacheKeyNumber(zPlaneParams.currentVisXRange[1])}`,
+        `zY0:${toCacheKeyNumber(zPlaneParams.currentVisYRange[0])}`,
+        `zY1:${toCacheKeyNumber(zPlaneParams.currentVisYRange[1])}`,
+        `zOx:${toCacheKeyNumber(zPlaneParams.origin.x)}`,
+        `zOy:${toCacheKeyNumber(zPlaneParams.origin.y)}`,
+        `zSx:${toCacheKeyNumber(zPlaneParams.scale.x)}`,
+        `zSy:${toCacheKeyNumber(zPlaneParams.scale.y)}`,
+        `zW:${zPlaneParams.width}`,
+        `zH:${zPlaneParams.height}`
+    ];
+    return keyParts.join('|');
+}
+
+function shouldUseZPlanarInputLayerCache() {
+    if (state.vectorFieldEnabled) return false;
+    if (state.riemannSphereViewEnabled && !state.splitViewEnabled) return false;
+    if (state.panStateZ && state.panStateZ.isPanning) return false;
+    return true;
+}
+
+function ensureZPlanarInputLayerCacheCanvas(width, height) {
+    if (width <= 0 || height <= 0) return null;
+    if (!zPlanarInputLayerCache.canvas) {
+        zPlanarInputLayerCache.canvas = document.createElement('canvas');
+        zPlanarInputLayerCache.ctx = zPlanarInputLayerCache.canvas.getContext('2d');
+        if (!zPlanarInputLayerCache.ctx) {
+            zPlanarInputLayerCache.canvas = null;
+            return null;
+        }
+    }
+    if (
+        zPlanarInputLayerCache.canvas.width !== width ||
+        zPlanarInputLayerCache.canvas.height !== height
+    ) {
+        zPlanarInputLayerCache.canvas.width = width;
+        zPlanarInputLayerCache.canvas.height = height;
+        zPlanarInputLayerCache.key = null;
+    }
+    return zPlanarInputLayerCache.canvas;
+}
+
 function drawZetaUndefinedRegionOverlay(ctx, planeParams) {
     if (!(state.currentFunction === 'zeta' && !state.zetaContinuationEnabled)) return;
 
@@ -189,6 +352,7 @@ function drawZPlaneContent(){
             }
         }, 'raster');
         if (state.vectorFieldEnabled) {
+            zPlanarInputLayerCache.key = null;
             if (state.streamlineFlowEnabled) {
                 drawPlaneLayer(zCtx, zPlaneParams, 'z', (layerCtx) => {
                     drawStreamlinesOnZPlane(layerCtx, zPlaneParams, state);
@@ -199,11 +363,40 @@ function drawZPlaneContent(){
                 }, 'capture');
             }
         } else {
-            const renderedInputByWebGL = (typeof drawPlanarInputShapeHybrid === 'function')
-                ? drawPlanarInputShapeHybrid(zCtx, zPlaneParams, 'z')
-                : false;
-            if (!renderedInputByWebGL) {
-                drawPlanarInputShape(zCtx, zPlaneParams);
+            const useCachedInputLayer = shouldUseZPlanarInputLayerCache();
+            if (useCachedInputLayer) {
+                const cacheCanvas = ensureZPlanarInputLayerCacheCanvas(zPlaneParams.width, zPlaneParams.height);
+                const cacheCtx = zPlanarInputLayerCache.ctx;
+                const cacheKey = buildZPlanarInputLayerCacheKey();
+                if (cacheCanvas && cacheCtx) {
+                    if (zPlanarInputLayerCache.key !== cacheKey) {
+                        cacheCtx.setTransform(1, 0, 0, 1, 0, 0);
+                        cacheCtx.clearRect(0, 0, cacheCanvas.width, cacheCanvas.height);
+                        const renderedInputByWebGL = (typeof drawPlanarInputShapeHybrid === 'function')
+                            ? drawPlanarInputShapeHybrid(cacheCtx, zPlaneParams, 'z')
+                            : false;
+                        if (!renderedInputByWebGL) {
+                            drawPlanarInputShape(cacheCtx, zPlaneParams);
+                        }
+                        zPlanarInputLayerCache.key = cacheKey;
+                    }
+                    zCtx.drawImage(cacheCanvas, 0, 0);
+                } else {
+                    const renderedInputByWebGL = (typeof drawPlanarInputShapeHybrid === 'function')
+                        ? drawPlanarInputShapeHybrid(zCtx, zPlaneParams, 'z')
+                        : false;
+                    if (!renderedInputByWebGL) {
+                        drawPlanarInputShape(zCtx, zPlaneParams);
+                    }
+                }
+            } else {
+                zPlanarInputLayerCache.key = null;
+                const renderedInputByWebGL = (typeof drawPlanarInputShapeHybrid === 'function')
+                    ? drawPlanarInputShapeHybrid(zCtx, zPlaneParams, 'z')
+                    : false;
+                if (!renderedInputByWebGL) {
+                    drawPlanarInputShape(zCtx, zPlaneParams);
+                }
             }
         }
         if (state.showZerosPoles) {
@@ -323,11 +516,40 @@ function drawWPlaneContent() {
                     drawSphereGridAndShape(layerCtx, cSP, wPlaneParams, true, curFunc);
                 }, 'raster');
             } else { // Planar w-plane view
-                const renderedByWebGL = (typeof drawPlanarTransformedShapeHybrid === 'function')
-                    ? drawPlanarTransformedShapeHybrid(wCtx, wPlaneParams, curFunc, 'w')
-                    : false;
-                if (!renderedByWebGL) {
-                    drawPlanarTransformedShape(wCtx, wPlaneParams, curFunc);
+                const useCachedLayer = shouldUseWPlanarTransformedLayerCache();
+                if (useCachedLayer) {
+                    const cacheCanvas = ensureWPlanarTransformedLayerCacheCanvas(wPlaneParams.width, wPlaneParams.height);
+                    const cacheCtx = wPlanarTransformedLayerCache.ctx;
+                    const cacheKey = buildWPlanarTransformedLayerCacheKey();
+                    if (cacheCanvas && cacheCtx) {
+                        if (wPlanarTransformedLayerCache.key !== cacheKey) {
+                            cacheCtx.setTransform(1, 0, 0, 1, 0, 0);
+                            cacheCtx.clearRect(0, 0, cacheCanvas.width, cacheCanvas.height);
+                            const renderedByWebGL = (typeof drawPlanarTransformedShapeHybrid === 'function')
+                                ? drawPlanarTransformedShapeHybrid(cacheCtx, wPlaneParams, curFunc, 'w')
+                                : false;
+                            if (!renderedByWebGL) {
+                                drawPlanarTransformedShape(cacheCtx, wPlaneParams, curFunc);
+                            }
+                            wPlanarTransformedLayerCache.key = cacheKey;
+                        }
+                        wCtx.drawImage(cacheCanvas, 0, 0);
+                    } else {
+                        const renderedByWebGL = (typeof drawPlanarTransformedShapeHybrid === 'function')
+                            ? drawPlanarTransformedShapeHybrid(wCtx, wPlaneParams, curFunc, 'w')
+                            : false;
+                        if (!renderedByWebGL) {
+                            drawPlanarTransformedShape(wCtx, wPlaneParams, curFunc);
+                        }
+                    }
+                } else {
+                    wPlanarTransformedLayerCache.key = null;
+                    const renderedByWebGL = (typeof drawPlanarTransformedShapeHybrid === 'function')
+                        ? drawPlanarTransformedShapeHybrid(wCtx, wPlaneParams, curFunc, 'w')
+                        : false;
+                    if (!renderedByWebGL) {
+                        drawPlanarTransformedShape(wCtx, wPlaneParams, curFunc);
+                    }
                 }
             }
         }

@@ -120,6 +120,8 @@ const LANCZOS_G = 7;
 const LANCZOS_P = [0.99999999999980993, 676.5203681218851, -1259.1392167224028, 771.32342877765313, -176.61502916214059, 12.507343278686905, -0.13857109526572012, 9.9843695780195716e-6, 1.5056327351493116e-7];
 const LN_2 = Math.log(2);
 const zetaLogIntegerCache = [0, 0]; // index n -> log(n), valid for n >= 1
+const zetaEvalCache = new Map();
+const ZETA_EVAL_CACHE_MAX = 180000;
 
 function ensureZetaLogIntegerCache(maxN) {
     if (!Number.isFinite(maxN) || maxN < 1) return;
@@ -139,6 +141,46 @@ function complexPositiveRealPowFromLog(logBase, expRe, expIm) {
     const magnitude = expSafe(expRe * logBase);
     const angle = expIm * logBase;
     return { re: magnitude * Math.cos(angle), im: magnitude * Math.sin(angle) };
+}
+
+function getZetaEvalCacheKey(a, b, continuationEnabled) {
+    const reKey = Math.round(a * 1e7);
+    const imKey = Math.round(b * 1e7);
+    return `${continuationEnabled ? 1 : 0}:${reKey}:${imKey}`;
+}
+
+function readZetaEvalCache(cacheKey) {
+    const cached = zetaEvalCache.get(cacheKey);
+    if (!cached) return null;
+    return { re: cached.re, im: cached.im };
+}
+
+function writeZetaEvalCache(cacheKey, value) {
+    if (!cacheKey || !value) return;
+    if (zetaEvalCache.size >= ZETA_EVAL_CACHE_MAX) {
+        zetaEvalCache.clear();
+    }
+    zetaEvalCache.set(cacheKey, { re: value.re, im: value.im });
+}
+
+function getDynamicZetaDirectTerms() {
+    const isInteracting = !!(
+        (state.panStateZ && state.panStateZ.isPanning) ||
+        (state.panStateW && state.panStateW.isPanning) ||
+        state.particleAnimationEnabled
+    );
+    if (!isInteracting) return NUM_ZETA_TERMS_DIRECT_SUM;
+    return Math.max(40, Math.floor(NUM_ZETA_TERMS_DIRECT_SUM * 0.65));
+}
+
+function getDynamicZetaHasseLevels() {
+    const isInteracting = !!(
+        (state.panStateZ && state.panStateZ.isPanning) ||
+        (state.panStateW && state.panStateW.isPanning) ||
+        state.particleAnimationEnabled
+    );
+    if (!isInteracting) return NUM_ZETA_HASSE_LEVELS;
+    return Math.max(14, Math.floor(NUM_ZETA_HASSE_LEVELS * 0.62));
 }
 
 function complexGamma(re, im) {
@@ -282,21 +324,43 @@ function complexRiemannZeta_HasseSeries(a, b, numLevels) {
 
 function complexRiemannZeta(a,b){
     const s = {re: a, im: b};
+    const continuationEnabled = !!state.zetaContinuationEnabled;
+    const cacheKey = getZetaEvalCacheKey(s.re, s.im, continuationEnabled);
+    const cached = readZetaEvalCache(cacheKey);
+    if (cached) return cached;
 
-    if (!state.zetaContinuationEnabled) {
+    let result;
+
+    if (!continuationEnabled) {
         if (s.re > ZETA_REFLECTION_POINT_RE) { 
-            return complexRiemannZeta_DirectSum(s.re, s.im, NUM_ZETA_TERMS_DIRECT_SUM);
+            result = complexRiemannZeta_DirectSum(s.re, s.im, getDynamicZetaDirectTerms());
         } else {
-            return { re: NaN, im: NaN }; 
+            result = { re: NaN, im: NaN };
         }
+        writeZetaEvalCache(cacheKey, result);
+        return result;
     }
 
     
-    if(s.re === 1 && s.im === 0) return {re: Infinity, im: NaN};
-    if(s.re === 0 && s.im === 0) return {re: -0.5, im: 0};
-    if(s.im === 0 && s.re < 0 && s.re % 2 === 0) return {re: 0, im: 0};
+    if(s.re === 1 && s.im === 0) {
+        result = {re: Infinity, im: NaN};
+        writeZetaEvalCache(cacheKey, result);
+        return result;
+    }
+    if(s.re === 0 && s.im === 0) {
+        result = {re: -0.5, im: 0};
+        writeZetaEvalCache(cacheKey, result);
+        return result;
+    }
+    if(s.im === 0 && s.re < 0 && s.re % 2 === 0) {
+        result = {re: 0, im: 0};
+        writeZetaEvalCache(cacheKey, result);
+        return result;
+    }
 
-    return complexRiemannZeta_HasseSeries(s.re, s.im, NUM_ZETA_HASSE_LEVELS);
+    result = complexRiemannZeta_HasseSeries(s.re, s.im, getDynamicZetaHasseLevels());
+    writeZetaEvalCache(cacheKey, result);
+    return result;
 }
 
 
