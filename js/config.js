@@ -74,6 +74,9 @@ const ADAPTIVE_ANCHOR_DENSITY = 800;
 const DEFAULT_POINTS_PER_LINE = 1000;
 const WEBGL_LINE_BATCH_LIMIT = 3500000;
 const WEBGL_SUPERSAMPLE_FACTOR = 2.25;
+const WEBGL_DOMAIN_COLOR_SUPERSAMPLE = 1.75;
+const WEBGL_DOMAIN_COLOR_INTERACTION_SCALE = 1.2;
+const WEBGL_DOMAIN_COLOR_STRESS_SCALE = 2.5;
 const ZETA_POLE = { re: 1, im: 0 };
 const ZETA_REFLECTION_POINT_RE = 1.0;
 const ZOOM_IN_FACTOR = 1.15;
@@ -191,6 +194,8 @@ let state = {
     plotly3DEnabled: false,
     showSphereAxesAndGrid: false, // Default to hidden
     webglLineRenderingEnabled: true,
+    webglDomainColoringEnabled: true,
+    webglGpuStressMode: false,
 
     // Fourier Transform state
     fourierModeEnabled: false,
@@ -237,7 +242,16 @@ let zCanvas, wCanvas, zDomainColorCanvas, wDomainColorCanvas;
 let webglSupport = {
     available: false,
     reason: 'not-initialized',
-    renderers: { z: null, w: null }
+    renderers: { z: null, w: null },
+    diagnostics: { z: null, w: null }
+};
+let webglDomainColorSupport = {
+    available: false,
+    reason: 'not-initialized',
+    renderers: { z: null, w: null },
+    diagnostics: { z: null, w: null },
+    warnedFunctionFallbacks: new Set(),
+    warnedRuntimeFallback: false
 };
 
 function getStreamlineColorByMagnitude(magnitude) {

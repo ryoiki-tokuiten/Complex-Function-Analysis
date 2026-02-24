@@ -118,6 +118,29 @@ function complexPow(base_re, base_im, exp_re, exp_im) {
 
 const LANCZOS_G = 7;
 const LANCZOS_P = [0.99999999999980993, 676.5203681218851, -1259.1392167224028, 771.32342877765313, -176.61502916214059, 12.507343278686905, -0.13857109526572012, 9.9843695780195716e-6, 1.5056327351493116e-7];
+const LN_2 = Math.log(2);
+const zetaLogIntegerCache = [0, 0]; // index n -> log(n), valid for n >= 1
+
+function ensureZetaLogIntegerCache(maxN) {
+    if (!Number.isFinite(maxN) || maxN < 1) return;
+    const target = Math.floor(maxN);
+    for (let n = zetaLogIntegerCache.length; n <= target; n++) {
+        zetaLogIntegerCache[n] = Math.log(n);
+    }
+}
+
+function expSafe(x) {
+    if (x > 700) return Math.exp(700);
+    if (x < -745) return 0;
+    return Math.exp(x);
+}
+
+function complexPositiveRealPowFromLog(logBase, expRe, expIm) {
+    const magnitude = expSafe(expRe * logBase);
+    const angle = expIm * logBase;
+    return { re: magnitude * Math.cos(angle), im: magnitude * Math.sin(angle) };
+}
+
 function complexGamma(re, im) {
     const z = {re, im};
     
@@ -157,8 +180,9 @@ function complexRiemannZeta_DirectSum(a, b, numTerms) {
     
     if (a <= 1.0) return { re: NaN, im: NaN }; 
     let sum_s = { re: 0, im: 0 };
+    ensureZetaLogIntegerCache(numTerms);
     for (let n = 1; n <= numTerms; n++) {
-        const term = complexPow(n, 0, -a, -b); 
+        const term = complexPositiveRealPowFromLog(zetaLogIntegerCache[n], -a, -b);
         sum_s = complexAdd(sum_s, term);
     }
     return sum_s;
@@ -168,9 +192,10 @@ function complexRiemannZeta_EtaSeries(a, b, numTerms) {
     
     if(a === 1 && b === 0) return {re: Infinity, im: NaN}; 
 
+    ensureZetaLogIntegerCache(numTerms);
     let eta_s = {re: 0, im: 0};
     for(let n = 1; n <= numTerms; n++){
-        const n_pow_minus_s = complexPow(n, 0, -a, -b); 
+        const n_pow_minus_s = complexPositiveRealPowFromLog(zetaLogIntegerCache[n], -a, -b);
         let term = n_pow_minus_s;
         if((n - 1) % 2 !== 0){ 
             term = complexScalarMul(-1, term);
@@ -178,8 +203,7 @@ function complexRiemannZeta_EtaSeries(a, b, numTerms) {
         eta_s = complexAdd(eta_s, term);
     }
     
-    const one_minus_s_exp = {re: 1 - a, im: -b};
-    const two_pow_one_minus_s = complexPow(2, 0, one_minus_s_exp.re, one_minus_s_exp.im);
+    const two_pow_one_minus_s = complexPositiveRealPowFromLog(LN_2, 1 - a, -b);
     const denominator = complexSub({re: 1, im: 0}, two_pow_one_minus_s);
 
     
@@ -224,12 +248,17 @@ function getZetaHasseBinomialRows(maxLevel) {
 function complexRiemannZeta_HasseSeries(a, b, numLevels) {
     if (a === 1 && b === 0) return { re: Infinity, im: NaN };
 
-    const denom = complexSub({ re: 1, im: 0 }, complexPow(2, 0, 1 - a, -b));
+    const denom = complexSub({ re: 1, im: 0 }, complexPositiveRealPowFromLog(LN_2, 1 - a, -b));
     if (Math.abs(denom.re) < 1e-14 && Math.abs(denom.im) < 1e-14) {
         return complexRiemannZeta_EtaSeries(a, b, NUM_ZETA_TERMS_ETA_SERIES);
     }
 
     const hasseRows = getZetaHasseBinomialRows(numLevels);
+    ensureZetaLogIntegerCache(numLevels + 1);
+    const negPowers = new Array(numLevels + 1);
+    for (let n = 1; n <= numLevels; n++) {
+        negPowers[n] = complexPositiveRealPowFromLog(zetaLogIntegerCache[n], -a, -b);
+    }
     let outerSum = { re: 0, im: 0 };
 
     for (let n = 0; n < numLevels; n++) {
@@ -238,7 +267,7 @@ function complexRiemannZeta_HasseSeries(a, b, numLevels) {
 
         for (let k = 0; k <= n; k++) {
             const coeff = ((k % 2 === 0) ? 1 : -1) * row[k];
-            const term = complexPow(k + 1, 0, -a, -b);
+            const term = negPowers[k + 1];
             innerSum.re += coeff * term.re;
             innerSum.im += coeff * term.im;
         }

@@ -273,7 +273,58 @@ function drawPlanarTransformedLine(ctx, planeParams, tf, z_pts, col) {
     ctx.lineCap = 'round';
     ctx.beginPath();let fV = true; let lastValidCanvasPoint = null;for (const z_pt of z_pts) {if (!z_pt || z_pt.re === undefined || z_pt.im === undefined) { if (!fV && lastValidCanvasPoint) ctx.stroke(); ctx.beginPath(); fV = true; lastValidCanvasPoint = null; continue;}let w;if (state.currentFunction === 'zeta' && !state.zetaContinuationEnabled && z_pt.re <= ZETA_REFLECTION_POINT_RE) {w = { re: NaN, im: NaN };} else {w = tf(z_pt.re, z_pt.im);}if (isNaN(w.re) || isNaN(w.im) || !isFinite(w.re) || !isFinite(w.im) ||Math.abs(w.re) > planeParams.xRange[1] * 10 || Math.abs(w.im) > planeParams.yRange[1] * 10) { if (!fV && lastValidCanvasPoint) {const edgePoint = findIntersectionWithViewport(lastValidCanvasPoint, {x: planeParams.origin.x + w.re * planeParams.scale.x, y: planeParams.origin.y - w.im * planeParams.scale.y}, planeParams);if (edgePoint) ctx.lineTo(edgePoint.x, edgePoint.y);ctx.stroke();}ctx.beginPath();fV = true;lastValidCanvasPoint = null;continue;}const p_c = mapToCanvasCoords(w.re, w.im, planeParams);if (fV) {ctx.moveTo(p_c.x, p_c.y);fV = false;} else {ctx.lineTo(p_c.x, p_c.y);}lastValidCanvasPoint = p_c;}if (!fV && lastValidCanvasPoint) {ctx.stroke();}}
 function findIntersectionWithViewport(p1, p2, planeParams) {const xmin = 0, xmax = planeParams.width;const ymin = 0, ymax = planeParams.height;let t = Infinity;if (p2.y < ymin && p1.y >= ymin) { t = Math.min(t, (ymin - p1.y) / (p2.y - p1.y)); }if (p2.y > ymax && p1.y <= ymax) { t = Math.min(t, (ymax - p1.y) / (p2.y - p1.y)); }if (p2.x < xmin && p1.x >= xmin) { t = Math.min(t, (xmin - p1.x) / (p2.x - p1.x)); }if (p2.x > xmax && p1.x <= xmax) { t = Math.min(t, (xmax - p1.x) / (p2.x - p1.x)); }if (isFinite(t) && t >= 0 && t <= 1) {return { x: p1.x + t * (p2.x - p1.x), y: p1.y + t * (p2.y - p1.y) };}return null;}
-function calculateDynamicPointsForSegment(p1_world, p2_world, tf) {const v_re = p2_world.re - p1_world.re;const v_im = p2_world.im - p1_world.im;const pole_to_p1_re = p1_world.re - ZETA_POLE.re;const pole_to_p1_im = p1_world.im - ZETA_POLE.im;let eval_point_for_tf;const dot_v_v = v_re * v_re + v_im * v_im;if (Math.abs(dot_v_v) < 1e-12) {eval_point_for_tf = p1_world;} else {const t_closest_line = -(pole_to_p1_re * v_re + pole_to_p1_im * v_im) / dot_v_v;eval_point_for_tf = {re: p1_world.re + t_closest_line * v_re,im: p1_world.im + t_closest_line * v_im};}if (state.currentFunction === 'zeta' && !state.zetaContinuationEnabled &&((p1_world.re <= ZETA_REFLECTION_POINT_RE && p2_world.re <= ZETA_REFLECTION_POINT_RE) || eval_point_for_tf.re <= ZETA_REFLECTION_POINT_RE)) {return MIN_POINTS_ADAPTIVE;}if (Math.abs(eval_point_for_tf.re - ZETA_POLE.re) < 1e-9 && Math.abs(eval_point_for_tf.im - ZETA_POLE.im) < 1e-9) {eval_point_for_tf = { re: ZETA_POLE.re + 1e-7, im: ZETA_POLE.im + 1e-7 };}let w_at_eval_point = tf(eval_point_for_tf.re, eval_point_for_tf.im);if (isNaN(w_at_eval_point.re) || isNaN(w_at_eval_point.im) ||!isFinite(w_at_eval_point.re) || !isFinite(w_at_eval_point.im)) {return MAX_POINTS_ADAPTIVE_DEFAULT;}const diameter_estimate = Math.sqrt(w_at_eval_point.re * w_at_eval_point.re + w_at_eval_point.im * w_at_eval_point.im);let num_points = Math.round(ADAPTIVE_ANCHOR_DENSITY * diameter_estimate);num_points = Math.min(MAX_POINTS_ADAPTIVE_DEFAULT, Math.max(MIN_POINTS_ADAPTIVE, num_points));return num_points;}
+function calculateDynamicPointsForSegment(p1_world, p2_world, tf) {
+    const v_re = p2_world.re - p1_world.re;
+    const v_im = p2_world.im - p1_world.im;
+    const pole_to_p1_re = p1_world.re - ZETA_POLE.re;
+    const pole_to_p1_im = p1_world.im - ZETA_POLE.im;
+    let eval_point_for_tf;
+    const dot_v_v = v_re * v_re + v_im * v_im;
+
+    if (Math.abs(dot_v_v) < 1e-12) {
+        eval_point_for_tf = p1_world;
+    } else {
+        const t_closest_line = -(pole_to_p1_re * v_re + pole_to_p1_im * v_im) / dot_v_v;
+        eval_point_for_tf = {
+            re: p1_world.re + t_closest_line * v_re,
+            im: p1_world.im + t_closest_line * v_im
+        };
+    }
+
+    const isLeftOfDirectSeriesBoundary = (
+        (p1_world.re <= ZETA_REFLECTION_POINT_RE && p2_world.re <= ZETA_REFLECTION_POINT_RE) ||
+        eval_point_for_tf.re <= ZETA_REFLECTION_POINT_RE
+    );
+    if (state.currentFunction === 'zeta' && !state.zetaContinuationEnabled && isLeftOfDirectSeriesBoundary) {
+        return Math.max(240, Math.floor(MIN_POINTS_ADAPTIVE * 0.5));
+    }
+
+    if (Math.abs(eval_point_for_tf.re - ZETA_POLE.re) < 1e-9 && Math.abs(eval_point_for_tf.im - ZETA_POLE.im) < 1e-9) {
+        eval_point_for_tf = { re: ZETA_POLE.re + 1e-7, im: ZETA_POLE.im + 1e-7 };
+    }
+
+    const w_at_eval_point = tf(eval_point_for_tf.re, eval_point_for_tf.im);
+    if (isNaN(w_at_eval_point.re) || isNaN(w_at_eval_point.im) || !isFinite(w_at_eval_point.re) || !isFinite(w_at_eval_point.im)) {
+        return Math.max(1800, Math.floor(MAX_POINTS_ADAPTIVE_DEFAULT * 0.6));
+    }
+
+    const isInteracting = !!(
+        (state.panStateZ && state.panStateZ.isPanning) ||
+        (state.panStateW && state.panStateW.isPanning) ||
+        state.particleAnimationEnabled
+    );
+    const baseMinPoints = Math.max(700, Math.floor(MIN_POINTS_ADAPTIVE * 0.58));
+    const baseMaxPoints = Math.max(3500, Math.floor(MAX_POINTS_ADAPTIVE_DEFAULT * 0.6));
+    const baseAnchorDensity = Math.max(360, Math.floor(ADAPTIVE_ANCHOR_DENSITY * 0.65));
+    const minPoints = isInteracting ? 240 : baseMinPoints;
+    const maxPoints = isInteracting ? 2200 : baseMaxPoints;
+    const anchorDensity = isInteracting ? 220 : baseAnchorDensity;
+
+    const diameter_estimate = Math.sqrt(w_at_eval_point.re * w_at_eval_point.re + w_at_eval_point.im * w_at_eval_point.im);
+    let num_points = Math.round(anchorDensity * diameter_estimate);
+    num_points = Math.min(maxPoints, Math.max(minPoints, num_points));
+    return num_points;
+}
 
 
 function drawTransformedCartesianGrid(ctx, planeParams, tf) {

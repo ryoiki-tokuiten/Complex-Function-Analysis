@@ -10,6 +10,9 @@ function setupDOMReferences() {
     if (typeof initializeWebGLLineSupport === 'function') {
         initializeWebGLLineSupport();
     }
+    if (typeof initializeWebGLDomainColoringSupport === 'function') {
+        initializeWebGLDomainColoringSupport();
+    }
     controls.zCanvasCard = document.getElementById('z_plane_column'); 
     controls.wCanvasCard = document.getElementById('w_plane_column'); 
     controls.toggleFullscreenZBtn = document.getElementById('toggle_fullscreen_z_btn'); controls.toggleFullscreenWBtn = document.getElementById('toggle_fullscreen_w_btn');

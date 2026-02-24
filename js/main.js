@@ -35,7 +35,10 @@ function requestRedrawAll(){
                 redrawRequest = null;
 
                 
-                if (state.particleAnimationEnabled) {
+                if (state.particleAnimationEnabled || (state.webglGpuStressMode && state.domainColoringEnabled)) {
+                    if (state.webglGpuStressMode && state.domainColoringEnabled) {
+                        domainColoringDirty = true;
+                    }
                     requestRedrawAll();
                 }
             } catch (error) {

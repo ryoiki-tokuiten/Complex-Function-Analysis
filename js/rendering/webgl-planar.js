@@ -43,6 +43,27 @@ function createWebGLProgram(gl, vertexSource, fragmentSource) {
     return program;
 }
 
+function getWebGLLineBackendInfo(gl) {
+    if (!gl) return null;
+    const info = {
+        vendor: gl.getParameter(gl.VENDOR),
+        renderer: gl.getParameter(gl.RENDERER),
+        version: gl.getParameter(gl.VERSION),
+        shadingLanguageVersion: gl.getParameter(gl.SHADING_LANGUAGE_VERSION),
+        unmaskedVendor: null, // Reserved for non-Firefox diagnostics; avoid deprecated WEBGL_debug_renderer_info.
+        unmaskedRenderer: null,
+        softwareBackend: false
+    };
+
+    const rendererString = `${info.renderer || ''}`.toLowerCase();
+    info.softwareBackend =
+        rendererString.includes('swiftshader') ||
+        rendererString.includes('llvmpipe') ||
+        rendererString.includes('softpipe') ||
+        rendererString.includes('software');
+    return info;
+}
+
 function createWebGLLineRenderer() {
     const canvas = document.createElement('canvas');
     const gl = canvas.getContext('webgl2', {
@@ -164,6 +185,7 @@ function createWebGLLineRenderer() {
     return {
         canvas,
         gl,
+        backendInfo: getWebGLLineBackendInfo(gl),
         program,
         textureProgram,
         positionBuffer,
@@ -774,6 +796,8 @@ function initializeWebGLLineSupport() {
     webglSupport.reason = 'disabled-or-unavailable';
     webglSupport.renderers.z = null;
     webglSupport.renderers.w = null;
+    webglSupport.diagnostics.z = null;
+    webglSupport.diagnostics.w = null;
 
     if (!state || !state.webglLineRenderingEnabled) {
         webglSupport.reason = 'disabled';
@@ -790,9 +814,22 @@ function initializeWebGLLineSupport() {
 
     webglSupport.renderers.z = rendererZ;
     webglSupport.renderers.w = rendererW;
+    webglSupport.diagnostics.z = rendererZ.backendInfo || null;
+    webglSupport.diagnostics.w = rendererW.backendInfo || null;
     webglSupport.available = true;
     webglSupport.reason = 'ready';
-    console.info('WebGL line rendering enabled.');
+    const diag = webglSupport.diagnostics.z || webglSupport.diagnostics.w;
+    if (diag) {
+        const rendererLabel = diag.unmaskedRenderer || diag.renderer || 'unknown renderer';
+        const vendorLabel = diag.unmaskedVendor || diag.vendor || 'unknown vendor';
+        if (diag.softwareBackend) {
+            console.warn(`WebGL line rendering is running on a software backend (${vendorLabel} | ${rendererLabel}).`);
+        } else {
+            console.info(`WebGL line rendering enabled on ${vendorLabel} | ${rendererLabel}.`);
+        }
+    } else {
+        console.info('WebGL line rendering enabled.');
+    }
 }
 
 function getWebGLRendererForPlane(planeKey) {
@@ -852,7 +889,7 @@ function drawWithWebGLRaster(ctx, planeParams, planeKey, drawCallback, options =
         const requestedRenderScale = (typeof renderScaleOverride === 'number' && renderScaleOverride > 0)
             ? renderScaleOverride
             : getWebGLSupersampleScale();
-        const directDrawIfNativeScale = !(options && typeof options === 'object' && options.directDrawIfNativeScale === false);
+        const directDrawIfNativeScale = !!(options && typeof options === 'object' && options.directDrawIfNativeScale === true);
         if (directDrawIfNativeScale && requestedRenderScale <= 1.001) {
             drawCallback(ctx);
             return true;
@@ -898,13 +935,6 @@ function canUseWebGLForPlanarInputShape() {
 }
 
 function drawPlanarTransformedShapeHybrid(ctx, planeParams, tf, planeKey) {
-    if (planeKey === 'w') {
-        const renderedByNativeRaster = drawWithWebGLRaster(ctx, planeParams, planeKey, (rasterCtx) => {
-            drawPlanarTransformedShape(rasterCtx, planeParams, tf);
-        }, { renderScaleOverride: 1 });
-        if (renderedByNativeRaster) return true;
-    }
-
     const captureDisabledByRadialSteps = state.radialDiscreteStepsEnabled && state.currentFunction !== 'poincare';
     const captureDisabledByLineMode = state.currentInputShape === 'line' && (state.currentFunction === 'cos' || state.currentFunction === 'sin');
     const canUseCapture = !captureDisabledByRadialSteps && !captureDisabledByLineMode;
@@ -918,7 +948,7 @@ function drawPlanarTransformedShapeHybrid(ctx, planeParams, tf, planeKey) {
 
     return drawWithWebGLRaster(ctx, planeParams, planeKey, (rasterCtx) => {
         drawPlanarTransformedShape(rasterCtx, planeParams, tf);
-    }, { renderScaleOverride: 1 });
+    }, { renderScaleOverride: 1, directDrawIfNativeScale: false });
 }
 
 function drawPlanarInputShapeHybrid(ctx, planeParams, planeKey) {
@@ -931,5 +961,5 @@ function drawPlanarInputShapeHybrid(ctx, planeParams, planeKey) {
 
     return drawWithWebGLRaster(ctx, planeParams, planeKey, (rasterCtx) => {
         drawPlanarInputShape(rasterCtx, planeParams);
-    }, { renderScaleOverride: 1 });
+    }, { renderScaleOverride: 1, directDrawIfNativeScale: false });
 }
