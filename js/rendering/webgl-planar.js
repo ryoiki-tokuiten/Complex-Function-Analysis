@@ -898,13 +898,6 @@ function canUseWebGLForPlanarInputShape() {
 }
 
 function drawPlanarTransformedShapeHybrid(ctx, planeParams, tf, planeKey) {
-    if (planeKey === 'w') {
-        const renderedByNativeRaster = drawWithWebGLRaster(ctx, planeParams, planeKey, (rasterCtx) => {
-            drawPlanarTransformedShape(rasterCtx, planeParams, tf);
-        }, { renderScaleOverride: 1 });
-        if (renderedByNativeRaster) return true;
-    }
-
     const captureDisabledByRadialSteps = state.radialDiscreteStepsEnabled && state.currentFunction !== 'poincare';
     const captureDisabledByLineMode = state.currentInputShape === 'line' && (state.currentFunction === 'cos' || state.currentFunction === 'sin');
     const canUseCapture = !captureDisabledByRadialSteps && !captureDisabledByLineMode;
