@@ -22,6 +22,7 @@ function updateSliderLabelsAndDisplay() {
             const isPolyFunc = state.currentFunction === 'polynomial';
             const isStripH = state.currentInputShape === 'strip_horizontal';
             const isSectorA = state.currentInputShape === 'sector_angular';
+            const isImage = state.currentInputShape === 'image';
 
             const showCommonParams = isLine || isCircle || isEllipse || isHyperbola;
             controls.commonParamsSliders.classList.toggle('hidden', !showCommonParams);
@@ -37,15 +38,26 @@ function updateSliderLabelsAndDisplay() {
             }
             controls.stripHorizontalParamsSliders.classList.toggle('hidden', !isStripH);
             controls.sectorAngularParamsSliders.classList.toggle('hidden', !isSectorA);
+            
+            const imageControlsDiv = document.getElementById('image_upload_controls');
+            if (imageControlsDiv) {
+                imageControlsDiv.classList.toggle('hidden', !isImage);
+            }
 
-            if (showCommonParams) {
+            if (showCommonParams || isImage) {
                 if (isLine) {
                     if (controls.a0LabelDesc) controls.a0LabelDesc.innerHTML = `Fixed Re(z) (<code>a<sub>0</sub></code>):`;
                     if (controls.b0LabelDesc) controls.b0LabelDesc.innerHTML = `Fixed Im(z) (<code>b<sub>0</sub></code>):`;
+                } else if (isImage) {
+                    if (controls.a0LabelDesc) controls.a0LabelDesc.innerHTML = `Image Center Re (<code>a<sub>0</sub></code>):`;
+                    if (controls.b0LabelDesc) controls.b0LabelDesc.innerHTML = `Image Center Im (<code>b<sub>0</sub></code>):`;
                 } else {
                     if (controls.a0LabelDesc) controls.a0LabelDesc.innerHTML = `Center Re(z<sub>0</sub>) (<code>a<sub>0</sub></code>):`;
                     if (controls.b0LabelDesc) controls.b0LabelDesc.innerHTML = `Center Im(z<sub>0</sub>) (<code>b<sub>0</sub></code>):`;
                 }
+                
+                // Ensure commonParamsSliders is visible for image
+                controls.commonParamsSliders.classList.toggle('hidden', false);
             }
 
             sliderParamKeys.forEach(k => {
@@ -364,6 +376,7 @@ function updateTitlesAndGlobalUI() {
     else if (state.currentInputShape === 'grid_logpolar') zPlaneTitleText += ": Log-Polar Grid)";
     else if (state.currentInputShape === 'strip_horizontal') zPlaneTitleText += ": Horiz. Strip)";
     else if (state.currentInputShape === 'sector_angular') zPlaneTitleText += ": Ang. Sector)";
+    else if (state.currentInputShape === 'image') zPlaneTitleText += ": Image)";
     else if (state.currentInputShape === 'empty_grid') zPlaneTitleText += ": Empty)";
     else zPlaneTitleText += ")"; 
     if (state.vectorFieldEnabled && (!state.riemannSphereViewEnabled || state.splitViewEnabled)) zPlaneTitleText = "z-plane (Vector Field: " + state.vectorFieldFunction + ")";

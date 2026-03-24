@@ -158,7 +158,26 @@ function drawPlanarInputShape(ctx,planeParams){
     ctx.save();
     ctx.lineJoin = 'round';
     ctx.lineCap = 'round';
-    let scX=0,scY=0;if (state.currentInputShape === 'line' || state.currentInputShape === 'circle' || state.currentInputShape === 'ellipse' || state.currentInputShape === 'hyperbola') {scX = state.a0;scY = state.b0;}let inputShapeToDraw=state.currentInputShape;let radiusToUse=state.circleR;ctx.lineWidth = (state.cauchyIntegralModeEnabled && (inputShapeToDraw === 'circle' || inputShapeToDraw === 'ellipse')) ? 3.5 : 2.5;ctx.strokeStyle = (state.cauchyIntegralModeEnabled && (inputShapeToDraw === 'circle' || inputShapeToDraw === 'ellipse')) ? COLOR_CAUCHY_CONTOUR_Z : COLOR_INPUT_SHAPE_Z;if(inputShapeToDraw==='grid_cartesian'){
+    let inputShapeToDraw=state.currentInputShape;let radiusToUse=state.circleR;ctx.lineWidth = (state.cauchyIntegralModeEnabled && (inputShapeToDraw === 'circle' || inputShapeToDraw === 'ellipse')) ? 3.5 : 2.5;ctx.strokeStyle = (state.cauchyIntegralModeEnabled && (inputShapeToDraw === 'circle' || inputShapeToDraw === 'ellipse')) ? COLOR_CAUCHY_CONTOUR_Z : COLOR_INPUT_SHAPE_Z;
+    if (inputShapeToDraw === 'image') {
+        if (typeof drawImageWithWebGL === 'function' && drawImageWithWebGL(ctx, planeParams, false)) {
+            // WebGL rendering successful
+        } else if (state.imagePoints && state.imagePoints.length > 0) {
+            ctx.globalAlpha = state.imageOpacity || 1.0;
+            const size = state.imageSize || 2.0;
+            const cx = state.a0 || 0;
+            const cy = state.b0 || 0;
+            for (let i = 0; i < state.imagePoints.length; i++) {
+                const pt = state.imagePoints[i];
+                const re = cx + pt.nx * (size / 2);
+                const im = cy + pt.ny * (size / 2);
+                const p_c = mapToCanvasCoords(re, im, planeParams);
+                ctx.fillStyle = pt.color;
+                ctx.fillRect(p_c.x - 1, p_c.y - 1, 2, 2); // 2x2 px dots
+            }
+            ctx.globalAlpha = 1.0;
+        }
+    } else if(inputShapeToDraw==='grid_cartesian'){
     ctx.lineWidth = 1.5;
     ctx.lineJoin = 'round';
     ctx.lineCap = 'round';
@@ -182,7 +201,7 @@ function drawPlanarInputShape(ctx,planeParams){
     ctx.lineWidth = 2.5;
     ctx.lineJoin = 'round';
     ctx.lineCap = 'round';
-    ctx.strokeStyle=COLOR_INPUT_SHAPE_Z; ctx.beginPath();const yb0c=mapToCanvasCoords(0,scY,planeParams).y,xminc=mapToCanvasCoords(planeParams.currentVisXRange[0],scY,planeParams).x,xmaxc=mapToCanvasCoords(planeParams.currentVisXRange[1],scY,planeParams).x;ctx.moveTo(xminc,yb0c);ctx.lineTo(xmaxc,yb0c);ctx.stroke();ctx.strokeStyle=COLOR_INPUT_LINE_IM_Z; ctx.beginPath();const xa0c=mapToCanvasCoords(scX,0,planeParams).x,yminc=mapToCanvasCoords(scX,planeParams.currentVisYRange[0],planeParams).y,ymaxc=mapToCanvasCoords(scX,planeParams.currentVisYRange[1],planeParams).y;ctx.moveTo(xa0c,yminc);ctx.lineTo(xa0c,ymaxc);ctx.stroke();} else{ ctx.beginPath();let fPt=true;const getPts=(s)=>{let p=[];if(s==='circle'){for(let i=0;i<=NUM_POINTS_CURVE;++i){const t=(i/NUM_POINTS_CURVE)*2*Math.PI;p.push({x:scX+radiusToUse*Math.cos(t),y:scY+radiusToUse*Math.sin(t)});}}else if(s==='ellipse'){for(let i=0;i<=NUM_POINTS_CURVE;++i){const t=(i/NUM_POINTS_CURVE)*2*Math.PI;p.push({x:scX+state.ellipseA*Math.cos(t),y:scY+state.ellipseB*Math.sin(t)});}}else if(s==='hyperbola'){const UM=2.5;for(let i=0;i<=NUM_POINTS_CURVE/2;++i){const u=(i/(NUM_POINTS_CURVE/2))*UM-UM/2;p.push({x:scX+state.hyperbolaA*cosh(u),y:scY+state.hyperbolaB*sinh(u)});}p.push(null);for(let i=0;i<=NUM_POINTS_CURVE/2;++i){const u=(i/(NUM_POINTS_CURVE/2))*UM-UM/2;p.push({x:scX-state.hyperbolaA*cosh(u),y:scY+state.hyperbolaB*sinh(u)});}}return p;};getPts(inputShapeToDraw).forEach(pt=>{if(!pt){ctx.stroke();ctx.beginPath();fPt=true;return;}const p_canvas=mapToCanvasCoords(pt.x,pt.y,planeParams);if(fPt){ctx.moveTo(p_canvas.x,p_canvas.y);fPt=false;}else{ctx.lineTo(p_canvas.x,p_canvas.y);}});ctx.stroke();}
+    ctx.strokeStyle=COLOR_INPUT_SHAPE_Z; ctx.beginPath();const yb0c=mapToCanvasCoords(0,scY,planeParams).y,xminc=mapToCanvasCoords(planeParams.currentVisXRange[0],scY,planeParams).x,xmaxc=mapToCanvasCoords(planeParams.currentVisXRange[1],scY,planeParams).x;ctx.moveTo(xminc,yb0c);ctx.lineTo(xmaxc,yb0c);ctx.stroke();ctx.strokeStyle=COLOR_INPUT_LINE_IM_Z; ctx.beginPath();const xa0c=mapToCanvasCoords(scX,0,planeParams).x,yminc=mapToCanvasCoords(scX,planeParams.currentVisYRange[0],planeParams).y,ymaxc=mapToCanvasCoords(scX,planeParams.currentVisYRange[1],planeParams).y;ctx.moveTo(xa0c,yminc);ctx.lineTo(xa0c,ymaxc);ctx.stroke();} else if (inputShapeToDraw !== 'image'){ ctx.beginPath();let fPt=true;let scX = state.a0 || 0; let scY = state.b0 || 0; const getPts=(s)=>{let p=[];if(s==='circle'){for(let i=0;i<=NUM_POINTS_CURVE;++i){const t=(i/NUM_POINTS_CURVE)*2*Math.PI;p.push({x:scX+radiusToUse*Math.cos(t),y:scY+radiusToUse*Math.sin(t)});}}else if(s==='ellipse'){for(let i=0;i<=NUM_POINTS_CURVE;++i){const t=(i/NUM_POINTS_CURVE)*2*Math.PI;p.push({x:scX+state.ellipseA*Math.cos(t),y:scY+state.ellipseB*Math.sin(t)});}}else if(s==='hyperbola'){const UM=2.5;for(let i=0;i<=NUM_POINTS_CURVE/2;++i){const u=(i/(NUM_POINTS_CURVE/2))*UM-UM/2;p.push({x:scX+state.hyperbolaA*cosh(u),y:scY+state.hyperbolaB*sinh(u)});}p.push(null);for(let i=0;i<=NUM_POINTS_CURVE/2;++i){const u=(i/(NUM_POINTS_CURVE/2))*UM-UM/2;p.push({x:scX-state.hyperbolaA*cosh(u),y:scY+state.hyperbolaB*sinh(u)});}}return p;};getPts(inputShapeToDraw).forEach(pt=>{if(!pt){ctx.stroke();ctx.beginPath();fPt=true;return;}const p_canvas=mapToCanvasCoords(pt.x,pt.y,planeParams);if(fPt){ctx.moveTo(p_canvas.x,p_canvas.y);fPt=false;}else{ctx.lineTo(p_canvas.x,p_canvas.y);}});ctx.stroke();}
     if (state.radialDiscreteStepsEnabled && state.currentFunction !== 'poincare') {
         drawRadialDiscreteSteps(ctx, planeParams, state.currentFunction, state.radialDiscreteStepsCount);
     }
@@ -528,6 +547,28 @@ function drawPlanarTransformedShape(ctx, planeParams, tf) {
     else if (inputShape === 'line') drawTransformedLinesFixedReIm(ctx, planeParams, tf);
     else if (['circle', 'ellipse', 'hyperbola'].includes(inputShape)) {
         drawTransformedGeometricShape(ctx, planeParams, tf, inputShape, baseColor);
+    }
+    else if (inputShape === 'image') {
+        if (typeof drawImageWithWebGL === 'function' && drawImageWithWebGL(ctx, planeParams, true)) {
+            // WebGL drawn
+        } else if (state.imagePoints && state.imagePoints.length > 0) {
+            ctx.globalAlpha = state.imageOpacity || 1.0;
+            const size = state.imageSize || 2.0;
+            const cx = state.a0 || 0;
+            const cy = state.b0 || 0;
+            for (let i = 0; i < state.imagePoints.length; i++) {
+                const pt = state.imagePoints[i];
+                const re = cx + pt.nx * (size / 2);
+                const im = cy + pt.ny * (size / 2);
+                const w = tf(re, im);
+                if (w && isFinite(w.re) && isFinite(w.im)) {
+                    const p_c = mapToCanvasCoords(w.re, w.im, planeParams);
+                    ctx.fillStyle = pt.color;
+                    ctx.fillRect(p_c.x - 1, p_c.y - 1, 2, 2);
+                }
+            }
+            ctx.globalAlpha = 1.0;
+        }
     }
     ctx.restore();
 }

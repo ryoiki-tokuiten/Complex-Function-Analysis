@@ -138,6 +138,30 @@ function getSphereSourcePoints(inputShape, zPlaneParams, sphereCenterRe, sphereC
 }
 
 function drawSphereGridAndShape(ctx, cSP, cDOMP, isWP, tf = null) {
+    if (state.currentInputShape === 'image' && state.imagePoints && state.imagePoints.length > 0) {
+        const size = state.imageSize || 2.0;
+        const cx = state.a0 || 0;
+        const cy = state.b0 || 0;
+        ctx.globalAlpha = state.imageOpacity || 1.0;
+        for (let i = 0; i < state.imagePoints.length; i++) {
+            const pt = state.imagePoints[i];
+            const re = cx + pt.nx * (size / 2);
+            const im = cy + pt.ny * (size / 2);
+            let w = isWP ? (tf ? tf(re, im) : {re, im}) : {re, im};
+            if (!w || isNaN(w.re) || isNaN(w.im) || !isFinite(w.re) || !isFinite(w.im)) continue;
+
+            const spherePoint = complexToSphere(w.re, w.im);
+            const rotatedSpherePoint = rotate3D(spherePoint, cSP.rotX, cSP.rotY);
+            const p2d = projectSphereToCanvas2D(rotatedSpherePoint, cSP.centerX, cSP.centerY, cSP.radius);
+            if (p2d.isVisible) {
+                ctx.fillStyle = pt.color;
+                ctx.fillRect(p2d.x - 1, p2d.y - 1, 2, 2);
+            }
+        }
+        ctx.globalAlpha = 1.0;
+        return;
+    }
+
     const sphereCenterRe = (zPlaneParams.currentVisXRange[0] + zPlaneParams.currentVisXRange[1]) / 2;
     const sphereCenterIm = (zPlaneParams.currentVisYRange[0] + zPlaneParams.currentVisYRange[1]) / 2;
     const sphereRadius = Math.max(zPlaneParams.currentVisXRange[1]-sphereCenterRe, zPlaneParams.currentVisYRange[1]-sphereCenterIm);

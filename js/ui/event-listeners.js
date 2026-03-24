@@ -145,6 +145,106 @@ window.setupEventListeners = function () {
         }
     });
 
+    // Image Upload Events
+    const imageInput = document.getElementById('image_upload_input');
+    if (imageInput) {
+        imageInput.addEventListener('change', (e) => {
+            const file = e.target.files[0];
+            if (!file) return;
+            const reader = new FileReader();
+            reader.onload = function(evt) {
+                const img = new Image();
+                img.onload = function() {
+                    processUploadedImage(img);
+                };
+                img.src = evt.target.result;
+            };
+            reader.readAsDataURL(file);
+        });
+    }
+
+    const imgResSlider = document.getElementById('image_resolution_slider');
+    if (imgResSlider) {
+        imgResSlider.addEventListener('change', () => {
+            state.imageResolution = parseInt(imgResSlider.value, 10);
+            const valDisplay = document.getElementById('image_resolution_value_display');
+            if (valDisplay) valDisplay.textContent = state.imageResolution;
+            
+            // Re-process image if we have one
+            const file = imageInput?.files[0];
+            if (file) {
+                const reader = new FileReader();
+                reader.onload = function(evt) {
+                    const img = new Image();
+                    img.onload = function() { processUploadedImage(img); };
+                    img.src = evt.target.result;
+                };
+                reader.readAsDataURL(file);
+            }
+        });
+        imgResSlider.addEventListener('input', () => {
+            const valDisplay = document.getElementById('image_resolution_value_display');
+            if (valDisplay) valDisplay.textContent = imgResSlider.value;
+        });
+    }
+
+    const imgSizeSlider = document.getElementById('image_size_slider');
+    if (imgSizeSlider) {
+        imgSizeSlider.addEventListener('input', () => {
+            state.imageSize = parseFloat(imgSizeSlider.value);
+            const valDisplay = document.getElementById('image_size_value_display');
+            if (valDisplay) valDisplay.textContent = state.imageSize.toFixed(1);
+            domainColoringDirty = true;
+            requestRedrawAll();
+        });
+    }
+
+    const imgOpacitySlider = document.getElementById('image_opacity_slider');
+    if (imgOpacitySlider) {
+        imgOpacitySlider.addEventListener('input', () => {
+            state.imageOpacity = parseFloat(imgOpacitySlider.value);
+            const valDisplay = document.getElementById('image_opacity_value_display');
+            if (valDisplay) valDisplay.textContent = state.imageOpacity.toFixed(2);
+            domainColoringDirty = true;
+            requestRedrawAll();
+        });
+    }
+
+    // Helper to process image into point cloud
+    function processUploadedImage(img) {
+        state.uploadedImage = img;
+        const resolution = state.imageResolution || 300;
+        const cpuResolution = Math.min(resolution, 150); // Cap CPU array size
+        let w = img.width, h = img.height;
+        if (w > h) { h = Math.round(h * cpuResolution / w); w = cpuResolution; }
+        else { w = Math.round(w * cpuResolution / h); h = cpuResolution; }
+        
+        const canvas = document.createElement('canvas');
+        canvas.width = w; canvas.height = h;
+        const ctx = canvas.getContext('2d');
+        ctx.drawImage(img, 0, 0, w, h);
+        
+        const imgData = ctx.getImageData(0, 0, w, h);
+        state.imagePoints = [];
+        
+        for (let y = 0; y < h; y++) {
+            for (let x = 0; x < w; x++) {
+                const idx = (y * w + x) * 4;
+                const alpha = imgData.data[idx+3];
+                // Only store points that are visibly opaque
+                if (alpha > 20) {
+                    state.imagePoints.push({
+                        nx: ((x / (w - 1)) * 2 - 1), 
+                        ny: -((y / (h - 1)) * 2 - 1), 
+                        color: `rgba(${imgData.data[idx]},${imgData.data[idx+1]},${imgData.data[idx+2]},${alpha/255})`
+                    });
+                }
+            }
+        }
+        domainColoringDirty = true;
+        requestRedrawAll();
+    }
+
     if (controls.polynomialNSlider) {
         controls.polynomialNSlider.addEventListener('input', () => {
             try {

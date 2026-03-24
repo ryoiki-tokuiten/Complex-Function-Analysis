@@ -152,8 +152,13 @@ let state = {
     vectorFieldEnabled: false,
     vectorFieldFunction: 'f(z)',
     vectorFieldScale: 0.1,
-    streamlineFlowEnabled: false,
     manualSeedPoints: [], 
+
+    imagePoints: [],
+    imageResolution: 300,
+    imageSize: 2.0,
+    imageOpacity: 1.0,
+    uploadedImage: null,
 
     panStateZ: { isPanning: false, panStart: { x: 0, y: 0 }, panStartOrigin: { x: 0, y: 0 } },
     panStateW: { isPanning: false, panStart: { x: 0, y: 0 }, panStartOrigin: { x: 0, y: 0 } },

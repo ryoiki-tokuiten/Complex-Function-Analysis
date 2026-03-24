@@ -606,6 +606,40 @@
                     </div>
                 </div>
 
+                <div id="image_upload_controls" class="dependent-settings-block hidden">
+                    <div class="control-group">
+                        <label for="image_upload_input">Upload Image:</label>
+                        <input type="file" id="image_upload_input" accept="image/*" class="control-file-input">
+                    </div>
+                    <div class="control-group">
+                        <label for="image_resolution_slider">
+                            Resolution (pts):
+                            <output id="image_resolution_value_display">300</output>
+                        </label>
+                        <div class="slider-container">
+                            <input type="range" id="image_resolution_slider" name="image_resolution_slider" min="50" max="1000" step="10" value="300" data-tooltip="Set max resolution for image processing. Higher is prettier but slower.">
+                        </div>
+                    </div>
+                    <div class="control-group">
+                        <label for="image_size_slider">
+                            Image Base Size:
+                            <output id="image_size_value_display">2.0</output>
+                        </label>
+                        <div class="slider-container">
+                            <input type="range" id="image_size_slider" name="image_size_slider" min="0.5" max="10" step="0.1" value="2.0" data-tooltip="Set logical size of the image in the complex plane.">
+                        </div>
+                    </div>
+                    <div class="control-group">
+                        <label for="image_opacity_slider">
+                            Opacity:
+                            <output id="image_opacity_value_display">1.0</output>
+                        </label>
+                        <div class="slider-container">
+                            <input type="range" id="image_opacity_slider" name="image_opacity_slider" min="0.1" max="1.0" step="0.05" value="1.0" data-tooltip="Set transparency of the drawn image points.">
+                        </div>
+                    </div>
+                </div>
+
                 <div id="strip_horizontal_params_sliders" class="dependent-settings-block hidden">
                     <div class="control-group">
                         <label>Horizontal Strip Parameters:</label>
@@ -1305,6 +1339,7 @@
                                 <option value="hyperbola">Hyperbola</option>
                                 <option value="strip_horizontal">Strip (Horizontal)</option>
                                 <option value="sector_angular">Sector (Angular)</option>
+                                <option value="image">Image Upload</option>
                             </select>
                             <button id="toggle_fullscreen_z_btn"
                                 data-tooltip="Toggle fullscreen view for z-plane">Fullscreen</button>
@@ -1405,6 +1440,7 @@
     <script src="js/rendering/webgl-planar.js"></script>
     <script src="js/rendering/draw-sphere.js"></script>
     <script src="js/rendering/draw-plotly-sphere.js"></script> <!-- Added this line -->
+    <script src="js/rendering/draw-image-webgl.js"></script>
     <script src="js/rendering/renderer.js"></script>
 
     <!-- UI Modules -->
