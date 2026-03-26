@@ -1,4 +1,64 @@
 
+function bindSlider(controlKey, stateKey, parser = parseFloat, customCallback = null) {
+    const slider = controls[controlKey];
+    if (slider) {
+        slider.addEventListener('input', () => {
+            try {
+                state[stateKey] = parser(slider.value);
+                if (customCallback) {
+                    customCallback();
+                } else {
+                    // Update only specific things that need domain coloring recalculation
+                    const domainDirtyKeys = ['a0', 'b0', 'circleR', 'ellipseA', 'ellipseB', 'hyperbolaA', 'hyperbolaB', 'stripY1', 'stripY2', 'sectorAngle1', 'sectorAngle2', 'sectorRMin', 'sectorRMax'];
+                    if (domainDirtyKeys.includes(stateKey) || controlKey.startsWith('mobius') || controlKey.startsWith('domain') || stateKey === 'imageSize' || stateKey === 'imageOpacity' || stateKey === 'zPlaneZoom' || stateKey === 'wPlaneZoom' || stateKey === 'vectorFieldScale') {
+                        domainColoringDirty = true;
+                    }
+                    requestRedrawAll();
+                }
+            } catch (error) {
+                console.error(`Error in ${controlKey} input listener:`, error);
+            }
+        });
+    }
+}
+
+function bindCheckbox(controlKey, stateKey, customCallback = null) {
+    const checkbox = controls[controlKey];
+    if (checkbox) {
+        checkbox.addEventListener('change', (e) => {
+            try {
+                state[stateKey] = e.target.checked;
+                if (customCallback) {
+                    customCallback(e);
+                } else {
+                    requestRedrawAll();
+                }
+            } catch (error) {
+                console.error(`Error in ${controlKey} change listener:`, error);
+            }
+        });
+    }
+}
+
+function bindSelector(controlKey, stateKey, customCallback = null) {
+    const selector = controls[controlKey];
+    if (selector) {
+        selector.addEventListener('change', (e) => {
+            try {
+                state[stateKey] = e.target.value;
+                if (customCallback) {
+                    customCallback(e);
+                } else {
+                    domainColoringDirty = true;
+                    requestRedrawAll();
+                }
+            } catch (error) {
+                console.error(`Error in ${controlKey} change listener:`, error);
+            }
+        });
+    }
+}
+
 window.setupEventListeners = function () {
     sliderParamKeys.forEach(key => {
         if (controls[`${key}Slider`]) {
@@ -11,6 +71,44 @@ window.setupEventListeners = function () {
                     console.error(`Error in ${key}Slider input listener:`, error);
                 }
             });
+
+    const simpleSliders = [
+        { controlKey: 'stripY1Slider', stateKey: 'stripY1', parser: parseFloat },
+        { controlKey: 'stripY2Slider', stateKey: 'stripY2', parser: parseFloat },
+        { controlKey: 'sectorAngle1Slider', stateKey: 'sectorAngle1', parser: parseFloat },
+        { controlKey: 'sectorAngle2Slider', stateKey: 'sectorAngle2', parser: parseFloat },
+        { controlKey: 'sectorRMinSlider', stateKey: 'sectorRMin', parser: parseFloat },
+        { controlKey: 'sectorRMaxSlider', stateKey: 'sectorRMax', parser: parseFloat },
+        { controlKey: 'gridDensitySlider', stateKey: 'gridDensity', parser: parseInt },
+        { controlKey: 'neighborhoodSizeSlider', stateKey: 'probeNeighborhoodSize', parser: parseFloat },
+        { controlKey: 'vectorFieldScaleSlider', stateKey: 'vectorFieldScale', parser: parseFloat },
+        { controlKey: 'vectorArrowThicknessSlider', stateKey: 'vectorArrowThickness', parser: parseFloat },
+        { controlKey: 'vectorArrowHeadSizeSlider', stateKey: 'vectorArrowHeadSize', parser: parseFloat },
+        { controlKey: 'streamlineStepSizeSlider', stateKey: 'streamlineStepSize', parser: parseFloat },
+        { controlKey: 'streamlineMaxLengthSlider', stateKey: 'streamlineMaxLength', parser: parseInt },
+        { controlKey: 'streamlineThicknessSlider', stateKey: 'streamlineThickness', parser: parseFloat },
+        { controlKey: 'streamlineSeedDensityFactorSlider', stateKey: 'streamlineSeedDensityFactor', parser: parseFloat },
+        { controlKey: 'radialDiscreteStepsCountSlider', stateKey: 'radialDiscreteStepsCount', parser: parseInt },
+        { controlKey: 'plotlyGridDensitySlider', stateKey: 'plotlyGridDensity', parser: parseInt },
+        { controlKey: 'plotlySphereOpacitySlider', stateKey: 'plotlySphereOpacity', parser: parseFloat },
+        { controlKey: 'taylorSeriesOrderSlider', stateKey: 'taylorSeriesOrder', parser: parseInt },
+        { controlKey: 'particleSpeedSlider', stateKey: 'particleSpeed', parser: parseFloat },
+        { controlKey: 'particleMaxLifetimeSlider', stateKey: 'particleMaxLifetime', parser: parseInt },
+    ];
+    simpleSliders.forEach(s => bindSlider(s.controlKey, s.stateKey, s.parser));
+
+    const simpleCheckboxes = [
+        { controlKey: 'showZerosPolesCb', stateKey: 'showZerosPoles' },
+        { controlKey: 'showCriticalPointsCb', stateKey: 'showCriticalPoints' },
+        { controlKey: 'enableCauchyIntegralModeCb', stateKey: 'cauchyIntegralModeEnabled' },
+        { controlKey: 'laplaceShowROCCb', stateKey: 'laplaceShowROC' },
+        { controlKey: 'laplaceShowPolesZerosCb', stateKey: 'laplaceShowPolesZeros' },
+        { controlKey: 'laplaceShowFourierLineCb', stateKey: 'laplaceShowFourierLine' },
+        { controlKey: 'togglePlotlySphereGridCb', stateKey: 'showPlotlySphereGrid' },
+        { controlKey: 'toggleSphereAxesGridCb', stateKey: 'showSphereAxesAndGrid' },
+    ];
+    simpleCheckboxes.forEach(c => bindCheckbox(c.controlKey, c.stateKey));
+
             if (controls[`play_${key}Btn`] && controls[`speed_${key}Selector`]) {
                 controls[`play_${key}Btn`].addEventListener('click', () => {
                     try {
@@ -260,38 +358,11 @@ window.setupEventListeners = function () {
         });
     }
 
-    if (controls.togglePlotlySphereGridCb) {
-        controls.togglePlotlySphereGridCb.addEventListener('change', (e) => {
-            try {
-                state.showPlotlySphereGrid = e.target.checked;
-                requestRedrawAll();
-            } catch (error) {
-                console.error("Error in togglePlotlySphereGridCb change listener:", error);
-            }
-        });
-    }
 
-    if (controls.plotlyGridDensitySlider) {
-        controls.plotlyGridDensitySlider.addEventListener('input', () => {
-            try {
-                state.plotlyGridDensity = parseInt(controls.plotlyGridDensitySlider.value, 10);
-                requestRedrawAll();
-            } catch (error) {
-                console.error("Error in plotlyGridDensitySlider input listener:", error);
-            }
-        });
-    }
 
-    if (controls.plotlySphereOpacitySlider) {
-        controls.plotlySphereOpacitySlider.addEventListener('input', () => {
-            try {
-                state.plotlySphereOpacity = parseFloat(controls.plotlySphereOpacitySlider.value);
-                requestRedrawAll();
-            } catch (error) {
-                console.error("Error in plotlySphereOpacitySlider input listener:", error);
-            }
-        });
-    }
+
+
+
 
     controls.enableDomainColoringCb.addEventListener('change', (e) => {
         try {
@@ -333,42 +404,12 @@ window.setupEventListeners = function () {
     });
 
 
-    controls.gridDensitySlider.addEventListener('input', () => {
-        try {
-            state.gridDensity = parseInt(controls.gridDensitySlider.value);
-            requestRedrawAll();
-        } catch (error) {
-            console.error("Error in gridDensitySlider input listener:", error);
-        }
-    });
 
-    controls.showZerosPolesCb.addEventListener('change', (e) => {
-        try {
-            state.showZerosPoles = e.target.checked;
-            requestRedrawAll();
-        } catch (error) {
-            console.error("Error in showZerosPolesCb change listener:", error);
-        }
-    });
-    controls.showCriticalPointsCb.addEventListener('change', (e) => {
-        try {
-            state.showCriticalPoints = e.target.checked;
-            requestRedrawAll();
-        } catch (error) {
-            console.error("Error in showCriticalPointsCb change listener:", error);
-        }
-    });
 
-    if (controls.enableCauchyIntegralModeCb) {
-        controls.enableCauchyIntegralModeCb.addEventListener('change', (e) => {
-            try {
-                state.cauchyIntegralModeEnabled = e.target.checked;
-                requestRedrawAll();
-            } catch (error) {
-                console.error("Error in enableCauchyIntegralModeCb change listener:", error);
-            }
-        });
-    }
+
+
+
+
     if (controls.enableSplitViewCb) {
         controls.enableSplitViewCb.addEventListener('change', (e) => {
             try {
@@ -382,14 +423,7 @@ window.setupEventListeners = function () {
     }
 
 
-    controls.neighborhoodSizeSlider.addEventListener('input', () => {
-        try {
-            state.probeNeighborhoodSize = parseFloat(controls.neighborhoodSizeSlider.value);
-            requestRedrawAll();
-        } catch (error) {
-            console.error("Error in neighborhoodSizeSlider input listener:", error);
-        }
-    });
+
     controls.zPlaneZoomSlider.addEventListener('input', () => {
         try {
             state.zPlaneZoom = parseFloat(controls.zPlaneZoomSlider.value);
@@ -412,12 +446,12 @@ window.setupEventListeners = function () {
     });
 
 
-    if (controls.stripY1Slider) controls.stripY1Slider.addEventListener('input', () => { try { state.stripY1 = parseFloat(controls.stripY1Slider.value); requestRedrawAll(); } catch (e) { console.error("Error in stripY1Slider listener", e); } });
-    if (controls.stripY2Slider) controls.stripY2Slider.addEventListener('input', () => { try { state.stripY2 = parseFloat(controls.stripY2Slider.value); requestRedrawAll(); } catch (e) { console.error("Error in stripY2Slider listener", e); } });
-    if (controls.sectorAngle1Slider) controls.sectorAngle1Slider.addEventListener('input', () => { try { state.sectorAngle1 = parseFloat(controls.sectorAngle1Slider.value); requestRedrawAll(); } catch (e) { console.error("Error in sectorAngle1Slider listener", e); } });
-    if (controls.sectorAngle2Slider) controls.sectorAngle2Slider.addEventListener('input', () => { try { state.sectorAngle2 = parseFloat(controls.sectorAngle2Slider.value); requestRedrawAll(); } catch (e) { console.error("Error in sectorAngle2Slider listener", e); } });
-    if (controls.sectorRMinSlider) controls.sectorRMinSlider.addEventListener('input', () => { try { state.sectorRMin = parseFloat(controls.sectorRMinSlider.value); requestRedrawAll(); } catch (e) { console.error("Error in sectorRMinSlider listener", e); } });
-    if (controls.sectorRMaxSlider) controls.sectorRMaxSlider.addEventListener('input', () => { try { state.sectorRMax = parseFloat(controls.sectorRMaxSlider.value); requestRedrawAll(); } catch (e) { console.error("Error in sectorRMaxSlider listener", e); } });
+
+
+
+
+
+
 
 
     controls.enableVectorFieldCb.addEventListener('change', (e) => {
@@ -438,34 +472,9 @@ window.setupEventListeners = function () {
             console.error("Error in vectorFieldFunctionSelector change listener:", error);
         }
     });
-    controls.vectorFieldScaleSlider.addEventListener('input', () => {
-        try {
-            state.vectorFieldScale = parseFloat(controls.vectorFieldScaleSlider.value);
-            requestRedrawAll();
-        } catch (error) {
-            console.error("Error in vectorFieldScaleSlider input listener:", error);
-        }
-    });
-    if (controls.vectorArrowThicknessSlider) {
-        controls.vectorArrowThicknessSlider.addEventListener('input', () => {
-            try {
-                state.vectorArrowThickness = parseFloat(controls.vectorArrowThicknessSlider.value);
-                requestRedrawAll();
-            } catch (error) {
-                console.error("Error in vectorArrowThicknessSlider input listener:", error);
-            }
-        });
-    }
-    if (controls.vectorArrowHeadSizeSlider) {
-        controls.vectorArrowHeadSizeSlider.addEventListener('input', () => {
-            try {
-                state.vectorArrowHeadSize = parseFloat(controls.vectorArrowHeadSizeSlider.value);
-                requestRedrawAll();
-            } catch (error) {
-                console.error("Error in vectorArrowHeadSizeSlider input listener:", error);
-            }
-        });
-    }
+
+
+
 
     const streamlineFlowCheckbox = controls.enableStreamlineFlowCb || document.getElementById('enable_streamline_flow_cb');
     if (streamlineFlowCheckbox) {
@@ -479,46 +488,10 @@ window.setupEventListeners = function () {
             }
         });
     }
-    if (controls.streamlineStepSizeSlider) {
-        controls.streamlineStepSizeSlider.addEventListener('input', () => {
-            try {
-                state.streamlineStepSize = parseFloat(controls.streamlineStepSizeSlider.value);
-                requestRedrawAll();
-            } catch (error) {
-                console.error("Error in streamlineStepSizeSlider input listener:", error);
-            }
-        });
-    }
-    if (controls.streamlineMaxLengthSlider) {
-        controls.streamlineMaxLengthSlider.addEventListener('input', () => {
-            try {
-                state.streamlineMaxLength = parseInt(controls.streamlineMaxLengthSlider.value);
-                requestRedrawAll();
-            } catch (error) {
-                console.error("Error in streamlineMaxLengthSlider input listener:", error);
-            }
-        });
-    }
-    if (controls.streamlineThicknessSlider) {
-        controls.streamlineThicknessSlider.addEventListener('input', () => {
-            try {
-                state.streamlineThickness = parseFloat(controls.streamlineThicknessSlider.value);
-                requestRedrawAll();
-            } catch (error) {
-                console.error("Error in streamlineThicknessSlider input listener:", error);
-            }
-        });
-    }
-    if (controls.streamlineSeedDensityFactorSlider) {
-        controls.streamlineSeedDensityFactorSlider.addEventListener('input', () => {
-            try {
-                state.streamlineSeedDensityFactor = parseFloat(controls.streamlineSeedDensityFactorSlider.value);
-                requestRedrawAll();
-            } catch (error) {
-                console.error("Error in streamlineSeedDensityFactorSlider input listener:", error);
-            }
-        });
-    }
+
+
+
+
 
     if (controls.enableRadialDiscreteStepsCb) {
         controls.enableRadialDiscreteStepsCb.addEventListener('change', (e) => {
@@ -533,16 +506,7 @@ window.setupEventListeners = function () {
         });
     }
 
-    if (controls.radialDiscreteStepsCountSlider) {
-        controls.radialDiscreteStepsCountSlider.addEventListener('input', () => {
-            try {
-                state.radialDiscreteStepsCount = parseInt(controls.radialDiscreteStepsCountSlider.value, 10);
-                requestRedrawAll();
-            } catch (error) {
-                console.error("Error in radialDiscreteStepsCountSlider input listener:", error);
-            }
-        });
-    }
+
 
 
     if (controls.enableRiemannSphereCb) {
@@ -596,17 +560,7 @@ window.setupEventListeners = function () {
         });
     }
 
-    if (controls.taylorSeriesOrderSlider) {
-        controls.taylorSeriesOrderSlider.addEventListener('input', () => {
-            try {
-                state.taylorSeriesOrder = parseInt(controls.taylorSeriesOrderSlider.value, 10);
 
-                requestRedrawAll();
-            } catch (error) {
-                console.error("Error in taylorSeriesOrderSlider input listener:", error);
-            }
-        });
-    }
 
     if (controls.enableTaylorSeriesCustomCenterCb) {
         controls.enableTaylorSeriesCustomCenterCb.addEventListener('change', (e) => {
@@ -829,16 +783,7 @@ window.setupEventListeners = function () {
         });
     }
 
-    if (controls.laplaceShowROCCb) {
-        controls.laplaceShowROCCb.addEventListener('change', (e) => {
-            try {
-                state.laplaceShowROC = e.target.checked;
-                requestRedrawAll();
-            } catch (error) {
-                console.error("Error in laplaceShowROCCb change listener:", error);
-            }
-        });
-    }
+
 
     if (controls.laplaceVizModeSelector) {
         controls.laplaceVizModeSelector.addEventListener('change', (e) => {
@@ -910,17 +855,7 @@ window.setupEventListeners = function () {
         });
     }
 
-    if (controls.laplaceShowPolesZerosCb) {
-        controls.laplaceShowPolesZerosCb.addEventListener('change', (e) => {
-            try {
-                state.laplaceShowPolesZeros = e.target.checked;
-                updateLaplace3DSurface();
-                requestRedrawAll();
-            } catch (error) {
-                console.error("Error in laplaceShowPolesZerosCb change listener:", error);
-            }
-        });
-    }
+
 
     if (controls.laplaceFindPolesZerosBtn) {
         controls.laplaceFindPolesZerosBtn.addEventListener('click', () => {
@@ -962,16 +897,7 @@ window.setupEventListeners = function () {
         });
     }
 
-    if (controls.laplaceShowFourierLineCb) {
-        controls.laplaceShowFourierLineCb.addEventListener('change', (e) => {
-            try {
-                state.laplaceShowFourierLine = e.target.checked;
-                requestRedrawAll();
-            } catch (error) {
-                console.error("Error in laplaceShowFourierLineCb change listener:", error);
-            }
-        });
-    }
+
 
 
     const sphereViewButtonActions = {
@@ -1415,26 +1341,8 @@ window.setupEventListeners = function () {
             }
         });
     }
-    if (controls.particleSpeedSlider) {
-        controls.particleSpeedSlider.addEventListener('input', () => {
-            try {
-                state.particleSpeed = parseFloat(controls.particleSpeedSlider.value);
-                requestRedrawAll();
-            } catch (error) {
-                console.error("Error in particleSpeedSlider input listener:", error);
-            }
-        });
-    }
-    if (controls.particleMaxLifetimeSlider) {
-        controls.particleMaxLifetimeSlider.addEventListener('input', () => {
-            try {
-                state.particleMaxLifetime = parseInt(controls.particleMaxLifetimeSlider.value);
-                requestRedrawAll();
-            } catch (error) {
-                console.error("Error in particleMaxLifetimeSlider input listener:", error);
-            }
-        });
-    }
+
+
 
 
 
@@ -1482,16 +1390,7 @@ window.setupEventListeners = function () {
         }
     });
 
-    if (controls.toggleSphereAxesGridCb) {
-        controls.toggleSphereAxesGridCb.addEventListener('change', (e) => {
-            try {
-                state.showSphereAxesAndGrid = e.target.checked;
-                requestRedrawAll();
-            } catch (error) {
-                console.error("Error in toggleSphereAxesGridCb change listener:", error);
-            }
-        });
-    }
+
 }
 
 

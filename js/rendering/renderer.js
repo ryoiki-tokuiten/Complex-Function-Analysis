@@ -50,8 +50,9 @@ function appendPointToCacheKey(parts, prefix, point) {
     parts.push(`${prefix}i:${toCacheKeyNumber(point.im)}`);
 }
 
-function buildWPlanarTransformedLayerCacheKey() {
-    const keyParts = [
+function buildPlanarLayerCacheKey(isWPlane) {
+    const params = isWPlane ? wPlaneParams : zPlaneParams;
+    let keyParts = [
         `f:${state.currentFunction}`,
         `shape:${state.currentInputShape}`,
         `grid:${state.gridDensity}`,
@@ -75,25 +76,60 @@ function buildWPlanarTransformedLayerCacheKey() {
         `zX1:${toCacheKeyNumber(zPlaneParams.currentVisXRange[1])}`,
         `zY0:${toCacheKeyNumber(zPlaneParams.currentVisYRange[0])}`,
         `zY1:${toCacheKeyNumber(zPlaneParams.currentVisYRange[1])}`,
-        `wOx:${toCacheKeyNumber(wPlaneParams.origin.x)}`,
-        `wOy:${toCacheKeyNumber(wPlaneParams.origin.y)}`,
-        `wSx:${toCacheKeyNumber(wPlaneParams.scale.x)}`,
-        `wSy:${toCacheKeyNumber(wPlaneParams.scale.y)}`,
-        `wW:${wPlaneParams.width}`,
-        `wH:${wPlaneParams.height}`
+        `Ox:${toCacheKeyNumber(params.origin.x)}`,
+        `Oy:${toCacheKeyNumber(params.origin.y)}`,
+        `Sx:${toCacheKeyNumber(params.scale.x)}`,
+        `Sy:${toCacheKeyNumber(params.scale.y)}`,
+        `W:${params.width}`,
+        `H:${params.height}`
     ];
 
-    appendPointToCacheKey(keyParts, 'mA', state.mobiusA);
-    appendPointToCacheKey(keyParts, 'mB', state.mobiusB);
-    appendPointToCacheKey(keyParts, 'mC', state.mobiusC);
-    appendPointToCacheKey(keyParts, 'mD', state.mobiusD);
-
-    const polyDegree = Math.max(0, Math.min(MAX_POLY_DEGREE, Number.isFinite(state.polynomialN) ? state.polynomialN : 0));
-    keyParts.push(`polyN:${polyDegree}`);
-    for (let i = 0; i <= polyDegree; i++) {
-        appendPointToCacheKey(keyParts, `p${i}`, (state.polynomialCoeffs && state.polynomialCoeffs[i]) ? state.polynomialCoeffs[i] : null);
+    if (isWPlane) {
+        appendPointToCacheKey(keyParts, 'mA', state.mobiusA);
+        appendPointToCacheKey(keyParts, 'mB', state.mobiusB);
+        appendPointToCacheKey(keyParts, 'mC', state.mobiusC);
+        appendPointToCacheKey(keyParts, 'mD', state.mobiusD);
+        const polyDegree = Math.max(0, Math.min(MAX_POLY_DEGREE, Number.isFinite(state.polynomialN) ? state.polynomialN : 0));
+        keyParts.push(`polyN:${polyDegree}`);
+        for (let i = 0; i <= polyDegree; i++) {
+            appendPointToCacheKey(keyParts, `p${i}`, (state.polynomialCoeffs && state.polynomialCoeffs[i]) ? state.polynomialCoeffs[i] : null);
+        }
     }
     return keyParts.join('|');
+}
+
+function buildWPlanarTransformedLayerCacheKey() {
+    return buildPlanarLayerCacheKey(true);
+}
+
+function buildZPlanarInputLayerCacheKey() {
+    return buildPlanarLayerCacheKey(false);
+}
+
+function ensurePlanarLayerCacheCanvas(cacheObj, width, height) {
+    if (width <= 0 || height <= 0) return null;
+    if (!cacheObj.canvas) {
+        cacheObj.canvas = document.createElement('canvas');
+        cacheObj.ctx = cacheObj.canvas.getContext('2d');
+        if (!cacheObj.ctx) {
+            cacheObj.canvas = null;
+            return null;
+        }
+    }
+    if (cacheObj.canvas.width !== width || cacheObj.canvas.height !== height) {
+        cacheObj.canvas.width = width;
+        cacheObj.canvas.height = height;
+        cacheObj.key = null;
+    }
+    return cacheObj.canvas;
+}
+
+function ensureWPlanarTransformedLayerCacheCanvas(width, height) {
+    return ensurePlanarLayerCacheCanvas(wPlanarTransformedLayerCache, width, height);
+}
+
+function ensureZPlanarInputLayerCacheCanvas(width, height) {
+    return ensurePlanarLayerCacheCanvas(zPlanarInputLayerCache, width, height);
 }
 
 function shouldUseWPlanarTransformedLayerCache() {
@@ -102,62 +138,6 @@ function shouldUseWPlanarTransformedLayerCache() {
     if (state.panStateZ && state.panStateZ.isPanning) return false;
     if (state.panStateW && state.panStateW.isPanning) return false;
     return true;
-}
-
-function ensureWPlanarTransformedLayerCacheCanvas(width, height) {
-    if (width <= 0 || height <= 0) return null;
-    if (!wPlanarTransformedLayerCache.canvas) {
-        wPlanarTransformedLayerCache.canvas = document.createElement('canvas');
-        wPlanarTransformedLayerCache.ctx = wPlanarTransformedLayerCache.canvas.getContext('2d');
-        if (!wPlanarTransformedLayerCache.ctx) {
-            wPlanarTransformedLayerCache.canvas = null;
-            return null;
-        }
-    }
-    if (
-        wPlanarTransformedLayerCache.canvas.width !== width ||
-        wPlanarTransformedLayerCache.canvas.height !== height
-    ) {
-        wPlanarTransformedLayerCache.canvas.width = width;
-        wPlanarTransformedLayerCache.canvas.height = height;
-        wPlanarTransformedLayerCache.key = null;
-    }
-    return wPlanarTransformedLayerCache.canvas;
-}
-
-function buildZPlanarInputLayerCacheKey() {
-    const keyParts = [
-        `f:${state.currentFunction}`,
-        `shape:${state.currentInputShape}`,
-        `grid:${state.gridDensity}`,
-        `zetaC:${state.zetaContinuationEnabled ? 1 : 0}`,
-        `radialD:${state.radialDiscreteStepsEnabled ? 1 : 0}`,
-        `radialN:${state.radialDiscreteStepsCount}`,
-        `a0:${toCacheKeyNumber(state.a0)}`,
-        `b0:${toCacheKeyNumber(state.b0)}`,
-        `circleR:${toCacheKeyNumber(state.circleR)}`,
-        `ellipseA:${toCacheKeyNumber(state.ellipseA)}`,
-        `ellipseB:${toCacheKeyNumber(state.ellipseB)}`,
-        `hyperbolaA:${toCacheKeyNumber(state.hyperbolaA)}`,
-        `hyperbolaB:${toCacheKeyNumber(state.hyperbolaB)}`,
-        `stripY1:${toCacheKeyNumber(state.stripY1)}`,
-        `stripY2:${toCacheKeyNumber(state.stripY2)}`,
-        `sectorA1:${toCacheKeyNumber(state.sectorAngle1)}`,
-        `sectorA2:${toCacheKeyNumber(state.sectorAngle2)}`,
-        `sectorRMin:${toCacheKeyNumber(state.sectorRMin)}`,
-        `sectorRMax:${toCacheKeyNumber(state.sectorRMax)}`,
-        `zX0:${toCacheKeyNumber(zPlaneParams.currentVisXRange[0])}`,
-        `zX1:${toCacheKeyNumber(zPlaneParams.currentVisXRange[1])}`,
-        `zY0:${toCacheKeyNumber(zPlaneParams.currentVisYRange[0])}`,
-        `zY1:${toCacheKeyNumber(zPlaneParams.currentVisYRange[1])}`,
-        `zOx:${toCacheKeyNumber(zPlaneParams.origin.x)}`,
-        `zOy:${toCacheKeyNumber(zPlaneParams.origin.y)}`,
-        `zSx:${toCacheKeyNumber(zPlaneParams.scale.x)}`,
-        `zSy:${toCacheKeyNumber(zPlaneParams.scale.y)}`,
-        `zW:${zPlaneParams.width}`,
-        `zH:${zPlaneParams.height}`
-    ];
-    return keyParts.join('|');
 }
 
 function shouldUseZPlanarInputLayerCache() {

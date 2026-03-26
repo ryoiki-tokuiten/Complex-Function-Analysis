@@ -24,12 +24,26 @@ function getHSLColor(ph, lM, bF = 1, brightness = 1.0, contrast = 1.0, lightness
     return `hsl(${h.toFixed(1)}, ${s_final * 100}%, ${l_final * 100}%)`;
 }
 
-function hslToRgb(hslStr){const m=hslStr.match(/hsl\((\d+\.?\d*), *(\d+\.?\d*)%, *(\d+\.?\d*)%\)/);if(!m)return{r:0,g:0,b:0};let h=parseFloat(m[1]),s=parseFloat(m[2])/100,l=parseFloat(m[3])/100;let c=(1-Math.abs(2*l-1))*s,x=c*(1-Math.abs((h/60)%2-1)),md=l-c/2,r=0,g=0,b=0;if(0<=h&&h<60){r=c;g=x;b=0;}else if(60<=h&&h<120){r=x;g=c;b=0;}else if(120<=h&&h<180){r=0;g=c;b=x;}else if(180<=h&&h<240){r=0;g=x;b=c;}else if(240<=h&&h<300){r=x;g=0;b=c;}else if(300<=h&&h<360){r=c;g=0;b=x;}return{r:Math.round((r+md)*255),g:Math.round((g+md)*255),b:Math.round((b+md)*255)};}
-
 function getDomainColorPlaneKey(targetCtx) {
     if (typeof zDomainColorCtx !== 'undefined' && targetCtx === zDomainColorCtx) return 'z';
     if (typeof wDomainColorCtx !== 'undefined' && targetCtx === wDomainColorCtx) return 'w';
     return 'z';
+}
+
+function calculateSphereLighting(N_cam, L_norm) {
+    const N_dot_L = N_cam.x * L_norm.x + N_cam.y * L_norm.y + N_cam.z * L_norm.z;
+    const diffuseFactor = Math.max(0, N_dot_L);
+    let specularFactor = 0;
+    if (N_dot_L > 0) {
+        const R_x = 2 * N_dot_L * N_cam.x - L_norm.x;
+        const R_y = 2 * N_dot_L * N_cam.y - L_norm.y;
+        const R_z = 2 * N_dot_L * N_cam.z - L_norm.z;
+        specularFactor = Math.pow(Math.max(0, R_z), SPHERE_TEXTURE_SHININESS_FACTOR);
+    }
+    const lightIntensity = SPHERE_TEXTURE_AMBIENT_INTENSITY +
+                           SPHERE_TEXTURE_DIFFUSE_INTENSITY * diffuseFactor +
+                           SPHERE_TEXTURE_SPECULAR_INTENSITY * specularFactor;
+    return Math.min(1.75, Math.max(0.1, lightIntensity));
 }
 
 function renderPlanarDomainColoring(tCtx,pP,isWPC,sTF){ 
@@ -136,28 +150,16 @@ function renderSphereDomainColoring(tCtx,cSP,cDOMP,isWPC,sTF){
                 const mod=Math.sqrt(valueToColor.re*valueToColor.re+valueToColor.im*valueToColor.im);
                 const logMod=Math.log(1+mod);
 
-                const N_dot_L = N_cam.x * L_norm.x + N_cam.y * L_norm.y + N_cam.z * L_norm.z;
-                const diffuseFactor = Math.max(0, N_dot_L);
-                let specularFactor = 0;
-                if (N_dot_L > 0) {
-                    const R_x = 2 * N_dot_L * N_cam.x - L_norm.x;
-                    const R_y = 2 * N_dot_L * N_cam.y - L_norm.y;
-                    const R_z = 2 * N_dot_L * N_cam.z - L_norm.z;
-                    specularFactor = Math.pow(Math.max(0, R_z), SPHERE_TEXTURE_SHININESS_FACTOR);
-                }
-                const lightIntensity = SPHERE_TEXTURE_AMBIENT_INTENSITY + 
-                                       SPHERE_TEXTURE_DIFFUSE_INTENSITY * diffuseFactor +
-                                       SPHERE_TEXTURE_SPECULAR_INTENSITY * specularFactor;
-                const clampedIntensity = Math.min(1.75, Math.max(0.1, lightIntensity));
-
+                const clampedIntensity = calculateSphereLighting(N_cam, L_norm);
                 const hslC = getHSLColor(phase, logMod, clampedIntensity, state.domainBrightness, state.domainContrast, state.domainLightnessCycles, state.domainSaturation);
-                const rgb=hslToRgb(hslC);
+                const m = hslC.match(/hsl\((\d+\.?\d*), *(\d+\.?\d*)%, *(\d+\.?\d*)%\)/);
+                const rgb = m ? hslToRgb(parseFloat(m[1])/360, parseFloat(m[2])/100, parseFloat(m[3])/100) : [0,0,0];
 
                 for(let dy=0;dy<det;dy++){
                     for(let dx=0;dx<det;dx++){
                         if(py+dy<h&&px+dx<w){
                             const idx=((py+dy)*w+(px+dx))*4;
-                            d[idx]=rgb.r;d[idx+1]=rgb.g;d[idx+2]=rgb.b;d[idx+3]=255;
+                            d[idx]=rgb[0];d[idx+1]=rgb[1];d[idx+2]=rgb[2];d[idx+3]=255;
                         }
                     }
                 }

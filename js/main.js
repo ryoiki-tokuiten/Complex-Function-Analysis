@@ -49,38 +49,9 @@ function requestRedrawAll(){
     }
 }
 
-function redrawAll(){
-    try {
-        const zIsPlanar = !state.riemannSphereViewEnabled || state.splitViewEnabled;
-        if(state.showZerosPoles && zIsPlanar && state.currentFunction !== 'poincare') findZerosAndPoles(); else { state.zeros = []; state.poles = [];}
-        if(state.showCriticalPoints && zIsPlanar && state.currentFunction !== 'poincare') findCriticalPoints(); else { state.criticalPoints = []; state.criticalValues = [];}
-
-        updateTaylorSeriesCenterAndRadius(); 
-        performCauchyAnalysis();
-        drawZPlaneContent();
-        drawWPlaneContent();
-        updateTitlesAndGlobalUI();
-        
-        // Handle Laplace 3D surface rendering
-        if (state.laplaceModeEnabled) {
-            const laplace3DColumn = document.getElementById('laplace_3d_column');
-            if (laplace3DColumn) {
-                laplace3DColumn.classList.remove('hidden');
-                if (typeof drawLaplace3DSurface === 'function') {
-                    drawLaplace3DSurface('laplace_3d_container');
-                }
-            }
-        } else {
-            const laplace3DColumn = document.getElementById('laplace_3d_column');
-            if (laplace3DColumn) {
-                laplace3DColumn.classList.add('hidden');
-            }
-        }
-        
-        domainColoringDirty = false;
-    } catch (error) {
-        console.error("Error during redraw (direct call):", error);
-    }
+// redrawAll is removed, requestRedrawAll is used everywhere instead
+function redrawAll() {
+    requestRedrawAll();
 }
 
 

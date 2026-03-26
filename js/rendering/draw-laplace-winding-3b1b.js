@@ -131,9 +131,9 @@ function drawLaplaceWindingPremium(ctx, signal, planeParams) {
     ctx.beginPath();
     ctx.rect(0, 0, W, topH);
     ctx.clip();
-    drawEnhancedGrid(ctx, topParams);
-    drawEnhancedAxes(ctx, topParams);
-    drawEnhancedSpiral(ctx, windingData, topParams, { r: 150, g: 200, b: 255 });
+    drawGrid(ctx, topParams);
+    drawAxes(ctx, topParams);
+    drawSpiral(ctx, windingData, topParams);
     ctx.strokeStyle = borderColor;
     ctx.lineWidth = 1.5;
     ctx.strokeRect(0, 0, W, topH);
@@ -148,9 +148,9 @@ function drawLaplaceWindingPremium(ctx, signal, planeParams) {
     ctx.beginPath();
     ctx.rect(0, botY, W, botH);
     ctx.clip();
-    drawEnhancedGrid(ctx, botParams);
-    drawEnhancedAxes(ctx, botParams);
-    drawTipToTailVectorsEnhanced(ctx, windingData, botParams);
+    drawGrid(ctx, botParams);
+    drawAxes(ctx, botParams);
+    drawTipToTailVectors(ctx, windingData, botParams, { style: 'enhanced', numVectors: 12, showLabels: (botParams.scale.x + botParams.scale.y) / 2 > 800 });
     ctx.strokeStyle = borderColor;
     ctx.lineWidth = 1.5;
     ctx.strokeRect(0, botY, W, botH);
@@ -258,15 +258,19 @@ function computeLaplaceWindingData(signal, sigma, omega) {
 }
 
 /**
- * Setup viewport for winding - SIMPLE initialization with better framing
+ * Setup viewport to show winding nicely - ONLY on first init, preserve pan/zoom after
  */
-function setupWindingViewportSplit(params, windingData) {
+function setupWindingViewport(planeParams, windingData, includeIntegral = false) {
+    if (planeParams.scale && planeParams.origin && !state.laplaceNeedViewportReset) {
+        updatePlaneViewportRanges(planeParams);
+        return;
+    }
+
     const points = windingData.points;
     if (points.length === 0) return;
 
-    // Find bounds of BOTH the spiral AND the integral result
-    let minReal = 0, maxReal = 0;
-    let minImag = 0, maxImag = 0;
+    let minReal = includeIntegral ? 0 : Infinity, maxReal = includeIntegral ? 0 : -Infinity;
+    let minImag = includeIntegral ? 0 : Infinity, maxImag = includeIntegral ? 0 : -Infinity;
 
     for (const pt of points) {
         minReal = Math.min(minReal, pt.real);
@@ -275,15 +279,15 @@ function setupWindingViewportSplit(params, windingData) {
         maxImag = Math.max(maxImag, pt.imag);
     }
 
-    // Include the integral result point
-    const integral = windingData.integral;
-    minReal = Math.min(minReal, integral.real);
-    maxReal = Math.max(maxReal, integral.real);
-    minImag = Math.min(minImag, integral.imag);
-    maxImag = Math.max(maxImag, integral.imag);
+    if (includeIntegral) {
+        const integral = windingData.integral;
+        minReal = Math.min(minReal, integral.real);
+        maxReal = Math.max(maxReal, integral.real);
+        minImag = Math.min(minImag, integral.imag);
+        maxImag = Math.max(maxImag, integral.imag);
+    }
 
-    // Add generous padding for visibility
-    const padding = 0.4;
+    const padding = includeIntegral ? 0.4 : 0.2;
     const rangeReal = maxReal - minReal;
     const rangeImag = maxImag - minImag;
 
@@ -292,7 +296,6 @@ function setupWindingViewportSplit(params, windingData) {
     minImag -= rangeImag * padding;
     maxImag += rangeImag * padding;
 
-    // Ensure reasonable minimum size (not too zoomed in)
     const minSize = 1.0;
     if (maxReal - minReal < minSize) {
         const center = (maxReal + minReal) / 2;
@@ -305,163 +308,39 @@ function setupWindingViewportSplit(params, windingData) {
         maxImag = center + minSize / 2;
     }
 
-    // Use same scale for X and Y to avoid distortion (like other panels)
-    const xSpan = maxReal - minReal;
-    const ySpan = maxImag - minImag;
-    const maxSpan = Math.max(xSpan, ySpan);
-
-    const scale = params.width / maxSpan;
-
-    // Center the view
-    const centerX = (minReal + maxReal) / 2;
-    const centerY = (minImag + maxImag) / 2;
-
-    params.scale = { x: scale, y: scale };
-    params.origin = {
-        x: params.width / 2 - centerX * scale,
-        y: params.height / 2 + centerY * scale
-    };
-    params.currentVisXRange = [centerX - maxSpan / 2, centerX + maxSpan / 2];
-    params.currentVisYRange = [centerY - maxSpan / 2, centerY + maxSpan / 2];
-}
-
-/**
- * Setup viewport to show winding nicely - ONLY on first init, preserve pan/zoom after
- */
-function setupWindingViewport(planeParams, windingData) {
-    // If already initialized with scale/origin, DON'T reset (preserve user pan/zoom)
-    if (planeParams.scale && planeParams.origin && !state.laplaceNeedViewportReset) {
-        // Just update the ranges based on current scale/origin
-        updatePlaneViewportRanges(planeParams);
-        return;
+    if (includeIntegral) {
+        const xSpan = maxReal - minReal;
+        const ySpan = maxImag - minImag;
+        const maxSpan = Math.max(xSpan, ySpan);
+        const scale = planeParams.width / maxSpan;
+        const centerX = (minReal + maxReal) / 2;
+        const centerY = (minImag + maxImag) / 2;
+        planeParams.scale = { x: scale, y: scale };
+        planeParams.origin = {
+            x: planeParams.width / 2 - centerX * scale,
+            y: planeParams.height / 2 + centerY * scale
+        };
+        planeParams.currentVisXRange = [centerX - maxSpan / 2, centerX + maxSpan / 2];
+        planeParams.currentVisYRange = [centerY - maxSpan / 2, centerY + maxSpan / 2];
+    } else {
+        planeParams.currentVisXRange = [minReal, maxReal];
+        planeParams.currentVisYRange = [minImag, maxImag];
+        planeParams.scale = {
+            x: planeParams.width / (maxReal - minReal),
+            y: planeParams.height / (maxImag - minImag)
+        };
+        planeParams.origin = {
+            x: -minReal * planeParams.scale.x,
+            y: planeParams.height + minImag * planeParams.scale.y
+        };
     }
-
-    const points = windingData.points;
-    if (points.length === 0) return;
-
-    // Find bounds
-    let minReal = Infinity, maxReal = -Infinity;
-    let minImag = Infinity, maxImag = -Infinity;
-
-    for (const pt of points) {
-        minReal = Math.min(minReal, pt.real);
-        maxReal = Math.max(maxReal, pt.real);
-        minImag = Math.min(minImag, pt.imag);
-        maxImag = Math.max(maxImag, pt.imag);
-    }
-
-    // Add padding
-    const rangeReal = maxReal - minReal;
-    const rangeImag = maxImag - minImag;
-    const padding = 0.2;
-
-    minReal -= rangeReal * padding;
-    maxReal += rangeReal * padding;
-    minImag -= rangeImag * padding;
-    maxImag += rangeImag * padding;
-
-    // Ensure reasonable minimum size
-    const minSize = 1;
-    if (maxReal - minReal < minSize) {
-        const center = (maxReal + minReal) / 2;
-        minReal = center - minSize / 2;
-        maxReal = center + minSize / 2;
-    }
-    if (maxImag - minImag < minSize) {
-        const center = (maxImag + minImag) / 2;
-        minImag = center - minSize / 2;
-        maxImag = center + minSize / 2;
-    }
-
-    planeParams.currentVisXRange = [minReal, maxReal];
-    planeParams.currentVisYRange = [minImag, maxImag];
-
-    const xSpan = maxReal - minReal;
-    const ySpan = maxImag - minImag;
-
-    planeParams.scale = {
-        x: planeParams.width / xSpan,
-        y: planeParams.height / ySpan
-    };
-    planeParams.origin = {
-        x: -minReal * planeParams.scale.x,
-        y: planeParams.height + minImag * planeParams.scale.y
-    };
-
-    // Clear reset flag
     state.laplaceNeedViewportReset = false;
 }
 
-/**
- * Draw subtle grid
- */
-function drawWindingGrid(ctx, planeParams) {
-    const xRange = planeParams.currentVisXRange;
-    const yRange = planeParams.currentVisYRange;
-
-    ctx.strokeStyle = 'rgba(40, 60, 80, 0.3)';
-    ctx.lineWidth = 0.5;
-
-    const xStart = Math.floor(xRange[0]);
-    const xEnd = Math.ceil(xRange[1]);
-    const yStart = Math.floor(yRange[0]);
-    const yEnd = Math.ceil(yRange[1]);
-
-    // Vertical lines
-    for (let x = xStart; x <= xEnd; x++) {
-        if (x === 0) continue;
-        const canvas = mapToCanvasCoords(x, 0, planeParams);
-        ctx.beginPath();
-        ctx.moveTo(canvas.x, 0);
-        ctx.lineTo(canvas.x, planeParams.height);
-        ctx.stroke();
-    }
-
-    // Horizontal lines
-    for (let y = yStart; y <= yEnd; y++) {
-        if (y === 0) continue;
-        const canvas = mapToCanvasCoords(0, y, planeParams);
-        ctx.beginPath();
-        ctx.moveTo(0, canvas.y);
-        ctx.lineTo(planeParams.width, canvas.y);
-        ctx.stroke();
-    }
+function setupWindingViewportSplit(params, windingData) {
+    setupWindingViewport(params, windingData, true);
 }
 
-/**
- * Draw axes with labels
- */
-function drawWindingAxes(ctx, planeParams) {
-    const origin = mapToCanvasCoords(0, 0, planeParams);
-
-    // X-axis (Real)
-    ctx.strokeStyle = 'rgba(100, 150, 200, 0.8)';
-    ctx.lineWidth = 2;
-    ctx.beginPath();
-    ctx.moveTo(0, origin.y);
-    ctx.lineTo(planeParams.width, origin.y);
-    ctx.stroke();
-
-    // Y-axis (Imaginary)
-    ctx.beginPath();
-    ctx.moveTo(origin.x, 0);
-    ctx.lineTo(origin.x, planeParams.height);
-    ctx.stroke();
-
-    // Axis labels
-    ctx.fillStyle = 'rgba(150, 180, 220, 0.9)';
-    ctx.font = 'italic 12px "SF Pro Text", sans-serif';
-    ctx.textAlign = 'right';
-    ctx.fillText('Re', planeParams.width - 10, origin.y - 8);
-    ctx.textAlign = 'left';
-    ctx.fillText('Im', origin.x + 8, 20);
-
-    // Origin dot
-    ctx.fillStyle = 'rgba(255, 255, 255, 0.9)';
-    ctx.beginPath();
-    ctx.arc(origin.x, origin.y, 4, 0, 2 * Math.PI);
-    ctx.fill();
-}
 
 /**
  * Draw the winding spiral path with progressive coloring (3b1b style!)

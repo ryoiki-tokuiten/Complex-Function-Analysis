@@ -1,21 +1,4 @@
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 function getPlotlyMappedData(transformFunc) {
     const traces = [];
     const currentInputShape = state.currentInputShape;
@@ -391,21 +374,3 @@ function getPlotlyDynamicGridTraces() {
     }
     return traces;
 }
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-

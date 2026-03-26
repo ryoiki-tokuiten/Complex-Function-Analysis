@@ -1,69 +1,3 @@
-function createWebGLShader(gl, shaderType, source) {
-    const shader = gl.createShader(shaderType);
-    if (!shader) return null;
-    gl.shaderSource(shader, source);
-    gl.compileShader(shader);
-    if (!gl.getShaderParameter(shader, gl.COMPILE_STATUS)) {
-        console.warn('WebGL shader compile error:', gl.getShaderInfoLog(shader));
-        gl.deleteShader(shader);
-        return null;
-    }
-    return shader;
-}
-
-function createWebGLProgram(gl, vertexSource, fragmentSource) {
-    const vertexShader = createWebGLShader(gl, gl.VERTEX_SHADER, vertexSource);
-    const fragmentShader = createWebGLShader(gl, gl.FRAGMENT_SHADER, fragmentSource);
-    if (!vertexShader || !fragmentShader) {
-        if (vertexShader) gl.deleteShader(vertexShader);
-        if (fragmentShader) gl.deleteShader(fragmentShader);
-        return null;
-    }
-
-    const program = gl.createProgram();
-    if (!program) {
-        gl.deleteShader(vertexShader);
-        gl.deleteShader(fragmentShader);
-        return null;
-    }
-
-    gl.attachShader(program, vertexShader);
-    gl.attachShader(program, fragmentShader);
-    gl.linkProgram(program);
-
-    gl.deleteShader(vertexShader);
-    gl.deleteShader(fragmentShader);
-
-    if (!gl.getProgramParameter(program, gl.LINK_STATUS)) {
-        console.warn('WebGL program link error:', gl.getProgramInfoLog(program));
-        gl.deleteProgram(program);
-        return null;
-    }
-
-    return program;
-}
-
-function getWebGLLineBackendInfo(gl) {
-    if (!gl) return null;
-    const info = {
-        vendor: gl.getParameter(gl.VENDOR),
-        renderer: gl.getParameter(gl.RENDERER),
-        version: gl.getParameter(gl.VERSION),
-        shadingLanguageVersion: gl.getParameter(gl.SHADING_LANGUAGE_VERSION),
-        unmaskedVendor: null, // Reserved for non-Firefox diagnostics; avoid deprecated WEBGL_debug_renderer_info.
-        unmaskedRenderer: null,
-        softwareBackend: false
-    };
-
-    const rendererString = `${info.renderer || ''}`.toLowerCase();
-    info.softwareBackend =
-        rendererString.includes('swiftshader') ||
-        rendererString.includes('llvmpipe') ||
-        rendererString.includes('softpipe') ||
-        rendererString.includes('software');
-    return info;
-}
-
 function createWebGLLineRenderer() {
     const canvas = document.createElement('canvas');
     const gl = canvas.getContext('webgl2', {
@@ -102,7 +36,7 @@ function createWebGLLineRenderer() {
         '}'
     ].join('\n');
 
-    const program = createWebGLProgram(gl, vertexSource, fragmentSource);
+    const program = createWebGLProgramShared(gl, vertexSource, fragmentSource);
     if (!program) return null;
 
     const texVertexSource = [
@@ -122,7 +56,7 @@ function createWebGLLineRenderer() {
         '  gl_FragColor = texture2D(u_texture, v_uv);',
         '}'
     ].join('\n');
-    const textureProgram = createWebGLProgram(gl, texVertexSource, texFragmentSource);
+    const textureProgram = createWebGLProgramShared(gl, texVertexSource, texFragmentSource);
     if (!textureProgram) {
         gl.deleteProgram(program);
         return null;
@@ -185,7 +119,7 @@ function createWebGLLineRenderer() {
     return {
         canvas,
         gl,
-        backendInfo: getWebGLLineBackendInfo(gl),
+        backendInfo: getWebGLBackendInfoShared(gl),
         program,
         textureProgram,
         positionBuffer,

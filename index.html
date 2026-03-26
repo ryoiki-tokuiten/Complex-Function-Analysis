@@ -6,6 +6,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Advanced Complex Function Visualization</title>
     <link rel="stylesheet" href="css/styles.css">
+    <link rel="stylesheet" href="css/control-sections.css">
     <script src="https://cdn.plot.ly/plotly-2.29.1.min.js"></script>
 </head>
 
@@ -56,23 +57,16 @@
                     style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; width: 100%;">
 
                     <!-- Signal Configuration Section -->
-                    <div
-                        style="background: linear-gradient(135deg, rgba(100,150,255,0.08), rgba(150,100,255,0.08)); padding: 14px; border-radius: 10px; border: 1px solid rgba(120,140,255,0.25);">
-                        <div
-                            style="color: rgba(150,200,255,1); font-weight: 700; font-size: 11px; text-transform: uppercase; letter-spacing: 0.8px; margin-bottom: 12px; opacity: 0.9; display: flex; align-items: center;">
-                            <div
-                                style="width: 3px; height: 14px; background: rgba(100,150,255,0.6); border-radius: 2px; margin-right: 8px;">
-                            </div>
+                    <div class="control-section fourier-signal">
+                        <div class="section-header">
+                            <div class="section-header-icon"></div>
                             Signal Configuration
                         </div>
 
                         <div class="control-group" style="margin-bottom: 8px;">
-                            <label for="fourier_function_selector"
-                                style="font-size: 10px; color: rgba(200,220,255,0.95); font-weight: 500;">Waveform
-                                Type</label>
+                            <label for="fourier_function_selector" class="slider-label">Waveform Type</label>
                             <select id="fourier_function_selector" name="fourier_function_selector"
-                                class="control-select" data-tooltip="Select the time domain signal type"
-                                style="margin-top: 3px; background: rgba(20,25,35,0.8); border: 1px solid rgba(100,150,255,0.3); color: rgba(200,220,255,1); padding: 5px 8px; border-radius: 5px; font-size: 11px;">
+                                class="control-select fourier-select" data-tooltip="Select the time domain signal type">
                                 <optgroup label="Basic Waves">
                                     <option value="sine">Sine Wave</option>
                                     <option value="cosine">Cosine Wave</option>
@@ -100,12 +94,9 @@
                         </div>
 
                         <div class="control-group" style="margin-bottom: 6px;">
-                            <label for="fourier_frequency_slider"
-                                style="font-size: 10px; color: rgba(180,200,240,0.9);">
+                            <label for="fourier_frequency_slider" class="slider-label">
                                 Frequency:
-                                <output id="fourier_frequency_value_display"
-                                    style="color: rgba(150,200,255,1); font-weight: 600; font-size: 11px;">1.0</output>
-                                Hz
+                                <output id="fourier_frequency_value_display" class="slider-value">1.0</output> Hz
                             </label>
                             <div class="slider-container">
                                 <input type="range" id="fourier_frequency_slider" name="fourier_frequency_slider"
@@ -115,11 +106,9 @@
                         </div>
 
                         <div class="control-group" style="margin-bottom: 0;">
-                            <label for="fourier_amplitude_slider"
-                                style="font-size: 10px; color: rgba(180,200,240,0.9);">
+                            <label for="fourier_amplitude_slider" class="slider-label">
                                 Amplitude:
-                                <output id="fourier_amplitude_value_display"
-                                    style="color: rgba(150,200,255,1); font-weight: 600; font-size: 11px;">1.0</output>
+                                <output id="fourier_amplitude_value_display" class="slider-value">1.0</output>
                             </label>
                             <div class="slider-container">
                                 <input type="range" id="fourier_amplitude_slider" name="fourier_amplitude_slider"
@@ -130,23 +119,16 @@
                     </div>
 
                     <!-- Sampling Parameters Section -->
-                    <div
-                        style="background: linear-gradient(135deg, rgba(100,180,200,0.06), rgba(100,200,180,0.06)); padding: 14px; border-radius: 10px; border: 1px solid rgba(100,180,200,0.2);">
-                        <div
-                            style="color: rgba(150,220,240,1); font-weight: 700; font-size: 11px; text-transform: uppercase; letter-spacing: 0.8px; margin-bottom: 12px; opacity: 0.9; display: flex; align-items: center;">
-                            <div
-                                style="width: 3px; height: 14px; background: rgba(100,180,200,0.6); border-radius: 2px; margin-right: 8px;">
-                            </div>
+                    <div class="control-section fourier-sampling">
+                        <div class="section-header">
+                            <div class="section-header-icon"></div>
                             Sampling Parameters
                         </div>
 
                         <div class="control-group" style="margin-bottom: 6px;">
-                            <label for="fourier_time_window_slider"
-                                style="font-size: 10px; color: rgba(180,220,240,0.9);">
+                            <label for="fourier_time_window_slider" class="slider-label">
                                 Time Window:
-                                <output id="fourier_time_window_value_display"
-                                    style="color: rgba(150,220,240,1); font-weight: 600; font-size: 11px;">4.0</output>
-                                s
+                                <output id="fourier_time_window_value_display" class="slider-value">4.0</output> s
                             </label>
                             <div class="slider-container">
                                 <input type="range" id="fourier_time_window_slider" name="fourier_time_window_slider"
@@ -156,10 +138,9 @@
                         </div>
 
                         <div class="control-group" style="margin-bottom: 0;">
-                            <label for="fourier_samples_slider" style="font-size: 10px; color: rgba(180,220,240,0.9);">
+                            <label for="fourier_samples_slider" class="slider-label">
                                 Samples:
-                                <output id="fourier_samples_value_display"
-                                    style="color: rgba(150,220,240,1); font-weight: 600; font-size: 11px;">128</output>
+                                <output id="fourier_samples_value_display" class="slider-value">128</output>
                             </label>
                             <div class="slider-container">
                                 <input type="range" id="fourier_samples_slider" name="fourier_samples_slider" min="32"
@@ -170,17 +151,11 @@
                         </div>
                     </div>
 
-                    <!-- Winding Analysis Section (The KEY Section!) -->
-                    <div
-                        style="background: linear-gradient(135deg, rgba(255,220,100,0.12), rgba(255,180,100,0.12)); padding: 14px; border-radius: 10px; border: 2px solid rgba(255,200,100,0.35); box-shadow: 0 0 15px rgba(255,200,100,0.15);">
-                        <div style="display: flex; align-items: center; margin-bottom: 12px;">
-                            <div
-                                style="width: 3px; height: 14px; background: linear-gradient(180deg, rgba(255,220,100,1), rgba(255,180,100,1)); border-radius: 2px; margin-right: 8px;">
-                            </div>
-                            <div
-                                style="color: rgba(255,230,180,1); font-weight: 700; font-size: 11px; text-transform: uppercase; letter-spacing: 0.8px;">
-                                Winding Analysis
-                            </div>
+                    <!-- Winding Analysis Section -->
+                    <div class="control-section fourier-winding">
+                        <div class="section-header">
+                            <div class="section-header-icon"></div>
+                            Winding Analysis
                         </div>
 
                         <div
@@ -192,12 +167,9 @@
                         </div>
 
                         <div class="control-group" style="margin-bottom: 8px;">
-                            <label for="fourier_winding_frequency_slider"
-                                style="font-size: 11px; color: rgba(255, 230, 180, 1); font-weight: 600;">
+                            <label for="fourier_winding_frequency_slider" class="slider-label" style="font-size: 11px;">
                                 Winding Freq:
-                                <output id="fourier_winding_frequency_value_display"
-                                    style="color: rgba(255, 245, 200, 1); font-weight: 700; font-size: 12px;">1.0</output>
-                                Hz
+                                <output id="fourier_winding_frequency_value_display" class="slider-value" style="font-size: 12px;">1.0</output> Hz
                             </label>
                             <div class="slider-container">
                                 <input type="range" id="fourier_winding_frequency_slider"
@@ -213,11 +185,9 @@
                         </div>
 
                         <div class="control-group" style="margin-bottom: 0;">
-                            <label for="fourier_winding_time_slider"
-                                style="font-size: 10px; color: rgba(255,220,180,0.9);">
+                            <label for="fourier_winding_time_slider" class="slider-label">
                                 Progress:
-                                <output id="fourier_winding_time_value_display"
-                                    style="color: rgba(255,230,180,1); font-weight: 600; font-size: 11px;">100</output>%
+                                <output id="fourier_winding_time_value_display" class="slider-value">100</output>%
                             </label>
                             <div class="slider-container">
                                 <input type="range" id="fourier_winding_time_slider" name="fourier_winding_time_slider"
@@ -234,23 +204,16 @@
                     style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; width: 100%;">
 
                     <!-- Signal Configuration Section -->
-                    <div
-                        style="background: linear-gradient(135deg, rgba(255,100,150,0.08), rgba(255,150,100,0.08)); padding: 14px; border-radius: 10px; border: 1px solid rgba(255,120,150,0.25);">
-                        <div
-                            style="color: rgba(255,180,200,1); font-weight: 700; font-size: 11px; text-transform: uppercase; letter-spacing: 0.8px; margin-bottom: 12px; opacity: 0.9; display: flex; align-items: center;">
-                            <div
-                                style="width: 3px; height: 14px; background: rgba(255,100,150,0.6); border-radius: 2px; margin-right: 8px;">
-                            </div>
+                    <div class="control-section laplace-signal">
+                        <div class="section-header">
+                            <div class="section-header-icon"></div>
                             Signal Configuration
                         </div>
 
                         <div class="control-group" style="margin-bottom: 8px;">
-                            <label for="laplace_function_selector"
-                                style="font-size: 10px; color: rgba(255,200,220,0.95); font-weight: 500;">Waveform
-                                Type</label>
-                            <select id="laplace_function_selector" class="control-select"
-                                data-tooltip="Select the time domain signal type"
-                                style="margin-top: 3px; background: rgba(20,25,35,0.8); border: 1px solid rgba(255,100,150,0.3); color: rgba(255,200,220,1); padding: 5px 8px; border-radius: 5px; font-size: 11px;">
+                            <label for="laplace_function_selector" class="slider-label">Waveform Type</label>
+                            <select id="laplace_function_selector" class="control-select laplace-select"
+                                data-tooltip="Select the time domain signal type">
                                 <optgroup label="Basic Signals">
                                     <option value="step">Unit Step u(t)</option>
                                     <option value="exponential">Exponential e^(-at)</option>
@@ -273,12 +236,9 @@
                         </div>
 
                         <div class="control-group" style="margin-bottom: 6px;">
-                            <label for="laplace_frequency_slider"
-                                style="font-size: 10px; color: rgba(255,180,200,0.9);">
+                            <label for="laplace_frequency_slider" class="slider-label">
                                 Frequency:
-                                <output id="laplace_frequency_value_display"
-                                    style="color: rgba(255,150,180,1); font-weight: 600; font-size: 11px;">2.0</output>
-                                Hz
+                                <output id="laplace_frequency_value_display" class="slider-value">2.0</output> Hz
                             </label>
                             <div class="slider-container">
                                 <input type="range" id="laplace_frequency_slider" min="0.5" max="10" step="0.1"
@@ -287,10 +247,9 @@
                         </div>
 
                         <div class="control-group" style="margin-bottom: 0;">
-                            <label for="laplace_damping_slider" style="font-size: 10px; color: rgba(255,180,200,0.9);">
+                            <label for="laplace_damping_slider" class="slider-label">
                                 Damping σ:
-                                <output id="laplace_damping_value_display"
-                                    style="color: rgba(255,150,180,1); font-weight: 600; font-size: 11px;">0.5</output>
+                                <output id="laplace_damping_value_display" class="slider-value">0.5</output>
                             </label>
                             <div class="slider-container">
                                 <input type="range" id="laplace_damping_slider" min="0.1" max="5" step="0.1" value="0.5"
@@ -300,22 +259,16 @@
                     </div>
 
                     <!-- s-Plane Exploration Section -->
-                    <div
-                        style="background: linear-gradient(135deg, rgba(100,200,150,0.08), rgba(100,220,180,0.08)); padding: 14px; border-radius: 10px; border: 2px solid rgba(100,200,150,0.3); box-shadow: 0 0 15px rgba(100,220,150,0.1);">
-                        <div
-                            style="color: rgba(150,255,200,1); font-weight: 700; font-size: 11px; text-transform: uppercase; letter-spacing: 0.8px; margin-bottom: 12px; opacity: 0.9; display: flex; align-items: center;">
-                            <div
-                                style="width: 3px; height: 14px; background: rgba(100,220,150,0.6); border-radius: 2px; margin-right: 8px;">
-                            </div>
+                    <div class="control-section laplace-splane">
+                        <div class="section-header">
+                            <div class="section-header-icon"></div>
                             s-Plane Exploration
                         </div>
 
                         <div class="control-group" style="margin-bottom: 6px;">
-                            <label for="laplace_sigma_slider"
-                                style="font-size: 11px; color: rgba(150,255,200,1); font-weight: 600;">
+                            <label for="laplace_sigma_slider" class="slider-label" style="font-size: 11px;">
                                 σ (Real):
-                                <output id="laplace_sigma_value_display"
-                                    style="color: rgba(180,255,220,1); font-weight: 700; font-size: 12px;">0.0</output>
+                                <output id="laplace_sigma_value_display" class="slider-value" style="font-size: 12px;">0.0</output>
                             </label>
                             <div class="slider-container">
                                 <input type="range" id="laplace_sigma_slider" min="-5" max="5" step="0.1" value="0.0"
@@ -324,10 +277,9 @@
                         </div>
 
                         <div class="control-group" style="margin-bottom: 6px;">
-                            <label for="laplace_omega_slider" style="font-size: 10px; color: rgba(180,240,200,0.9);">
+                            <label for="laplace_omega_slider" class="slider-label">
                                 ω (Imaginary):
-                                <output id="laplace_omega_value_display"
-                                    style="color: rgba(150,255,200,1); font-weight: 600; font-size: 11px;">1.0</output>
+                                <output id="laplace_omega_value_display" class="slider-value">1.0</output>
                             </label>
                             <div class="slider-container">
                                 <input type="range" id="laplace_omega_slider" min="-10" max="10" step="0.1" value="1.0"
@@ -336,8 +288,7 @@
                         </div>
 
                         <div class="control-group" style="margin-bottom: 0;">
-                            <label for="laplace_show_roc_cb" class="control-label tooltip-label"
-                                style="font-size: 10px; color: rgba(180,240,200,0.9);"
+                            <label for="laplace_show_roc_cb" class="control-label tooltip-label slider-label"
                                 data-tooltip="Show/hide Region of Convergence boundary and shading on the s-plane">
                                 <input type="checkbox" id="laplace_show_roc_cb" class="control-checkbox" checked>
                                 <span class="custom-checkbox-visual"></span>
@@ -347,22 +298,15 @@
                     </div>
 
                     <!-- 3D Visualization Options Section -->
-                    <div
-                        style="background: linear-gradient(135deg, rgba(150,100,255,0.08), rgba(200,100,255,0.08)); padding: 14px; border-radius: 10px; border: 1px solid rgba(180,100,255,0.25);">
-                        <div
-                            style="color: rgba(200,150,255,1); font-weight: 700; font-size: 11px; text-transform: uppercase; letter-spacing: 0.8px; margin-bottom: 12px; opacity: 0.9; display: flex; align-items: center;">
-                            <div
-                                style="width: 3px; height: 14px; background: rgba(180,100,255,0.6); border-radius: 2px; margin-right: 8px;">
-                            </div>
+                    <div class="control-section laplace-3d">
+                        <div class="section-header">
+                            <div class="section-header-icon"></div>
                             3D Visualization
                         </div>
 
                         <div class="control-group" style="margin-bottom: 8px;">
-                            <label for="laplace_viz_mode_selector"
-                                style="font-size: 10px; color: rgba(220,200,255,0.95); font-weight: 500;">Display
-                                Mode</label>
-                            <select id="laplace_viz_mode_selector" class="control-select"
-                                style="margin-top: 3px; background: rgba(20,25,35,0.8); border: 1px solid rgba(180,100,255,0.3); color: rgba(220,200,255,1); padding: 5px 8px; border-radius: 5px; font-size: 11px;">
+                            <label for="laplace_viz_mode_selector" class="slider-label">Display Mode</label>
+                            <select id="laplace_viz_mode_selector" class="control-select laplace-3d-select">
                                 <option value="magnitude" selected>Magnitude |F(s)|</option>
                                 <option value="phase">Phase ∠F(s)</option>
                                 <option value="combined">Combined (Mag+Phase)</option>
@@ -370,11 +314,9 @@
                         </div>
 
                         <div class="control-group" style="margin-bottom: 6px;">
-                            <label for="laplace_clip_height_slider"
-                                style="font-size: 10px; color: rgba(200,180,240,0.9);">
+                            <label for="laplace_clip_height_slider" class="slider-label">
                                 Clip Height:
-                                <output id="laplace_clip_height_value_display"
-                                    style="color: rgba(200,150,255,1); font-weight: 600; font-size: 11px;">10</output>
+                                <output id="laplace_clip_height_value_display" class="slider-value">10</output>
                             </label>
                             <div class="slider-container">
                                 <input type="range" id="laplace_clip_height_slider" min="1" max="50" step="1" value="10"
@@ -384,11 +326,9 @@
                         </div>
 
                         <div class="control-group" style="margin-bottom: 0;">
-                            <label for="laplace_show_poles_zeros_cb" class="control-label tooltip-label"
-                                style="font-size: 10px; color: rgba(200,180,240,0.9);"
+                            <label for="laplace_show_poles_zeros_cb" class="control-label tooltip-label slider-label"
                                 data-tooltip="Show/hide poles (×) and zeros (○) on the 3D surface and winding visualization">
-                                <input type="checkbox" id="laplace_show_poles_zeros_cb" class="control-checkbox"
-                                    checked>
+                                <input type="checkbox" id="laplace_show_poles_zeros_cb" class="control-checkbox" checked>
                                 <span class="custom-checkbox-visual"></span>
                                 Show Poles & Zeros
                             </label>
@@ -396,13 +336,9 @@
                     </div>
 
                     <!-- Animation Controls Section -->
-                    <div
-                        style="background: linear-gradient(135deg, rgba(255,200,100,0.12), rgba(255,150,80,0.12)); padding: 14px; border-radius: 10px; border: 2px solid rgba(255,180,100,0.35); box-shadow: 0 0 15px rgba(255,180,100,0.15);">
-                        <div
-                            style="color: rgba(255,220,150,1); font-weight: 700; font-size: 11px; text-transform: uppercase; letter-spacing: 0.8px; margin-bottom: 12px; opacity: 0.9; display: flex; align-items: center;">
-                            <div
-                                style="width: 3px; height: 14px; background: linear-gradient(180deg, rgba(255,220,100,1), rgba(255,150,80,1)); border-radius: 2px; margin-right: 8px;">
-                            </div>
+                    <div class="control-section laplace-animation">
+                        <div class="section-header">
+                            <div class="section-header-icon"></div>
                             Integral Animation
                         </div>
 
@@ -422,11 +358,9 @@
 
                         <!-- Animation speed -->
                         <div class="control-group" style="margin-bottom: 8px;">
-                            <label for="laplace_animation_speed_slider"
-                                style="font-size: 10px; color: rgba(255,220,180,0.9);">
+                            <label for="laplace_animation_speed_slider" class="slider-label">
                                 Speed:
-                                <output id="laplace_animation_speed_display"
-                                    style="color: rgba(255,200,150,1); font-weight: 600; font-size: 11px;">3.0</output>s
+                                <output id="laplace_animation_speed_display" class="slider-value">3.0</output>s
                             </label>
                             <div class="slider-container">
                                 <input type="range" id="laplace_animation_speed_slider" min="0.5" max="10" step="0.5"
@@ -437,8 +371,7 @@
 
                         <!-- Animation loop -->
                         <div class="control-group" style="margin-bottom: 6px;">
-                            <label for="laplace_animation_loop_cb" class="control-label tooltip-label"
-                                style="font-size: 10px; color: rgba(255,220,180,0.9);"
+                            <label for="laplace_animation_loop_cb" class="control-label tooltip-label slider-label"
                                 data-tooltip="Automatically restart the animation when it completes">
                                 <input type="checkbox" id="laplace_animation_loop_cb" class="control-checkbox" checked>
                                 <span class="custom-checkbox-visual"></span>
@@ -1411,6 +1344,11 @@
     </main>
 
     <!-- Core Libraries -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/mathjs/12.4.0/math.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/lodash.js/4.17.21/lodash.min.js"></script>
+    <script src="js/constants/colors.js"></script>
+    <script src="js/constants/numerical.js"></script>
+    <script src="js/constants/rendering.js"></script>
     <script src="js/config.js"></script>
     <script src="js/math-utils.js"></script>
 
@@ -1435,7 +1373,10 @@
     <script src="js/rendering/draw-laplace-winding-3b1b.js"></script>
     <script src="js/rendering/laplace-animation.js"></script>
     <script src="js/rendering/laplace-3d-surface.js"></script>
+    <script src="js/rendering/shape-generators.js"></script>
+    <script src="js/rendering/canvas-primitives.js"></script>
     <script src="js/rendering/draw-primitives.js"></script>
+    <script src="js/rendering/webgl-shared.js"></script>
     <script src="js/rendering/draw-planar.js"></script>
     <script src="js/rendering/webgl-planar.js"></script>
     <script src="js/rendering/draw-sphere.js"></script>

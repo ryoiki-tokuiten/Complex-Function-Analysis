@@ -36,41 +36,7 @@ function createWebGLImageRenderer() {
         'uniform float u_zetaContinuationEnabled;',
         'uniform float u_zetaReflectionBoundary;',
         '',
-        'const float PI = 3.1415926535897932384626433832795;',
-        'const int ZETA_GPU_TERMS = 72;',
-        '',
-        'float safeExp(float x) { return exp(clamp(x, -60.0, 60.0)); }',
-        'float coshCompat(float x) { return 0.5 * (safeExp(x) + safeExp(-x)); }',
-        'float sinhCompat(float x) { return 0.5 * (safeExp(x) - safeExp(-x)); }',
-        'bool isFiniteFloatCompat(float value) { return (value == value) && abs(value) < 1.0e19; }',
-        'bool isFiniteVec2Compat(vec2 value) { return isFiniteFloatCompat(value.x) && isFiniteFloatCompat(value.y); }',
-        'vec2 complexAdd(vec2 a, vec2 b) { return a + b; }',
-        'vec2 complexMul(vec2 a, vec2 b) { return vec2(a.x * b.x - a.y * b.y, a.x * b.y + a.y * b.x); }',
-        'vec2 complexDiv(vec2 num, vec2 den) { float denMagSq = max(dot(den, den), 1.0e-30); return vec2((num.x * den.x + num.y * den.y) / denMagSq, (num.y * den.x - num.x * den.y) / denMagSq); }',
-        'vec2 complexExp(vec2 z) { float e = safeExp(z.x); return vec2(e * cos(z.y), e * sin(z.y)); }',
-        'vec2 complexLn(vec2 z) { return vec2(log(length(z)), atan(z.y, z.x)); }',
-        'vec2 complexSin(vec2 z) { return vec2(sin(z.x) * coshCompat(z.y), cos(z.x) * sinhCompat(z.y)); }',
-        'vec2 complexCos(vec2 z) { return vec2(cos(z.x) * coshCompat(z.y), -sin(z.x) * sinhCompat(z.y)); }',
-        'vec2 evalPolynomial(vec2 z) { vec2 acc = vec2(0.0, 0.0); vec2 zPow = vec2(1.0, 0.0); for (int i = 0; i <= 10; i++) { if (i <= u_polyDegree) { acc = complexAdd(acc, complexMul(u_polyCoeffs[i], zPow)); } zPow = complexMul(zPow, z); } return acc; }',
-        'vec2 complexPowPositiveRealBase(float positiveBase, vec2 exponent) { float lnBase = log(max(positiveBase, 1.0e-30)); float magnitude = safeExp(exponent.x * lnBase); float angle = exponent.y * lnBase; return vec2(magnitude * cos(angle), magnitude * sin(angle)); }',
-        'bool evaluateZeta(vec2 s, out vec2 value) { if (abs(s.x - 1.0) < 1.0e-6 && abs(s.y) < 1.0e-6) return false; if (u_zetaContinuationEnabled < 0.5 && s.x <= u_zetaReflectionBoundary) return false; vec2 etaSum = vec2(0.0, 0.0); vec2 negS = vec2(-s.x, -s.y); for (int n = 1; n <= ZETA_GPU_TERMS; n++) { vec2 nPowNegS = complexPowPositiveRealBase(float(n), negS); float alternatingSign = (mod(float(n), 2.0) < 0.5) ? -1.0 : 1.0; etaSum += nPowNegS * alternatingSign; } vec2 oneMinusS = vec2(1.0 - s.x, -s.y); vec2 twoPowOneMinusS = complexPowPositiveRealBase(2.0, oneMinusS); vec2 denominator = vec2(1.0, 0.0) - twoPowOneMinusS; if (dot(denominator, denominator) < 1.0e-18) return false; value = complexDiv(etaSum, denominator); return isFiniteVec2Compat(value); }',
-        '',
-        'bool evaluateMappedValue(vec2 z, out vec2 mapped) {',
-        '  if (u_isWPlane < 0.5) { mapped = z; return isFiniteVec2Compat(mapped); }',
-        '  float functionId = floor(u_functionId + 0.5);',
-        '  if (abs(functionId - 1.0) < 0.5) { mapped = complexCos(z); return isFiniteVec2Compat(mapped); }',
-        '  if (abs(functionId - 2.0) < 0.5) { mapped = complexSin(z); return isFiniteVec2Compat(mapped); }',
-        '  if (abs(functionId - 3.0) < 0.5) { vec2 denTan = complexCos(z); if (dot(denTan, denTan) < 1.0e-18) return false; mapped = complexDiv(complexSin(z), denTan); return isFiniteVec2Compat(mapped); }',
-        '  if (abs(functionId - 4.0) < 0.5) { vec2 denSec = complexCos(z); if (dot(denSec, denSec) < 1.0e-18) return false; mapped = complexDiv(vec2(1.0, 0.0), denSec); return isFiniteVec2Compat(mapped); }',
-        '  if (abs(functionId - 5.0) < 0.5) { mapped = complexExp(z); return isFiniteVec2Compat(mapped); }',
-        '  if (abs(functionId - 6.0) < 0.5) { if (dot(z, z) < 1.0e-20) return false; mapped = complexLn(z); return isFiniteVec2Compat(mapped); }',
-        '  if (abs(functionId - 7.0) < 0.5) { if (dot(z, z) < 1.0e-18) return false; mapped = complexDiv(vec2(1.0, 0.0), z); return isFiniteVec2Compat(mapped); }',
-        '  if (abs(functionId - 8.0) < 0.5) { vec2 num = complexAdd(complexMul(u_mobiusA, z), u_mobiusB); vec2 den = complexAdd(complexMul(u_mobiusC, z), u_mobiusD); if (dot(den, den) < 1.0e-18) return false; mapped = complexDiv(num, den); return isFiniteVec2Compat(mapped); }',
-        '  if (abs(functionId - 9.0) < 0.5) { mapped = evalPolynomial(z); return isFiniteVec2Compat(mapped); }',
-        '  if (abs(functionId - 10.0) < 0.5) { if (z.y <= 1.0e-9) return false; float rootY = sqrt(max(z.y, 0.0)); if (!isFiniteFloatCompat(rootY) || rootY <= 1.0e-8) return false; mapped = vec2(z.x / rootY, rootY); return isFiniteVec2Compat(mapped); }',
-        '  if (abs(functionId - 11.0) < 0.5) { return evaluateZeta(z, mapped); }',
-        '  return false;',
-        '}',
+        GLSL_COMPLEX_MATH_LIBRARY,
         '',
         'void main() {',
         '  v_uv = a_texCoord;',
@@ -78,8 +44,9 @@ function createWebGLImageRenderer() {
         '  float ny = -(a_texCoord.y * 2.0 - 1.0);', // texture image Y inverted naturally
         '  vec2 zInput = vec2(u_center.x + nx * (u_imageSize.x / 2.0), u_center.y + ny * (u_imageSize.y / 2.0));',
         '',
-        '  vec2 mappedValue = zInput;',
-        '  bool ok = evaluateMappedValue(zInput, mappedValue);',
+        '  vec2 mappedValue = vec2(0.0);',
+        '  float isWP = (u_isWPlane > 0.5) ? 0.0 : 1.0;', // evaluateMappedValueBase treats isWPlane > 0.5 as identity mapping, but this shader historically expects u_isWPlane < 0.5 for identity. So we flip it.
+        '  bool ok = evaluateMappedValueBase(zInput, isWP, u_functionId, u_mobiusA, u_mobiusB, u_mobiusC, u_mobiusD, u_polyDegree, u_polyCoeffs, u_zetaContinuationEnabled, u_zetaReflectionBoundary, mappedValue);',
         '  if (!ok || !isFiniteVec2Compat(mappedValue)) {',
         '    gl_Position = vec4(10.0, 10.0, 10.0, 1.0);', // offscreen
         '    gl_PointSize = 0.0;',
@@ -105,7 +72,7 @@ function createWebGLImageRenderer() {
         '}'
     ].join('\n');
 
-    const program = createWebGLProgram(gl, vertexSource, fragmentSource);
+    const program = createWebGLProgramShared(gl, vertexSource, fragmentSource);
     if (!program) return null;
 
     const uvBuffer = gl.createBuffer();
@@ -250,8 +217,8 @@ function drawImageWithWebGL(targetCtx, planeParams, isWP) {
     gl.uniform1f(loc.uOpacity, typeof state.imageOpacity === 'number' ? state.imageOpacity : 1.0);
     
     if (isWP) {
-        // Assume getWebGLDomainColorFunctionId exists in webgl-domain-coloring.js
-        const funcId = (typeof getWebGLDomainColorFunctionId === 'function') ? getWebGLDomainColorFunctionId(state.currentFunction) : 0;
+        // Assume getWebGLDomainColorFunctionIdShared exists in webgl-shared.js
+        const funcId = (typeof getWebGLDomainColorFunctionIdShared === 'function') ? getWebGLDomainColorFunctionIdShared(state.currentFunction) : 0;
         gl.uniform1f(loc.uFunctionId, funcId);
         
         // Mobius

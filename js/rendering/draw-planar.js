@@ -201,7 +201,7 @@ function drawPlanarInputShape(ctx,planeParams){
     ctx.lineWidth = 2.5;
     ctx.lineJoin = 'round';
     ctx.lineCap = 'round';
-    ctx.strokeStyle=COLOR_INPUT_SHAPE_Z; ctx.beginPath();const yb0c=mapToCanvasCoords(0,scY,planeParams).y,xminc=mapToCanvasCoords(planeParams.currentVisXRange[0],scY,planeParams).x,xmaxc=mapToCanvasCoords(planeParams.currentVisXRange[1],scY,planeParams).x;ctx.moveTo(xminc,yb0c);ctx.lineTo(xmaxc,yb0c);ctx.stroke();ctx.strokeStyle=COLOR_INPUT_LINE_IM_Z; ctx.beginPath();const xa0c=mapToCanvasCoords(scX,0,planeParams).x,yminc=mapToCanvasCoords(scX,planeParams.currentVisYRange[0],planeParams).y,ymaxc=mapToCanvasCoords(scX,planeParams.currentVisYRange[1],planeParams).y;ctx.moveTo(xa0c,yminc);ctx.lineTo(xa0c,ymaxc);ctx.stroke();} else if (inputShapeToDraw !== 'image'){ ctx.beginPath();let fPt=true;let scX = state.a0 || 0; let scY = state.b0 || 0; const getPts=(s)=>{let p=[];if(s==='circle'){for(let i=0;i<=NUM_POINTS_CURVE;++i){const t=(i/NUM_POINTS_CURVE)*2*Math.PI;p.push({x:scX+radiusToUse*Math.cos(t),y:scY+radiusToUse*Math.sin(t)});}}else if(s==='ellipse'){for(let i=0;i<=NUM_POINTS_CURVE;++i){const t=(i/NUM_POINTS_CURVE)*2*Math.PI;p.push({x:scX+state.ellipseA*Math.cos(t),y:scY+state.ellipseB*Math.sin(t)});}}else if(s==='hyperbola'){const UM=2.5;for(let i=0;i<=NUM_POINTS_CURVE/2;++i){const u=(i/(NUM_POINTS_CURVE/2))*UM-UM/2;p.push({x:scX+state.hyperbolaA*cosh(u),y:scY+state.hyperbolaB*sinh(u)});}p.push(null);for(let i=0;i<=NUM_POINTS_CURVE/2;++i){const u=(i/(NUM_POINTS_CURVE/2))*UM-UM/2;p.push({x:scX-state.hyperbolaA*cosh(u),y:scY+state.hyperbolaB*sinh(u)});}}return p;};getPts(inputShapeToDraw).forEach(pt=>{if(!pt){ctx.stroke();ctx.beginPath();fPt=true;return;}const p_canvas=mapToCanvasCoords(pt.x,pt.y,planeParams);if(fPt){ctx.moveTo(p_canvas.x,p_canvas.y);fPt=false;}else{ctx.lineTo(p_canvas.x,p_canvas.y);}});ctx.stroke();}
+    ctx.strokeStyle=COLOR_INPUT_SHAPE_Z; ctx.beginPath();const yb0c=mapToCanvasCoords(0,scY,planeParams).y,xminc=mapToCanvasCoords(planeParams.currentVisXRange[0],scY,planeParams).x,xmaxc=mapToCanvasCoords(planeParams.currentVisXRange[1],scY,planeParams).x;ctx.moveTo(xminc,yb0c);ctx.lineTo(xmaxc,yb0c);ctx.stroke();ctx.strokeStyle=COLOR_INPUT_LINE_IM_Z; ctx.beginPath();const xa0c=mapToCanvasCoords(scX,0,planeParams).x,yminc=mapToCanvasCoords(scX,planeParams.currentVisYRange[0],planeParams).y,ymaxc=mapToCanvasCoords(scX,planeParams.currentVisYRange[1],planeParams).y;ctx.moveTo(xa0c,yminc);ctx.lineTo(xa0c,ymaxc);ctx.stroke();} else if (inputShapeToDraw !== 'image'){ ctx.beginPath();let fPt=true;let scX = state.a0 || 0; let scY = state.b0 || 0; const getPts=(s)=>{if(s==='circle')return generateCirclePoints(scX,scY,radiusToUse,NUM_POINTS_CURVE).map(p=>({x:p.re,y:p.im}));if(s==='ellipse')return generateEllipsePoints(scX,scY,state.ellipseA,state.ellipseB,NUM_POINTS_CURVE).map(p=>({x:p.re,y:p.im}));if(s==='hyperbola')return generateHyperbolaPoints(scX,scY,state.hyperbolaA,state.hyperbolaB,NUM_POINTS_CURVE).map(p=>p?{x:p.re,y:p.im}:null);return [];};getPts(inputShapeToDraw).forEach(pt=>{if(!pt){ctx.stroke();ctx.beginPath();fPt=true;return;}const p_canvas=mapToCanvasCoords(pt.x,pt.y,planeParams);if(fPt){ctx.moveTo(p_canvas.x,p_canvas.y);fPt=false;}else{ctx.lineTo(p_canvas.x,p_canvas.y);}});ctx.stroke();}
     if (state.radialDiscreteStepsEnabled && state.currentFunction !== 'poincare') {
         drawRadialDiscreteSteps(ctx, planeParams, state.currentFunction, state.radialDiscreteStepsCount);
     }
@@ -524,9 +524,9 @@ function drawTransformedGeometricShape(ctx, planeParams, tf, shapeType, baseColo
     const scX = state.a0, scY = state.b0;
     const radiusToUse = state.circleR;
     let z_pts=[];
-    if(shapeType==='circle'){for(let i=0;i<=NUM_POINTS_CURVE;++i){const t=(i/NUM_POINTS_CURVE)*2*Math.PI;z_pts.push({re:scX+radiusToUse*Math.cos(t),im:scY+radiusToUse*Math.sin(t)});}}
-    else if(shapeType==='ellipse'){for(let i=0;i<=NUM_POINTS_CURVE;++i){const t=(i/NUM_POINTS_CURVE)*2*Math.PI;z_pts.push({re:scX+state.ellipseA*Math.cos(t),im:scY+state.ellipseB*Math.sin(t)});}}
-    else if(shapeType==='hyperbola'){const UM=2.5;for(let i=0;i<=NUM_POINTS_CURVE/2;++i){const u=(i/(NUM_POINTS_CURVE/2))*UM-UM/2;z_pts.push({re:scX+state.hyperbolaA*cosh(u),im:scY+state.hyperbolaB*sinh(u)});}z_pts.push(null); for(let i=0;i<=NUM_POINTS_CURVE/2;++i){const u=(i/(NUM_POINTS_CURVE/2))*UM-UM/2;z_pts.push({re:scX-state.hyperbolaA*cosh(u),im:scY+state.hyperbolaB*sinh(u)});}}
+    if(shapeType==='circle') z_pts = generateCirclePoints(scX,scY,radiusToUse,NUM_POINTS_CURVE);
+    else if(shapeType==='ellipse') z_pts = generateEllipsePoints(scX,scY,state.ellipseA,state.ellipseB,NUM_POINTS_CURVE);
+    else if(shapeType==='hyperbola') z_pts = generateHyperbolaPoints(scX,scY,state.hyperbolaA,state.hyperbolaB,NUM_POINTS_CURVE);
     drawPlanarTransformedLine(ctx,planeParams,tf,z_pts,baseColor);
 }
 
@@ -667,9 +667,9 @@ function drawPlanarTaylorApproximation(ctx, wPlaneParamsOriginal, originalFuncKe
         drawPlanarTransformedLine(ctx,wPlaneParamsOriginal,taylorApproxFunc,vz_pts,axisColorX); 
     } else if (['circle', 'ellipse', 'hyperbola'].includes(inputShape)) {
         let z_pts=[];
-        if(inputShape==='circle'){for(let i=0;i<=NUM_POINTS_CURVE;++i){const t=(i/NUM_POINTS_CURVE)*2*Math.PI;z_pts.push({re:scX_source+radiusToUse_source*Math.cos(t),im:scY_source+radiusToUse_source*Math.sin(t)});}}
-        else if(inputShape==='ellipse'){for(let i=0;i<=NUM_POINTS_CURVE;++i){const t=(i/NUM_POINTS_CURVE)*2*Math.PI;z_pts.push({re:scX_source+state.ellipseA*Math.cos(t),im:scY_source+state.ellipseB*Math.sin(t)});}}
-        else if(inputShape==='hyperbola'){const UM=2.5;for(let i=0;i<=NUM_POINTS_CURVE/2;++i){const u=(i/(NUM_POINTS_CURVE/2))*UM-UM/2;z_pts.push({re:scX_source+state.hyperbolaA*cosh(u),im:scY_source+state.hyperbolaB*sinh(u)});}z_pts.push(null); for(let i=0;i<=NUM_POINTS_CURVE/2;++i){const u=(i/(NUM_POINTS_CURVE/2))*UM-UM/2;z_pts.push({re:scX_source-state.hyperbolaA*cosh(u),im:scY_source+state.hyperbolaB*sinh(u)});}}
+        if(inputShape==='circle') z_pts = generateCirclePoints(scX_source,scY_source,radiusToUse_source,NUM_POINTS_CURVE);
+        else if(inputShape==='ellipse') z_pts = generateEllipsePoints(scX_source,scY_source,state.ellipseA,state.ellipseB,NUM_POINTS_CURVE);
+        else if(inputShape==='hyperbola') z_pts = generateHyperbolaPoints(scX_source,scY_source,state.hyperbolaA,state.hyperbolaB,NUM_POINTS_CURVE);
         drawPlanarTransformedLine(ctx,wPlaneParamsOriginal,taylorApproxFunc,z_pts, axisColorX); 
     } else if (inputShape === 'strip_horizontal') {
         let zlp1 = [], zlp2 = [];

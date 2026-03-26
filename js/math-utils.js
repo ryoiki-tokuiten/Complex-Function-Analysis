@@ -1,120 +1,119 @@
 
-class Complex {
-    constructor(real, imag) {
-        this.real = real;
-        this.imag = imag;
+function C(re, im) {
+    let r = 0, i = 0;
+    if (typeof re === 'object' && re !== null) {
+        r = re.re || re.real || 0;
+        i = re.im || re.imag || 0;
+    } else {
+        r = re || 0;
+        i = im || 0;
     }
-    add(other) { return new Complex(this.real + other.real, this.imag + other.imag); }
-    subtract(other) { return new Complex(this.real - other.real, this.imag - other.imag); }
-    multiply(other) {
-        return new Complex(this.real * other.real - this.imag * other.imag,
-                           this.real * other.imag + this.imag * other.real);
-    }
-    divide(other) {
-        const d = other.real * other.real + other.imag * other.imag;
-        if (d === 0) return new Complex(NaN, NaN); 
-        return new Complex((this.real * other.real + this.imag * other.imag) / d,
-                           (this.imag * other.real - this.real * other.imag) / d);
-    }
-    abs() { return Math.sqrt(this.real * this.real + this.imag * this.imag); }
-
     
-    static power(base, exp) {
-        let res = new Complex(1, 0);
-        if (exp === 0) return res;
-
-        let currentPower = base.clone();
-        let positiveExp = Math.abs(exp);
-
-        
-        for (let i = 0; i < positiveExp; i++) {
-            res = res.multiply(currentPower);
+    return {
+        re: r,
+        im: i,
+        get real() { return this.re; },
+        get imag() { return this.im; },
+        add: function(other) {
+            const res = math.add(math.complex(this.re, this.im), math.complex(other.re || other.real || 0, other.im || other.imag || 0));
+            return C(res.re, res.im);
+        },
+        subtract: function(other) {
+            const res = math.subtract(math.complex(this.re, this.im), math.complex(other.re || other.real || 0, other.im || other.imag || 0));
+            return C(res.re, res.im);
+        },
+        multiply: function(other) {
+            const res = math.multiply(math.complex(this.re, this.im), math.complex(other.re || other.real || 0, other.im || other.imag || 0));
+            return C(res.re, res.im);
+        },
+        divide: function(other) {
+            const res = math.divide(math.complex(this.re, this.im), math.complex(other.re || other.real || 0, other.im || other.imag || 0));
+            return C(res.re, res.im);
+        },
+        abs: function() {
+            return Math.sqrt(this.re * this.re + this.im * this.im);
+        },
+        arg: function() {
+            return Math.atan2(this.im, this.re);
+        },
+        clone: function() {
+            return C(this.re, this.im);
+        },
+        equals: function(other) {
+            const ore = other.re || other.real || 0;
+            const oim = other.im || other.imag || 0;
+            return Math.abs(this.re - ore) < 1e-12 && Math.abs(this.im - oim) < 1e-12;
+        },
+        isFinite: function() {
+            return Number.isFinite(this.re) && Number.isFinite(this.im);
+        },
+        conjugate: function() {
+            return C(this.re, -this.im);
+        },
+        negate: function() {
+            return C(-this.re, -this.im);
         }
-
-        if (exp < 0) {
-            if (res.abs() < 1e-100) return new Complex(NaN, NaN); 
-            return (new Complex(1,0)).divide(res);
-        }
-        return res;
-    }
-
-    clone() { return new Complex(this.real, this.imag); }
-    arg() { return Math.atan2(this.imag, this.real); }
-    equals(other, tol = 1e-9) {
-        if (!other) return false;
-        return Math.abs(this.real - other.real) < tol && Math.abs(this.imag - other.imag) < tol;
-    }
-    isFinite() {
-        return isFinite(this.real) && isFinite(this.imag);
-    }
-    
-    conjugate() {
-        return new Complex(this.real, -this.imag);
-    }
-    
-    negate() {
-        return new Complex(-this.real, -this.imag);
-    }
+    };
 }
 
+C.power = function(base, exp) {
+    if (typeof exp === 'number') {
+        const res = math.pow(math.complex(base.re || base.real || 0, base.im || base.imag || 0), exp);
+        return C(res.re, res.im);
+    }
+    const res = math.pow(
+        math.complex(base.re || base.real || 0, base.im || base.imag || 0),
+        math.complex(exp.re || exp.real || 0, exp.im || exp.imag || 0)
+    );
+    return C(res.re, res.im);
+};
 
+// Aliases for backward compatibility in parts of code that still use `new Complex(re, im)`
+const Complex = C;
 
-function complexAdd(z1, z2) { return { re: z1.re + z2.re, im: z1.im + z2.im }; }
-function complexSub(z1, z2) { return { re: z1.re - z2.re, im: z1.im - z2.im }; }
-function complexMul(z1, z2) { return { re: z1.re * z2.re - z1.im * z2.im, im: z1.re * z2.im + z1.im * z2.re }; }
+function complexAdd(z1, z2) { const res = math.add(math.complex(z1.re, z1.im), math.complex(z2.re, z2.im)); return { re: res.re, im: res.im }; }
+function complexSub(z1, z2) { const res = math.subtract(math.complex(z1.re, z1.im), math.complex(z2.re, z2.im)); return { re: res.re, im: res.im }; }
+function complexMul(z1, z2) { const res = math.multiply(math.complex(z1.re, z1.im), math.complex(z2.re, z2.im)); return { re: res.re, im: res.im }; }
 function complexScalarMul(s, z) { return { re: s * z.re, im: s * z.im }; }
-function cosh(x) { return (Math.exp(x) + Math.exp(-x)) / 2; }
-function sinh(x) { return (Math.exp(x) - Math.exp(-x)) / 2; }
-function complexCos(a, b) { return { re: Math.cos(a) * cosh(b), im: -Math.sin(a) * sinh(b) }; }
-function complexSin(a, b) { return { re: Math.sin(a) * cosh(b), im: Math.cos(a) * sinh(b) }; }
-function complexExp(a,b) { return { re: Math.exp(a) * Math.cos(b), im: Math.exp(a) * Math.sin(b) }; }
-
 function complexDivide(num, den) {
-    const den_sq_mag = den.re * den.re + den.im * den.im;
-    const num_sq_mag = num.re * num.re + num.im * num.im;
-
-    if (Math.abs(den_sq_mag) < 1e-30) { 
-        if (Math.abs(num_sq_mag) < 1e-30) { 
-            return { re: NaN, im: NaN }; 
-        }
-        
-        const large_val = POLE_MAGNITUDE_THRESHOLD * 2; 
-        if (Math.abs(num.re) < 1e-15 && Math.abs(num.im) < 1e-15) return {re:0, im:0}; 
-        const scale = large_val / Math.sqrt(num_sq_mag); 
+    if (Math.abs(den.re * den.re + den.im * den.im) < 1e-30) {
+        const num_sq_mag = num.re * num.re + num.im * num.im;
+        if (Math.abs(num_sq_mag) < 1e-30) return { re: NaN, im: NaN };
+        const large_val = POLE_MAGNITUDE_THRESHOLD * 2;
+        if (Math.abs(num.re) < 1e-15 && Math.abs(num.im) < 1e-15) return { re: 0, im: 0 };
+        const scale = large_val / Math.sqrt(num_sq_mag);
         return { re: num.re * scale, im: num.im * scale };
     }
-    
-    return { re: (num.re * den.re + num.im * den.im) / den_sq_mag, im: (num.im * den.re - num.re * den.im) / den_sq_mag };
+    const res = math.divide(math.complex(num.re, num.im), math.complex(den.re, den.im));
+    return { re: res.re, im: res.im };
 }
 
-function complexTan(a, b) { return complexDivide(complexSin(a, b), complexCos(a, b)); }
-function complexSec(a, b) { return complexDivide({ re: 1, im: 0 }, complexCos(a, b)); }
+function cosh(x) { return Math.cosh(x); }
+function sinh(x) { return Math.sinh(x); }
 
-function complexLn(a,b) {
-    if (a === 0 && b === 0) { return { re: -Infinity, im: 0 }; } 
-    const mod = Math.sqrt(a * a + b * b);
-    const arg = Math.atan2(b, a); 
-    return { re: Math.log(mod), im: arg };
+function complexCos(a, b) { const res = math.cos(math.complex(a, b)); return { re: res.re, im: res.im }; }
+function complexSin(a, b) { const res = math.sin(math.complex(a, b)); return { re: res.re, im: res.im }; }
+function complexTan(a, b) { const res = math.tan(math.complex(a, b)); return { re: res.re, im: res.im }; }
+function complexSec(a, b) { const res = math.sec(math.complex(a, b)); return { re: res.re, im: res.im }; }
+function complexExp(a, b) { const res = math.exp(math.complex(a, b)); return { re: res.re, im: res.im }; }
+function complexLn(a, b) {
+    if (a === 0 && b === 0) return { re: -Infinity, im: 0 };
+    const res = math.log(math.complex(a, b));
+    return { re: res.re, im: res.im };
 }
-
-function complexReciprocal(a,b) { return complexDivide({re:1, im:0}, {re:a, im:b}); }
-
+function complexReciprocal(a, b) {
+    if (a === 0 && b === 0) return { re: NaN, im: NaN };
+    const res = math.divide(1, math.complex(a, b));
+    return { re: res.re, im: res.im };
+}
 function complexPow(base_re, base_im, exp_re, exp_im) {
-    
     if (base_re === 0 && base_im === 0) {
-        if (exp_re > 0 || (exp_re === 0 && exp_im !== 0)) return { re: 0, im: 0 }; 
-        if (exp_re === 0 && exp_im === 0) return { re: 1, im: 0}; 
-        
-        
+        if (exp_re > 0 || (exp_re === 0 && exp_im !== 0)) return { re: 0, im: 0 };
+        if (exp_re === 0 && exp_im === 0) return { re: 1, im: 0 };
     }
-    const logBase = complexLn(base_re, base_im);
-    
-    
-    const exponent = {re: exp_re, im: exp_im};
-    const product = complexMul(exponent, logBase);
-    return complexExp(product.re, product.im);
+    const res = math.pow(math.complex(base_re, base_im), math.complex(exp_re, exp_im));
+    return { re: res.re, im: res.im };
 }
-
 
 const LANCZOS_G = 7;
 const LANCZOS_P = [0.99999999999980993, 676.5203681218851, -1259.1392167224028, 771.32342877765313, -176.61502916214059, 12.507343278686905, -0.13857109526572012, 9.9843695780195716e-6, 1.5056327351493116e-7];
@@ -568,137 +567,115 @@ function factorial(n) {
 
 
 
+function isFiniteComplex(c) {
+    return isFinite(c.re) && isFinite(c.im);
+}
+
 function numericDerivativeNthOrder(funcWrapper, zComplex, order, h_base = 1e-5) {
-    if (order < 1) return funcWrapper(zComplex); 
+    if (order < 1) return funcWrapper(zComplex);
 
     let h = h_base;
 
     if (order === 1) {
-        const f_plus_h = funcWrapper(new Complex(zComplex.real + h, zComplex.imag));
-        const f_minus_h = funcWrapper(new Complex(zComplex.real - h, zComplex.imag));
-        if (!f_plus_h.isFinite() || !f_minus_h.isFinite()) return new Complex(NaN, NaN);
-        return f_plus_h.subtract(f_minus_h).divide(new Complex(2 * h, 0));
+        const f_plus_h = funcWrapper({ re: zComplex.re + h, im: zComplex.im });
+        const f_minus_h = funcWrapper({ re: zComplex.re - h, im: zComplex.im });
+        if (!isFiniteComplex(f_plus_h) || !isFiniteComplex(f_minus_h)) return { re: NaN, im: NaN };
+        return complexDivide(complexSub(f_plus_h, f_minus_h), { re: 2 * h, im: 0 });
     } else if (order === 2) {
         const f_z = funcWrapper(zComplex);
-        const f_plus_h = funcWrapper(new Complex(zComplex.real + h, zComplex.imag));
-        const f_minus_h = funcWrapper(new Complex(zComplex.real - h, zComplex.imag));
-        if (!f_z.isFinite() || !f_plus_h.isFinite() || !f_minus_h.isFinite()) return new Complex(NaN, NaN);
-        const term1 = f_plus_h;
-        const term2 = f_z.multiply(new Complex(2,0));
-        const term3 = f_minus_h;
-        return term1.subtract(term2).add(term3).divide(new Complex(h * h, 0));
+        const f_plus_h = funcWrapper({ re: zComplex.re + h, im: zComplex.im });
+        const f_minus_h = funcWrapper({ re: zComplex.re - h, im: zComplex.im });
+        if (!isFiniteComplex(f_z) || !isFiniteComplex(f_plus_h) || !isFiniteComplex(f_minus_h)) return { re: NaN, im: NaN };
+        const term2 = complexScalarMul(2, f_z);
+        return complexDivide(complexAdd(complexSub(f_plus_h, term2), f_minus_h), { re: h * h, im: 0 });
     } else if (order === 3) {
-        const f_p2h = funcWrapper(new Complex(zComplex.real + 2*h, zComplex.imag));
-        const f_ph = funcWrapper(new Complex(zComplex.real + h, zComplex.imag));
-        const f_mh = funcWrapper(new Complex(zComplex.real - h, zComplex.imag));
-        const f_m2h = funcWrapper(new Complex(zComplex.real - 2*h, zComplex.imag));
-        if(!f_p2h.isFinite() || !f_ph.isFinite() || !f_mh.isFinite() || !f_m2h.isFinite()) return new Complex(NaN,NaN);
-        const t1 = f_p2h;
-        const t2 = f_ph.multiply(new Complex(2,0));
-        const t3 = f_mh.multiply(new Complex(2,0));
-        const t4 = f_m2h;
-        return t1.subtract(t2).add(t3).subtract(t4).divide(new Complex(2 * h*h*h, 0));
+        const f_p2h = funcWrapper({ re: zComplex.re + 2 * h, im: zComplex.im });
+        const f_ph = funcWrapper({ re: zComplex.re + h, im: zComplex.im });
+        const f_mh = funcWrapper({ re: zComplex.re - h, im: zComplex.im });
+        const f_m2h = funcWrapper({ re: zComplex.re - 2 * h, im: zComplex.im });
+        if (!isFiniteComplex(f_p2h) || !isFiniteComplex(f_ph) || !isFiniteComplex(f_mh) || !isFiniteComplex(f_m2h)) return { re: NaN, im: NaN };
+        const t2 = complexScalarMul(2, f_ph);
+        const t3 = complexScalarMul(2, f_mh);
+        return complexDivide(complexSub(complexAdd(complexSub(f_p2h, t2), t3), f_m2h), { re: 2 * h * h * h, im: 0 });
     } else if (order === 4) {
-        const f_p2h = funcWrapper(new Complex(zComplex.real + 2*h, zComplex.imag));
-        const f_ph = funcWrapper(new Complex(zComplex.real + h, zComplex.imag));
+        const f_p2h = funcWrapper({ re: zComplex.re + 2 * h, im: zComplex.im });
+        const f_ph = funcWrapper({ re: zComplex.re + h, im: zComplex.im });
         const f_z = funcWrapper(zComplex);
-        const f_mh = funcWrapper(new Complex(zComplex.real - h, zComplex.imag));
-        const f_m2h = funcWrapper(new Complex(zComplex.real - 2*h, zComplex.imag));
-        if(!f_p2h.isFinite() || !f_ph.isFinite() || !f_z.isFinite() || !f_mh.isFinite() || !f_m2h.isFinite()) return new Complex(NaN,NaN);
-        const t1 = f_p2h;
-        const t2 = f_ph.multiply(new Complex(4,0));
-        const t3 = f_z.multiply(new Complex(6,0));
-        const t4 = f_mh.multiply(new Complex(4,0));
-        const t5 = f_m2h;
-        return t1.subtract(t2).add(t3).subtract(t4).add(t5).divide(new Complex(h*h*h*h, 0));
+        const f_mh = funcWrapper({ re: zComplex.re - h, im: zComplex.im });
+        const f_m2h = funcWrapper({ re: zComplex.re - 2 * h, im: zComplex.im });
+        if (!isFiniteComplex(f_p2h) || !isFiniteComplex(f_ph) || !isFiniteComplex(f_z) || !isFiniteComplex(f_mh) || !isFiniteComplex(f_m2h)) return { re: NaN, im: NaN };
+        const t2 = complexScalarMul(4, f_ph);
+        const t3 = complexScalarMul(6, f_z);
+        const t4 = complexScalarMul(4, f_mh);
+        return complexDivide(complexAdd(complexSub(complexAdd(complexSub(f_p2h, t2), t3), t4), f_m2h), { re: h * h * h * h, im: 0 });
     }
 
     console.warn(`numericDerivativeNthOrder not implemented for order ${order} using general recursive method (less accurate).`);
     if (order > 0) {
-        const deriv_n_minus_1_plus_h = numericDerivativeNthOrder(funcWrapper, new Complex(zComplex.real + h, zComplex.imag), order - 1, h);
-        const deriv_n_minus_1_minus_h = numericDerivativeNthOrder(funcWrapper, new Complex(zComplex.real - h, zComplex.imag), order - 1, h);
-        if (!deriv_n_minus_1_plus_h.isFinite() || !deriv_n_minus_1_minus_h.isFinite()) return new Complex(NaN,NaN);
-        return deriv_n_minus_1_plus_h.subtract(deriv_n_minus_1_minus_h).divide(new Complex(2 * h, 0));
+        const deriv_n_minus_1_plus_h = numericDerivativeNthOrder(funcWrapper, { re: zComplex.re + h, im: zComplex.im }, order - 1, h);
+        const deriv_n_minus_1_minus_h = numericDerivativeNthOrder(funcWrapper, { re: zComplex.re - h, im: zComplex.im }, order - 1, h);
+        if (!isFiniteComplex(deriv_n_minus_1_plus_h) || !isFiniteComplex(deriv_n_minus_1_minus_h)) return { re: NaN, im: NaN };
+        return complexDivide(complexSub(deriv_n_minus_1_plus_h, deriv_n_minus_1_minus_h), { re: 2 * h, im: 0 });
     }
-    return new Complex(NaN,NaN);
+    return { re: NaN, im: NaN };
 }
-
 
 function calculateTaylorApproximation(originalTransformFuncKey, zInputComplex, z0Complex, order) {
     const originalTransformFunc = transformFunctions[originalTransformFuncKey];
     if (!originalTransformFunc) {
         console.error("Taylor: Original transform function not found for key:", originalTransformFuncKey);
-        return new Complex(NaN, NaN);
+        return { re: NaN, im: NaN };
     }
 
-    
-    
     const funcWrapper = (z_complex) => {
-        const res = originalTransformFunc(z_complex.real, z_complex.imag);
-        return new Complex(res.re, res.im);
+        return originalTransformFunc(z_complex.re, z_complex.im);
     };
 
-    let seriesSum = new Complex(0, 0);
+    let seriesSum = { re: 0, im: 0 };
 
     for (let n = 0; n <= order; n++) {
         const nthDerivativeAtZ0 = numericDerivativeNthOrder(funcWrapper, z0Complex, n);
-        if (!nthDerivativeAtZ0.isFinite()) {
-            
-            if (n === 0) { 
-                return new Complex(NaN, NaN);
-            }
-            
-            
-            if (!zInputComplex.equals(z0Complex)) {
-                 console.warn(`Taylor: Derivative order ${n} at z0=${z0Complex.real}+${z0Complex.imag}i is not finite: ${nthDerivativeAtZ0.real}+${nthDerivativeAtZ0.imag}i. Term might be non-finite.`);
-                
-                
-                
+        if (!isFiniteComplex(nthDerivativeAtZ0)) {
+            if (n === 0) return { re: NaN, im: NaN };
+            const equals = Math.abs(zInputComplex.re - z0Complex.re) < 1e-9 && Math.abs(zInputComplex.im - z0Complex.im) < 1e-9;
+            if (!equals) {
+                console.warn(`Taylor: Derivative order ${n} at z0=${z0Complex.re}+${z0Complex.im}i is not finite: ${nthDerivativeAtZ0.re}+${nthDerivativeAtZ0.im}i. Term might be non-finite.`);
             }
         }
 
         const fact_n = factorial(n);
-        if (isNaN(fact_n) || fact_n === 0) { 
+        if (isNaN(fact_n) || fact_n === 0) {
             console.error("Taylor: Factorial is NaN or zero for n=", n);
-            return new Complex(NaN, NaN);
+            return { re: NaN, im: NaN };
         }
 
         let z_minus_z0_pow_n;
         if (n === 0) {
-            z_minus_z0_pow_n = new Complex(1, 0); 
+            z_minus_z0_pow_n = { re: 1, im: 0 };
         } else {
-            const z_minus_z0 = zInputComplex.subtract(z0Complex);
-            z_minus_z0_pow_n = Complex.power(z_minus_z0, n);
+            const z_minus_z0 = complexSub(zInputComplex, z0Complex);
+            z_minus_z0_pow_n = complexPow(z_minus_z0.re, z_minus_z0.im, n, 0);
         }
 
-        if (!z_minus_z0_pow_n.isFinite()) {
-            
-            if (nthDerivativeAtZ0.abs() > 1e-9) { 
-                 
-            } else { 
-                
-                
-                continue; 
+        if (!isFiniteComplex(z_minus_z0_pow_n)) {
+            if (Math.sqrt(nthDerivativeAtZ0.re * nthDerivativeAtZ0.re + nthDerivativeAtZ0.im * nthDerivativeAtZ0.im) > 1e-9) {
+            } else {
+                continue;
             }
         }
 
-        const derivative_div_factorial = nthDerivativeAtZ0.divide(new Complex(fact_n, 0));
-        const term = derivative_div_factorial.multiply(z_minus_z0_pow_n);
+        const derivative_div_factorial = complexDivide(nthDerivativeAtZ0, { re: fact_n, im: 0 });
+        const term = complexMul(derivative_div_factorial, z_minus_z0_pow_n);
 
-        if (!term.isFinite()) {
-            if (n === 0 && zInputComplex.equals(z0Complex)) {
-                
-                return new Complex(NaN, NaN);
-            } else if (n > 0 && zInputComplex.equals(z0Complex)) {
-                
-                
-            } else if (term.abs() > POLE_MAGNITUDE_THRESHOLD * 100 && n > 0){
-              
-              
-              
+        if (!isFiniteComplex(term)) {
+            const equals = Math.abs(zInputComplex.re - z0Complex.re) < 1e-9 && Math.abs(zInputComplex.im - z0Complex.im) < 1e-9;
+            if (n === 0 && equals) {
+                return { re: NaN, im: NaN };
+            } else if (n > 0 && equals) {
+            } else if (Math.sqrt(term.re * term.re + term.im * term.im) > POLE_MAGNITUDE_THRESHOLD * 100 && n > 0) {
             }
         }
-        seriesSum = seriesSum.add(term);
+        seriesSum = complexAdd(seriesSum, term);
     }
     return seriesSum;
 }

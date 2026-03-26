@@ -126,12 +126,17 @@ function getSphereSourcePoints(inputShape, zPlaneParams, sphereCenterRe, sphereC
     } else if (inputShape === 'empty_grid') { }
     else if (inputShape === 'strip_horizontal') {let p1 = [], p2 = []; for(let i=0; i<=pps_other_shapes; ++i) { const x = zxR_cv[0] + i * (zxR_cv[1] - zxR_cv[0]) / pps_other_shapes; p1.push({re: x, im: state.stripY1}); p2.push({re: x, im: state.stripY2});} point_sets.push({points: p1, color: COLOR_STRIP_LINES}); point_sets.push({points: p2, color: COLOR_STRIP_LINES});}
     else if (inputShape === 'sector_angular') {const a1 = state.sectorAngle1 * Math.PI / 180, a2 = state.sectorAngle2 * Math.PI / 180; const rMin = state.sectorRMin, rMax = state.sectorRMax; let rd1=[], rd2=[], acMin=[], acMax=[]; for(let i=0; i<=pps_other_shapes/2; ++i) { rd1.push({re: (rMin + i*(rMax-rMin)/(pps_other_shapes/2)) * Math.cos(a1), im: (rMin + i*(rMax-rMin)/(pps_other_shapes/2)) * Math.sin(a1)}); } for(let i=0; i<=pps_other_shapes/2; ++i) { rd2.push({re: (rMin + i*(rMax-rMin)/(pps_other_shapes/2)) * Math.cos(a2), im: (rMin + i*(rMax-rMin)/(pps_other_shapes/2)) * Math.sin(a2)}); } for(let i=0; i<=pps_other_shapes/2; ++i) { const ang = a1 + i*(a2-a1)/(pps_other_shapes/2); acMin.push({re: rMin * Math.cos(ang), im: rMin * Math.sin(ang)}); } for(let i=0; i<=pps_other_shapes/2; ++i) { const ang = a1 + i*(a2-a1)/(pps_other_shapes/2); acMax.push({re: rMax * Math.cos(ang), im: rMax * Math.sin(ang)}); } point_sets.push({points:rd1, color: COLOR_SECTOR_LINES}); point_sets.push({points:rd2, color: COLOR_SECTOR_LINES}); point_sets.push({points:acMin, color: COLOR_SECTOR_LINES}); point_sets.push({points:acMax, color: COLOR_SECTOR_LINES});}
-    else if (inputShape === 'line') {let hzp=[];for(let i=0;i<=pps_other_shapes;++i)hzp.push({re:zxR_cv[0]+i*(zxR_cv[1]-zxR_cv[0])/pps_other_shapes,im:state.b0}); point_sets.push({points:hzp,color:COLOR_INPUT_SHAPE_Z}); let vzp=[];for(let i=0;i<=pps_other_shapes;++i)vzp.push({re:state.a0,im:zyR_cv[0]+i*(zyR_cv[1]-zyR_cv[0])/pps_other_shapes}); point_sets.push({points:vzp,color:COLOR_INPUT_LINE_IM_Z});}
+    else if (inputShape === 'line') {
+        let hzp = generateLinePoints(zxR_cv[0], zxR_cv[1], state.b0, pps_other_shapes);
+        point_sets.push({points:hzp,color:COLOR_INPUT_SHAPE_Z});
+        let vzp = generateVerticalLinePoints(state.a0, zyR_cv[0], zyR_cv[1], pps_other_shapes);
+        point_sets.push({points:vzp,color:COLOR_INPUT_LINE_IM_Z});
+    }
     else { 
         let spm=[], col = COLOR_INPUT_SHAPE_Z;
-        if(inputShape==='circle'){for(let i=0;i<=pps_other_shapes;++i){const t=(i/pps_other_shapes)*2*Math.PI;spm.push({re:state.a0+state.circleR*Math.cos(t),im:state.b0+state.circleR*Math.sin(t)});}}
-        else if(inputShape==='ellipse'){for(let i=0;i<=pps_other_shapes;++i){const t=(i/pps_other_shapes)*2*Math.PI;spm.push({re:state.a0+state.ellipseA*Math.cos(t),im:state.b0+state.ellipseB*Math.sin(t)});}}
-        else if(inputShape==='hyperbola'){const UM=2.5; for(let i=0;i<=pps_other_shapes/2;++i){const u=(i/(pps_other_shapes/2))*UM-UM/2;spm.push({re:state.a0+state.hyperbolaA*cosh(u),im:state.b0+state.hyperbolaB*sinh(u)});} spm.push(null); for(let i=0;i<=pps_other_shapes/2;++i){const u=(i/(pps_other_shapes/2))*UM-UM/2;spm.push({re:state.a0-state.hyperbolaA*cosh(u),im:state.b0+state.hyperbolaB*sinh(u)});}}
+        if(inputShape==='circle') spm = generateCirclePoints(state.a0, state.b0, state.circleR, pps_other_shapes);
+        else if(inputShape==='ellipse') spm = generateEllipsePoints(state.a0, state.b0, state.ellipseA, state.ellipseB, pps_other_shapes);
+        else if(inputShape==='hyperbola') spm = generateHyperbolaPoints(state.a0, state.b0, state.hyperbolaA, state.hyperbolaB, pps_other_shapes);
         point_sets.push({points:spm, color:col});
     }
     return point_sets;

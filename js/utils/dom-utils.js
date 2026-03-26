@@ -1,3 +1,154 @@
+const DOM_BINDINGS = [
+    { key: 'zCanvasCard', id: 'z_plane_column' },
+    { key: 'wCanvasCard', id: 'w_plane_column' },
+    { key: 'toggleFullscreenZBtn', id: 'toggle_fullscreen_z_btn' },
+    { key: 'toggleFullscreenWBtn', id: 'toggle_fullscreen_w_btn' },
+    { key: 'fullscreenContainer', id: 'fullscreen_container' },
+    { key: 'closeFullscreenBtn', id: 'close_fullscreen_btn' },
+    { key: 'commonParamsSliders', id: 'common_params_sliders' },
+    { key: 'shapeParamsSliders', id: 'shape_params_sliders' },
+    { key: 'mobiusParamsSliders', id: 'mobius_params_sliders' },
+    { key: 'polynomialParamsSliders', id: 'polynomial_params_sliders' },
+    { key: 'polynomialNSlider', id: 'polynomialN_slider' },
+    { key: 'polynomialNValueDisplay', id: 'polynomialN_value_display' },
+    { key: 'polynomialCoeffsContainer', id: 'polynomial_coeffs_container' },
+    { key: 'circleRSliderGroup', id: 'circleR_slider_group' },
+    { key: 'ellipseParamsSliderGroup', id: 'ellipse_params_slider_group' },
+    { key: 'hyperbolaParamsSliderGroup', id: 'hyperbola_params_slider_group' },
+    { key: 'stripHorizontalParamsSliders', id: 'strip_horizontal_params_sliders' },
+    { key: 'stripY1Slider', id: 'stripY1_slider' },
+    { key: 'stripY1ValueDisplay', id: 'stripY1_value_display' },
+    { key: 'stripY2Slider', id: 'stripY2_slider' },
+    { key: 'stripY2ValueDisplay', id: 'stripY2_value_display' },
+    { key: 'sectorAngularParamsSliders', id: 'sector_angular_params_sliders' },
+    { key: 'sectorAngle1Slider', id: 'sectorAngle1_slider' },
+    { key: 'sectorAngle1ValueDisplay', id: 'sectorAngle1_value_display' },
+    { key: 'sectorAngle2Slider', id: 'sectorAngle2_slider' },
+    { key: 'sectorAngle2ValueDisplay', id: 'sectorAngle2_value_display' },
+    { key: 'sectorRMinSlider', id: 'sectorRMin_slider' },
+    { key: 'sectorRMinValueDisplay', id: 'sectorRMin_value_display' },
+    { key: 'sectorRMaxSlider', id: 'sectorRMax_slider' },
+    { key: 'sectorRMaxValueDisplay', id: 'sectorRMax_value_display' },
+    { key: 'inputShapeSelector', id: 'input_shape_selector' },
+    { key: 'fourierSpecificControlsDiv', id: 'fourier_specific_controls' },
+    { key: 'fourierFunctionSelector', id: 'fourier_function_selector' },
+    { key: 'fourierFrequencySlider', id: 'fourier_frequency_slider' },
+    { key: 'fourierFrequencyValueDisplay', id: 'fourier_frequency_value_display' },
+    { key: 'fourierAmplitudeSlider', id: 'fourier_amplitude_slider' },
+    { key: 'fourierAmplitudeValueDisplay', id: 'fourier_amplitude_value_display' },
+    { key: 'fourierTimeWindowSlider', id: 'fourier_time_window_slider' },
+    { key: 'fourierTimeWindowValueDisplay', id: 'fourier_time_window_value_display' },
+    { key: 'fourierSamplesSlider', id: 'fourier_samples_slider' },
+    { key: 'fourierSamplesValueDisplay', id: 'fourier_samples_value_display' },
+    { key: 'fourierWindingFrequencySlider', id: 'fourier_winding_frequency_slider' },
+    { key: 'fourierWindingFrequencyValueDisplay', id: 'fourier_winding_frequency_value_display' },
+    { key: 'fourierWindingTimeSlider', id: 'fourier_winding_time_slider' },
+    { key: 'fourierWindingTimeValueDisplay', id: 'fourier_winding_time_value_display' },
+    { key: 'laplaceSpecificControlsDiv', id: 'laplace_specific_controls' },
+    { key: 'laplaceFunctionSelector', id: 'laplace_function_selector' },
+    { key: 'laplaceFrequencySlider', id: 'laplace_frequency_slider' },
+    { key: 'laplaceFrequencyValueDisplay', id: 'laplace_frequency_value_display' },
+    { key: 'laplaceDampingSlider', id: 'laplace_damping_slider' },
+    { key: 'laplaceDampingValueDisplay', id: 'laplace_damping_value_display' },
+    { key: 'laplaceSigmaSlider', id: 'laplace_sigma_slider' },
+    { key: 'laplaceSigmaValueDisplay', id: 'laplace_sigma_value_display' },
+    { key: 'laplaceOmegaSlider', id: 'laplace_omega_slider' },
+    { key: 'laplaceOmegaValueDisplay', id: 'laplace_omega_value_display' },
+    { key: 'laplaceShowROCCb', id: 'laplace_show_roc_cb' },
+    { key: 'laplaceVizModeSelector', id: 'laplace_viz_mode_selector' },
+    { key: 'laplaceClipHeightSlider', id: 'laplace_clip_height_slider' },
+    { key: 'laplaceClipHeightValueDisplay', id: 'laplace_clip_height_value_display' },
+    { key: 'laplaceShowPolesZerosCb', id: 'laplace_show_poles_zeros_cb' },
+    { key: 'laplaceFindPolesZerosBtn', id: 'laplace_find_poles_zeros_btn' },
+    { key: 'laplaceStabilityAnalysisBtn', id: 'laplace_stability_analysis_btn' },
+    { key: 'laplaceStabilityDisplay', id: 'laplace_stability_display' },
+    { key: 'laplaceShowFourierLineCb', id: 'laplace_show_fourier_line_cb' },
+    { key: 'wPlaneTitleFunc', id: 'w-plane-title-func' },
+    { key: 'zPlaneTitle', id: 'z-plane-title' },
+    { key: 'wPlaneTitle', id: 'w-plane-title' },
+    { key: 'enableDomainColoringCb', id: 'enable_domain_coloring_cb' },
+    { key: 'domainColoringOptionsDiv', id: 'domain_coloring_options_div' },
+    { key: 'domainBrightnessSlider', id: 'domain_brightness_slider' },
+    { key: 'domainBrightnessValueDisplay', id: 'domain_brightness_value_display' },
+    { key: 'domainContrastSlider', id: 'domain_contrast_slider' },
+    { key: 'domainContrastValueDisplay', id: 'domain_contrast_value_display' },
+    { key: 'domainSaturationSlider', id: 'domain_saturation_slider' },
+    { key: 'domainSaturationValueDisplay', id: 'domain_saturation_value_display' },
+    { key: 'domainLightnessCyclesSlider', id: 'domain_lightness_cycles_slider' },
+    { key: 'domainLightnessCyclesValueDisplay', id: 'domain_lightness_cycles_value_display' },
+    { key: 'domainColoringKeyDiv', id: 'domain_coloring_key' },
+    { key: 'gridDensitySlider', id: 'grid_density_slider' },
+    { key: 'gridDensityValueDisplay', id: 'grid_density_value_display' },
+    { key: 'showZerosPolesCb', id: 'show_zeros_poles_cb' },
+    { key: 'showCriticalPointsCb', id: 'show_critical_points_cb' },
+    { key: 'neighborhoodSizeSlider', id: 'neighborhood_size_slider' },
+    { key: 'neighborhoodSizeValueDisplay', id: 'neighborhood_size_value_display' },
+    { key: 'enableRiemannSphereCb', id: 'enable_riemann_sphere_cb' },
+    { key: 'enableTaylorSeriesCb', id: 'enable_taylor_series_cb' },
+    { key: 'taylorSeriesOptionsDetailDiv', id: 'taylor_series_options_detail_div' },
+    { key: 'taylorSeriesOrderSlider', id: 'taylor_series_order_slider' },
+    { key: 'taylorSeriesOrderValueDisplay', id: 'taylor_series_order_value_display' },
+    { key: 'enableTaylorSeriesCustomCenterCb', id: 'enable_taylor_series_custom_center_cb' },
+    { key: 'taylorSeriesCustomCenterInputsDiv', id: 'taylor_series_custom_center_inputs_div' },
+    { key: 'taylorSeriesCustomCenterReInput', id: 'taylor_series_custom_center_re_input' },
+    { key: 'taylorSeriesCustomCenterImInput', id: 'taylor_series_custom_center_im_input' },
+    { key: 'zPlaneProbeInfo', id: 'z_plane_probe_info' },
+    { key: 'wPlaneProbeInfo', id: 'w_plane_probe_info' },
+    { key: 'wPlaneAnalysisInfo', id: 'w_plane_analysis_info' },
+    { key: 'zPlaneZoomSlider', id: 'z_plane_zoom_slider' },
+    { key: 'zPlaneZoomValueDisplay', id: 'z_plane_zoom_value_display' },
+    { key: 'wPlaneZoomSlider', id: 'w_plane_zoom_slider' },
+    { key: 'wPlaneZoomValueDisplay', id: 'w_plane_zoom_value_display' },
+    { key: 'toggleZetaContinuationBtn', id: 'toggle_zeta_continuation_btn' },
+    { key: 'zetaSpecificControlsDiv', id: 'zeta_specific_controls' },
+    { key: 'enableVectorFieldCb', id: 'enable_vector_field_cb' },
+    { key: 'vectorFieldOptionsDiv', id: 'vector_field_options_div' },
+    { key: 'vectorFieldFunctionSelector', id: 'vector_field_function_selector' },
+    { key: 'vectorFieldScaleSlider', id: 'vector_field_scale_slider' },
+    { key: 'vectorFieldScaleValueDisplay', id: 'vector_field_scale_value_display' },
+    { key: 'enableCauchyIntegralModeCb', id: 'enable_cauchy_integral_mode_cb' },
+    { key: 'cauchyIntegralResultsInfo', id: 'cauchy_integral_results_info' },
+    { key: 'enableRadialDiscreteStepsCb', id: 'enable_radial_discrete_steps_cb' },
+    { key: 'radialDiscreteStepsOptionsDiv', id: 'radial_discrete_steps_options_div' },
+    { key: 'radialDiscreteStepsCountSlider', id: 'radial_discrete_steps_count_slider' },
+    { key: 'radialDiscreteStepsCountValueDisplay', id: 'radial_discrete_steps_count_value_display' },
+    { key: 'enableSplitViewCb', id: 'enable_split_view_cb' },
+    { key: 'sphereViewControlsDiv', id: 'sphere_view_controls_div' },
+    { key: 'sphereViewNorthBtn', id: 'sphere_view_north_btn' },
+    { key: 'sphereViewSouthBtn', id: 'sphere_view_south_btn' },
+    { key: 'sphereViewEastBtn', id: 'sphere_view_east_btn' },
+    { key: 'sphereViewWestBtn', id: 'sphere_view_west_btn' },
+    { key: 'sphereViewFrontBtn', id: 'sphere_view_front_btn' },
+    { key: 'sphereViewResetBtn', id: 'sphere_view_reset_btn' },
+    { key: 'showVectorFieldPanelCb', id: 'show_vector_field_panel_cb' },
+    { key: 'vectorFlowOptionsContent', id: 'vector_flow_options_content' },
+    { key: 'vectorArrowThicknessSlider', id: 'vector_arrow_thickness_slider' },
+    { key: 'vectorArrowThicknessValueDisplay', id: 'vector_arrow_thickness_value_display' },
+    { key: 'vectorArrowHeadSizeSlider', id: 'vector_arrow_head_size_slider' },
+    { key: 'vectorArrowHeadSizeValueDisplay', id: 'vector_arrow_head_size_value_display' },
+    { key: 'enableStreamlineFlowCb', id: 'enable_streamline_flow_cb' },
+    { key: 'streamlineOptionsDetailsDiv', id: 'streamline_options_details_div' },
+    { key: 'clearManualSeedsBtn', id: 'clear_manual_seeds_btn' },
+    { key: 'streamlineStepSizeSlider', id: 'streamline_step_size_slider' },
+    { key: 'streamlineStepSizeValueDisplay', id: 'streamline_step_size_value_display' },
+    { key: 'streamlineMaxLengthSlider', id: 'streamline_max_length_slider' },
+    { key: 'streamlineMaxLengthValueDisplay', id: 'streamline_max_length_value_display' },
+    { key: 'streamlineThicknessSlider', id: 'streamline_thickness_slider' },
+    { key: 'streamlineThicknessValueDisplay', id: 'streamline_thickness_value_display' },
+    { key: 'streamlineSeedDensityFactorSlider', id: 'streamline_seed_density_factor_slider' },
+    { key: 'streamlineSeedDensityFactorValueDisplay', id: 'streamline_seed_density_factor_value_display' },
+    { key: 'enableParticleAnimationCb', id: 'enable_particle_animation_cb' },
+    { key: 'particleAnimationDetailsDiv', id: 'particle_animation_details_div' },
+    { key: 'particleDensitySlider', id: 'particle_density_slider' },
+    { key: 'particleDensityValueDisplay', id: 'particle_density_value_display' },
+    { key: 'particleSpeedSlider', id: 'particle_speed_slider' },
+    { key: 'particleSpeedValueDisplay', id: 'particle_speed_value_display' },
+    { key: 'particleMaxLifetimeSlider', id: 'particle_max_lifetime_slider' },
+    { key: 'particleMaxLifetimeValueDisplay', id: 'particle_max_lifetime_value_display' },
+    { key: 'functionControlsPanel', id: 'function-controls-panel' },
+    { key: 'visualizationOptionsPanel', id: 'visualization-options-panel' }
+];
+
 function setupDOMReferences() {
     zCanvas = document.getElementById('z_plane_canvas'); wCanvas = document.getElementById('w_plane_canvas');
     zCtx = zCanvas.getContext('2d');
@@ -13,11 +164,10 @@ function setupDOMReferences() {
     if (typeof initializeWebGLDomainColoringSupport === 'function') {
         initializeWebGLDomainColoringSupport();
     }
-    controls.zCanvasCard = document.getElementById('z_plane_column'); 
-    controls.wCanvasCard = document.getElementById('w_plane_column'); 
-    controls.toggleFullscreenZBtn = document.getElementById('toggle_fullscreen_z_btn'); controls.toggleFullscreenWBtn = document.getElementById('toggle_fullscreen_w_btn');
-    controls.fullscreenContainer = document.getElementById('fullscreen_container'); 
-    controls.closeFullscreenBtn = document.getElementById('close_fullscreen_btn'); 
+
+    DOM_BINDINGS.forEach(binding => {
+        controls[binding.key] = document.getElementById(binding.id);
+    });
 
     zDomainColorCanvas = document.createElement('canvas'); wDomainColorCanvas = document.createElement('canvas');
     zDomainColorCtx = zDomainColorCanvas.getContext('2d', { willReadFrequently: true });
@@ -35,22 +185,6 @@ function setupDOMReferences() {
         const speedSel = document.getElementById(`speed_${key}_selector`); if (speedSel) controls[`speed_${key}Selector`] = speedSel;
     });
 
-    controls.commonParamsSliders = document.getElementById('common_params_sliders');
-    controls.shapeParamsSliders = document.getElementById('shape_params_sliders');
-    controls.mobiusParamsSliders = document.getElementById('mobius_params_sliders');
-    controls.polynomialParamsSliders = document.getElementById('polynomial_params_sliders');
-    controls.polynomialNSlider = document.getElementById('polynomialN_slider');
-    controls.polynomialNValueDisplay = document.getElementById('polynomialN_value_display');
-    controls.polynomialCoeffsContainer = document.getElementById('polynomial_coeffs_container');
-    controls.circleRSliderGroup = document.getElementById('circleR_slider_group');
-    controls.ellipseParamsSliderGroup = document.getElementById('ellipse_params_slider_group');
-    controls.hyperbolaParamsSliderGroup = document.getElementById('hyperbola_params_slider_group');
-    controls.stripHorizontalParamsSliders = document.getElementById('strip_horizontal_params_sliders');
-    controls.stripY1Slider = document.getElementById('stripY1_slider'); controls.stripY1ValueDisplay = document.getElementById('stripY1_value_display');
-    controls.stripY2Slider = document.getElementById('stripY2_slider'); controls.stripY2ValueDisplay = document.getElementById('stripY2_value_display');
-    controls.sectorAngularParamsSliders = document.getElementById('sector_angular_params_sliders');
-
-    
     ['A', 'B', 'C', 'D'].forEach(param => {
         ['re', 'im'].forEach(part => {
             controls[`mobius${param}_${part}_slider`] = document.getElementById(`mobius${param}_${part}_slider`);
@@ -60,186 +194,10 @@ function setupDOMReferences() {
         });
     });
 
-    controls.sectorAngle1Slider = document.getElementById('sectorAngle1_slider'); controls.sectorAngle1ValueDisplay = document.getElementById('sectorAngle1_value_display');
-    controls.sectorAngle2Slider = document.getElementById('sectorAngle2_slider'); controls.sectorAngle2ValueDisplay = document.getElementById('sectorAngle2_value_display');
-    controls.sectorRMinSlider = document.getElementById('sectorRMin_slider'); controls.sectorRMinValueDisplay = document.getElementById('sectorRMin_value_display');
-    controls.sectorRMaxSlider = document.getElementById('sectorRMax_slider'); controls.sectorRMaxValueDisplay = document.getElementById('sectorRMax_value_display');
-
-    controls.inputShapeSelector = document.getElementById('input_shape_selector');
     controls.funcButtons = {};
     ['fourier', 'laplace', 'cos', 'sin', 'tan', 'sec', 'exp', 'ln', 'reciprocal', 'mobius', 'zeta', 'polynomial', 'poincare'].forEach(f => { 
         controls.funcButtons[f] = document.getElementById(`select_${f}_btn`);
     });
-    
-    // Fourier Transform controls
-    controls.fourierSpecificControlsDiv = document.getElementById('fourier_specific_controls');
-    controls.fourierFunctionSelector = document.getElementById('fourier_function_selector');
-    controls.fourierFrequencySlider = document.getElementById('fourier_frequency_slider');
-    controls.fourierFrequencyValueDisplay = document.getElementById('fourier_frequency_value_display');
-    controls.fourierAmplitudeSlider = document.getElementById('fourier_amplitude_slider');
-    controls.fourierAmplitudeValueDisplay = document.getElementById('fourier_amplitude_value_display');
-    controls.fourierTimeWindowSlider = document.getElementById('fourier_time_window_slider');
-    controls.fourierTimeWindowValueDisplay = document.getElementById('fourier_time_window_value_display');
-    controls.fourierSamplesSlider = document.getElementById('fourier_samples_slider');
-    controls.fourierSamplesValueDisplay = document.getElementById('fourier_samples_value_display');
-    controls.fourierWindingFrequencySlider = document.getElementById('fourier_winding_frequency_slider');
-    controls.fourierWindingFrequencyValueDisplay = document.getElementById('fourier_winding_frequency_value_display');
-    controls.fourierWindingTimeSlider = document.getElementById('fourier_winding_time_slider');
-    controls.fourierWindingTimeValueDisplay = document.getElementById('fourier_winding_time_value_display');
-    
-    // Laplace Transform controls
-    controls.laplaceSpecificControlsDiv = document.getElementById('laplace_specific_controls');
-    controls.laplaceFunctionSelector = document.getElementById('laplace_function_selector');
-    controls.laplaceFrequencySlider = document.getElementById('laplace_frequency_slider');
-    controls.laplaceFrequencyValueDisplay = document.getElementById('laplace_frequency_value_display');
-    controls.laplaceDampingSlider = document.getElementById('laplace_damping_slider');
-    controls.laplaceDampingValueDisplay = document.getElementById('laplace_damping_value_display');
-    controls.laplaceSigmaSlider = document.getElementById('laplace_sigma_slider');
-    controls.laplaceSigmaValueDisplay = document.getElementById('laplace_sigma_value_display');
-    controls.laplaceOmegaSlider = document.getElementById('laplace_omega_slider');
-    controls.laplaceOmegaValueDisplay = document.getElementById('laplace_omega_value_display');
-    controls.laplaceShowROCCb = document.getElementById('laplace_show_roc_cb');
-    controls.laplaceVizModeSelector = document.getElementById('laplace_viz_mode_selector');
-    controls.laplaceClipHeightSlider = document.getElementById('laplace_clip_height_slider');
-    controls.laplaceClipHeightValueDisplay = document.getElementById('laplace_clip_height_value_display');
-    controls.laplaceShowPolesZerosCb = document.getElementById('laplace_show_poles_zeros_cb');
-    controls.laplaceFindPolesZerosBtn = document.getElementById('laplace_find_poles_zeros_btn');
-    controls.laplaceStabilityAnalysisBtn = document.getElementById('laplace_stability_analysis_btn');
-    controls.laplaceStabilityDisplay = document.getElementById('laplace_stability_display');
-    controls.laplaceShowFourierLineCb = document.getElementById('laplace_show_fourier_line_cb');
-    
-    controls.wPlaneTitleFunc = document.getElementById('w-plane-title-func');
-    controls.zPlaneTitle = document.getElementById('z-plane-title');
-    controls.wPlaneTitle = document.getElementById('w-plane-title');
-    controls.enableDomainColoringCb = document.getElementById('enable_domain_coloring_cb');
-    
-    controls.domainColoringOptionsDiv = document.getElementById('domain_coloring_options_div');
-    controls.domainBrightnessSlider = document.getElementById('domain_brightness_slider');
-    controls.domainBrightnessValueDisplay = document.getElementById('domain_brightness_value_display');
-    controls.domainContrastSlider = document.getElementById('domain_contrast_slider');
-    controls.domainContrastValueDisplay = document.getElementById('domain_contrast_value_display');
-    controls.domainSaturationSlider = document.getElementById('domain_saturation_slider');
-    controls.domainSaturationValueDisplay = document.getElementById('domain_saturation_value_display');
-    controls.domainLightnessCyclesSlider = document.getElementById('domain_lightness_cycles_slider');
-    controls.domainLightnessCyclesValueDisplay = document.getElementById('domain_lightness_cycles_value_display');
-    controls.domainColoringKeyDiv = document.getElementById('domain_coloring_key'); 
-
-
-    controls.gridDensitySlider = document.getElementById('grid_density_slider');
-    controls.gridDensityValueDisplay = document.getElementById('grid_density_value_display');
-    controls.showZerosPolesCb = document.getElementById('show_zeros_poles_cb');
-    controls.showCriticalPointsCb = document.getElementById('show_critical_points_cb');
-    controls.neighborhoodSizeSlider = document.getElementById('neighborhood_size_slider');
-    controls.neighborhoodSizeValueDisplay = document.getElementById('neighborhood_size_value_display');
-    
-    controls.enableRiemannSphereCb = document.getElementById('enable_riemann_sphere_cb'); 
-    controls.enableTaylorSeriesCb = document.getElementById('enable_taylor_series_cb');
-    controls.taylorSeriesOptionsDetailDiv = document.getElementById('taylor_series_options_detail_div');
-    controls.taylorSeriesOrderSlider = document.getElementById('taylor_series_order_slider');
-    controls.taylorSeriesOrderValueDisplay = document.getElementById('taylor_series_order_value_display');
-    controls.enableTaylorSeriesCustomCenterCb = document.getElementById('enable_taylor_series_custom_center_cb');
-    controls.taylorSeriesCustomCenterInputsDiv = document.getElementById('taylor_series_custom_center_inputs_div');
-    controls.taylorSeriesCustomCenterReInput = document.getElementById('taylor_series_custom_center_re_input');
-    controls.taylorSeriesCustomCenterImInput = document.getElementById('taylor_series_custom_center_im_input');
-    controls.zPlaneProbeInfo = document.getElementById('z_plane_probe_info');
-    controls.wPlaneProbeInfo = document.getElementById('w_plane_probe_info');
-    controls.wPlaneAnalysisInfo = document.getElementById('w_plane_analysis_info');
-    controls.zPlaneZoomSlider = document.getElementById('z_plane_zoom_slider');
-    controls.zPlaneZoomValueDisplay = document.getElementById('z_plane_zoom_value_display');
-    controls.wPlaneZoomSlider = document.getElementById('w_plane_zoom_slider');
-    controls.wPlaneZoomValueDisplay = document.getElementById('w_plane_zoom_value_display');
-    controls.toggleZetaContinuationBtn = document.getElementById('toggle_zeta_continuation_btn');
-    controls.zetaSpecificControlsDiv = document.getElementById('zeta_specific_controls');
-    controls.enableVectorFieldCb = document.getElementById('enable_vector_field_cb');
-    controls.vectorFieldOptionsDiv = document.getElementById('vector_field_options_div');
-    controls.vectorFieldFunctionSelector = document.getElementById('vector_field_function_selector');
-    controls.vectorFieldScaleSlider = document.getElementById('vector_field_scale_slider');
-    controls.vectorFieldScaleValueDisplay = document.getElementById('vector_field_scale_value_display');
-    controls.enableCauchyIntegralModeCb = document.getElementById('enable_cauchy_integral_mode_cb');
-    controls.cauchy_integral_results_info = document.getElementById('cauchy_integral_results_info');
-
-    
-    controls.enableRadialDiscreteStepsCb = document.getElementById('enable_radial_discrete_steps_cb');
-    controls.radialDiscreteStepsOptionsDiv = document.getElementById('radial_discrete_steps_options_div');
-    controls.radialDiscreteStepsCountSlider = document.getElementById('radial_discrete_steps_count_slider');
-    controls.radialDiscreteStepsCountValueDisplay = document.getElementById('radial_discrete_steps_count_value_display');
-
-    
-    controls.enableSplitViewCb = document.getElementById('enable_split_view_cb');
-    controls.sphereViewControlsDiv = document.getElementById('sphere_view_controls_div');
-    ['sphere_view_north_btn', 'sphere_view_south_btn', 'sphere_view_east_btn', 'sphere_view_west_btn', 'sphere_view_front_btn', 'sphere_view_reset_btn'].forEach(id => {
-        controls[id] = document.getElementById(id);
-    });
-
-    
-    controls.showVectorFieldPanelCb = document.getElementById('show_vector_field_panel_cb');
-    controls.vectorFlowOptionsContent = document.getElementById('vector_flow_options_content');
-    controls.enableDomainColoringCb = document.getElementById('enable_domain_coloring_cb');
-    controls.domainColoringOptionsDiv = document.getElementById('domain_coloring_options_div');
-    controls.domainBrightnessSlider = document.getElementById('domain_brightness_slider');
-    controls.domainBrightnessValueDisplay = document.getElementById('domain_brightness_value_display');
-    controls.domainContrastSlider = document.getElementById('domain_contrast_slider');
-    controls.domainContrastValueDisplay = document.getElementById('domain_contrast_value_display');
-    controls.domainSaturationSlider = document.getElementById('domain_saturation_slider');
-    controls.domainSaturationValueDisplay = document.getElementById('domain_saturation_value_display');
-    controls.domainLightnessCyclesSlider = document.getElementById('domain_lightness_cycles_slider');
-    controls.domainLightnessCyclesValueDisplay = document.getElementById('domain_lightness_cycles_value_display');
-    controls.showZerosPolesCb = document.getElementById('show_zeros_poles_cb');
-    controls.showCriticalPointsCb = document.getElementById('show_critical_points_cb');
-    controls.enableRadialDiscreteStepsCb = document.getElementById('enable_radial_discrete_steps_cb');
-    controls.radialDiscreteStepsOptionsDiv = document.getElementById('radial_discrete_steps_options_div');
-    controls.radialDiscreteStepsCountSlider = document.getElementById('radial_discrete_steps_count_slider');
-    controls.radialDiscreteStepsCountValueDisplay = document.getElementById('radial_discrete_steps_count_value_display');
-    controls.enableCauchyIntegralModeCb = document.getElementById('enable_cauchy_integral_mode_cb');
-    controls.cauchyIntegralResultsInfo = document.getElementById('cauchy_integral_results_info');
-    controls.enableTaylorSeriesCb = document.getElementById('enable_taylor_series_cb');
-    controls.taylorSeriesOptionsDetailDiv = document.getElementById('taylor_series_options_detail_div');
-    controls.taylorSeriesOrderSlider = document.getElementById('taylor_series_order_slider');
-    controls.taylorSeriesOrderValueDisplay = document.getElementById('taylor_series_order_value_display');
-    controls.enableTaylorSeriesCustomCenterCb = document.getElementById('enable_taylor_series_custom_center_cb');
-    controls.taylorSeriesCustomCenterInputsDiv = document.getElementById('taylor_series_custom_center_inputs_div');
-    controls.taylorSeriesCustomCenterReInput = document.getElementById('taylor_series_custom_center_re_input');
-    controls.taylorSeriesCustomCenterImInput = document.getElementById('taylor_series_custom_center_im_input');
-    controls.enableRiemannSphereCb = document.getElementById('enable_riemann_sphere_cb');
-    controls.enableSplitViewCb = document.getElementById('enable_split_view_cb');
-    controls.sphereViewNorthBtn = document.getElementById('sphere_view_north_btn');
-    controls.sphereViewSouthBtn = document.getElementById('sphere_view_south_btn');
-    controls.sphereViewEastBtn = document.getElementById('sphere_view_east_btn');
-    controls.sphereViewWestBtn = document.getElementById('sphere_view_west_btn');
-    controls.sphereViewFrontBtn = document.getElementById('sphere_view_front_btn');
-    controls.sphereViewResetBtn = document.getElementById('sphere_view_reset_btn');
-    controls.enableVectorFieldCb = document.getElementById('enable_vector_field_cb');
-    controls.vectorFieldOptionsDiv = document.getElementById('vector_field_options_div');
-    controls.vectorFieldFunctionSelector = document.getElementById('vector_field_function_selector');
-    controls.vectorFieldScaleSlider = document.getElementById('vector_field_scale_slider');
-    controls.vectorFieldScaleValueDisplay = document.getElementById('vector_field_scale_value_display');
-    controls.vectorArrowThicknessSlider = document.getElementById('vector_arrow_thickness_slider');
-    controls.vectorArrowThicknessValueDisplay = document.getElementById('vector_arrow_thickness_value_display');
-    controls.vectorArrowHeadSizeSlider = document.getElementById('vector_arrow_head_size_slider');
-    controls.vectorArrowHeadSizeValueDisplay = document.getElementById('vector_arrow_head_size_value_display');
-    controls.enableStreamlineFlowCb = document.getElementById('enable_streamline_flow_cb');
-    controls.streamlineOptionsDetailsDiv = document.getElementById('streamline_options_details_div');
-    controls.clearManualSeedsBtn = document.getElementById('clear_manual_seeds_btn');
-    controls.streamlineStepSizeSlider = document.getElementById('streamline_step_size_slider');
-    controls.streamlineStepSizeValueDisplay = document.getElementById('streamline_step_size_value_display');
-    controls.streamlineMaxLengthSlider = document.getElementById('streamline_max_length_slider');
-    controls.streamlineMaxLengthValueDisplay = document.getElementById('streamline_max_length_value_display');
-    controls.streamlineThicknessSlider = document.getElementById('streamline_thickness_slider');
-    controls.streamlineThicknessValueDisplay = document.getElementById('streamline_thickness_value_display');
-    controls.streamlineSeedDensityFactorSlider = document.getElementById('streamline_seed_density_factor_slider');
-    controls.streamlineSeedDensityFactorValueDisplay = document.getElementById('streamline_seed_density_factor_value_display');
-    controls.enableParticleAnimationCb = document.getElementById('enable_particle_animation_cb');
-    controls.particleAnimationDetailsDiv = document.getElementById('particle_animation_details_div');
-    controls.particleDensitySlider = document.getElementById('particle_density_slider');
-    controls.particleDensityValueDisplay = document.getElementById('particle_density_value_display');
-    controls.particleSpeedSlider = document.getElementById('particle_speed_slider');
-    controls.particleSpeedValueDisplay = document.getElementById('particle_speed_value_display');
-    controls.particleMaxLifetimeSlider = document.getElementById('particle_max_lifetime_slider');
-    controls.particleMaxLifetimeValueDisplay = document.getElementById('particle_max_lifetime_value_display');
-
-    // Add references for the main panels
-    controls.functionControlsPanel = document.getElementById('function-controls-panel');
-    controls.visualizationOptionsPanel = document.getElementById('visualization-options-panel');
     
     const essentialControlIds = [
         'z_plane_canvas', 'w_plane_canvas', // These are global vars, special check
