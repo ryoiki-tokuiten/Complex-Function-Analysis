@@ -1170,8 +1170,6 @@ function bindFullscreenControls() {
             if (column3d) {
                 column3d.classList.add('hidden-visually');
             }
-
-            controls.toggleFullscreenLaplace3DBtn.textContent = '✖ Exit';
         } else {
             if (state.originalLaplace3DParent) {
                 state.originalLaplace3DParent.appendChild(container3d);
@@ -1199,8 +1197,6 @@ function bindFullscreenControls() {
             fullscreenContainer.style.height = '';
             fullscreenContainer.style.zIndex = '';
             fullscreenContainer.style.backgroundColor = '';
-
-            controls.toggleFullscreenLaplace3DBtn.textContent = 'Fullscreen';
         }
 
         requestAnimationFrame(() => {
@@ -1229,6 +1225,49 @@ function bindFullscreenControls() {
             controls.toggleFullscreenLaplace3DBtn.click();
         }
     });
+}
+
+function syncTopControlsCollapseState() {
+    if (!controls.controlsOptionsSection || !controls.toggleTopControlsBtn || !controls.toggleTopControlsCollapsedBtn || !controls.topControlsCollapsedBar) {
+        return;
+    }
+
+    controls.controlsOptionsSection.classList.toggle('is-collapsed', state.topControlsCollapsed);
+
+    const isCollapsed = state.topControlsCollapsed;
+    const expandedTooltipText = 'Minimize top half panels';
+    const collapsedTooltipText = 'Expand top half panels';
+
+    controls.topControlsCollapsedBar.classList.toggle('hidden', !isCollapsed);
+
+    controls.toggleTopControlsBtn.dataset.tooltip = expandedTooltipText;
+    controls.toggleTopControlsBtn.title = expandedTooltipText;
+    controls.toggleTopControlsBtn.setAttribute('aria-label', expandedTooltipText);
+
+    controls.toggleTopControlsCollapsedBtn.dataset.tooltip = collapsedTooltipText;
+    controls.toggleTopControlsCollapsedBtn.title = collapsedTooltipText;
+    controls.toggleTopControlsCollapsedBtn.setAttribute('aria-label', collapsedTooltipText);
+}
+
+function refreshCanvasLayoutAfterTopControlsToggle() {
+    const resizeAndRedraw = () => {
+        setupVisualParameters(false, false);
+        requestDomainRedraw(true);
+    };
+
+    requestAnimationFrame(resizeAndRedraw);
+    setTimeout(resizeAndRedraw, 280);
+}
+
+function bindTopControlsToggle() {
+    const toggleTopControls = () => {
+        state.topControlsCollapsed = !state.topControlsCollapsed;
+        syncTopControlsCollapseState();
+        refreshCanvasLayoutAfterTopControlsToggle();
+    };
+
+    bindControlListener('toggleTopControlsBtn', 'click', toggleTopControls);
+    bindControlListener('toggleTopControlsCollapsedBtn', 'click', toggleTopControls);
 }
 
 window.setupEventListeners = function () {
@@ -1329,7 +1368,9 @@ window.setupEventListeners = function () {
         });
 
     bindCanvasInteractions();
+    bindTopControlsToggle();
     bindFullscreenControls();
+    syncTopControlsCollapseState();
     updateModePanels();
 };
 
@@ -1424,7 +1465,6 @@ function handleFullScreenToggle(planeType) {
     }
 
     const canvasCard = isZPlane ? controls.zCanvasCard : controls.wCanvasCard;
-    const toggleButton = isZPlane ? controls.toggleFullscreenZBtn : controls.toggleFullscreenWBtn;
     const fullscreenContainer = controls.fullscreenContainer;
 
     if (isZPlane) {
@@ -1478,8 +1518,6 @@ function handleFullScreenToggle(planeType) {
             controls.laplaceWindingSyncBtn.style.top = '50px';
             controls.laplaceWindingSyncBtn.style.right = '20px';
         }
-
-        toggleButton.textContent = '✖ Exit';
     } else {
         const originalParent = isZPlane ? state.originalZParent : state.originalWParent;
         const originalStyle = isZPlane ? state.originalZStyle : state.originalWStyle;
@@ -1517,8 +1555,6 @@ function handleFullScreenToggle(planeType) {
         fullscreenContainer.style.height = '';
         fullscreenContainer.style.zIndex = '';
         fullscreenContainer.style.backgroundColor = '';
-
-        toggleButton.textContent = 'Fullscreen';
     }
 
     setupVisualParameters(true, true);

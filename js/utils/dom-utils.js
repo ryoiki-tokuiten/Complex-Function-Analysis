@@ -1,4 +1,9 @@
 const DOM_BINDINGS = [
+    { key: 'controlsOptionsSection', id: 'controls_options_section' },
+    { key: 'controlsPanelsRow', id: 'controls_panels_row' },
+    { key: 'topControlsCollapsedBar', id: 'top_controls_collapsed_bar' },
+    { key: 'toggleTopControlsBtn', id: 'toggle_top_controls_btn' },
+    { key: 'toggleTopControlsCollapsedBtn', id: 'toggle_top_controls_collapsed_btn' },
     { key: 'zPlaneCanvas', id: 'z_plane_canvas' },
     { key: 'wPlaneCanvas', id: 'w_plane_canvas' },
     { key: 'zCanvasCard', id: 'z_plane_column' },
@@ -180,6 +185,7 @@ const DOM_BINDINGS = [
     { key: 'laplace3DContainer', id: 'laplace_3d_container' },
     { key: 'preloader', id: 'preloader' },
     { key: 'functionControlsPanel', id: 'function-controls-panel' },
+    { key: 'parameterControlsPanel', id: 'parameter-controls-panel' },
     { key: 'visualizationOptionsPanel', id: 'visualization-options-panel' }
 ];
 

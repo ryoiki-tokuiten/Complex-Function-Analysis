@@ -1,3 +1,15 @@
+function syncParameterControlsPanelVisibility() {
+    if (!controls.parameterControlsPanel) {
+        return;
+    }
+
+    const hasVisibleContent = Array.from(controls.parameterControlsPanel.children).some(child =>
+        !child.classList.contains('hidden') && !child.classList.contains('hidden-visually')
+    );
+
+    controls.parameterControlsPanel.classList.toggle('hidden', !hasVisibleContent);
+}
+
 function updateSliderLabelsAndDisplay() {
     try {
         const isFourierMode = state.fourierModeEnabled;
@@ -133,6 +145,8 @@ function updateSliderLabelsAndDisplay() {
     if (controls.taylorSeriesCustomCenterImInput && document.activeElement !== controls.taylorSeriesCustomCenterImInput) {
         controls.taylorSeriesCustomCenterImInput.value = formatTaylorNumericValue(state.taylorSeriesCustomCenter.im);
     }
+
+    syncParameterControlsPanelVisibility();
 
     if (controls.enableStreamlineFlowCb) {
         controls.enableStreamlineFlowCb.checked = state.streamlineFlowEnabled;

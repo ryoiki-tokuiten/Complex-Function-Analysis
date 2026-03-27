@@ -137,7 +137,6 @@ main {
 
 #controls_options_section {
     flex-shrink: 0;
-    overflow-y: hidden; /* Main section itself should not scroll, its child will */
     padding: 1.5rem;
     border-radius: 20px;
     background: var(--card-bg-color);
@@ -147,65 +146,148 @@ main {
     box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.2);
     opacity: 1;
     transform: translateY(0);
-    /* display: flex; /* Modified for side-by-side panels */
-    /* flex-direction: column; /* Modified for side-by-side panels */
-    display: flex;
-    flex-direction: row;
-    justify-content: space-between;
-    align-items: flex-start; /* Align items to the top */
-    gap: 1.5rem; /* Gap between the two new panels */
-}
-
-/* Remove or adapt styles for the old single scrollable container */
-/* #controls_options_section > .input-controls { ... } */
-/* The .input-controls class might be removed from index.html if not used for the outer container anymore */
-
-
-/* Styling for the new side-by-side panels */
-#function-controls-panel,
-#visualization-options-panel {
-    flex-basis: 0;
-    flex-grow: 1;
-    min-width: 250px; /* Minimum width before content gets too cramped */
-    height: 260px; /* Reduced fixed height */
-    overflow-y: auto;
-    padding: 1.25rem; /* Internal padding */
-    border: 1px solid var(--border-color); /* Optional border */
-    border-radius: 12px; /* Optional rounded corners */
-    /* display: grid; /* Changed to flex column */
-    /* grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); /* Removed */
-    /* align-content: flex-start; /* Removed with grid */
     display: flex;
     flex-direction: column;
-    gap: 1.25rem; /* Gap between stacked elements */
-    position: relative; /* For positioning children absolutely (e.g., Riemann toggle) */
-    background-color: transparent; /* Ensure transparency for backdrop-filter */
-
-    /* Custom Scrollbar Styling */
-    scrollbar-width: thin; /* For Firefox */
-    scrollbar-color: var(--border-color) rgba(0,0,0,0.1); /* For Firefox: thumb and track color */
+    gap: 1rem;
+    position: relative;
+    transition: padding 0.25s ease, gap 0.25s ease;
 }
 
-#function-controls-panel::-webkit-scrollbar,
-#visualization-options-panel::-webkit-scrollbar {
+.controls-collapsed-bar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+    min-height: 40px;
+    padding: 0.25rem 0;
+}
+
+.controls-collapsed-label {
+    color: var(--text-color);
+    font-size: 0.92rem;
+    font-weight: 500;
+}
+
+#controls_panels_row {
+    display: flex;
+    gap: 1.25rem;
+    align-items: stretch;
+    max-height: 320px;
+    overflow: hidden;
+    opacity: 1;
+    transition: max-height 0.28s ease, opacity 0.2s ease;
+}
+
+#controls_options_section.is-collapsed {
+    padding-top: 1rem;
+    padding-bottom: 1rem;
+    gap: 0;
+    min-height: 72px;
+}
+
+#controls_options_section.is-collapsed #controls_panels_row {
+    max-height: 0;
+    opacity: 0;
+    pointer-events: none;
+}
+
+#controls_options_section.is-collapsed .controls-collapsed-bar {
+    display: flex;
+}
+
+.controls-panel {
+    flex: 1 1 0;
+    min-width: 0;
+    height: 260px;
+    overflow-y: auto;
+    padding: 1.15rem 1.2rem;
+    border: 1px solid var(--border-color);
+    border-radius: 14px;
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+    position: relative;
+    background:
+        linear-gradient(180deg, rgba(14, 18, 42, 0.22), rgba(14, 18, 42, 0.08)),
+        rgba(255, 255, 255, 0.01);
+    scrollbar-width: thin;
+    scrollbar-color: var(--border-color) rgba(0,0,0,0.1);
+}
+
+.controls-panel::-webkit-scrollbar {
     width: 8px;
 }
 
-#function-controls-panel::-webkit-scrollbar-track,
-#visualization-options-panel::-webkit-scrollbar-track {
+.controls-panel::-webkit-scrollbar-track {
     background: rgba(0,0,0,0.1);
     border-radius: 4px;
 }
 
-#function-controls-panel::-webkit-scrollbar-thumb,
-#visualization-options-panel::-webkit-scrollbar-thumb {
+.controls-panel::-webkit-scrollbar-thumb {
     background: var(--border-color);
     border-radius: 4px;
 }
 
-#function-controls-panel::-webkit-scrollbar-thumb:hover,
-#visualization-options-panel::-webkit-scrollbar-thumb:hover {
+.controls-panel::-webkit-scrollbar-thumb:hover {
     background: var(--glow-color);
+}
+
+.controls-panel-heading {
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+    padding-bottom: 0.2rem;
+}
+
+.controls-panel-eyebrow {
+    font-size: 0.72rem;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    color: color-mix(in srgb, var(--accent-purple) 60%, var(--text-secondary-color));
+}
+
+.controls-panel-title {
+    font-size: 1rem;
+    font-weight: 600;
+    color: var(--text-color);
+}
+
+.controls-panel-copy {
+    font-size: 0.8rem;
+    line-height: 1.45;
+    color: var(--text-secondary-color);
+}
+
+#function-controls-panel {
+    flex: 0.9 1 0;
+}
+
+#parameter-controls-panel,
+#visualization-options-panel {
+    flex: 1.15 1 0;
+}
+
+#visualization-options-panel {
+    padding-top: 1rem;
+}
+
+.controls-panel-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.75rem;
+}
+
+.controls-panel-name {
+    color: var(--text-color);
+    font-size: 0.98rem;
+    font-weight: 600;
+    letter-spacing: 0.01em;
+}
+
+.controls-panel-divider {
+    border-bottom: 1px solid color-mix(in srgb, var(--border-color) 85%, transparent);
+    margin-top: -0.2rem;
 }
 
 /* Styles for the top-right controls container in the visualization panel */
@@ -706,20 +788,59 @@ button:active {
 }
 
 /* Container for function selection buttons */
-#function-controls-panel > .control-group:first-child > div {
+.function-button-grid {
     display: flex;
     flex-wrap: wrap;
     gap: 0.5rem;
 }
 
 /* Specific style for persistently active function selection buttons */
-#function-controls-panel > .control-group:first-child > div > button.active {
+.function-button-grid > button.active {
     background-color: var(--accent-purple-dark);
     color: #fff;
     border-color: var(--accent-purple-dark);
     box-shadow: 0 0 8px var(--accent-purple-dark); /* Use var for color */
     filter: brightness(1); /* Reset any generic active brightness - already present */
     transform: translateY(0px); /* Ensure no press effect persists - already present */
+}
+
+.icon-button {
+    width: 38px;
+    height: 38px;
+    padding: 0;
+    border-radius: 10px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+}
+
+.icon-button svg {
+    width: 18px;
+    height: 18px;
+    stroke-width: 1.8;
+}
+
+.canvas-icon-button {
+    width: 36px;
+    height: 36px;
+}
+
+.top-controls-toggle-btn {
+    width: 40px;
+    height: 40px;
+}
+
+.top-controls-maximize-icon {
+    display: none;
+}
+
+#controls_options_section.is-collapsed .top-controls-minimize-icon {
+    display: none;
+}
+
+#controls_options_section.is-collapsed .top-controls-maximize-icon {
+    display: inline-flex;
 }
 
 /* Generic active state for toggle buttons (e.g., for dependent settings) */
@@ -1061,11 +1182,14 @@ select:focus {
 }
 
 @media (max-width: 960px) {
-    #controls_options_section {
+    #controls_panels_row {
         flex-direction: column;
-        align-items: stretch;
+        max-height: none;
     }
-    /* Note: #function-controls-panel and #visualization-options-panel height remains 260px for now */
+    .controls-panel {
+        height: auto;
+        min-height: 220px;
+    }
 }
 
 /* Spacing for Sphere View Buttons */

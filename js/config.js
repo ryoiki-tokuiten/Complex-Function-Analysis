@@ -60,6 +60,7 @@ let state = {
 
     isZFullScreen: false,
     isWFullScreen: false,
+    topControlsCollapsed: false,
     originalZParent: null,
     originalWParent: null,
 
