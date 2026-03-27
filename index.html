@@ -551,9 +551,16 @@
                     </div>
                 </div>
 
-                <div id="image_upload_controls" class="dependent-settings-block hidden">
-                    <div class="control-group">
-                        <label for="image_upload_input">Upload Image:</label>
+                <div id="image_upload_controls" class="dependent-settings-block hidden image-upload-panel">
+                    <div class="panel-inline-heading">
+                        <span class="panel-inline-title">Image Upload</span>
+                        <span class="panel-inline-copy">Bring a source image into the z-plane and map it like any other input shape.</span>
+                    </div>
+                    <div class="control-group image-upload-field">
+                        <label for="image_upload_input" class="upload-control-label">
+                            <span class="upload-control-title">Choose Source Image</span>
+                            <span class="upload-control-copy">PNG, JPG, GIF, or WEBP</span>
+                        </label>
                         <input type="file" id="image_upload_input" accept="image/*" class="control-file-input">
                     </div>
                     <div class="control-group">
@@ -653,7 +660,7 @@
 
                 <div id="mobius_params_sliders" class="dependent-settings-block hidden">
                     <div class="control-group">
-                        <label>Möbius Parameters (w = (az+b)/(cz+d)):</label>
+                        <label class="panel-formula-label">Möbius Parameters (w = (az+b)/(cz+d)):</label>
                     </div>
                     <div class="mobius-coeff-row">
                         <div class="control-group">
@@ -802,7 +809,7 @@
                 </div>
                 <div id="polynomial_params_sliders" class="dependent-settings-block hidden">
                     <div class="control-group">
-                        <label>Polynomial: w = a<sub>0</sub>z<sup>n</sup> + ... + a<sub>n-1</sub>z +
+                        <label class="panel-formula-label">Polynomial: w = a<sub>0</sub>z<sup>n</sup> + ... + a<sub>n-1</sub>z +
                             a<sub>n</sub></label>
                     </div>
                     <div class="control-group" style="min-width: 100%;">
@@ -881,121 +888,71 @@
                     </div>
                 </div>
 
-                <hr class="panel-separator">
-
-                <!-- Global View Options Section -->
-                <div class="control-group">
-                    <label for="enable_domain_coloring_cb" class="control-label tooltip-label">
-                        <input type="checkbox" id="enable_domain_coloring_cb" class="control-checkbox"
-                            data-tooltip="Toggle domain coloring visualization (color indicates argument, lightness indicates magnitude)">
-                        <span class="custom-checkbox-visual"></span>
-                        Domain Coloring
-                    </label>
-                </div>
-                <div id="domain_coloring_options_div" class="dependent-settings-block hidden">
-                    <div class="control-group">
-                        <label for="domain_brightness_slider" style="font-size:0.8rem;">
-                            Brightness:
-                            <output id="domain_brightness_value_display">1.0</output>
+                <div class="viz-feature-section">
+                    <div class="viz-feature-section-header">
+                        <span class="viz-feature-section-title">Analysis</span>
+                    </div>
+                    <div class="viz-toggle-grid">
+                        <label for="show_zeros_poles_cb" class="control-label tooltip-label viz-toggle-card">
+                            <input type="checkbox" id="show_zeros_poles_cb" class="control-checkbox"
+                                data-tooltip="Show detected zeros (roots) and poles (singularities) of f(z)">
+                            <span class="custom-checkbox-visual"></span>
+                            <span class="viz-toggle-card-content">
+                                <span class="viz-toggle-card-title">Zeros & Poles</span>
+                                <span class="viz-toggle-card-copy">Mark detected roots and singularities.</span>
+                            </span>
                         </label>
-                        <div class="slider-container">
-                            <input type="range" id="domain_brightness_slider" name="domain_brightness_slider" min="0.5"
-                                max="1.5" step="0.05" value="1.0"
-                                data-tooltip="Adjust overall brightness of the domain coloring">
+                        <label for="show_critical_points_cb" class="control-label tooltip-label viz-toggle-card">
+                            <input type="checkbox" id="show_critical_points_cb" class="control-checkbox"
+                                data-tooltip="Show detected critical points (where f'(z) = 0 or is undefined)">
+                            <span class="custom-checkbox-visual"></span>
+                            <span class="viz-toggle-card-content">
+                                <span class="viz-toggle-card-title">Critical Points</span>
+                                <span class="viz-toggle-card-copy">Show where f'(z) vanishes or breaks.</span>
+                            </span>
+                        </label>
+                        <label for="enable_radial_discrete_steps_cb" class="control-label tooltip-label viz-toggle-card">
+                            <input type="checkbox" id="enable_radial_discrete_steps_cb" class="control-checkbox"
+                                data-tooltip="Toggle radial discrete steps visualization">
+                            <span class="custom-checkbox-visual"></span>
+                            <span class="viz-toggle-card-content">
+                                <span class="viz-toggle-card-title">Radial Steps</span>
+                                <span class="viz-toggle-card-copy">Draw discrete sampling circles on the input plane.</span>
+                            </span>
+                        </label>
+                        <label for="enable_cauchy_integral_mode_cb" class="control-label tooltip-label viz-toggle-card">
+                            <input type="checkbox" id="enable_cauchy_integral_mode_cb" class="control-checkbox"
+                                data-tooltip="Enable Cauchy Integral mode: draw a contour on z-plane to visualize its image and related integral values on w-plane">
+                            <span class="custom-checkbox-visual"></span>
+                            <span class="viz-toggle-card-content">
+                                <span class="viz-toggle-card-title">Cauchy Integral</span>
+                                <span class="viz-toggle-card-copy">Contour image, winding, and residue readout.</span>
+                            </span>
+                        </label>
+                        <label for="enable_taylor_series_cb" class="control-label tooltip-label viz-toggle-card">
+                            <input type="checkbox" id="enable_taylor_series_cb" class="control-checkbox"
+                                data-tooltip="Toggle the Taylor series approximation of f(z) in the w-plane. The default expansion center is z0 = 0, and the convergence disk is shown on the z-plane.">
+                            <span class="custom-checkbox-visual"></span>
+                            <span class="viz-toggle-card-content">
+                                <span class="viz-toggle-card-title">Taylor Series</span>
+                                <span class="viz-toggle-card-copy">Local polynomial expansion around z0.</span>
+                            </span>
+                        </label>
+                    </div>
+                    <div id="radial_discrete_steps_options_div" class="dependent-settings-block hidden viz-detail-block">
+                        <div class="control-group">
+                            <label for="radial_discrete_steps_count_slider">
+                                Discrete steps:
+                                <output id="radial_discrete_steps_count_value_display">200</output>
+                            </label>
+                            <div class="slider-container">
+                                <input type="range" id="radial_discrete_steps_count_slider"
+                                    name="radial_discrete_steps_count_slider" min="0" max="800" step="1" value="200"
+                                    data-tooltip="Adjust the number of discrete radial steps">
+                            </div>
                         </div>
                     </div>
-                    <div class="control-group">
-                        <label for="domain_contrast_slider" style="font-size:0.8rem;">
-                            Contrast:
-                            <output id="domain_contrast_value_display">1.0</output>
-                        </label>
-                        <div class="slider-container">
-                            <input type="range" id="domain_contrast_slider" name="domain_contrast_slider" min="0.5"
-                                max="2.0" step="0.05" value="1.0" data-tooltip="Adjust contrast of the domain coloring">
-                        </div>
-                    </div>
-                    <div class="control-group">
-                        <label for="domain_saturation_slider" style="font-size:0.8rem;">
-                            Saturation:
-                            <output id="domain_saturation_value_display">1.0</output>
-                        </label>
-                        <div class="slider-container">
-                            <input type="range" id="domain_saturation_slider" name="domain_saturation_slider" min="0.0"
-                                max="1.0" step="0.05" value="1.0"
-                                data-tooltip="Adjust color saturation of the domain coloring">
-                        </div>
-                    </div>
-                    <div class="control-group">
-                        <label for="domain_lightness_cycles_slider" style="font-size:0.8rem;">
-                            Lightness Cycles:
-                            <output id="domain_lightness_cycles_value_display">1.0</output>
-                        </label>
-                        <div class="slider-container">
-                            <input type="range" id="domain_lightness_cycles_slider"
-                                name="domain_lightness_cycles_slider" min="0.25" max="4.0" step="0.25" value="1.0"
-                                data-tooltip="Adjust frequency of lightness cycles (magnitude bands) in domain coloring">
-                        </div>
-                    </div>
-                </div>
-
-                <div class="control-group">
-                    <label for="show_zeros_poles_cb" class="control-label tooltip-label">
-                        <input type="checkbox" id="show_zeros_poles_cb" class="control-checkbox"
-                            data-tooltip="Show detected zeros (roots) and poles (singularities) of f(z)">
-                        <span class="custom-checkbox-visual"></span>
-                        Show Zeros/Poles
-                    </label>
-                </div>
-
-                <div class="control-group">
-                    <label for="show_critical_points_cb" class="control-label tooltip-label">
-                        <input type="checkbox" id="show_critical_points_cb" class="control-checkbox"
-                            data-tooltip="Show detected critical points (where f'(z) = 0 or is undefined)">
-                        <span class="custom-checkbox-visual"></span>
-                        Show Critical Points f'(z)=0
-                    </label>
-                </div>
-
-                <div class="control-group">
-                    <label for="enable_radial_discrete_steps_cb" class="control-label tooltip-label">
-                        <input type="checkbox" id="enable_radial_discrete_steps_cb" class="control-checkbox"
-                            data-tooltip="Toggle radial discrete steps visualization">
-                        <span class="custom-checkbox-visual"></span>
-                        Radial Discrete steps
-                    </label>
-                </div>
-                <div id="radial_discrete_steps_options_div" class="dependent-settings-block hidden">
-                    <div class="control-group">
-                        <label for="radial_discrete_steps_count_slider">
-                            Discrete steps:
-                            <output id="radial_discrete_steps_count_value_display">200</output>
-                        </label>
-                        <div class="slider-container">
-                            <input type="range" id="radial_discrete_steps_count_slider"
-                                name="radial_discrete_steps_count_slider" min="0" max="800" step="1" value="200"
-                                data-tooltip="Adjust the number of discrete radial steps">
-                        </div>
-                    </div>
-                </div>
-
-                <div class="control-group">
-                    <label for="enable_cauchy_integral_mode_cb" class="control-label tooltip-label">
-                        <input type="checkbox" id="enable_cauchy_integral_mode_cb" class="control-checkbox"
-                            data-tooltip="Enable Cauchy Integral mode: draw a contour on z-plane to visualize its image and related integral values on w-plane">
-                        <span class="custom-checkbox-visual"></span>
-                        Cauchy Integral/Residue
-                    </label>
-                </div>
-
-                <div class="control-group">
-                    <label for="enable_taylor_series_cb" class="control-label tooltip-label">
-                        <input type="checkbox" id="enable_taylor_series_cb" class="control-checkbox"
-                            data-tooltip="Toggle the Taylor series approximation of f(z) in the w-plane. The default expansion center is z0 = 0, and the convergence disk is shown on the z-plane.">
-                        <span class="custom-checkbox-visual"></span>
-                        Taylor Series Approximation
-                    </label>
-                </div>
-                <div id="taylor_series_options_detail_div" class="dependent-settings-block hidden taylor-series-panel">
+                    <div id="taylor_series_options_detail_div" class="dependent-settings-block hidden taylor-series-panel viz-detail-block">
                     <div class="taylor-series-header">
                         <div class="taylor-series-header-copy">
                             <span class="taylor-series-eyebrow">Local Approximation</span>
@@ -1050,109 +1007,217 @@
                         </div>
                     </div>
                 </div>
+                </div>
 
-                <div class="control-group">
-                    <label for="enable_riemann_sphere_cb" class="control-label tooltip-label">
-                        <input type="checkbox" id="enable_riemann_sphere_cb" class="control-checkbox"
-                            data-tooltip="Toggle Riemann Sphere projection options">
-                        <span class="custom-checkbox-visual"></span>
-                        Riemann Sphere
-                    </label>
-                </div>
-                <div id="riemann_sphere_options_div" class="dependent-settings-block hidden control-group-indent">
-                    <div class="control-group">
-                        <label for="enable_plotly_3d_cb" class="control-label tooltip-label">
-                            <input type="checkbox" id="enable_plotly_3d_cb" class="control-checkbox"
-                                data-tooltip="Toggle interactive 3D Riemann Sphere rendering using Plotly for the w-plane">
+                <div class="viz-feature-section">
+                    <div class="viz-feature-section-header">
+                        <span class="viz-feature-section-title">Surface & Projection</span>
+                    </div>
+                    <div class="viz-toggle-grid viz-toggle-grid--duo">
+                        <label for="enable_domain_coloring_cb" class="control-label tooltip-label viz-toggle-card">
+                            <input type="checkbox" id="enable_domain_coloring_cb" class="control-checkbox"
+                                data-tooltip="Toggle domain coloring visualization (color indicates argument, lightness indicates magnitude)">
                             <span class="custom-checkbox-visual"></span>
-                            3D Rendering (Plotly for w-sphere)
+                            <span class="viz-toggle-card-content">
+                                <span class="viz-toggle-card-title">Domain Coloring</span>
+                                <span class="viz-toggle-card-copy">Hue for argument, lightness bands for magnitude.</span>
+                            </span>
+                        </label>
+                        <label for="enable_riemann_sphere_cb" class="control-label tooltip-label viz-toggle-card">
+                            <input type="checkbox" id="enable_riemann_sphere_cb" class="control-checkbox"
+                                data-tooltip="Toggle Riemann Sphere projection options">
+                            <span class="custom-checkbox-visual"></span>
+                            <span class="viz-toggle-card-content">
+                                <span class="viz-toggle-card-title">Riemann Sphere</span>
+                                <span class="viz-toggle-card-copy">Project the mapped output onto the sphere.</span>
+                            </span>
                         </label>
                     </div>
-                    <div id="plotly_3d_options_div" class="dependent-settings-block hidden control-group-indent">
-                        <div class="control-group">
-                            <label for="toggle_sphere_axes_grid_cb" class="control-label tooltip-label">
-                                <input type="checkbox" id="toggle_sphere_axes_grid_cb" class="control-checkbox"
-                                    data-tooltip="Toggle visibility of axes and grid lines in the 3D sphere view">
-                                <span class="custom-checkbox-visual"></span>
-                                Show Axes & Grid (3D)
-                            </label>
-                        </div>
-                        <div class="control-group">
-                            <label for="plotly_sphere_opacity_slider">
-                                Sphere Opacity:
-                                <output id="plotly_sphere_opacity_value_display">0.10</output>
-                            </label>
-                            <div class="slider-container">
-                                <input type="range" id="plotly_sphere_opacity_slider"
-                                    name="plotly_sphere_opacity_slider" min="0" max="1" step="0.05" value="0.10"
-                                    data-tooltip="Adjust opacity of the base Riemann sphere mesh in 3D Plotly view">
+                    <div id="domain_coloring_options_div" class="dependent-settings-block hidden viz-detail-block">
+                        <div class="viz-settings-grid">
+                            <div class="control-group">
+                                <label for="domain_brightness_slider" style="font-size:0.8rem;">
+                                    Brightness:
+                                    <output id="domain_brightness_value_display">1.0</output>
+                                </label>
+                                <div class="slider-container">
+                                    <input type="range" id="domain_brightness_slider" name="domain_brightness_slider" min="0.5"
+                                        max="1.5" step="0.05" value="1.0"
+                                        data-tooltip="Adjust overall brightness of the domain coloring">
+                                </div>
+                            </div>
+                            <div class="control-group">
+                                <label for="domain_contrast_slider" style="font-size:0.8rem;">
+                                    Contrast:
+                                    <output id="domain_contrast_value_display">1.0</output>
+                                </label>
+                                <div class="slider-container">
+                                    <input type="range" id="domain_contrast_slider" name="domain_contrast_slider" min="0.5"
+                                        max="2.0" step="0.05" value="1.0" data-tooltip="Adjust contrast of the domain coloring">
+                                </div>
+                            </div>
+                            <div class="control-group">
+                                <label for="domain_saturation_slider" style="font-size:0.8rem;">
+                                    Saturation:
+                                    <output id="domain_saturation_value_display">1.0</output>
+                                </label>
+                                <div class="slider-container">
+                                    <input type="range" id="domain_saturation_slider" name="domain_saturation_slider" min="0.0"
+                                        max="1.0" step="0.05" value="1.0"
+                                        data-tooltip="Adjust color saturation of the domain coloring">
+                                </div>
+                            </div>
+                            <div class="control-group">
+                                <label for="domain_lightness_cycles_slider" style="font-size:0.8rem;">
+                                    Lightness Cycles:
+                                    <output id="domain_lightness_cycles_value_display">1.0</output>
+                                </label>
+                                <div class="slider-container">
+                                    <input type="range" id="domain_lightness_cycles_slider"
+                                        name="domain_lightness_cycles_slider" min="0.25" max="4.0" step="0.25" value="1.0"
+                                        data-tooltip="Adjust frequency of lightness cycles (magnitude bands) in domain coloring">
+                                </div>
                             </div>
                         </div>
-                        <div class="control-group">
-                            <label for="plotly_grid_density_slider">
-                                Sphere Grid Density:
-                                <output id="plotly_grid_density_value_display">12</output>
+                    </div>
+                    <div id="riemann_sphere_options_div" class="dependent-settings-block hidden control-group-indent viz-detail-block">
+                        <div class="viz-toggle-grid viz-toggle-grid--duo viz-toggle-grid--compact">
+                            <label for="enable_plotly_3d_cb" class="control-label tooltip-label viz-toggle-card viz-toggle-card--compact">
+                                <input type="checkbox" id="enable_plotly_3d_cb" class="control-checkbox"
+                                    data-tooltip="Toggle interactive 3D Riemann Sphere rendering using Plotly for the w-plane">
+                                <span class="custom-checkbox-visual"></span>
+                                <span class="viz-toggle-card-content">
+                                    <span class="viz-toggle-card-title">3D Sphere</span>
+                                    <span class="viz-toggle-card-copy">Use Plotly for an interactive w-sphere.</span>
+                                </span>
                             </label>
-                            <div class="slider-container">
-                                <input type="range" id="plotly_grid_density_slider" name="plotly_grid_density_slider"
-                                    min="4" max="30" step="1" value="12"
-                                    data-tooltip="Adjust density of grid lines on the 3D Plotly sphere surface">
+                            <label for="enable_split_view_cb" class="control-label tooltip-label viz-toggle-card viz-toggle-card--compact">
+                                <input type="checkbox" id="enable_split_view_cb" class="control-checkbox"
+                                    data-tooltip="Show z-plane as planar and w-plane as Riemann Sphere side-by-side">
+                                <span class="custom-checkbox-visual"></span>
+                                <span class="viz-toggle-card-content">
+                                    <span class="viz-toggle-card-title">Split View</span>
+                                    <span class="viz-toggle-card-copy">Keep the z-plane beside the w-sphere.</span>
+                                </span>
+                            </label>
+                        </div>
+                        <div id="plotly_3d_options_div" class="dependent-settings-block hidden control-group-indent viz-subdetail-block">
+                            <div class="viz-settings-grid">
+                                <div class="control-group">
+                                    <label for="toggle_sphere_axes_grid_cb" class="control-label tooltip-label">
+                                        <input type="checkbox" id="toggle_sphere_axes_grid_cb" class="control-checkbox"
+                                            data-tooltip="Toggle visibility of axes and grid lines in the 3D sphere view">
+                                        <span class="custom-checkbox-visual"></span>
+                                        Show Axes & Grid (3D)
+                                    </label>
+                                </div>
+                                <div class="control-group">
+                                    <label for="plotly_sphere_opacity_slider">
+                                        Sphere Opacity:
+                                        <output id="plotly_sphere_opacity_value_display">0.10</output>
+                                    </label>
+                                    <div class="slider-container">
+                                        <input type="range" id="plotly_sphere_opacity_slider"
+                                            name="plotly_sphere_opacity_slider" min="0" max="1" step="0.05" value="0.10"
+                                            data-tooltip="Adjust opacity of the base Riemann sphere mesh in 3D Plotly view">
+                                    </div>
+                                </div>
+                                <div class="control-group">
+                                    <label for="plotly_grid_density_slider">
+                                        Sphere Grid Density:
+                                        <output id="plotly_grid_density_value_display">12</output>
+                                    </label>
+                                    <div class="slider-container">
+                                        <input type="range" id="plotly_grid_density_slider" name="plotly_grid_density_slider"
+                                            min="4" max="30" step="1" value="12"
+                                            data-tooltip="Adjust density of grid lines on the 3D Plotly sphere surface">
+                                    </div>
+                                </div>
+                                <div class="control-group">
+                                    <label for="toggle_plotly_sphere_grid_cb" class="control-label tooltip-label">
+                                        <input type="checkbox" id="toggle_plotly_sphere_grid_cb" class="control-checkbox"
+                                            checked
+                                            data-tooltip="Toggle visibility of the latitude/longitude grid lines on the sphere surface">
+                                        <span class="custom-checkbox-visual"></span>
+                                        Show Sphere Surface Grid
+                                    </label>
+                                </div>
                             </div>
                         </div>
-                        <div class="control-group">
-                            <label for="toggle_plotly_sphere_grid_cb" class="control-label tooltip-label">
-                                <input type="checkbox" id="toggle_plotly_sphere_grid_cb" class="control-checkbox"
-                                    checked
-                                    data-tooltip="Toggle visibility of the latitude/longitude grid lines on the sphere surface">
-                                <span class="custom-checkbox-visual"></span>
-                                Show Sphere Surface Grid
-                            </label>
+                    </div>
+                    <div id="sphere_view_controls_div" class="dependent-settings-block hidden viz-detail-block">
+                        <div class="viz-detail-header">
+                            <span class="viz-detail-title">Sphere Views</span>
+                            <span class="viz-detail-copy">Jump to common orientations.</span>
+                        </div>
+                        <div class="sphere-view-button-row">
+                            <button id="sphere_view_north_btn"
+                                data-tooltip="View Riemann sphere from North Pole">North</button>
+                            <button id="sphere_view_south_btn"
+                                data-tooltip="View Riemann sphere from South Pole">South</button>
+                            <button id="sphere_view_east_btn" data-tooltip="View Riemann sphere from East">East</button>
+                            <button id="sphere_view_west_btn" data-tooltip="View Riemann sphere from West">West</button>
+                            <button id="sphere_view_front_btn"
+                                data-tooltip="View Riemann sphere from Front (default perspective)">Front</button>
+                            <button id="sphere_view_reset_btn"
+                                data-tooltip="Reset Riemann sphere rotation to initial view">Reset</button>
                         </div>
                     </div>
-                    <div class="control-group">
-                        <label for="enable_split_view_cb" class="control-label tooltip-label">
-                            <input type="checkbox" id="enable_split_view_cb" class="control-checkbox"
-                                data-tooltip="Show z-plane as planar and w-plane as Riemann Sphere side-by-side">
-                            <span class="custom-checkbox-visual"></span>
-                            Split View (z-Plane | w-Sphere)
-                        </label>
-                    </div>
                 </div>
-                <div id="sphere_view_controls_div" class="dependent-settings-block hidden">
-                    <label>Sphere Default Views:</label>
-                    <div>
-                        <button id="sphere_view_north_btn"
-                            data-tooltip="View Riemann sphere from North Pole">North</button>
-                        <button id="sphere_view_south_btn"
-                            data-tooltip="View Riemann sphere from South Pole">South</button>
-                        <button id="sphere_view_east_btn" data-tooltip="View Riemann sphere from East">East</button>
-                        <button id="sphere_view_west_btn" data-tooltip="View Riemann sphere from West">West</button>
-                        <button id="sphere_view_front_btn"
-                            data-tooltip="View Riemann sphere from Front (default perspective)">Front</button>
-                        <button id="sphere_view_reset_btn"
-                            data-tooltip="Reset Riemann sphere rotation to initial view">Reset</button>
+
+                <div class="viz-feature-section viz-feature-section--vector">
+                    <div class="viz-feature-section-header">
+                        <span class="viz-feature-section-title">Vector Field</span>
                     </div>
-                </div>
-                <!-- Vector Field & Flow Visualization Section -->
-                <div class="control-group">
-                    <label for="show_vector_field_panel_cb" class="control-label tooltip-label">
+                    <label for="show_vector_field_panel_cb" class="control-label tooltip-label viz-toggle-card viz-toggle-card--hero">
                         <input type="checkbox" id="show_vector_field_panel_cb" class="control-checkbox"
                             data-tooltip="Show/hide all Vector Field & Flow Visualization options">
                         <span class="custom-checkbox-visual"></span>
-                        Show Vector Field Panel
+                        <span class="viz-toggle-card-content">
+                            <span class="viz-toggle-card-title">Vector Field Panel</span>
+                            <span class="viz-toggle-card-copy">Open field, streamline, and particle tools together.</span>
+                        </span>
                     </label>
-                </div>
-                <div id="vector_flow_options_content" class="dependent-settings-block hidden">
-                    <div class="control-group">
-                        <label for="enable_vector_field_cb" class="control-label tooltip-label">
-                            <input type="checkbox" id="enable_vector_field_cb" class="control-checkbox"
-                                data-tooltip="Overlay a vector field on the z-plane based on selected function">
-                            <span class="custom-checkbox-visual"></span>
-                            Vector Field on z-plane
-                        </label>
-                    </div>
-                    <div id="vector_field_options_div" class="dependent-settings-block hidden">
-                        <div class="control-group" style="flex-basis: 55%; min-width: 180px;">
+                    <div id="vector_flow_options_content" class="dependent-settings-block hidden viz-detail-block vector-flow-workspace">
+                        <div class="viz-detail-header">
+                            <span class="viz-detail-title">Flow Modes</span>
+                            <span class="viz-detail-copy">Choose what to visualize, then tune the active layer below.</span>
+                        </div>
+                        <div class="viz-toggle-grid viz-toggle-grid--duo vector-flow-toggle-grid">
+                            <label for="enable_vector_field_cb" class="control-label tooltip-label viz-toggle-card">
+                                <input type="checkbox" id="enable_vector_field_cb" class="control-checkbox"
+                                    data-tooltip="Overlay a vector field on the z-plane based on selected function">
+                                <span class="custom-checkbox-visual"></span>
+                                <span class="viz-toggle-card-content">
+                                    <span class="viz-toggle-card-title">Vector Field</span>
+                                    <span class="viz-toggle-card-copy">Sample arrows from f(z), 1/f(z), or f'(z).</span>
+                                </span>
+                            </label>
+                            <label for="enable_streamline_flow_cb" class="control-label tooltip-label viz-toggle-card">
+                                <input type="checkbox" id="enable_streamline_flow_cb" class="control-checkbox"
+                                    data-tooltip="Toggle streamline flow visualization for the vector field">
+                                <span class="custom-checkbox-visual"></span>
+                                <span class="viz-toggle-card-content">
+                                    <span class="viz-toggle-card-title">Streamlines</span>
+                                    <span class="viz-toggle-card-copy">Trace integral curves through the active field.</span>
+                                </span>
+                            </label>
+                            <label for="enable_particle_animation_cb" class="control-label tooltip-label viz-toggle-card">
+                                <input type="checkbox" id="enable_particle_animation_cb" class="control-checkbox">
+                                <span class="custom-checkbox-visual"></span>
+                                <span class="viz-toggle-card-content">
+                                    <span class="viz-toggle-card-title">Particle Motion</span>
+                                    <span class="viz-toggle-card-copy">Animate particles drifting through the field.</span>
+                                </span>
+                            </label>
+                        </div>
+                        <div id="vector_field_options_div" class="dependent-settings-block hidden vector-settings-card">
+                        <div class="vector-settings-header">
+                            <span class="vector-settings-title">Vector Field Settings</span>
+                            <span class="vector-settings-copy">Choose the source function and tune arrow rendering.</span>
+                        </div>
+                        <div class="vector-settings-grid">
+                        <div class="control-group">
                             <label for="vector_field_function_selector" style="font-size:0.8rem;">Vector
                                 Function:</label>
                             <select id="vector_field_function_selector"
@@ -1162,7 +1227,7 @@
                                 <option value="f'(z)">f'(z)</option>
                             </select>
                         </div>
-                        <div class="control-group" style="flex-basis: 40%; min-width: 180px;">
+                        <div class="control-group">
                             <label for="vector_field_scale_slider" style="font-size:0.8rem;">
                                 Vector Scale:
                                 <output id="vector_field_scale_value_display">0.10</output>
@@ -1173,7 +1238,7 @@
                                     data-tooltip="Adjust the display scale/length of vectors in the field">
                             </div>
                         </div>
-                        <div class="control-group" style="flex-basis: 48%; min-width: 180px;">
+                        <div class="control-group">
                             <label for="vector_arrow_thickness_slider" style="font-size:0.8rem;">
                                 Arrow Thickness:
                                 <output id="vector_arrow_thickness_value_display">1.5</output>
@@ -1184,7 +1249,7 @@
                                     data-tooltip="Adjust thickness of the vector arrows">
                             </div>
                         </div>
-                        <div class="control-group" style="flex-basis: 48%; min-width: 180px;">
+                        <div class="control-group">
                             <label for="vector_arrow_head_size_slider" style="font-size:0.8rem;">
                                 Arrow Head Size:
                                 <output id="vector_arrow_head_size_value_display">6</output>
@@ -1195,23 +1260,19 @@
                                     data-tooltip="Adjust size of the vector arrow heads">
                             </div>
                         </div>
-                    </div> <!-- vector_field_options_div ends here -->
-
-                    <div class="control-group"> <!-- Streamline Flow Toggle -->
-                        <label for="enable_streamline_flow_cb" class="control-label tooltip-label">
-                            <input type="checkbox" id="enable_streamline_flow_cb" class="control-checkbox"
-                                data-tooltip="Toggle streamline flow visualization for the vector field">
-                            <span class="custom-checkbox-visual"></span>
-                            Streamline Flow
-                        </label>
+                        </div>
                     </div>
-                    <div id="streamline_options_details_div" class="dependent-settings-block hidden">
-                        <!-- New wrapper for streamline details -->
-                        <div class="control-group-detail" id="streamline_details_div">
+                    <div id="streamline_options_details_div" class="dependent-settings-block hidden vector-settings-card">
+                        <div class="vector-settings-header">
+                            <span class="vector-settings-title">Streamline Settings</span>
+                            <span class="vector-settings-copy">Control seeding, thickness, and integration quality.</span>
+                        </div>
+                        <div class="vector-toolbar" id="streamline_details_div">
                             <button id="clear_manual_seeds_btn" class="control-button"
                                 data-tooltip="Clear all manually added seed points for streamlines">Clear Manual
                                 Seeds</button>
                         </div>
+                        <div class="vector-settings-grid">
                         <div class="control-group">
                             <label for="streamline_step_size_slider" style="font-size:0.8rem;">
                                 Integration Step Size:
@@ -1258,35 +1319,34 @@
                             </div>
                         </div>
                     </div>
-                    <hr class="sub-panel-separator">
-                    <!-- This separator should be AFTER streamline_options_details_div -->
-                    <div class="control-group" id="particle_animation_options_div">
-                        <label for="enable_particle_animation_cb" class="control-label tooltip-label">
-                            <input type="checkbox" id="enable_particle_animation_cb" class="control-checkbox">
-                            Enable Particle Animation
-                            <span class="tooltip-text">Show animated particles moving along the vector field.</span>
-                        </label>
                     </div>
-                    <div class="control-group-detail hidden" id="particle_animation_details_div">
-                        <div class="slider-group">
-                            <label for="particle_density_slider" class="slider-label">Particle Density:</label>
-                            <input type="range" id="particle_density_slider" class="control-slider" min="10" max="500"
-                                step="10" value="50">
-                            <span id="particle_density_value_display" class="slider-value-display">50</span>
+                    <div class="control-group-detail hidden vector-settings-card" id="particle_animation_details_div">
+                        <div class="vector-settings-header">
+                            <span class="vector-settings-title">Particle Settings</span>
+                            <span class="vector-settings-copy">Tune density, speed, and particle lifetime.</span>
                         </div>
-                        <div class="slider-group">
-                            <label for="particle_speed_slider" class="slider-label">Particle Speed:</label>
-                            <input type="range" id="particle_speed_slider" class="control-slider" min="0.001" max="0.05"
-                                step="0.001" value="0.01">
-                            <span id="particle_speed_value_display" class="slider-value-display">0.01</span>
+                        <div class="particle-settings-grid">
+                            <div class="slider-group">
+                                <label for="particle_density_slider" class="slider-label">Particle Density:</label>
+                                <input type="range" id="particle_density_slider" class="control-slider" min="10" max="500"
+                                    step="10" value="50">
+                                <span id="particle_density_value_display" class="slider-value-display">50</span>
+                            </div>
+                            <div class="slider-group">
+                                <label for="particle_speed_slider" class="slider-label">Particle Speed:</label>
+                                <input type="range" id="particle_speed_slider" class="control-slider" min="0.001" max="0.05"
+                                    step="0.001" value="0.01">
+                                <span id="particle_speed_value_display" class="slider-value-display">0.01</span>
+                            </div>
+                            <div class="slider-group">
+                                <label for="particle_max_lifetime_slider" class="slider-label">Particle Max Lifetime
+                                    (frames):</label>
+                                <input type="range" id="particle_max_lifetime_slider" class="control-slider" min="50"
+                                    max="1000" step="50" value="200">
+                                <span id="particle_max_lifetime_value_display" class="slider-value-display">200</span>
+                            </div>
                         </div>
-                        <div class="slider-group">
-                            <label for="particle_max_lifetime_slider" class="slider-label">Particle Max Lifetime
-                                (frames):</label>
-                            <input type="range" id="particle_max_lifetime_slider" class="control-slider" min="50"
-                                max="1000" step="50" value="200">
-                            <span id="particle_max_lifetime_value_display" class="slider-value-display">200</span>
-                        </div>
+                    </div>
                     </div>
                 </div>
             </div>
@@ -1300,8 +1360,7 @@
                         <h2 class="section-title"><span id="z-plane-title">z-plane (Input:
                                 <code>z = a + ib</code>)</span></h2>
                         <div class="canvas-header-controls">
-                            <label for="input_shape_selector">Shape:</label>
-                            <select id="input_shape_selector"
+                            <select id="input_shape_selector" class="canvas-shape-select" aria-label="Select input shape"
                                 data-tooltip="Select the input shape/grid to draw on the z-plane">
                                 <option value="grid_cartesian" selected>Grid (Cartesian)</option>
                                 <option value="grid_polar">Grid (Polar)</option>
@@ -1390,6 +1449,7 @@
                         <div id="laplace_3d_container" style="width: 100%; height: 100%;"></div>
                     </div>
                 </div>
+            </div>
         </section>
     </main>
 
