@@ -624,7 +624,7 @@ function drawPlanarTransformedProbe(ctx,planeParams,tf){
     drawConformalityProbeSegments(ctx, planeParams, state.probeZ, effectiveTransformFunc, true); 
 }
 
-function drawZPlaneVectorField(ctx, planeParams, baseFunc, vectorFuncType) {
+function drawZPlaneVectorField(ctx, planeParams, currentFunctionStr, vectorFuncType) {
     const { currentVisXRange: xR, currentVisYRange: yR } = planeParams;
     const density = Math.max(5, Math.min(25, Math.floor(state.gridDensity * 0.75)));
     const dx = (xR[1] - xR[0]) / density;
@@ -636,22 +636,7 @@ function drawZPlaneVectorField(ctx, planeParams, baseFunc, vectorFuncType) {
         for (let j = 0; j <= density; j++) {
             const z_im = yR[0] + j * dy;
             const z = { re: z_re, im: z_im };
-            let vectorVal;
-
-            if (vectorFuncType === 'f(z)') {
-                vectorVal = baseFunc(z.re, z.im, state); 
-            } else if (vectorFuncType === '1/f(z)') {
-                const f_of_z = baseFunc(z.re, z.im, state); 
-                if (Math.abs(f_of_z.re) < 1e-9 && Math.abs(f_of_z.im) < 1e-9) {
-                    vectorVal = { re: Infinity, im: Infinity }; 
-                } else {
-                    vectorVal = complexReciprocal(f_of_z.re, f_of_z.im);
-                }
-            } else if (vectorFuncType === "f'(z)") {
-                vectorVal = numericDerivative(state.currentFunction, z, state); 
-            } else {
-                vectorVal = { re: 0, im: 0 };
-            }
+            const vectorVal = getVectorFieldValueAtPoint(z.re, z.im, currentFunctionStr, vectorFuncType, state);
 
             if (isNaN(vectorVal.re) || isNaN(vectorVal.im) || !isFinite(vectorVal.re) || !isFinite(vectorVal.im)) {
                 continue;

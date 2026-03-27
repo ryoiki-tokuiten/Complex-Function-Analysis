@@ -418,6 +418,7 @@ function complexPoincareCustomMetric(a, b) {
 function numericDerivative(funcName, z, h = 1e-7) {
     const func = transformFunctions[funcName];
     if (!func) return {re: NaN, im: NaN};
+    const step = Number.isFinite(h) ? h : 1e-7;
 
     
     if (funcName === 'zeta' && !state.zetaContinuationEnabled) {
@@ -426,7 +427,7 @@ function numericDerivative(funcName, z, h = 1e-7) {
             return {re: NaN, im: NaN};
         }
         
-        if (z.re + h <= ZETA_REFLECTION_POINT_RE || z.re - h <= ZETA_REFLECTION_POINT_RE) {
+        if (z.re + step <= ZETA_REFLECTION_POINT_RE || z.re - step <= ZETA_REFLECTION_POINT_RE) {
             
             
             return {re: NaN, im: NaN};
@@ -435,9 +436,8 @@ function numericDerivative(funcName, z, h = 1e-7) {
     
     
     
-
-    const z_plus_h_real  = {re: z.re + h, im: z.im};
-    const z_minus_h_real = {re: z.re - h, im: z.im};
+    const z_plus_h_real  = {re: z.re + step, im: z.im};
+    const z_minus_h_real = {re: z.re - step, im: z.im};
 
     const f_z_plus_h  = func(z_plus_h_real.re,  z_plus_h_real.im);
     const f_z_minus_h = func(z_minus_h_real.re, z_minus_h_real.im);
@@ -450,7 +450,7 @@ function numericDerivative(funcName, z, h = 1e-7) {
     }
 
     const numerator = complexSub(f_z_plus_h, f_z_minus_h);
-    const denominator = {re: 2 * h, im: 0};
+    const denominator = {re: 2 * step, im: 0};
     return complexDivide(numerator, denominator);
 }
 

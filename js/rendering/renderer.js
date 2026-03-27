@@ -35,6 +35,11 @@ const zPlanarInputLayerCache = {
     canvas: null,
     ctx: null
 };
+const zFlowLayerCache = {
+    key: null,
+    canvas: null,
+    ctx: null
+};
 
 function toCacheKeyNumber(value) {
     if (!Number.isFinite(value)) return `${value}`;
@@ -48,6 +53,24 @@ function appendPointToCacheKey(parts, prefix, point) {
     }
     parts.push(`${prefix}r:${toCacheKeyNumber(point.re)}`);
     parts.push(`${prefix}i:${toCacheKeyNumber(point.im)}`);
+}
+
+function appendCurrentFunctionStateToCacheKey(parts) {
+    if (state.currentFunction === 'mobius') {
+        appendPointToCacheKey(parts, 'mA', state.mobiusA);
+        appendPointToCacheKey(parts, 'mB', state.mobiusB);
+        appendPointToCacheKey(parts, 'mC', state.mobiusC);
+        appendPointToCacheKey(parts, 'mD', state.mobiusD);
+        return;
+    }
+
+    if (state.currentFunction === 'polynomial') {
+        const polyDegree = Math.max(0, Math.min(MAX_POLY_DEGREE, Number.isFinite(state.polynomialN) ? state.polynomialN : 0));
+        parts.push(`polyN:${polyDegree}`);
+        for (let i = 0; i <= polyDegree; i++) {
+            appendPointToCacheKey(parts, `p${i}`, (state.polynomialCoeffs && state.polynomialCoeffs[i]) ? state.polynomialCoeffs[i] : null);
+        }
+    }
 }
 
 function buildPlanarLayerCacheKey(isWPlane) {
@@ -83,19 +106,12 @@ function buildPlanarLayerCacheKey(isWPlane) {
         `H:${params.height}`
     ];
 
+    appendCurrentFunctionStateToCacheKey(keyParts);
+
     if (isWPlane) {
         if (state.taylorSeriesEnabled) {
             appendPointToCacheKey(keyParts, 'tC', state.taylorSeriesCenter);
             keyParts.push(`tO:${state.taylorSeriesOrder}`);
-        }
-        appendPointToCacheKey(keyParts, 'mA', state.mobiusA);
-        appendPointToCacheKey(keyParts, 'mB', state.mobiusB);
-        appendPointToCacheKey(keyParts, 'mC', state.mobiusC);
-        appendPointToCacheKey(keyParts, 'mD', state.mobiusD);
-        const polyDegree = Math.max(0, Math.min(MAX_POLY_DEGREE, Number.isFinite(state.polynomialN) ? state.polynomialN : 0));
-        keyParts.push(`polyN:${polyDegree}`);
-        for (let i = 0; i <= polyDegree; i++) {
-            appendPointToCacheKey(keyParts, `p${i}`, (state.polynomialCoeffs && state.polynomialCoeffs[i]) ? state.polynomialCoeffs[i] : null);
         }
     }
     return keyParts.join('|');
@@ -131,6 +147,55 @@ function shouldUseZPlanarInputLayerCache() {
     if (state.riemannSphereViewEnabled && !state.splitViewEnabled) return false;
     if (state.panStateZ && state.panStateZ.isPanning) return false;
     return true;
+}
+
+function appendManualSeedPointsToCacheKey(parts, seedPoints) {
+    const points = Array.isArray(seedPoints) ? seedPoints : [];
+    parts.push(`manualSeeds:${points.length}`);
+    points.forEach((point, index) => appendPointToCacheKey(parts, `seed${index}`, point));
+}
+
+function buildZFlowLayerCacheKey() {
+    const keyParts = [
+        buildPlanarLayerCacheKey(false),
+        `flow:${(state.vectorFieldEnabled || state.streamlineFlowEnabled) ? 1 : 0}`,
+        `vfMode:${state.vectorFieldFunction}`,
+        `stream:${state.streamlineFlowEnabled ? 1 : 0}`,
+        `vfScale:${toCacheKeyNumber(state.vectorFieldScale)}`,
+        `vfThick:${toCacheKeyNumber(state.vectorArrowThickness)}`,
+        `vfHead:${toCacheKeyNumber(state.vectorArrowHeadSize)}`,
+        `domB:${toCacheKeyNumber(state.domainBrightness)}`,
+        `domC:${toCacheKeyNumber(state.domainContrast)}`,
+        `domS:${toCacheKeyNumber(state.domainSaturation)}`,
+        `domL:${toCacheKeyNumber(state.domainLightnessCycles)}`,
+        `sStep:${toCacheKeyNumber(state.streamlineStepSize)}`,
+        `sMax:${state.streamlineMaxLength}`,
+        `sThick:${toCacheKeyNumber(state.streamlineThickness)}`,
+        `sSeed:${toCacheKeyNumber(state.streamlineSeedDensityFactor)}`
+    ];
+
+    appendManualSeedPointsToCacheKey(keyParts, state.manualSeedPoints);
+    return keyParts.join('|');
+}
+
+function shouldUseZFlowLayerCache() {
+    if (!(state.vectorFieldEnabled || state.streamlineFlowEnabled)) return false;
+    if (state.riemannSphereViewEnabled && !state.splitViewEnabled) return false;
+    if (state.panStateZ && state.panStateZ.isPanning) return false;
+    return true;
+}
+
+function renderZPlaneFlowLayer(targetCtx, planeParams) {
+    if (state.streamlineFlowEnabled) {
+        drawPlaneLayer(targetCtx, planeParams, 'z', layerCtx => {
+            drawStreamlinesOnZPlane(layerCtx, planeParams, state);
+        }, 'capture');
+        return;
+    }
+
+    drawPlaneLayer(targetCtx, planeParams, 'z', layerCtx => {
+        drawZPlaneVectorField(layerCtx, planeParams, state.currentFunction, state.vectorFieldFunction);
+    }, 'capture');
 }
 
 function drawZetaUndefinedRegionOverlay(ctx, planeParams) {
@@ -280,6 +345,7 @@ function drawZPlaneContent(){
         if(state.domainColoringEnabled && domainColoringDirty){renderPlanarDomainColoring(zDomainColorCtx,zPlaneParams,false,curFunc);} 
         const drawReferenceGrid =
             !state.vectorFieldEnabled &&
+            !state.streamlineFlowEnabled &&
             (state.currentInputShape === 'grid_cartesian' ||
             state.currentInputShape === 'grid_polar' ||
             state.currentInputShape === 'grid_logpolar');
@@ -296,18 +362,30 @@ function drawZPlaneContent(){
                 drawGridLines(layerCtx, zPlaneParams);
             }
         }, 'raster');
-        if (state.vectorFieldEnabled) {
+        if (state.vectorFieldEnabled || state.streamlineFlowEnabled) {
             zPlanarInputLayerCache.key = null;
-            if (state.streamlineFlowEnabled) {
-                drawPlaneLayer(zCtx, zPlaneParams, 'z', (layerCtx) => {
-                    drawStreamlinesOnZPlane(layerCtx, zPlaneParams, state);
-                }, 'capture');
+            const useCachedFlowLayer = shouldUseZFlowLayerCache();
+            if (useCachedFlowLayer) {
+                const cacheCanvas = ensurePlanarLayerCacheCanvas(zFlowLayerCache, zPlaneParams.width, zPlaneParams.height);
+                const cacheCtx = zFlowLayerCache.ctx;
+                const cacheKey = buildZFlowLayerCacheKey();
+                if (cacheCanvas && cacheCtx) {
+                    if (zFlowLayerCache.key !== cacheKey) {
+                        cacheCtx.setTransform(1, 0, 0, 1, 0, 0);
+                        cacheCtx.clearRect(0, 0, cacheCanvas.width, cacheCanvas.height);
+                        renderZPlaneFlowLayer(cacheCtx, zPlaneParams);
+                        zFlowLayerCache.key = cacheKey;
+                    }
+                    zCtx.drawImage(cacheCanvas, 0, 0);
+                } else {
+                    renderZPlaneFlowLayer(zCtx, zPlaneParams);
+                }
             } else {
-                drawPlaneLayer(zCtx, zPlaneParams, 'z', (layerCtx) => {
-                    drawZPlaneVectorField(layerCtx, zPlaneParams, curFunc, state.vectorFieldFunction);
-                }, 'capture');
+                zFlowLayerCache.key = null;
+                renderZPlaneFlowLayer(zCtx, zPlaneParams);
             }
         } else {
+            zFlowLayerCache.key = null;
             const useCachedInputLayer = shouldUseZPlanarInputLayerCache();
             if (useCachedInputLayer) {
                 const cacheCanvas = ensurePlanarLayerCacheCanvas(zPlanarInputLayerCache, zPlaneParams.width, zPlaneParams.height);

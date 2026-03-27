@@ -447,7 +447,11 @@ function updateTitlesAndGlobalUI() {
     else if (state.currentInputShape === 'image') zPlaneTitleText += ": Image)";
     else if (state.currentInputShape === 'empty_grid') zPlaneTitleText += ": Empty)";
     else zPlaneTitleText += ")"; 
-    if (state.vectorFieldEnabled && (!state.riemannSphereViewEnabled || state.splitViewEnabled)) zPlaneTitleText = "z-plane (Vector Field: " + state.vectorFieldFunction + ")";
+    if ((state.vectorFieldEnabled || state.streamlineFlowEnabled) && (!state.riemannSphereViewEnabled || state.splitViewEnabled)) {
+        zPlaneTitleText = state.streamlineFlowEnabled
+            ? `z-plane (Streamlines: ${state.vectorFieldFunction})`
+            : `z-plane (Vector Field: ${state.vectorFieldFunction})`;
+    }
 
 
     if (state.splitViewEnabled) {
