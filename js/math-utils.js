@@ -1,33 +1,44 @@
+function getComplexParts(re, im) {
+    if (typeof re === 'object' && re !== null) {
+        return {
+            re: re.re ?? re.real ?? 0,
+            im: re.im ?? re.imag ?? 0
+        };
+    }
+
+    return {
+        re: re ?? 0,
+        im: im ?? 0
+    };
+}
+
+function toMathComplex(re, im) {
+    const parts = getComplexParts(re, im);
+    return math.complex(parts.re, parts.im);
+}
 
 function C(re, im) {
-    let r = 0, i = 0;
-    if (typeof re === 'object' && re !== null) {
-        r = re.re || re.real || 0;
-        i = re.im || re.imag || 0;
-    } else {
-        r = re || 0;
-        i = im || 0;
-    }
-    
+    const parts = getComplexParts(re, im);
+
     return {
-        re: r,
-        im: i,
+        re: parts.re,
+        im: parts.im,
         get real() { return this.re; },
         get imag() { return this.im; },
         add: function(other) {
-            const res = math.add(math.complex(this.re, this.im), math.complex(other.re || other.real || 0, other.im || other.imag || 0));
+            const res = math.add(toMathComplex(this), toMathComplex(other));
             return C(res.re, res.im);
         },
         subtract: function(other) {
-            const res = math.subtract(math.complex(this.re, this.im), math.complex(other.re || other.real || 0, other.im || other.imag || 0));
+            const res = math.subtract(toMathComplex(this), toMathComplex(other));
             return C(res.re, res.im);
         },
         multiply: function(other) {
-            const res = math.multiply(math.complex(this.re, this.im), math.complex(other.re || other.real || 0, other.im || other.imag || 0));
+            const res = math.multiply(toMathComplex(this), toMathComplex(other));
             return C(res.re, res.im);
         },
         divide: function(other) {
-            const res = math.divide(math.complex(this.re, this.im), math.complex(other.re || other.real || 0, other.im || other.imag || 0));
+            const res = math.divide(toMathComplex(this), toMathComplex(other));
             return C(res.re, res.im);
         },
         abs: function() {
@@ -40,9 +51,8 @@ function C(re, im) {
             return C(this.re, this.im);
         },
         equals: function(other) {
-            const ore = other.re || other.real || 0;
-            const oim = other.im || other.imag || 0;
-            return Math.abs(this.re - ore) < 1e-12 && Math.abs(this.im - oim) < 1e-12;
+            const normalized = getComplexParts(other);
+            return Math.abs(this.re - normalized.re) < 1e-12 && Math.abs(this.im - normalized.im) < 1e-12;
         },
         isFinite: function() {
             return Number.isFinite(this.re) && Number.isFinite(this.im);
@@ -57,23 +67,18 @@ function C(re, im) {
 }
 
 C.power = function(base, exp) {
-    if (typeof exp === 'number') {
-        const res = math.pow(math.complex(base.re || base.real || 0, base.im || base.imag || 0), exp);
-        return C(res.re, res.im);
-    }
-    const res = math.pow(
-        math.complex(base.re || base.real || 0, base.im || base.imag || 0),
-        math.complex(exp.re || exp.real || 0, exp.im || exp.imag || 0)
-    );
+    const res = typeof exp === 'number'
+        ? math.pow(toMathComplex(base), exp)
+        : math.pow(toMathComplex(base), toMathComplex(exp));
     return C(res.re, res.im);
 };
 
 // Aliases for backward compatibility in parts of code that still use `new Complex(re, im)`
 const Complex = C;
 
-function complexAdd(z1, z2) { const res = math.add(math.complex(z1.re, z1.im), math.complex(z2.re, z2.im)); return { re: res.re, im: res.im }; }
-function complexSub(z1, z2) { const res = math.subtract(math.complex(z1.re, z1.im), math.complex(z2.re, z2.im)); return { re: res.re, im: res.im }; }
-function complexMul(z1, z2) { const res = math.multiply(math.complex(z1.re, z1.im), math.complex(z2.re, z2.im)); return { re: res.re, im: res.im }; }
+function complexAdd(z1, z2) { const res = math.add(toMathComplex(z1), toMathComplex(z2)); return { re: res.re, im: res.im }; }
+function complexSub(z1, z2) { const res = math.subtract(toMathComplex(z1), toMathComplex(z2)); return { re: res.re, im: res.im }; }
+function complexMul(z1, z2) { const res = math.multiply(toMathComplex(z1), toMathComplex(z2)); return { re: res.re, im: res.im }; }
 function complexScalarMul(s, z) { return { re: s * z.re, im: s * z.im }; }
 function complexDivide(num, den) {
     if (Math.abs(den.re * den.re + den.im * den.im) < 1e-30) {
@@ -84,26 +89,26 @@ function complexDivide(num, den) {
         const scale = large_val / Math.sqrt(num_sq_mag);
         return { re: num.re * scale, im: num.im * scale };
     }
-    const res = math.divide(math.complex(num.re, num.im), math.complex(den.re, den.im));
+    const res = math.divide(toMathComplex(num), toMathComplex(den));
     return { re: res.re, im: res.im };
 }
 
 function cosh(x) { return Math.cosh(x); }
 function sinh(x) { return Math.sinh(x); }
 
-function complexCos(a, b) { const res = math.cos(math.complex(a, b)); return { re: res.re, im: res.im }; }
-function complexSin(a, b) { const res = math.sin(math.complex(a, b)); return { re: res.re, im: res.im }; }
-function complexTan(a, b) { const res = math.tan(math.complex(a, b)); return { re: res.re, im: res.im }; }
-function complexSec(a, b) { const res = math.sec(math.complex(a, b)); return { re: res.re, im: res.im }; }
-function complexExp(a, b) { const res = math.exp(math.complex(a, b)); return { re: res.re, im: res.im }; }
+function complexCos(a, b) { const res = math.cos(toMathComplex(a, b)); return { re: res.re, im: res.im }; }
+function complexSin(a, b) { const res = math.sin(toMathComplex(a, b)); return { re: res.re, im: res.im }; }
+function complexTan(a, b) { const res = math.tan(toMathComplex(a, b)); return { re: res.re, im: res.im }; }
+function complexSec(a, b) { const res = math.sec(toMathComplex(a, b)); return { re: res.re, im: res.im }; }
+function complexExp(a, b) { const res = math.exp(toMathComplex(a, b)); return { re: res.re, im: res.im }; }
 function complexLn(a, b) {
     if (a === 0 && b === 0) return { re: -Infinity, im: 0 };
-    const res = math.log(math.complex(a, b));
+    const res = math.log(toMathComplex(a, b));
     return { re: res.re, im: res.im };
 }
 function complexReciprocal(a, b) {
     if (a === 0 && b === 0) return { re: NaN, im: NaN };
-    const res = math.divide(1, math.complex(a, b));
+    const res = math.divide(1, toMathComplex(a, b));
     return { re: res.re, im: res.im };
 }
 function complexPow(base_re, base_im, exp_re, exp_im) {
@@ -111,7 +116,7 @@ function complexPow(base_re, base_im, exp_re, exp_im) {
         if (exp_re > 0 || (exp_re === 0 && exp_im !== 0)) return { re: 0, im: 0 };
         if (exp_re === 0 && exp_im === 0) return { re: 1, im: 0 };
     }
-    const res = math.pow(math.complex(base_re, base_im), math.complex(exp_re, exp_im));
+    const res = math.pow(toMathComplex(base_re, base_im), toMathComplex(exp_re, exp_im));
     return { re: res.re, im: res.im };
 }
 

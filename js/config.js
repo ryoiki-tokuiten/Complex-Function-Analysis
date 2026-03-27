@@ -40,6 +40,13 @@ let state = {
     vectorFieldEnabled: false,
     vectorFieldFunction: 'f(z)',
     vectorFieldScale: 0.1,
+    vectorArrowThickness: 1.5,
+    vectorArrowHeadSize: 6,
+    streamlineFlowEnabled: false,
+    streamlineStepSize: 0.02,
+    streamlineMaxLength: 100,
+    streamlineThickness: 1.0,
+    streamlineSeedDensityFactor: 0.5,
     manualSeedPoints: [], 
 
     imagePoints: [],
@@ -86,6 +93,9 @@ let state = {
     globalViewOptionsEnabled: false,
     plotly3DEnabled: false,
     showSphereAxesAndGrid: false, // Default to hidden
+    plotlySphereOpacity: 0.10,
+    plotlyGridDensity: 12,
+    showPlotlySphereGrid: true,
     webglLineRenderingEnabled: true,
     webglDomainColoringEnabled: true,
     webglGpuStressMode: false,
@@ -101,6 +111,36 @@ let state = {
     fourierDFTResult: [],
     fourierWindingFrequency: 1.0, // The frequency we're testing (KEY CONTROL!)
     fourierWindingTime: 1.0, // How far along in time (0 to 1, for animation)
+
+    // Laplace Transform state
+    laplaceModeEnabled: false,
+    laplaceFunction: 'damped_sine',
+    laplaceFrequency: 2.0,
+    laplaceDamping: 0.5,
+    laplaceSigma: 0.0,
+    laplaceOmega: 1.0,
+    laplaceAmplitude: 1.0,
+    laplaceShowROC: true,
+    laplaceVizMode: 'magnitude',
+    laplaceClipHeight: 10,
+    laplaceShowPolesZeros: true,
+    laplaceShowFourierLine: true,
+    laplaceAnimationTime: 1.0,
+    laplaceAnimationPlaying: false,
+    laplaceAnimationSpeed: 3.0,
+    laplaceAnimationLoop: true,
+    laplaceNeedViewportReset: true,
+    laplaceWindingSyncZoom: true,
+    laplaceTopVP: null,
+    lapaceBotVP: null,
+    laplaceDragging: null,
+    laplaceTimeDomainSignal: [],
+    laplaceSurface: [],
+    laplacePoles: [],
+    laplaceZeros: [],
+    laplaceStability: null,
+    isLaplace3DFullScreen: false,
+    originalLaplace3DParent: null,
 };
 
 

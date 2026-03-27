@@ -1,1529 +1,1103 @@
+const DOMAIN_DIRTY_STATE_KEYS = new Set([
+    'a0',
+    'b0',
+    'circleR',
+    'ellipseA',
+    'ellipseB',
+    'hyperbolaA',
+    'hyperbolaB',
+    'stripY1',
+    'stripY2',
+    'sectorAngle1',
+    'sectorAngle2',
+    'sectorRMin',
+    'sectorRMax',
+    'imageSize',
+    'imageOpacity',
+    'vectorFieldScale',
+    'zPlaneZoom',
+    'wPlaneZoom'
+]);
+
+const BASIC_SLIDER_BINDINGS = [
+    { controlKey: 'stripY1Slider', stateKey: 'stripY1', parser: parseFloat },
+    { controlKey: 'stripY2Slider', stateKey: 'stripY2', parser: parseFloat },
+    { controlKey: 'sectorAngle1Slider', stateKey: 'sectorAngle1', parser: parseFloat },
+    { controlKey: 'sectorAngle2Slider', stateKey: 'sectorAngle2', parser: parseFloat },
+    { controlKey: 'sectorRMinSlider', stateKey: 'sectorRMin', parser: parseFloat },
+    { controlKey: 'sectorRMaxSlider', stateKey: 'sectorRMax', parser: parseFloat },
+    { controlKey: 'gridDensitySlider', stateKey: 'gridDensity', parser: parseInteger },
+    { controlKey: 'neighborhoodSizeSlider', stateKey: 'probeNeighborhoodSize', parser: parseFloat },
+    { controlKey: 'vectorFieldScaleSlider', stateKey: 'vectorFieldScale', parser: parseFloat },
+    { controlKey: 'vectorArrowThicknessSlider', stateKey: 'vectorArrowThickness', parser: parseFloat },
+    { controlKey: 'vectorArrowHeadSizeSlider', stateKey: 'vectorArrowHeadSize', parser: parseFloat },
+    { controlKey: 'streamlineStepSizeSlider', stateKey: 'streamlineStepSize', parser: parseFloat },
+    { controlKey: 'streamlineMaxLengthSlider', stateKey: 'streamlineMaxLength', parser: parseInteger },
+    { controlKey: 'streamlineThicknessSlider', stateKey: 'streamlineThickness', parser: parseFloat },
+    { controlKey: 'streamlineSeedDensityFactorSlider', stateKey: 'streamlineSeedDensityFactor', parser: parseFloat },
+    { controlKey: 'radialDiscreteStepsCountSlider', stateKey: 'radialDiscreteStepsCount', parser: parseInteger },
+    { controlKey: 'plotlyGridDensitySlider', stateKey: 'plotlyGridDensity', parser: parseInteger },
+    { controlKey: 'plotlySphereOpacitySlider', stateKey: 'plotlySphereOpacity', parser: parseFloat },
+    { controlKey: 'taylorSeriesOrderSlider', stateKey: 'taylorSeriesOrder', parser: parseInteger },
+    { controlKey: 'particleDensitySlider', stateKey: 'particleDensity', parser: parseInteger },
+    { controlKey: 'particleSpeedSlider', stateKey: 'particleSpeed', parser: parseFloat },
+    { controlKey: 'particleMaxLifetimeSlider', stateKey: 'particleMaxLifetime', parser: parseInteger },
+    { controlKey: 'imageResolutionSlider', stateKey: 'imageResolution', parser: parseInteger },
+    { controlKey: 'imageSizeSlider', stateKey: 'imageSize', parser: parseFloat },
+    { controlKey: 'imageOpacitySlider', stateKey: 'imageOpacity', parser: parseFloat },
+    { controlKey: 'zPlaneZoomSlider', stateKey: 'zPlaneZoom', parser: parseFloat },
+    { controlKey: 'wPlaneZoomSlider', stateKey: 'wPlaneZoom', parser: parseFloat },
+    { controlKey: 'laplaceAnimationSpeedSlider', stateKey: 'laplaceAnimationSpeed', parser: parseFloat },
+    { controlKey: 'fourierFrequencySlider', stateKey: 'fourierFrequency', parser: parseFloat },
+    { controlKey: 'fourierAmplitudeSlider', stateKey: 'fourierAmplitude', parser: parseFloat },
+    { controlKey: 'fourierTimeWindowSlider', stateKey: 'fourierTimeWindow', parser: parseFloat },
+    { controlKey: 'fourierSamplesSlider', stateKey: 'fourierSamples', parser: parseInteger },
+    { controlKey: 'fourierWindingFrequencySlider', stateKey: 'fourierWindingFrequency', parser: parseFloat },
+    { controlKey: 'fourierWindingTimeSlider', stateKey: 'fourierWindingTime', parser: parseFloat },
+    { controlKey: 'laplaceFrequencySlider', stateKey: 'laplaceFrequency', parser: parseFloat },
+    { controlKey: 'laplaceDampingSlider', stateKey: 'laplaceDamping', parser: parseFloat },
+    { controlKey: 'laplaceSigmaSlider', stateKey: 'laplaceSigma', parser: parseFloat },
+    { controlKey: 'laplaceOmegaSlider', stateKey: 'laplaceOmega', parser: parseFloat },
+    { controlKey: 'laplaceClipHeightSlider', stateKey: 'laplaceClipHeight', parser: parseFloat }
+];
+
+const BASIC_CHECKBOX_BINDINGS = [
+    { controlKey: 'showZerosPolesCb', stateKey: 'showZerosPoles' },
+    { controlKey: 'showCriticalPointsCb', stateKey: 'showCriticalPoints' },
+    { controlKey: 'enableCauchyIntegralModeCb', stateKey: 'cauchyIntegralModeEnabled' },
+    { controlKey: 'enableSplitViewCb', stateKey: 'splitViewEnabled' },
+    { controlKey: 'enableVectorFieldCb', stateKey: 'vectorFieldEnabled' },
+    { controlKey: 'enableStreamlineFlowCb', stateKey: 'streamlineFlowEnabled' },
+    { controlKey: 'enableRadialDiscreteStepsCb', stateKey: 'radialDiscreteStepsEnabled' },
+    { controlKey: 'enableRiemannSphereCb', stateKey: 'riemannSphereViewEnabled' },
+    { controlKey: 'enablePlotly3DCb', stateKey: 'plotly3DEnabled' },
+    { controlKey: 'toggleSphereAxesGridCb', stateKey: 'showSphereAxesAndGrid' },
+    { controlKey: 'togglePlotlySphereGridCb', stateKey: 'showPlotlySphereGrid' },
+    { controlKey: 'enableTaylorSeriesCb', stateKey: 'taylorSeriesEnabled' },
+    { controlKey: 'enableTaylorSeriesCustomCenterCb', stateKey: 'taylorSeriesCustomCenterEnabled' },
+    { controlKey: 'laplaceShowROCCb', stateKey: 'laplaceShowROC' },
+    { controlKey: 'laplaceShowPolesZerosCb', stateKey: 'laplaceShowPolesZeros' },
+    { controlKey: 'laplaceShowFourierLineCb', stateKey: 'laplaceShowFourierLine' },
+    { controlKey: 'laplaceAnimationLoopCb', stateKey: 'laplaceAnimationLoop' },
+    { controlKey: 'enableParticleAnimationCb', stateKey: 'particleAnimationEnabled' },
+    { controlKey: 'showVectorFieldPanelCb', stateKey: 'showVectorFieldPanelEnabled' },
+    { controlKey: 'enableDomainColoringCb', stateKey: 'domainColoringEnabled' }
+];
+
+const BASIC_SELECTOR_BINDINGS = [
+    { controlKey: 'inputShapeSelector', stateKey: 'currentInputShape' },
+    { controlKey: 'vectorFieldFunctionSelector', stateKey: 'vectorFieldFunction' },
+    { controlKey: 'fourierFunctionSelector', stateKey: 'fourierFunction' },
+    { controlKey: 'laplaceFunctionSelector', stateKey: 'laplaceFunction' },
+    { controlKey: 'laplaceVizModeSelector', stateKey: 'laplaceVizMode' }
+];
+
+const SPHERE_VIEW_BUTTONS = {
+    sphereViewNorthBtn: { rotX: -Math.PI / 2 + 0.01, rotY: 0 },
+    sphereViewSouthBtn: { rotX: Math.PI / 2 - 0.01, rotY: 0 },
+    sphereViewEastBtn: { rotX: 0, rotY: -Math.PI / 2 },
+    sphereViewWestBtn: { rotX: 0, rotY: Math.PI / 2 },
+    sphereViewFrontBtn: { rotX: 0, rotY: 0 },
+    sphereViewResetBtn: { rotX: SPHERE_INITIAL_ROT_X, rotY: SPHERE_INITIAL_ROT_Y }
+};
+
+let uiEventListenersBound = false;
+
+function parseInteger(value) {
+    return parseInt(value, 10);
+}
+
+function parseControlValue(control, parser = parseFloat, fallback = 0) {
+    if (!control) {
+        return fallback;
+    }
+
+    const parsed = parser(control.value);
+    return Number.isNaN(parsed) ? fallback : parsed;
+}
+
+function readSliderState(controlKey, stateKey, parser = parseFloat) {
+    const control = controls[controlKey];
+    if (!control) {
+        return state[stateKey];
+    }
+
+    state[stateKey] = parseControlValue(control, parser, state[stateKey]);
+    return state[stateKey];
+}
+
+function readCheckboxState(controlKey, stateKey) {
+    const control = controls[controlKey];
+    if (!control) {
+        return state[stateKey];
+    }
+
+    state[stateKey] = control.checked;
+    return state[stateKey];
+}
+
+function readSelectorState(controlKey, stateKey) {
+    const control = controls[controlKey];
+    if (!control) {
+        return state[stateKey];
+    }
+
+    state[stateKey] = control.value;
+    return state[stateKey];
+}
+
+function shouldMarkDomainDirty(controlKey, stateKey) {
+    return DOMAIN_DIRTY_STATE_KEYS.has(stateKey) ||
+        controlKey.startsWith('mobius') ||
+        controlKey.startsWith('domain');
+}
+
+function requestDomainRedraw(markDomainDirty = false) {
+    if (markDomainDirty) {
+        domainColoringDirty = true;
+    }
+    requestRedrawAll();
+}
+
+function bindElementListener(element, eventName, handler) {
+    if (!element) {
+        return;
+    }
+
+    element.addEventListener(eventName, event => {
+        try {
+            handler(event, element);
+        } catch (error) {
+            console.error(`Error in ${element.id || 'element'} ${eventName} listener:`, error);
+        }
+    });
+}
+
+function bindControlListener(controlKey, eventName, handler) {
+    bindElementListener(controls[controlKey], eventName, handler);
+}
 
 function bindSlider(controlKey, stateKey, parser = parseFloat, customCallback = null) {
-    const slider = controls[controlKey];
-    if (slider) {
-        slider.addEventListener('input', () => {
-            try {
-                state[stateKey] = parser(slider.value);
-                if (customCallback) {
-                    customCallback();
-                } else {
-                    // Update only specific things that need domain coloring recalculation
-                    const domainDirtyKeys = ['a0', 'b0', 'circleR', 'ellipseA', 'ellipseB', 'hyperbolaA', 'hyperbolaB', 'stripY1', 'stripY2', 'sectorAngle1', 'sectorAngle2', 'sectorRMin', 'sectorRMax'];
-                    if (domainDirtyKeys.includes(stateKey) || controlKey.startsWith('mobius') || controlKey.startsWith('domain') || stateKey === 'imageSize' || stateKey === 'imageOpacity' || stateKey === 'zPlaneZoom' || stateKey === 'wPlaneZoom' || stateKey === 'vectorFieldScale') {
-                        domainColoringDirty = true;
-                    }
-                    requestRedrawAll();
-                }
-            } catch (error) {
-                console.error(`Error in ${controlKey} input listener:`, error);
-            }
-        });
-    }
+    bindControlListener(controlKey, 'input', (_event, slider) => {
+        state[stateKey] = parseControlValue(slider, parser, state[stateKey]);
+
+        if (customCallback) {
+            customCallback(state[stateKey], slider);
+            return;
+        }
+
+        requestDomainRedraw(shouldMarkDomainDirty(controlKey, stateKey));
+    });
 }
 
 function bindCheckbox(controlKey, stateKey, customCallback = null) {
-    const checkbox = controls[controlKey];
-    if (checkbox) {
-        checkbox.addEventListener('change', (e) => {
-            try {
-                state[stateKey] = e.target.checked;
-                if (customCallback) {
-                    customCallback(e);
-                } else {
-                    requestRedrawAll();
-                }
-            } catch (error) {
-                console.error(`Error in ${controlKey} change listener:`, error);
-            }
-        });
-    }
+    bindControlListener(controlKey, 'change', (event, checkbox) => {
+        state[stateKey] = checkbox.checked;
+
+        if (customCallback) {
+            customCallback(event, checkbox.checked, checkbox);
+            return;
+        }
+
+        requestRedrawAll();
+    });
 }
 
 function bindSelector(controlKey, stateKey, customCallback = null) {
-    const selector = controls[controlKey];
-    if (selector) {
-        selector.addEventListener('change', (e) => {
-            try {
-                state[stateKey] = e.target.value;
-                if (customCallback) {
-                    customCallback(e);
-                } else {
-                    domainColoringDirty = true;
-                    requestRedrawAll();
-                }
-            } catch (error) {
-                console.error(`Error in ${controlKey} change listener:`, error);
+    bindControlListener(controlKey, 'change', (event, selector) => {
+        state[stateKey] = selector.value;
+
+        if (customCallback) {
+            customCallback(event, selector.value, selector);
+            return;
+        }
+
+        requestDomainRedraw(true);
+    });
+}
+
+function syncLaplacePlayPauseButton() {
+    if (!controls.laplacePlayPauseBtn) {
+        return;
+    }
+
+    controls.laplacePlayPauseBtn.innerHTML = state.laplaceAnimationPlaying ? '⏸ Pause' : '▶ Play';
+}
+
+function syncLaplaceWindingSyncButton() {
+    if (!controls.laplaceWindingSyncBtn) {
+        return;
+    }
+
+    controls.laplaceWindingSyncBtn.textContent = state.laplaceWindingSyncZoom ? 'Sync Zoom: On' : 'Sync Zoom: Off';
+    controls.laplaceWindingSyncBtn.style.color = state.laplaceWindingSyncZoom
+        ? 'rgba(150, 200, 255, 0.9)'
+        : 'rgba(180, 180, 180, 0.6)';
+    controls.laplaceWindingSyncBtn.style.borderColor = state.laplaceWindingSyncZoom
+        ? 'rgba(80, 120, 180, 0.5)'
+        : 'rgba(80, 80, 80, 0.4)';
+}
+
+function setActiveFunctionButton(activeKey) {
+    Object.entries(controls.funcButtons).forEach(([key, button]) => {
+        if (!button) {
+            return;
+        }
+
+        const isActive = key === activeKey;
+        button.classList.toggle('active', isActive);
+        button.classList.toggle('btn-primary', isActive);
+        button.classList.toggle('btn-outline-secondary', !isActive);
+    });
+}
+
+function updateModePanels() {
+    if (controls.fourierSpecificControlsDiv) {
+        controls.fourierSpecificControlsDiv.classList.toggle('hidden', !state.fourierModeEnabled);
+    }
+    if (controls.laplaceSpecificControlsDiv) {
+        controls.laplaceSpecificControlsDiv.classList.toggle('hidden', !state.laplaceModeEnabled);
+    }
+    if (controls.laplaceWindingSyncBtn) {
+        controls.laplaceWindingSyncBtn.style.display = state.laplaceModeEnabled ? 'block' : 'none';
+    }
+
+    syncLaplacePlayPauseButton();
+    syncLaplaceWindingSyncButton();
+}
+
+function activateFunctionMode(key) {
+    const enteringFourier = key === 'fourier';
+    const enteringLaplace = key === 'laplace';
+
+    if (state.laplaceModeEnabled && !enteringLaplace && typeof stopLaplaceAnimation === 'function') {
+        stopLaplaceAnimation();
+    }
+
+    state.currentFunction = key;
+    state.fourierModeEnabled = enteringFourier;
+    state.laplaceModeEnabled = enteringLaplace;
+
+    if (enteringFourier && typeof updateFourierTransform === 'function') {
+        updateFourierTransform();
+    }
+
+    if (enteringLaplace) {
+        state.laplaceTopVP = null;
+        state.lapaceBotVP = null;
+        state.laplaceDragging = null;
+        state.laplaceNeedViewportReset = true;
+
+        if (typeof updateLaplaceTransform === 'function') {
+            updateLaplaceTransform();
+        }
+        if (typeof showFullLaplaceSpiral === 'function') {
+            showFullLaplaceSpiral();
+        }
+    }
+
+    updateModePanels();
+    setActiveFunctionButton(key);
+    requestDomainRedraw(true);
+}
+
+function readImageFile(file, callback) {
+    const reader = new FileReader();
+    reader.onload = event => {
+        const img = new Image();
+        img.onload = () => callback(img);
+        img.src = event.target.result;
+    };
+    reader.readAsDataURL(file);
+}
+
+function processUploadedImage(img) {
+    if (!img) {
+        return;
+    }
+
+    state.uploadedImage = img;
+
+    const targetResolution = Math.max(1, state.imageResolution || 300);
+    const cpuResolution = Math.min(targetResolution, 150);
+
+    let width = img.width;
+    let height = img.height;
+    if (width > height) {
+        height = Math.round((height * cpuResolution) / width);
+        width = cpuResolution;
+    } else {
+        width = Math.round((width * cpuResolution) / height);
+        height = cpuResolution;
+    }
+
+    const canvas = document.createElement('canvas');
+    canvas.width = Math.max(1, width);
+    canvas.height = Math.max(1, height);
+
+    const ctx = canvas.getContext('2d');
+    ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+
+    const imgData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+    const xDivisor = Math.max(1, canvas.width - 1);
+    const yDivisor = Math.max(1, canvas.height - 1);
+    const imagePoints = [];
+
+    for (let y = 0; y < canvas.height; y += 1) {
+        for (let x = 0; x < canvas.width; x += 1) {
+            const idx = (y * canvas.width + x) * 4;
+            const alpha = imgData.data[idx + 3];
+            if (alpha <= 20) {
+                continue;
             }
-        });
+
+            imagePoints.push({
+                nx: (x / xDivisor) * 2 - 1,
+                ny: -((y / yDivisor) * 2 - 1),
+                color: `rgba(${imgData.data[idx]},${imgData.data[idx + 1]},${imgData.data[idx + 2]},${alpha / 255})`
+            });
+        }
+    }
+
+    state.imagePoints = imagePoints;
+    requestDomainRedraw(true);
+}
+
+function reprocessUploadedImage() {
+    if (state.uploadedImage) {
+        processUploadedImage(state.uploadedImage);
     }
 }
 
-window.setupEventListeners = function () {
+function initializeMobiusState() {
+    ['A', 'B', 'C', 'D'].forEach(param => {
+        const nextValue = state[`mobius${param}`] || { re: 0, im: 0 };
+        ['re', 'im'].forEach(part => {
+            const controlKey = `mobius${param}_${part}_slider`;
+            const slider = controls[controlKey];
+            if (slider) {
+                nextValue[part] = parseControlValue(slider, parseFloat, nextValue[part]);
+            }
+        });
+        state[`mobius${param}`] = nextValue;
+    });
+}
+
+function initializeCustomTaylorCenter() {
+    if (controls.taylorSeriesCustomCenterReInput) {
+        const parsed = parseFloat(controls.taylorSeriesCustomCenterReInput.value);
+        state.taylorSeriesCustomCenter.re = Number.isNaN(parsed) ? state.taylorSeriesCustomCenter.re : parsed;
+    }
+    if (controls.taylorSeriesCustomCenterImInput) {
+        const parsed = parseFloat(controls.taylorSeriesCustomCenterImInput.value);
+        state.taylorSeriesCustomCenter.im = Number.isNaN(parsed) ? state.taylorSeriesCustomCenter.im : parsed;
+    }
+}
+
+function initializeScalarBindings() {
     sliderParamKeys.forEach(key => {
-        if (controls[`${key}Slider`]) {
-            controls[`${key}Slider`].addEventListener('input', () => {
-                try {
-                    state[key] = parseFloat(controls[`${key}Slider`].value);
-                    domainColoringDirty = true;
-                    requestRedrawAll();
-                } catch (error) {
-                    console.error(`Error in ${key}Slider input listener:`, error);
+        readSliderState(`${key}Slider`, key, parseFloat);
+    });
+
+    BASIC_SLIDER_BINDINGS.forEach(({ controlKey, stateKey, parser }) => {
+        readSliderState(controlKey, stateKey, parser);
+    });
+
+    BASIC_CHECKBOX_BINDINGS.forEach(({ controlKey, stateKey }) => {
+        readCheckboxState(controlKey, stateKey);
+    });
+
+    BASIC_SELECTOR_BINDINGS.forEach(({ controlKey, stateKey }) => {
+        readSelectorState(controlKey, stateKey);
+    });
+
+    initializeMobiusState();
+    initializeCustomTaylorCenter();
+}
+
+window.initializeStateFromControls = function () {
+    initializeScalarBindings();
+    updateModePanels();
+    setActiveFunctionButton(state.currentFunction);
+};
+
+function bindBaseParameterControls() {
+    sliderParamKeys.forEach(key => {
+        bindSlider(`${key}Slider`, key, parseFloat);
+
+        const playButton = controls[`play_${key}Btn`];
+        const speedSelector = controls[`speed_${key}Selector`];
+        const slider = controls[`${key}Slider`];
+
+        if (!slider || !playButton || !speedSelector) {
+            return;
+        }
+
+        bindElementListener(playButton, 'click', () => {
+            toggleAnimation(
+                slider,
+                value => {
+                    state[key] = value;
+                },
+                playButton,
+                speedSelector
+            );
+        });
+    });
+}
+
+function bindMobiusControls() {
+    ['A', 'B', 'C', 'D'].forEach(param => {
+        ['re', 'im'].forEach(part => {
+            const sliderKey = `mobius${param}_${part}_slider`;
+            const playButtonKey = `play_mobius${param}_${part}_btn`;
+            const speedSelectorKey = `speed_mobius${param}_${part}_selector`;
+
+            bindControlListener(sliderKey, 'input', (_event, slider) => {
+                const value = parseControlValue(slider, parseFloat, 0);
+                if (!state[`mobius${param}`]) {
+                    state[`mobius${param}`] = { re: 0, im: 0 };
                 }
+
+                state[`mobius${param}`][part] = value;
+                requestDomainRedraw(true);
             });
 
-    const simpleSliders = [
-        { controlKey: 'stripY1Slider', stateKey: 'stripY1', parser: parseFloat },
-        { controlKey: 'stripY2Slider', stateKey: 'stripY2', parser: parseFloat },
-        { controlKey: 'sectorAngle1Slider', stateKey: 'sectorAngle1', parser: parseFloat },
-        { controlKey: 'sectorAngle2Slider', stateKey: 'sectorAngle2', parser: parseFloat },
-        { controlKey: 'sectorRMinSlider', stateKey: 'sectorRMin', parser: parseFloat },
-        { controlKey: 'sectorRMaxSlider', stateKey: 'sectorRMax', parser: parseFloat },
-        { controlKey: 'gridDensitySlider', stateKey: 'gridDensity', parser: parseInt },
-        { controlKey: 'neighborhoodSizeSlider', stateKey: 'probeNeighborhoodSize', parser: parseFloat },
+            const slider = controls[sliderKey];
+            const playButton = controls[playButtonKey];
+            const speedSelector = controls[speedSelectorKey];
+
+            if (!slider || !playButton || !speedSelector) {
+                return;
+            }
+
+            bindElementListener(playButton, 'click', () => {
+                toggleAnimation(
+                    slider,
+                    value => {
+                        if (!state[`mobius${param}`]) {
+                            state[`mobius${param}`] = { re: 0, im: 0 };
+                        }
+
+                        state[`mobius${param}`][part] = value;
+                    },
+                    playButton,
+                    speedSelector
+                );
+            });
+        });
+    });
+}
+
+function bindFunctionButtons() {
+    Object.entries(controls.funcButtons).forEach(([key, button]) => {
+        bindElementListener(button, 'click', () => {
+            activateFunctionMode(key);
+        });
+    });
+}
+
+function bindImageControls() {
+    bindControlListener('imageUploadInput', 'change', event => {
+        const [file] = event.target.files || [];
+        if (!file) {
+            return;
+        }
+
+        readImageFile(file, processUploadedImage);
+    });
+
+    bindSlider('imageResolutionSlider', 'imageResolution', parseInteger, () => {
+        reprocessUploadedImage();
+        requestRedrawAll();
+    });
+
+    bindSlider('imageSizeSlider', 'imageSize', parseFloat, () => {
+        requestDomainRedraw(true);
+    });
+
+    bindSlider('imageOpacitySlider', 'imageOpacity', parseFloat, () => {
+        requestDomainRedraw(true);
+    });
+}
+
+function bindDomainColoringControls() {
+    bindCheckbox('enableDomainColoringCb', 'domainColoringEnabled', () => {
+        if (controls.domainColoringOptionsDiv) {
+            controls.domainColoringOptionsDiv.classList.toggle('hidden', !state.domainColoringEnabled);
+        }
+        if (controls.domainColoringKeyDiv) {
+            controls.domainColoringKeyDiv.classList.toggle('hidden', !state.domainColoringEnabled);
+        }
+        requestDomainRedraw(true);
+    });
+
+    ['domainBrightness', 'domainContrast', 'domainSaturation', 'domainLightnessCycles'].forEach(stateKey => {
+        bindSlider(`${stateKey}Slider`, stateKey, parseFloat, () => {
+            requestDomainRedraw(true);
+        });
+    });
+}
+
+function bindViewControls() {
+    bindCheckbox('enableSplitViewCb', 'splitViewEnabled', () => {
+        requestDomainRedraw(true);
+    });
+
+    bindSlider('zPlaneZoomSlider', 'zPlaneZoom', parseFloat, () => {
+        setupVisualParameters(true, false);
+        requestDomainRedraw(true);
+    });
+
+    bindSlider('wPlaneZoomSlider', 'wPlaneZoom', parseFloat, () => {
+        setupVisualParameters(false, true);
+        requestDomainRedraw(true);
+    });
+
+    bindCheckbox('enableRiemannSphereCb', 'riemannSphereViewEnabled', () => {
+        if (controls.riemannSphereOptionsDiv) {
+            controls.riemannSphereOptionsDiv.classList.toggle('hidden', !state.riemannSphereViewEnabled);
+        }
+        if (!state.riemannSphereViewEnabled && controls.plotly3DOptionsDiv) {
+            controls.plotly3DOptionsDiv.classList.add('hidden');
+        }
+        requestDomainRedraw(true);
+    });
+
+    bindCheckbox('enablePlotly3DCb', 'plotly3DEnabled', () => {
+        if (controls.plotly3DOptionsDiv) {
+            controls.plotly3DOptionsDiv.classList.toggle('hidden', !state.plotly3DEnabled);
+        }
+        requestRedrawAll();
+    });
+
+    bindCheckbox('toggleSphereAxesGridCb', 'showSphereAxesAndGrid');
+    bindCheckbox('togglePlotlySphereGridCb', 'showPlotlySphereGrid');
+
+    Object.entries(SPHERE_VIEW_BUTTONS).forEach(([controlKey, rotation]) => {
+        bindControlListener(controlKey, 'click', () => {
+            sphereViewParams.z.rotX = rotation.rotX;
+            sphereViewParams.z.rotY = rotation.rotY;
+            sphereViewParams.w.rotX = rotation.rotX;
+            sphereViewParams.w.rotY = rotation.rotY;
+            requestDomainRedraw(true);
+        });
+    });
+}
+
+function bindVectorFieldControls() {
+    bindCheckbox('enableVectorFieldCb', 'vectorFieldEnabled', () => {
+        if (controls.vectorFieldOptionsDiv) {
+            controls.vectorFieldOptionsDiv.classList.toggle('hidden', !state.vectorFieldEnabled);
+        }
+        requestDomainRedraw(true);
+    });
+
+    bindSelector('vectorFieldFunctionSelector', 'vectorFieldFunction', () => {
+        requestRedrawAll();
+    });
+
+    [
         { controlKey: 'vectorFieldScaleSlider', stateKey: 'vectorFieldScale', parser: parseFloat },
         { controlKey: 'vectorArrowThicknessSlider', stateKey: 'vectorArrowThickness', parser: parseFloat },
         { controlKey: 'vectorArrowHeadSizeSlider', stateKey: 'vectorArrowHeadSize', parser: parseFloat },
         { controlKey: 'streamlineStepSizeSlider', stateKey: 'streamlineStepSize', parser: parseFloat },
-        { controlKey: 'streamlineMaxLengthSlider', stateKey: 'streamlineMaxLength', parser: parseInt },
+        { controlKey: 'streamlineMaxLengthSlider', stateKey: 'streamlineMaxLength', parser: parseInteger },
         { controlKey: 'streamlineThicknessSlider', stateKey: 'streamlineThickness', parser: parseFloat },
-        { controlKey: 'streamlineSeedDensityFactorSlider', stateKey: 'streamlineSeedDensityFactor', parser: parseFloat },
-        { controlKey: 'radialDiscreteStepsCountSlider', stateKey: 'radialDiscreteStepsCount', parser: parseInt },
-        { controlKey: 'plotlyGridDensitySlider', stateKey: 'plotlyGridDensity', parser: parseInt },
-        { controlKey: 'plotlySphereOpacitySlider', stateKey: 'plotlySphereOpacity', parser: parseFloat },
-        { controlKey: 'taylorSeriesOrderSlider', stateKey: 'taylorSeriesOrder', parser: parseInt },
-        { controlKey: 'particleSpeedSlider', stateKey: 'particleSpeed', parser: parseFloat },
-        { controlKey: 'particleMaxLifetimeSlider', stateKey: 'particleMaxLifetime', parser: parseInt },
-    ];
-    simpleSliders.forEach(s => bindSlider(s.controlKey, s.stateKey, s.parser));
-
-    const simpleCheckboxes = [
-        { controlKey: 'showZerosPolesCb', stateKey: 'showZerosPoles' },
-        { controlKey: 'showCriticalPointsCb', stateKey: 'showCriticalPoints' },
-        { controlKey: 'enableCauchyIntegralModeCb', stateKey: 'cauchyIntegralModeEnabled' },
-        { controlKey: 'laplaceShowROCCb', stateKey: 'laplaceShowROC' },
-        { controlKey: 'laplaceShowPolesZerosCb', stateKey: 'laplaceShowPolesZeros' },
-        { controlKey: 'laplaceShowFourierLineCb', stateKey: 'laplaceShowFourierLine' },
-        { controlKey: 'togglePlotlySphereGridCb', stateKey: 'showPlotlySphereGrid' },
-        { controlKey: 'toggleSphereAxesGridCb', stateKey: 'showSphereAxesAndGrid' },
-    ];
-    simpleCheckboxes.forEach(c => bindCheckbox(c.controlKey, c.stateKey));
-
-            if (controls[`play_${key}Btn`] && controls[`speed_${key}Selector`]) {
-                controls[`play_${key}Btn`].addEventListener('click', () => {
-                    try {
-                        toggleAnimation(
-                            controls[`${key}Slider`],
-                            (value) => { state[key] = value; },
-                            controls[`play_${key}Btn`],
-                            controls[`speed_${key}Selector`]
-                        );
-                    } catch (error) {
-                        console.error(`Error in play_${key}Btn click listener:`, error);
-                    }
-                });
-            }
-        }
+        { controlKey: 'streamlineSeedDensityFactorSlider', stateKey: 'streamlineSeedDensityFactor', parser: parseFloat }
+    ].forEach(({ controlKey, stateKey, parser }) => {
+        bindSlider(controlKey, stateKey, parser);
     });
 
+    bindCheckbox('enableStreamlineFlowCb', 'streamlineFlowEnabled');
 
-    ['A', 'B', 'C', 'D'].forEach(param => {
-        ['re', 'im'].forEach(part => {
-            const sliderId = `mobius${param}_${part}_slider`;
-            const playBtnId = `play_mobius${param}_${part}_btn`;
-            const speedSelectorId = `speed_mobius${param}_${part}_selector`;
-
-
-            if (controls[sliderId]) {
-                controls[sliderId].addEventListener('input', () => {
-                    try {
-
-                        let baseParam = state[`mobius${param}`];
-                        if (!baseParam) {
-                            state[`mobius${param}`] = { re: 0, im: 0 };
-                            baseParam = state[`mobius${param}`];
-                        }
-                        baseParam[part] = parseFloat(controls[sliderId].value);
-
-                        domainColoringDirty = true;
-                        requestRedrawAll();
-                    } catch (error) {
-                        console.error(`Error in ${sliderId} input listener:`, error);
-                    }
-                });
-
-                if (controls[playBtnId] && controls[speedSelectorId]) {
-                    controls[playBtnId].addEventListener('click', () => {
-                        try {
-                            toggleAnimation(
-                                controls[sliderId],
-                                (value) => {
-                                    if (state[`mobius${param}`]) {
-                                        state[`mobius${param}`][part] = value;
-                                    } else {
-                                        state[`mobius${param}`] = { re: 0, im: 0 };
-                                        state[`mobius${param}`][part] = value;
-                                    }
-                                },
-                                controls[playBtnId],
-                                controls[speedSelectorId]
-                            );
-                        } catch (error) {
-                            console.error(`Error in ${playBtnId} click listener:`, error);
-                        }
-                    });
-                }
-            }
-        });
-    });
-
-    Object.keys(controls.funcButtons).forEach(key => {
-        controls.funcButtons[key].addEventListener('click', () => {
-            try {
-                state.currentFunction = key;
-
-                // Handle Fourier mode
-                if (key === 'fourier') {
-                    state.fourierModeEnabled = true;
-                    if (controls.fourierSpecificControlsDiv) {
-                        controls.fourierSpecificControlsDiv.classList.remove('hidden');
-                    }
-                    // Update Fourier transform on mode entry
-                    updateFourierTransform();
-                } else {
-                    state.fourierModeEnabled = false;
-                    if (controls.fourierSpecificControlsDiv) {
-                        controls.fourierSpecificControlsDiv.classList.add('hidden');
-                    }
-                }
-
-                // Handle Laplace mode
-                if (key === 'laplace') {
-                    state.laplaceModeEnabled = true;
-                    // Reset per-panel viewports on mode entry so they auto-fit fresh data
-                    state.laplaceTopVP = null;
-                    state.lapaceBotVP = null;
-                    if (controls.laplaceSpecificControlsDiv) {
-                        controls.laplaceSpecificControlsDiv.classList.remove('hidden');
-                    }
-                    // Show sync button
-                    const syncBtn = document.getElementById('laplace_winding_sync_btn');
-                    if (syncBtn) syncBtn.style.display = 'block';
-                    // Update Laplace transform on mode entry
-                    updateLaplaceTransform();
-                } else {
-                    state.laplaceModeEnabled = false;
-                    if (controls.laplaceSpecificControlsDiv) {
-                        controls.laplaceSpecificControlsDiv.classList.add('hidden');
-                    }
-                    // Hide sync button
-                    const syncBtn = document.getElementById('laplace_winding_sync_btn');
-                    if (syncBtn) syncBtn.style.display = 'none';
-                }
-
-                Object.keys(controls.funcButtons).forEach(k => {
-                    controls.funcButtons[k].classList.remove('active');
-                });
-                controls.funcButtons[key].classList.add('active');
-                domainColoringDirty = true;
-                requestRedrawAll();
-            } catch (error) {
-                console.error(`Error in funcButtons[${key}] click listener:`, error);
-            }
-        });
-    });
-
-    controls.inputShapeSelector.addEventListener('change', (e) => {
-        try {
-            state.currentInputShape = e.target.value;
-            domainColoringDirty = true;
-            requestRedrawAll();
-        } catch (error) {
-            console.error("Error in inputShapeSelector change listener:", error);
-        }
-    });
-
-    // Image Upload Events
-    const imageInput = document.getElementById('image_upload_input');
-    if (imageInput) {
-        imageInput.addEventListener('change', (e) => {
-            const file = e.target.files[0];
-            if (!file) return;
-            const reader = new FileReader();
-            reader.onload = function(evt) {
-                const img = new Image();
-                img.onload = function() {
-                    processUploadedImage(img);
-                };
-                img.src = evt.target.result;
-            };
-            reader.readAsDataURL(file);
-        });
-    }
-
-    const imgResSlider = document.getElementById('image_resolution_slider');
-    if (imgResSlider) {
-        imgResSlider.addEventListener('change', () => {
-            state.imageResolution = parseInt(imgResSlider.value, 10);
-            const valDisplay = document.getElementById('image_resolution_value_display');
-            if (valDisplay) valDisplay.textContent = state.imageResolution;
-            
-            // Re-process image if we have one
-            const file = imageInput?.files[0];
-            if (file) {
-                const reader = new FileReader();
-                reader.onload = function(evt) {
-                    const img = new Image();
-                    img.onload = function() { processUploadedImage(img); };
-                    img.src = evt.target.result;
-                };
-                reader.readAsDataURL(file);
-            }
-        });
-        imgResSlider.addEventListener('input', () => {
-            const valDisplay = document.getElementById('image_resolution_value_display');
-            if (valDisplay) valDisplay.textContent = imgResSlider.value;
-        });
-    }
-
-    const imgSizeSlider = document.getElementById('image_size_slider');
-    if (imgSizeSlider) {
-        imgSizeSlider.addEventListener('input', () => {
-            state.imageSize = parseFloat(imgSizeSlider.value);
-            const valDisplay = document.getElementById('image_size_value_display');
-            if (valDisplay) valDisplay.textContent = state.imageSize.toFixed(1);
-            domainColoringDirty = true;
-            requestRedrawAll();
-        });
-    }
-
-    const imgOpacitySlider = document.getElementById('image_opacity_slider');
-    if (imgOpacitySlider) {
-        imgOpacitySlider.addEventListener('input', () => {
-            state.imageOpacity = parseFloat(imgOpacitySlider.value);
-            const valDisplay = document.getElementById('image_opacity_value_display');
-            if (valDisplay) valDisplay.textContent = state.imageOpacity.toFixed(2);
-            domainColoringDirty = true;
-            requestRedrawAll();
-        });
-    }
-
-    // Helper to process image into point cloud
-    function processUploadedImage(img) {
-        state.uploadedImage = img;
-        const resolution = state.imageResolution || 300;
-        const cpuResolution = Math.min(resolution, 150); // Cap CPU array size
-        let w = img.width, h = img.height;
-        if (w > h) { h = Math.round(h * cpuResolution / w); w = cpuResolution; }
-        else { w = Math.round(w * cpuResolution / h); h = cpuResolution; }
-        
-        const canvas = document.createElement('canvas');
-        canvas.width = w; canvas.height = h;
-        const ctx = canvas.getContext('2d');
-        ctx.drawImage(img, 0, 0, w, h);
-        
-        const imgData = ctx.getImageData(0, 0, w, h);
-        state.imagePoints = [];
-        
-        for (let y = 0; y < h; y++) {
-            for (let x = 0; x < w; x++) {
-                const idx = (y * w + x) * 4;
-                const alpha = imgData.data[idx+3];
-                // Only store points that are visibly opaque
-                if (alpha > 20) {
-                    state.imagePoints.push({
-                        nx: ((x / (w - 1)) * 2 - 1), 
-                        ny: -((y / (h - 1)) * 2 - 1), 
-                        color: `rgba(${imgData.data[idx]},${imgData.data[idx+1]},${imgData.data[idx+2]},${alpha/255})`
-                    });
-                }
-            }
-        }
-        domainColoringDirty = true;
+    bindControlListener('clearManualSeedsBtn', 'click', () => {
+        state.manualSeedPoints = [];
         requestRedrawAll();
-    }
+    });
 
-    if (controls.polynomialNSlider) {
-        controls.polynomialNSlider.addEventListener('input', () => {
-            try {
-                const newN = parseInt(controls.polynomialNSlider.value);
-                state.polynomialN = newN;
-                initializePolynomialCoeffs(newN, true);
-                generatePolynomialCoeffSliders();
-                domainColoringDirty = true;
-                requestRedrawAll();
-            } catch (error) {
-                console.error("Error in polynomialNSlider input listener:", error);
-            }
-        });
-    }
-
-
-
-
-
-
-
-    controls.enableDomainColoringCb.addEventListener('change', (e) => {
-        try {
-            state.domainColoringEnabled = e.target.checked;
-            if (controls.domainColoringOptionsDiv) {
-                controls.domainColoringOptionsDiv.classList.toggle('hidden', !state.domainColoringEnabled);
-            }
-            if (controls.domainColoringKeyDiv) {
-                controls.domainColoringKeyDiv.classList.toggle('hidden', !state.domainColoringEnabled);
-            }
-            domainColoringDirty = true;
-            requestRedrawAll();
-        } catch (error) {
-            console.error("Error in enableDomainColoringCb change listener:", error);
+    bindCheckbox('showVectorFieldPanelCb', 'showVectorFieldPanelEnabled', () => {
+        if (controls.vectorFlowOptionsContent) {
+            controls.vectorFlowOptionsContent.classList.toggle('hidden', !state.showVectorFieldPanelEnabled);
         }
     });
-
-
-    const domainControlSliderIds = ['domainBrightness', 'domainContrast', 'domainSaturation', 'domainLightnessCycles'];
-    domainControlSliderIds.forEach(id => {
-        const slider = controls[`${id}Slider`];
-        if (slider) {
-            slider.addEventListener('input', () => {
-                try {
-                    state[id.replace('domain', '').toLowerCase()] = parseFloat(slider.value);
-
-                    if (id === 'domainBrightness') state.domainBrightness = parseFloat(slider.value);
-                    else if (id === 'domainContrast') state.domainContrast = parseFloat(slider.value);
-                    else if (id === 'domainSaturation') state.domainSaturation = parseFloat(slider.value);
-                    else if (id === 'domainLightnessCycles') state.domainLightnessCycles = parseFloat(slider.value);
-
-                    domainColoringDirty = true;
-                    requestRedrawAll();
-                } catch (error) {
-                    console.error(`Error in ${id}Slider input listener:`, error);
-                }
-            });
-        }
-    });
-
-
-
-
-
-
-
-
-    if (controls.enableSplitViewCb) {
-        controls.enableSplitViewCb.addEventListener('change', (e) => {
-            try {
-                state.splitViewEnabled = e.target.checked;
-                domainColoringDirty = true;
-                requestRedrawAll();
-            } catch (error) {
-                console.error("Error in enableSplitViewCb change listener:", error);
-            }
-        });
-    }
-
-
-
-    controls.zPlaneZoomSlider.addEventListener('input', () => {
-        try {
-            state.zPlaneZoom = parseFloat(controls.zPlaneZoomSlider.value);
-            setupVisualParameters(true, false);
-            domainColoringDirty = true;
-            requestRedrawAll();
-        } catch (error) {
-            console.error("Error in zPlaneZoomSlider input listener:", error);
-        }
-    });
-    controls.wPlaneZoomSlider.addEventListener('input', () => {
-        try {
-            state.wPlaneZoom = parseFloat(controls.wPlaneZoomSlider.value);
-            setupVisualParameters(false, true);
-            domainColoringDirty = true;
-            requestRedrawAll();
-        } catch (error) {
-            console.error("Error in wPlaneZoomSlider input listener:", error);
-        }
-    });
-
-
-
-
-
-
-
-
-
-
-    controls.enableVectorFieldCb.addEventListener('change', (e) => {
-        try {
-            state.vectorFieldEnabled = e.target.checked;
-            controls.vectorFieldOptionsDiv.classList.toggle('hidden', !state.vectorFieldEnabled);
-            domainColoringDirty = true;
-            requestRedrawAll();
-        } catch (error) {
-            console.error("Error in enableVectorFieldCb change listener:", error);
-        }
-    });
-    controls.vectorFieldFunctionSelector.addEventListener('change', (e) => {
-        try {
-            state.vectorFieldFunction = e.target.value;
-            requestRedrawAll();
-        } catch (error) {
-            console.error("Error in vectorFieldFunctionSelector change listener:", error);
-        }
-    });
-
-
-
-
-    const streamlineFlowCheckbox = controls.enableStreamlineFlowCb || document.getElementById('enable_streamline_flow_cb');
-    if (streamlineFlowCheckbox) {
-        streamlineFlowCheckbox.addEventListener('change', (event) => {
-            try {
-                state.streamlineFlowEnabled = event.target.checked;
-
-                requestRedrawAll();
-            } catch (error) {
-                console.error("Error in enableStreamlineFlowCb change listener:", error);
-            }
-        });
-    }
-
-
-
-
-
-    if (controls.enableRadialDiscreteStepsCb) {
-        controls.enableRadialDiscreteStepsCb.addEventListener('change', (e) => {
-            try {
-                state.radialDiscreteStepsEnabled = e.target.checked;
-
-
-                requestRedrawAll();
-            } catch (error) {
-                console.error("Error in enableRadialDiscreteStepsCb change listener:", error);
-            }
-        });
-    }
-
-
-
-
-    if (controls.enableRiemannSphereCb) {
-        controls.enableRiemannSphereCb.addEventListener('change', (e) => {
-            try {
-                state.riemannSphereViewEnabled = e.target.checked;
-
-                if (controls.riemannSphereOptionsDiv) {
-                    controls.riemannSphereOptionsDiv.classList.toggle('hidden', !state.riemannSphereViewEnabled);
-                }
-
-                if (!state.riemannSphereViewEnabled && controls.plotly3DOptionsDiv) {
-                    controls.plotly3DOptionsDiv.classList.add('hidden');
-                }
-                domainColoringDirty = true;
-                requestRedrawAll();
-            } catch (error) {
-                console.error("Error in enableRiemannSphereCb change listener:", error);
-            }
-        });
-    }
-
-    if (controls.enablePlotly3DCb) {
-        controls.enablePlotly3DCb.addEventListener('change', (e) => {
-            try {
-                state.plotly3DEnabled = e.target.checked;
-
-                if (controls.plotly3DOptionsDiv) {
-                    controls.plotly3DOptionsDiv.classList.toggle('hidden', !state.plotly3DEnabled);
-                }
-                requestRedrawAll();
-            } catch (error) {
-                console.error("Error in enablePlotly3DCb change listener:", error);
-            }
-        });
-    }
-
-
-    if (controls.enableTaylorSeriesCb) {
-        controls.enableTaylorSeriesCb.addEventListener('change', (e) => {
-            try {
-                state.taylorSeriesEnabled = e.target.checked;
-                if (controls.taylorSeriesOptionsDetailDiv) {
-                    controls.taylorSeriesOptionsDetailDiv.classList.toggle('hidden', !state.taylorSeriesEnabled);
-                }
-                domainColoringDirty = true;
-                requestRedrawAll();
-            } catch (error) {
-                console.error("Error in enableTaylorSeriesCb change listener:", error);
-            }
-        });
-    }
-
-
-
-    if (controls.enableTaylorSeriesCustomCenterCb) {
-        controls.enableTaylorSeriesCustomCenterCb.addEventListener('change', (e) => {
-            try {
-                state.taylorSeriesCustomCenterEnabled = e.target.checked;
-                if (controls.taylorSeriesCustomCenterInputsDiv) {
-                    controls.taylorSeriesCustomCenterInputsDiv.classList.toggle('hidden', !state.taylorSeriesCustomCenterEnabled);
-                }
-                requestRedrawAll();
-            } catch (error) {
-                console.error("Error in enableTaylorSeriesCustomCenterCb change listener:", error);
-            }
-        });
-    }
-
-    if (controls.taylorSeriesCustomCenterReInput) {
-        controls.taylorSeriesCustomCenterReInput.addEventListener('input', () => {
-            try {
-                state.taylorSeriesCustomCenter.re = parseFloat(controls.taylorSeriesCustomCenterReInput.value) || 0;
-
-            } catch (error) {
-                console.error("Error in taylorSeriesCustomCenterReInput input listener:", error);
-            }
-        });
-        controls.taylorSeriesCustomCenterReInput.addEventListener('change', () => {
-            try {
-                state.taylorSeriesCustomCenter.re = parseFloat(controls.taylorSeriesCustomCenterReInput.value) || 0;
-                requestRedrawAll();
-            } catch (error) {
-                console.error("Error in taylorSeriesCustomCenterReInput change listener:", error);
-            }
-        });
-    }
-    if (controls.taylorSeriesCustomCenterImInput) {
-        controls.taylorSeriesCustomCenterImInput.addEventListener('input', () => {
-            try {
-                state.taylorSeriesCustomCenter.im = parseFloat(controls.taylorSeriesCustomCenterImInput.value) || 0;
-
-            } catch (error) {
-                console.error("Error in taylorSeriesCustomCenterImInput input listener:", error);
-            }
-        });
-        controls.taylorSeriesCustomCenterImInput.addEventListener('change', () => {
-            try {
-                state.taylorSeriesCustomCenter.im = parseFloat(controls.taylorSeriesCustomCenterImInput.value) || 0;
-                requestRedrawAll();
-            } catch (error) {
-                console.error("Error in taylorSeriesCustomCenterImInput change listener:", error);
-            }
-        });
-    }
-
-
-
-    controls.toggleZetaContinuationBtn.addEventListener('click', () => {
-        try {
-            state.zetaContinuationEnabled = !state.zetaContinuationEnabled;
-            domainColoringDirty = true;
-            requestRedrawAll();
-        } catch (error) {
-            console.error("Error in toggleZetaContinuationBtn click listener:", error);
-        }
-    });
-
-    // Fourier Transform event listeners
-    if (controls.fourierFunctionSelector) {
-        controls.fourierFunctionSelector.addEventListener('change', (e) => {
-            try {
-                state.fourierFunction = e.target.value;
-                updateFourierTransform();
-                requestRedrawAll();
-            } catch (error) {
-                console.error("Error in fourierFunctionSelector change listener:", error);
-            }
-        });
-    }
-
-    if (controls.fourierFrequencySlider) {
-        controls.fourierFrequencySlider.addEventListener('input', () => {
-            try {
-                state.fourierFrequency = parseFloat(controls.fourierFrequencySlider.value);
-                updateFourierTransform();
-                requestRedrawAll();
-            } catch (error) {
-                console.error("Error in fourierFrequencySlider input listener:", error);
-            }
-        });
-    }
-
-    if (controls.fourierAmplitudeSlider) {
-        controls.fourierAmplitudeSlider.addEventListener('input', () => {
-            try {
-                state.fourierAmplitude = parseFloat(controls.fourierAmplitudeSlider.value);
-                updateFourierTransform();
-                requestRedrawAll();
-            } catch (error) {
-                console.error("Error in fourierAmplitudeSlider input listener:", error);
-            }
-        });
-    }
-
-    if (controls.fourierTimeWindowSlider) {
-        controls.fourierTimeWindowSlider.addEventListener('input', () => {
-            try {
-                state.fourierTimeWindow = parseFloat(controls.fourierTimeWindowSlider.value);
-                updateFourierTransform();
-                requestRedrawAll();
-            } catch (error) {
-                console.error("Error in fourierTimeWindowSlider input listener:", error);
-            }
-        });
-    }
-
-    if (controls.fourierSamplesSlider) {
-        controls.fourierSamplesSlider.addEventListener('input', () => {
-            try {
-                state.fourierSamples = parseInt(controls.fourierSamplesSlider.value);
-                updateFourierTransform();
-                requestRedrawAll();
-            } catch (error) {
-                console.error("Error in fourierSamplesSlider input listener:", error);
-            }
-        });
-    }
-
-    if (controls.fourierWindingFrequencySlider) {
-        controls.fourierWindingFrequencySlider.addEventListener('input', () => {
-            try {
-                state.fourierWindingFrequency = parseFloat(controls.fourierWindingFrequencySlider.value);
-                requestRedrawAll();
-            } catch (error) {
-                console.error("Error in fourierWindingFrequencySlider input listener:", error);
-            }
-        });
-    }
-
-    if (controls.fourierWindingTimeSlider) {
-        controls.fourierWindingTimeSlider.addEventListener('input', () => {
-            try {
-                state.fourierWindingTime = parseFloat(controls.fourierWindingTimeSlider.value);
-                requestRedrawAll();
-            } catch (error) {
-                console.error("Error in fourierWindingTimeSlider input listener:", error);
-            }
-        });
-    }
-
-    // Laplace Transform event listeners
-    if (controls.laplaceFunctionSelector) {
-        controls.laplaceFunctionSelector.addEventListener('change', (e) => {
-            try {
-                state.laplaceFunction = e.target.value;
-                updateLaplaceTransform();
-                requestRedrawAll();
-            } catch (error) {
-                console.error("Error in laplaceFunctionSelector change listener:", error);
-            }
-        });
-    }
-
-    if (controls.laplaceFrequencySlider) {
-        controls.laplaceFrequencySlider.addEventListener('input', () => {
-            try {
-                state.laplaceFrequency = parseFloat(controls.laplaceFrequencySlider.value);
-                if (controls.laplaceFrequencyValueDisplay) {
-                    controls.laplaceFrequencyValueDisplay.textContent = state.laplaceFrequency.toFixed(1);
-                }
-                updateLaplaceTransform();
-                requestRedrawAll();
-            } catch (error) {
-                console.error("Error in laplaceFrequencySlider input listener:", error);
-            }
-        });
-    }
-
-    if (controls.laplaceDampingSlider) {
-        controls.laplaceDampingSlider.addEventListener('input', () => {
-            try {
-                state.laplaceDamping = parseFloat(controls.laplaceDampingSlider.value);
-                if (controls.laplaceDampingValueDisplay) {
-                    controls.laplaceDampingValueDisplay.textContent = state.laplaceDamping.toFixed(1);
-                }
-                updateLaplaceTransform();
-                requestRedrawAll();
-            } catch (error) {
-                console.error("Error in laplaceDampingSlider input listener:", error);
-            }
-        });
-    }
-
-    if (controls.laplaceSigmaSlider) {
-        controls.laplaceSigmaSlider.addEventListener('input', () => {
-            try {
-                state.laplaceSigma = parseFloat(controls.laplaceSigmaSlider.value);
-                if (controls.laplaceSigmaValueDisplay) {
-                    controls.laplaceSigmaValueDisplay.textContent = state.laplaceSigma.toFixed(1);
-                }
-                // Fast update - only recompute winding path and eval point, not 3D surface
-                updateLaplaceEvaluationPoint();
-                requestRedrawAll();
-            } catch (error) {
-                console.error("Error in laplaceSigmaSlider input listener:", error);
-            }
-        });
-    }
-
-    if (controls.laplaceOmegaSlider) {
-        controls.laplaceOmegaSlider.addEventListener('input', () => {
-            try {
-                state.laplaceOmega = parseFloat(controls.laplaceOmegaSlider.value);
-                if (controls.laplaceOmegaValueDisplay) {
-                    controls.laplaceOmegaValueDisplay.textContent = state.laplaceOmega.toFixed(1);
-                }
-                // Fast update - only recompute winding path and eval point, not 3D surface
-                updateLaplaceEvaluationPoint();
-                requestRedrawAll();
-            } catch (error) {
-                console.error("Error in laplaceOmegaSlider input listener:", error);
-            }
-        });
-    }
-
-
-
-    if (controls.laplaceVizModeSelector) {
-        controls.laplaceVizModeSelector.addEventListener('change', (e) => {
-            try {
-                state.laplaceVizMode = e.target.value;
-                updateLaplace3DSurface();
-                requestRedrawAll();
-            } catch (error) {
-                console.error("Error in laplaceVizModeSelector change listener:", error);
-            }
-        });
-    }
-
-    if (controls.laplaceClipHeightSlider) {
-        controls.laplaceClipHeightSlider.addEventListener('input', () => {
-            try {
-                state.laplaceClipHeight = parseFloat(controls.laplaceClipHeightSlider.value);
-                if (controls.laplaceClipHeightValueDisplay) {
-                    controls.laplaceClipHeightValueDisplay.textContent = state.laplaceClipHeight.toFixed(0);
-                }
-                updateLaplace3DSurface();
-                requestRedrawAll();
-            } catch (error) {
-                console.error("Error in laplaceClipHeightSlider input listener:", error);
-            }
-        });
-    }
-
-    // Animation controls
-    const laplaceAnimSpeedSlider = document.getElementById('laplace_animation_speed_slider');
-    const laplaceAnimSpeedDisplay = document.getElementById('laplace_animation_speed_display');
-    const laplaceAnimLoopCb = document.getElementById('laplace_animation_loop_cb');
-    const laplacePlayPauseBtn = document.getElementById('laplace_play_pause_btn');
-
-    if (laplaceAnimSpeedSlider) {
-        laplaceAnimSpeedSlider.addEventListener('input', () => {
-            state.laplaceAnimationSpeed = parseFloat(laplaceAnimSpeedSlider.value);
-            if (laplaceAnimSpeedDisplay) {
-                laplaceAnimSpeedDisplay.textContent = state.laplaceAnimationSpeed.toFixed(1);
-            }
-        });
-    }
-
-    if (laplaceAnimLoopCb) {
-        laplaceAnimLoopCb.addEventListener('change', () => {
-            state.laplaceAnimationLoop = laplaceAnimLoopCb.checked;
-        });
-    }
-
-    // Update play/pause button text and ensure animation starts when entering Laplace mode
-    if (laplacePlayPauseBtn) {
-        setInterval(() => {
-            if (state.laplaceModeEnabled && laplacePlayPauseBtn) {
-                laplacePlayPauseBtn.innerHTML = state.laplaceAnimationPlaying ? '⏸ Pause' : '▶ Play';
-            }
-        }, 100);
-    }
-
-    // Auto-start animation when Laplace mode is enabled
-    const originalLaplaceBtn = document.getElementById('laplace_mode_btn');
-    if (originalLaplaceBtn) {
-        originalLaplaceBtn.addEventListener('click', () => {
-            // Wait a frame for mode to be enabled
-            setTimeout(() => {
-                if (state.laplaceModeEnabled && typeof showFullLaplaceSpiral === 'function') {
-                    showFullLaplaceSpiral(); // Start with full spiral visible
-                }
-            }, 100);
-        });
-    }
-
-
-
-    if (controls.laplaceFindPolesZerosBtn) {
-        controls.laplaceFindPolesZerosBtn.addEventListener('click', () => {
-            try {
-                // Trigger pole-zero finding
-                if (state.laplaceModeEnabled) {
-                    const pz = findPolesZeros(state.laplaceFunction || 'damped_sine', {
-                        frequency: state.laplaceFrequency || 2.0,
-                        damping: state.laplaceDamping || 0.5,
-                        amplitude: 1.0
-                    });
-                    state.laplacePoles = pz.poles;
-                    state.laplaceZeros = pz.zeros;
-                    requestRedrawAll();
-                }
-            } catch (error) {
-                console.error("Error in laplaceFindPolesZerosBtn click listener:", error);
-            }
-        });
-    }
-
-    if (controls.laplaceStabilityAnalysisBtn) {
-        controls.laplaceStabilityAnalysisBtn.addEventListener('click', () => {
-            try {
-                // Perform stability analysis
-                if (state.laplaceModeEnabled && state.laplacePoles) {
-                    const stability = analyzeStability(state.laplacePoles);
-                    state.laplaceStability = stability;
-
-                    // Update display
-                    if (controls.laplaceStabilityDisplay) {
-                        controls.laplaceStabilityDisplay.textContent = stability.message;
-                        controls.laplaceStabilityDisplay.style.color = stability.color || 'rgba(200, 220, 255, 1)';
-                    }
-                }
-            } catch (error) {
-                console.error("Error in laplaceStabilityAnalysisBtn click listener:", error);
-            }
-        });
-    }
-
-
-
-
-    const sphereViewButtonActions = {
-        'sphere_view_north_btn': { rotX: -Math.PI / 2 + 0.01, rotY: 0 },
-        'sphere_view_south_btn': { rotX: Math.PI / 2 - 0.01, rotY: 0 },
-        'sphere_view_east_btn': { rotX: 0, rotY: -Math.PI / 2 },
-        'sphere_view_west_btn': { rotX: 0, rotY: Math.PI / 2 },
-        'sphere_view_front_btn': { rotX: 0, rotY: 0 },
-        'sphere_view_reset_btn': { rotX: SPHERE_INITIAL_ROT_X, rotY: SPHERE_INITIAL_ROT_Y }
-    };
-    Object.keys(sphereViewButtonActions).forEach(btnId => {
-        if (controls[btnId]) {
-            controls[btnId].addEventListener('click', () => {
-                try {
-                    const action = sphereViewButtonActions[btnId];
-                    sphereViewParams.z.rotX = action.rotX;
-                    sphereViewParams.z.rotY = action.rotY;
-                    sphereViewParams.w.rotX = action.rotX;
-                    sphereViewParams.w.rotY = action.rotY;
-                    domainColoringDirty = true;
-                    requestRedrawAll();
-                } catch (error) {
-                    console.error(`Error in ${btnId} click listener:`, error);
-                }
-            });
-        }
-    });
-
-
-    [zCanvas, wCanvas].forEach(canvas => {
-        const planeType = canvas === zCanvas ? 'z' : 'w';
-        const planeParams = canvas === zCanvas ? zPlaneParams : wPlaneParams;
-        const statePanInfo = canvas === zCanvas ? state.panStateZ : state.panStateW;
-        const isZCanvas = planeType === 'z';
-
-        canvas.addEventListener('mousemove', (e) => {
-            try {
-                const isSphereActive = (isZCanvas && (state.riemannSphereViewEnabled && !state.splitViewEnabled)) ||
-                    (!isZCanvas && (state.riemannSphereViewEnabled || state.splitViewEnabled));
-                if (isSphereActive) return;
-
-                const rect = canvas.getBoundingClientRect();
-                const mouseX = e.clientX - rect.left;
-                const mouseY = e.clientY - rect.top;
-
-                // --- Laplace winding mode: per-panel panning ---
-                if (!isZCanvas && state.laplaceModeEnabled && state.laplaceDragging) {
-                    const drag = state.laplaceDragging;
-                    const vp = drag.panel === 'top' ? state.laplaceTopVP : state.lapaceBotVP;
-                    if (vp) {
-                        const dx = mouseX - drag.startX;
-                        const dy = mouseY - drag.startY;
-                        vp.origin.x = drag.startOrigin.x + dx;
-                        vp.origin.y = drag.startOrigin.y + dy;
-
-                        // Update ranges for grid drawing
-                        const originWorldX = -vp.origin.x / vp.scale.x;
-                        const originWorldY = (vp.origin.y - vp.offsetY - vp.height / 2) / vp.scale.y;
-                        vp.currentVisXRange = [originWorldX, originWorldX + vp.width / vp.scale.x];
-                        vp.currentVisYRange = [originWorldY - vp.height / (2 * vp.scale.y), originWorldY + vp.height / (2 * vp.scale.y)];
-
-                        requestRedrawAll();
-                    }
-                    return;
-                }
-
-                if (statePanInfo.isPanning) {
-                    const dx = mouseX - statePanInfo.panStart.x;
-                    const dy = mouseY - statePanInfo.panStart.y;
-                    planeParams.origin.x = statePanInfo.panStartOrigin.x + dx;
-                    planeParams.origin.y = statePanInfo.panStartOrigin.y + dy;
-                    updatePlaneViewportRanges(planeParams);
-                    domainColoringDirty = true;
-                    requestRedrawAll();
-                } else if (isZCanvas && !state.panStateZ.isPanning && !state.panStateW.isPanning) {
-                    const worldCoords = mapCanvasToWorldCoords(mouseX, mouseY, planeParams);
-                    state.probeZ = { re: worldCoords.x, im: worldCoords.y };
-                    state.probeActive = true;
-                    requestRedrawAll();
-                } else if (!isZCanvas && state.laplaceModeEnabled && !state.laplaceDragging) {
-                    // Hover effect or probe for Laplace if needed (optional)
-                }
-            } catch (error) {
-                console.error(`Error in canvas (${planeType}) mousemove listener:`, error);
-            }
-        });
-        canvas.addEventListener('mousedown', (e) => {
-            try {
-                const isSphereActive = (isZCanvas && (state.riemannSphereViewEnabled && !state.splitViewEnabled)) ||
-                    (!isZCanvas && (state.riemannSphereViewEnabled || state.splitViewEnabled));
-                if (isSphereActive) return;
-
-                const rect = canvas.getBoundingClientRect();
-                const mouseX = e.clientX - rect.left;
-                const mouseY = e.clientY - rect.top;
-
-                // --- Laplace winding mode: per-panel panning start ---
-                if (!isZCanvas && state.laplaceModeEnabled && state.laplaceTopVP && state.lapaceBotVP) {
-                    if (e.button === 0) {
-                        const topH = state.laplaceTopVP.height;
-                        const isTop = mouseY < topH; // Simple hit test since panels are top/bottom
-                        const vp = isTop ? state.laplaceTopVP : state.lapaceBotVP;
-
-                        state.laplaceDragging = {
-                            panel: isTop ? 'top' : 'bot',
-                            startX: mouseX,
-                            startY: mouseY,
-                            startOrigin: { x: vp.origin.x, y: vp.origin.y }
-                        };
-                        canvas.style.cursor = 'grabbing';
-                        return;
-                    }
-                }
-
-                if (isZCanvas) {
-
-
-                    if (e.button === 0 && state.streamlineFlowEnabled) {
-                        const worldCoords = mapCanvasToWorldCoords(mouseX, mouseY, planeParams);
-                        if (worldCoords) {
-                            state.manualSeedPoints.push({ re: worldCoords.x, im: worldCoords.y });
-
-                            requestRedrawAll();
-                            e.stopPropagation();
-                            return;
-                        }
-                    }
-                }
-
-
-                if (e.button === 0) {
-                    statePanInfo.isPanning = true;
-                    statePanInfo.panStart.x = mouseX;
-                    statePanInfo.panStart.y = mouseY;
-                    statePanInfo.panStartOrigin.x = planeParams.origin.x;
-                    statePanInfo.panStartOrigin.y = planeParams.origin.y;
-                    canvas.style.cursor = 'grabbing';
-                    if (isZCanvas) state.probeActive = false;
-                    requestRedrawAll();
-                }
-            } catch (error) {
-                console.error(`Error in canvas (${planeType}) mousedown listener:`, error);
-            }
-        });
-        canvas.addEventListener('mouseup', (e) => {
-            try {
-                const isSphereActive = (isZCanvas && (state.riemannSphereViewEnabled && !state.splitViewEnabled)) ||
-                    (!isZCanvas && (state.riemannSphereViewEnabled || state.splitViewEnabled));
-                if (isSphereActive) return;
-
-                // --- Laplace winding mode: panning end ---
-                if (!isZCanvas && state.laplaceDragging) {
-                    state.laplaceDragging = null;
-                    canvas.style.cursor = 'crosshair';
-                    return;
-                }
-
-                if (e.button === 0 && statePanInfo.isPanning) {
-                    statePanInfo.isPanning = false;
-                    canvas.style.cursor = 'crosshair';
-                    if (isZCanvas) {
-                        const rect = canvas.getBoundingClientRect();
-                        const mouseX = e.clientX - rect.left;
-                        const mouseY = e.clientY - rect.top;
-                        if (mouseX >= 0 && mouseX <= canvas.width && mouseY >= 0 && mouseY <= canvas.height) {
-                            const worldCoords = mapCanvasToWorldCoords(mouseX, mouseY, planeParams);
-                            state.probeZ = { re: worldCoords.x, im: worldCoords.y };
-                            state.probeActive = true;
-                        } else {
-                            state.probeActive = false;
-                        }
-                        requestRedrawAll();
-                    }
-                }
-            } catch (error) {
-                console.error(`Error in canvas (${planeType}) mouseup listener:`, error);
-            }
-        });
-        canvas.addEventListener('mouseleave', () => {
-            try {
-                const isSphereActive = (isZCanvas && (state.riemannSphereViewEnabled && !state.splitViewEnabled)) ||
-                    (!isZCanvas && (state.riemannSphereViewEnabled || state.splitViewEnabled));
-                if (isSphereActive) return;
-
-                // --- Laplace winding mode: panning end ---
-                if (!isZCanvas && state.laplaceDragging) {
-                    state.laplaceDragging = null;
-                    canvas.style.cursor = 'crosshair';
-                }
-
-                if (statePanInfo.isPanning) {
-                    statePanInfo.isPanning = false;
-                    canvas.style.cursor = 'crosshair';
-                    domainColoringDirty = true;
-
-                }
-                if (isZCanvas) {
-                    state.probeActive = false;
-                }
-                requestRedrawAll();
-            } catch (error) {
-                console.error(`Error in canvas (${planeType}) mouseleave listener:`, error);
-            }
-        });
-        canvas.addEventListener('wheel', (e) => {
-            try {
-                const isSphereActive = (isZCanvas && (state.riemannSphereViewEnabled && !state.splitViewEnabled)) ||
-                    (!isZCanvas && (state.riemannSphereViewEnabled || state.splitViewEnabled));
-                if (isSphereActive) return;
-
-                e.preventDefault();
-
-                // --- Laplace winding mode: per-panel zoom ---
-                if (!isZCanvas && state.laplaceModeEnabled && state.laplaceTopVP && state.lapaceBotVP) {
-                    const rect = canvas.getBoundingClientRect();
-                    const mouseX = e.clientX - rect.left;
-                    const mouseY = e.clientY - rect.top;
-                    const zoomFactor = e.deltaY < 0 ? ZOOM_IN_FACTOR : ZOOM_OUT_FACTOR;
-
-                    const H = rect.height;
-                    const gap = 4;
-                    const topH = Math.floor((H - gap) / 2);
-                    const inTop = mouseY < topH;
-
-                    function zoomPanel(vp, mx, my) {
-                        // Convert canvas coords to world coords before zoom
-                        const worldX = (mx - vp.origin.x) / vp.scale.x;
-                        const worldY = (vp.origin.y - my) / vp.scale.y;
-                        vp.scale.x *= zoomFactor;
-                        vp.scale.y *= zoomFactor;
-                        // Keep world point under mouse
-                        vp.origin.x = mx - worldX * vp.scale.x;
-                        vp.origin.y = my + worldY * vp.scale.y;
-                        // Update visible ranges
-                        const halfW = vp.width / 2 / vp.scale.x;
-                        const halfH = vp.height / 2 / vp.scale.y;
-                        const cRe = (mx - vp.origin.x) / vp.scale.x - vp.width / 2 / vp.scale.x + halfW;
-                        const cIm = (vp.origin.y - my) / vp.scale.y - vp.height / 2 / vp.scale.y + halfH;
-                        // Simpler: derive from origin
-                        const originWorldX = -vp.origin.x / vp.scale.x;
-                        const originWorldY = (vp.origin.y - vp.offsetY - vp.height / 2) / vp.scale.y;
-                        vp.currentVisXRange = [originWorldX, originWorldX + vp.width / vp.scale.x];
-                        vp.currentVisYRange = [originWorldY - vp.height / (2 * vp.scale.y), originWorldY + vp.height / (2 * vp.scale.y)];
-                    }
-
-                    function zoomPanelCentered(vp, factor) {
-                        // Zoom centered on panel center (for sync, no mouse-tracking)
-                        const cx = vp.width / 2;
-                        const cy = vp.offsetY + vp.height / 2;
-                        const worldX = (cx - vp.origin.x) / vp.scale.x;
-                        const worldY = (vp.origin.y - cy) / vp.scale.y;
-                        vp.scale.x *= factor;
-                        vp.scale.y *= factor;
-                        vp.origin.x = cx - worldX * vp.scale.x;
-                        vp.origin.y = cy + worldY * vp.scale.y;
-                        vp.currentVisXRange = [worldX - vp.width / (2 * vp.scale.x), worldX + vp.width / (2 * vp.scale.x)];
-                        vp.currentVisYRange = [worldY - vp.height / (2 * vp.scale.y), worldY + vp.height / (2 * vp.scale.y)];
-                    }
-
-                    const syncOn = state.laplaceWindingSyncZoom !== false; // default true
-
-                    if (inTop) {
-                        zoomPanel(state.laplaceTopVP, mouseX, mouseY);
-                        if (syncOn) zoomPanelCentered(state.lapaceBotVP, zoomFactor);
-                    } else {
-                        zoomPanel(state.lapaceBotVP, mouseX, mouseY);
-                        if (syncOn) zoomPanelCentered(state.laplaceTopVP, zoomFactor);
-                    }
-
-                    requestRedrawAll();
-                    return;
-                }
-
-                // --- Generic zoom for all other modes ---
-                const rect = canvas.getBoundingClientRect();
-                const mouseX = e.clientX - rect.left;
-                const mouseY = e.clientY - rect.top;
-                const worldMouseBefore = mapCanvasToWorldCoords(mouseX, mouseY, planeParams);
-
-                const zoomFactor = e.deltaY < 0 ? ZOOM_IN_FACTOR : ZOOM_OUT_FACTOR;
-                const currentPlaneZoomStateKey = isZCanvas ? 'zPlaneZoom' : 'wPlaneZoom';
-
-                let newEffectiveStateZoom = state[currentPlaneZoomStateKey] * zoomFactor;
-                newEffectiveStateZoom = Math.max(MIN_STATE_ZOOM_LEVEL, Math.min(MAX_STATE_ZOOM_LEVEL, newEffectiveStateZoom));
-
-                const actualZoomApplied = newEffectiveStateZoom / state[currentPlaneZoomStateKey];
-                state[currentPlaneZoomStateKey] = newEffectiveStateZoom;
-
-                planeParams.scale.x *= actualZoomApplied;
-                planeParams.scale.y *= actualZoomApplied;
-
-                planeParams.origin.x = mouseX - worldMouseBefore.x * planeParams.scale.x;
-                planeParams.origin.y = mouseY + worldMouseBefore.y * planeParams.scale.y;
-
-                updatePlaneViewportRanges(planeParams);
-                domainColoringDirty = true;
-                requestRedrawAll();
-            } catch (error) {
-                console.error(`Error in canvas (${planeType}) wheel listener:`, error);
-            }
-        });
-    });
-
-
-    zCanvas.addEventListener('mousedown', (e) => { try { handleSphereMouseDown(e, 'z'); } catch (err) { console.error("Error in zCanvas sphere mousedown:", err); } });
-    zCanvas.addEventListener('mousemove', (e) => { try { handleSphereMouseMove(e, 'z'); } catch (err) { console.error("Error in zCanvas sphere mousemove:", err); } });
-    zCanvas.addEventListener('mouseup', () => { try { handleSphereMouseUp('z'); } catch (err) { console.error("Error in zCanvas sphere mouseup:", err); } });
-    zCanvas.addEventListener('mouseleave', () => { try { handleSphereMouseUp('z'); } catch (err) { console.error("Error in zCanvas sphere mouseleave:", err); } });
-
-    wCanvas.addEventListener('mousedown', (e) => { try { handleSphereMouseDown(e, 'w'); } catch (err) { console.error("Error in wCanvas sphere mousedown:", err); } });
-    wCanvas.addEventListener('mousemove', (e) => { try { handleSphereMouseMove(e, 'w'); } catch (err) { console.error("Error in wCanvas sphere mousemove:", err); } });
-    wCanvas.addEventListener('mouseup', () => { try { handleSphereMouseUp('w'); } catch (err) { console.error("Error in wCanvas sphere mouseup:", err); } });
-    wCanvas.addEventListener('mouseleave', () => { try { handleSphereMouseUp('w'); } catch (err) { console.error("Error in wCanvas sphere mouseleave:", err); } });
-
-    controls.toggleFullscreenZBtn.addEventListener('click', () => { try { handleFullScreenToggle('z'); } catch (e) { console.error("Error in toggleFullscreenZBtn listener:", e); } });
-    controls.toggleFullscreenWBtn.addEventListener('click', () => { try { handleFullScreenToggle('w'); } catch (e) { console.error("Error in toggleFullscreenWBtn listener:", e); } });
-
-    // Laplace winding sync zoom button
-    const laplaceWindingSyncBtn = document.getElementById('laplace_winding_sync_btn');
-    if (laplaceWindingSyncBtn) {
-        // Default: sync on
-        state.laplaceWindingSyncZoom = true;
-        laplaceWindingSyncBtn.addEventListener('click', () => {
-            state.laplaceWindingSyncZoom = !state.laplaceWindingSyncZoom;
-            laplaceWindingSyncBtn.textContent = state.laplaceWindingSyncZoom ? 'Sync Zoom: On' : 'Sync Zoom: Off';
-            laplaceWindingSyncBtn.style.color = state.laplaceWindingSyncZoom
-                ? 'rgba(150, 200, 255, 0.9)'
-                : 'rgba(180, 180, 180, 0.6)';
-            laplaceWindingSyncBtn.style.borderColor = state.laplaceWindingSyncZoom
-                ? 'rgba(80, 120, 180, 0.5)'
-                : 'rgba(80, 80, 80, 0.4)';
-        });
-    }
-
-    // 3D surface fullscreen
-    const laplace3dFsBtn = document.getElementById('toggle_fullscreen_laplace_3d_btn');
-    if (laplace3dFsBtn) {
-        laplace3dFsBtn.addEventListener('click', () => {
-            try {
-                const container3d = document.getElementById('laplace_3d_container');
-                const column3d = document.getElementById('laplace_3d_column');
-                if (!container3d) return;
-
-                state.isLaplace3DFullScreen = !state.isLaplace3DFullScreen;
-                const fullscreenContainer = controls.fullscreenContainer;
-
-                if (state.isLaplace3DFullScreen) {
-                    state.originalLaplace3DParent = container3d.parentElement;
-
-                    fullscreenContainer.style.position = 'fixed';
-                    fullscreenContainer.style.top = '0';
-                    fullscreenContainer.style.left = '0';
-                    fullscreenContainer.style.width = '100vw';
-                    fullscreenContainer.style.height = '100vh';
-                    fullscreenContainer.style.zIndex = '1000';
-                    fullscreenContainer.style.backgroundColor = '#000';
-
-                    controls.closeFullscreenBtn.onclick = () => { laplace3dFsBtn.click(); };
-                    fullscreenContainer.appendChild(controls.closeFullscreenBtn);
-                    controls.closeFullscreenBtn.classList.remove('hidden');
-
-                    container3d.style.width = '100%';
-                    container3d.style.height = '100%';
-                    fullscreenContainer.appendChild(container3d);
-                    document.body.appendChild(fullscreenContainer);
-                    fullscreenContainer.classList.remove('hidden');
-                    if (column3d) column3d.classList.add('hidden-visually');
-
-                    laplace3dFsBtn.textContent = '✖ Exit';
-
-                    // Resize Plotly after layout settles
-                    requestAnimationFrame(() => {
-                        setTimeout(() => {
-                            try { Plotly.Plots.resize(container3d); } catch (e) { }
-                        }, 150);
-                    });
-                } else {
-                    const origParent = state.originalLaplace3DParent;
-                    if (origParent) origParent.appendChild(container3d);
-                    container3d.style.width = '100%';
-                    container3d.style.height = '100%';
-
-                    fullscreenContainer.classList.add('hidden');
-                    if (fullscreenContainer.parentElement === document.body) {
-                        document.body.removeChild(fullscreenContainer);
-                    }
-                    if (controls.closeFullscreenBtn.parentElement === fullscreenContainer) {
-                        fullscreenContainer.removeChild(controls.closeFullscreenBtn);
-                        controls.closeFullscreenBtn.classList.add('hidden');
-                    }
-                    if (column3d) column3d.classList.remove('hidden-visually');
-
-                    fullscreenContainer.style.position = '';
-                    fullscreenContainer.style.top = '';
-                    fullscreenContainer.style.left = '';
-                    fullscreenContainer.style.width = '';
-                    fullscreenContainer.style.height = '';
-                    fullscreenContainer.style.zIndex = '';
-                    fullscreenContainer.style.backgroundColor = '';
-
-                    laplace3dFsBtn.textContent = 'Fullscreen';
-
-                    requestAnimationFrame(() => {
-                        setTimeout(() => {
-                            try { Plotly.Plots.resize(container3d); } catch (e) { }
-                        }, 100);
-                    });
-                }
-            } catch (e) {
-                console.error('Error in laplace 3D fullscreen toggle:', e);
-            }
-        });
-    }
-
-
-    if (controls.enableParticleAnimationCb) {
-        controls.enableParticleAnimationCb.addEventListener('change', (e) => {
-            try {
-                state.particleAnimationEnabled = e.target.checked;
-                if (controls.particleAnimationDetailsDiv) {
-                    controls.particleAnimationDetailsDiv.classList.toggle('hidden', !state.particleAnimationEnabled);
-                }
-                if (!state.particleAnimationEnabled) {
-                    state.particles = [];
-                }
-
-                requestRedrawAll();
-            } catch (error) {
-                console.error("Error in enableParticleAnimationCb change listener:", error);
-            }
-        });
-    }
-    if (controls.particleDensitySlider) {
-        controls.particleDensitySlider.addEventListener('input', () => {
-            try {
-                state.particleDensity = parseInt(controls.particleDensitySlider.value);
-                state.particles = [];
-                requestRedrawAll();
-            } catch (error) {
-                console.error("Error in particleDensitySlider input listener:", error);
-            }
-        });
-    }
-
-
-
-
-
-
-    if (controls.clearManualSeedsBtn && !controls.clearManualSeedsBtn.dataset.listenerAttached) {
-        controls.clearManualSeedsBtn.addEventListener('click', () => {
-            try {
-                state.manualSeedPoints = [];
-                requestRedrawAll();
-            } catch (error) {
-                console.error("Error in clearManualSeedsBtn click listener:", error);
-            }
-        });
-        controls.clearManualSeedsBtn.dataset.listenerAttached = 'true';
-    }
-
-
-    if (controls.showVectorFieldPanelCb && controls.vectorFlowOptionsContent) {
-        controls.showVectorFieldPanelCb.addEventListener('change', (e) => {
-            try {
-                state.showVectorFieldPanelEnabled = e.target.checked;
-                controls.vectorFlowOptionsContent.classList.toggle('hidden', !state.showVectorFieldPanelEnabled);
-            } catch (error) {
-                console.error("Error in showVectorFieldPanelCb change listener:", error);
-            }
-        });
-
-    }
-
-
-
-
-    document.addEventListener('keydown', (e) => {
-        try {
-            if (e.key === 'Escape') {
-                if (state.isZFullScreen) handleFullScreenToggle('z');
-                if (state.isWFullScreen) handleFullScreenToggle('w');
-                if (state.isLaplace3DFullScreen) {
-                    const btn = document.getElementById('toggle_fullscreen_laplace_3d_btn');
-                    if (btn) btn.click();
-                }
-            }
-        } catch (error) {
-            console.error("Error in document keydown listener for Escape key:", error);
-        }
-    });
-
-
 }
 
-
-function attemptPlotlyResize(plotlyDiv, maxAttempts = 3, delay = 100, currentAttempt = 1) {
-    if (!plotlyDiv) return;
-
-
-
-
-    const width = plotlyDiv.offsetWidth;
-
-    const height = plotlyDiv.offsetHeight;
-
-    if (width > 0 && height > 0) {
-        try {
-            Plotly.Plots.resize(plotlyDiv);
-
-        } catch (resizeError) {
-            console.error(`Error during Plotly.Plots.resize (attempt ${currentAttempt}):`, resizeError);
+function bindTaylorControls() {
+    bindCheckbox('enableTaylorSeriesCb', 'taylorSeriesEnabled', () => {
+        if (controls.taylorSeriesOptionsDetailDiv) {
+            controls.taylorSeriesOptionsDetailDiv.classList.toggle('hidden', !state.taylorSeriesEnabled);
         }
-    } else {
-        if (currentAttempt < maxAttempts) {
+        requestDomainRedraw(true);
+    });
 
-            setTimeout(() => {
-                attemptPlotlyResize(plotlyDiv, maxAttempts, delay, currentAttempt + 1);
-            }, delay);
-        } else {
-            console.warn(`Plotly container ${plotlyDiv.id} still has zero dimensions after ${maxAttempts} attempts. Resize failed. Dimensions: ${width}x${height}`);
+    bindSlider('taylorSeriesOrderSlider', 'taylorSeriesOrder', parseInteger);
+
+    bindCheckbox('enableTaylorSeriesCustomCenterCb', 'taylorSeriesCustomCenterEnabled', () => {
+        if (controls.taylorSeriesCustomCenterInputsDiv) {
+            controls.taylorSeriesCustomCenterInputsDiv.classList.toggle('hidden', !state.taylorSeriesCustomCenterEnabled);
         }
-    }
+        requestRedrawAll();
+    });
+
+    bindControlListener('taylorSeriesCustomCenterReInput', 'input', (_event, input) => {
+        const parsed = parseFloat(input.value);
+        state.taylorSeriesCustomCenter.re = Number.isNaN(parsed) ? 0 : parsed;
+    });
+    bindControlListener('taylorSeriesCustomCenterReInput', 'change', (_event, input) => {
+        const parsed = parseFloat(input.value);
+        state.taylorSeriesCustomCenter.re = Number.isNaN(parsed) ? 0 : parsed;
+        requestRedrawAll();
+    });
+
+    bindControlListener('taylorSeriesCustomCenterImInput', 'input', (_event, input) => {
+        const parsed = parseFloat(input.value);
+        state.taylorSeriesCustomCenter.im = Number.isNaN(parsed) ? 0 : parsed;
+    });
+    bindControlListener('taylorSeriesCustomCenterImInput', 'change', (_event, input) => {
+        const parsed = parseFloat(input.value);
+        state.taylorSeriesCustomCenter.im = Number.isNaN(parsed) ? 0 : parsed;
+        requestRedrawAll();
+    });
 }
 
-
-function handleSphereMouseDown(e, planeType) {
-    try {
-        const sphereParams = planeType === 'z' ? sphereViewParams.z : sphereViewParams.w;
-        const isActiveSphere = (planeType === 'z' && state.riemannSphereViewEnabled && !state.splitViewEnabled) ||
-            (planeType === 'w' && (state.riemannSphereViewEnabled || state.splitViewEnabled));
-        if (!isActiveSphere) return;
-
-        sphereParams.dragging = true;
-        sphereParams.lastMouseX = e.clientX;
-        sphereParams.lastMouseY = e.clientY;
-        const canvas = planeType === 'z' ? zCanvas : wCanvas;
-        canvas.style.cursor = 'grabbing';
-    } catch (error) {
-        console.error(`Error in handleSphereMouseDown (${planeType}):`, error);
-    }
+function bindPolynomialControls() {
+    bindSlider('polynomialNSlider', 'polynomialN', parseInteger, value => {
+        initializePolynomialCoeffs(value, true);
+        generatePolynomialCoeffSliders();
+        requestDomainRedraw(true);
+    });
 }
-function handleSphereMouseMove(e, planeType) {
-    try {
-        const sphereParams = planeType === 'z' ? sphereViewParams.z : sphereViewParams.w;
-        const isActiveSphere = (planeType === 'z' && state.riemannSphereViewEnabled && !state.splitViewEnabled) ||
-            (planeType === 'w' && (state.riemannSphereViewEnabled || state.splitViewEnabled));
-        if (!isActiveSphere) return;
 
-        if (sphereParams.dragging) {
-            const dx = e.clientX - sphereParams.lastMouseX;
-            const dy = e.clientY - sphereParams.lastMouseY;
-            sphereParams.rotY += dx * SPHERE_SENSITIVITY;
-            sphereParams.rotX += dy * SPHERE_SENSITIVITY;
-            sphereParams.rotX = Math.max(-Math.PI / 2 + 0.01, Math.min(Math.PI / 2 - 0.01, sphereParams.rotX));
-            sphereParams.lastMouseX = e.clientX;
-            sphereParams.lastMouseY = e.clientY;
-            domainColoringDirty = true;
+function bindRadialAndZetaControls() {
+    bindCheckbox('enableRadialDiscreteStepsCb', 'radialDiscreteStepsEnabled');
+    bindSlider('radialDiscreteStepsCountSlider', 'radialDiscreteStepsCount', parseInteger);
+
+    bindControlListener('toggleZetaContinuationBtn', 'click', () => {
+        state.zetaContinuationEnabled = !state.zetaContinuationEnabled;
+        requestDomainRedraw(true);
+    });
+}
+
+function bindParticleControls() {
+    bindCheckbox('enableParticleAnimationCb', 'particleAnimationEnabled', () => {
+        if (controls.particleAnimationDetailsDiv) {
+            controls.particleAnimationDetailsDiv.classList.toggle('hidden', !state.particleAnimationEnabled);
+        }
+        if (!state.particleAnimationEnabled) {
+            state.particles = [];
+        }
+        requestRedrawAll();
+    });
+
+    bindSlider('particleDensitySlider', 'particleDensity', parseInteger, () => {
+        state.particles = [];
+        requestRedrawAll();
+    });
+
+    bindSlider('particleSpeedSlider', 'particleSpeed', parseFloat);
+    bindSlider('particleMaxLifetimeSlider', 'particleMaxLifetime', parseInteger);
+}
+
+function bindFourierControls() {
+    bindSelector('fourierFunctionSelector', 'fourierFunction', () => {
+        updateFourierTransform();
+        requestRedrawAll();
+    });
+
+    ['fourierFrequency', 'fourierAmplitude', 'fourierTimeWindow', 'fourierSamples'].forEach(stateKey => {
+        bindSlider(`${stateKey}Slider`, stateKey, stateKey === 'fourierSamples' ? parseInteger : parseFloat, () => {
+            updateFourierTransform();
             requestRedrawAll();
-        }
-    } catch (error) {
-        console.error(`Error in handleSphereMouseMove (${planeType}):`, error);
-    }
-}
-function handleSphereMouseUp(planeType) {
-    try {
-        const sphereParams = planeType === 'z' ? sphereViewParams.z : sphereViewParams.w;
-        const isActiveSphere = (planeType === 'z' && state.riemannSphereViewEnabled && !state.splitViewEnabled) ||
-            (planeType === 'w' && (state.riemannSphereViewEnabled || state.splitViewEnabled));
-        if (!isActiveSphere && !sphereParams.dragging) return;
+        });
+    });
 
-        sphereParams.dragging = false;
-        const canvas = planeType === 'z' ? zCanvas : wCanvas;
-        canvas.style.cursor = 'crosshair';
-    } catch (error) {
-        console.error(`Error in handleSphereMouseUp (${planeType}):`, error);
-    }
+    bindSlider('fourierWindingFrequencySlider', 'fourierWindingFrequency', parseFloat);
+    bindSlider('fourierWindingTimeSlider', 'fourierWindingTime', parseFloat);
 }
 
+function bindLaplaceControls() {
+    bindSelector('laplaceFunctionSelector', 'laplaceFunction', () => {
+        updateLaplaceTransform();
+        requestRedrawAll();
+    });
 
-function handleFullScreenToggle(planeType) {
-    try {
-        const isZPlane = planeType === 'z';
-        let currentElement;
-        let isPlotlyCase = false;
-        const wPlotlyContainer = document.getElementById('w_plane_plotly_container');
+    ['laplaceFrequency', 'laplaceDamping'].forEach(stateKey => {
+        bindSlider(`${stateKey}Slider`, stateKey, parseFloat, () => {
+            updateLaplaceTransform();
+            requestRedrawAll();
+        });
+    });
 
-        if (isZPlane) {
-            currentElement = zCanvas;
-        } else {
-            if (state.plotly3DEnabled && state.riemannSphereViewEnabled && wPlotlyContainer) {
-                currentElement = wPlotlyContainer;
-                isPlotlyCase = true;
-            } else {
-                currentElement = wCanvas;
-            }
+    ['laplaceSigma', 'laplaceOmega'].forEach(stateKey => {
+        bindSlider(`${stateKey}Slider`, stateKey, parseFloat, () => {
+            updateLaplaceEvaluationPoint();
+            requestRedrawAll();
+        });
+    });
+
+    bindSelector('laplaceVizModeSelector', 'laplaceVizMode', () => {
+        updateLaplace3DSurface();
+        requestRedrawAll();
+    });
+
+    bindSlider('laplaceClipHeightSlider', 'laplaceClipHeight', parseFloat, () => {
+        updateLaplace3DSurface();
+        requestRedrawAll();
+    });
+
+    bindCheckbox('laplaceShowROCCb', 'laplaceShowROC');
+    bindCheckbox('laplaceShowPolesZerosCb', 'laplaceShowPolesZeros');
+    bindCheckbox('laplaceShowFourierLineCb', 'laplaceShowFourierLine');
+    bindSlider('laplaceAnimationSpeedSlider', 'laplaceAnimationSpeed', parseFloat, () => {
+        if (controls.laplaceAnimationSpeedDisplay) {
+            controls.laplaceAnimationSpeedDisplay.textContent = state.laplaceAnimationSpeed.toFixed(1);
         }
+        syncLaplacePlayPauseButton();
+    });
+    bindCheckbox('laplaceAnimationLoopCb', 'laplaceAnimationLoop');
 
-        if (!currentElement) {
-            console.error("Fullscreen target element not found for plane:", planeType, "isPlotlyCase:", isPlotlyCase);
+    bindControlListener('laplacePlayPauseBtn', 'click', () => {
+        if (typeof toggleLaplaceAnimation === 'function') {
+            toggleLaplaceAnimation();
+        }
+        requestAnimationFrame(syncLaplacePlayPauseButton);
+    });
+    bindControlListener('laplaceResetBtn', 'click', () => {
+        if (typeof resetLaplaceAnimation === 'function') {
+            resetLaplaceAnimation();
+        }
+        requestAnimationFrame(syncLaplacePlayPauseButton);
+    });
+    bindControlListener('laplaceShowFullBtn', 'click', () => {
+        if (typeof showFullLaplaceSpiral === 'function') {
+            showFullLaplaceSpiral();
+        }
+        requestAnimationFrame(syncLaplacePlayPauseButton);
+    });
+
+    bindControlListener('laplaceFindPolesZerosBtn', 'click', () => {
+        if (!state.laplaceModeEnabled) {
             return;
         }
 
-        const canvasCard = isZPlane ? controls.zCanvasCard : controls.wCanvasCard;
-        const fullscreenContainer = controls.fullscreenContainer;
-        const toggleButton = isZPlane ? controls.toggleFullscreenZBtn : controls.toggleFullscreenWBtn;
+        const result = findPolesZeros(state.laplaceFunction || 'damped_sine', {
+            frequency: state.laplaceFrequency || 2.0,
+            damping: state.laplaceDamping || 0.5,
+            amplitude: state.laplaceAmplitude || 1.0
+        });
 
-        let isNowFullScreenGlobalState;
-        if (isZPlane) {
-            state.isZFullScreen = !state.isZFullScreen;
-            isNowFullScreenGlobalState = state.isZFullScreen;
-        } else {
-            state.isWFullScreen = !state.isWFullScreen;
-            isNowFullScreenGlobalState = state.isWFullScreen;
+        state.laplacePoles = result.poles;
+        state.laplaceZeros = result.zeros;
+        requestRedrawAll();
+    });
+
+    bindControlListener('laplaceStabilityAnalysisBtn', 'click', () => {
+        if (!state.laplaceModeEnabled || !state.laplacePoles) {
+            return;
         }
 
-        if (isNowFullScreenGlobalState) {
+        state.laplaceStability = analyzeStability(state.laplacePoles);
+        requestRedrawAll();
+    });
 
-            if (isZPlane) {
-                state.originalZParent = currentElement.parentElement;
-                state.originalZStyle = { width: currentElement.style.width, height: currentElement.style.height };
-            } else {
-                state.originalWParent = currentElement.parentElement;
-                state.originalWStyle = { width: currentElement.style.width, height: currentElement.style.height };
+    bindControlListener('laplaceWindingSyncBtn', 'click', () => {
+        state.laplaceWindingSyncZoom = !state.laplaceWindingSyncZoom;
+        syncLaplaceWindingSyncButton();
+    });
+}
+
+function getCanvasInteractionContext(planeType) {
+    return planeType === 'z'
+        ? { canvas: zCanvas, planeParams: zPlaneParams, panState: state.panStateZ, isZCanvas: true }
+        : { canvas: wCanvas, planeParams: wPlaneParams, panState: state.panStateW, isZCanvas: false };
+}
+
+function isSphereInteractionActive(isZCanvas) {
+    return isZCanvas
+        ? state.riemannSphereViewEnabled && !state.splitViewEnabled
+        : state.riemannSphereViewEnabled || state.splitViewEnabled;
+}
+
+function getCanvasMousePosition(canvas, event) {
+    const rect = canvas.getBoundingClientRect();
+    return {
+        rect,
+        x: event.clientX - rect.left,
+        y: event.clientY - rect.top
+    };
+}
+
+function updateLaplaceViewportRanges(viewport) {
+    const originWorldX = -viewport.origin.x / viewport.scale.x;
+    const originWorldY = (viewport.origin.y - viewport.offsetY - viewport.height / 2) / viewport.scale.y;
+    viewport.currentVisXRange = [originWorldX, originWorldX + viewport.width / viewport.scale.x];
+    viewport.currentVisYRange = [
+        originWorldY - viewport.height / (2 * viewport.scale.y),
+        originWorldY + viewport.height / (2 * viewport.scale.y)
+    ];
+}
+
+function getLaplaceViewportAtY(mouseY) {
+    if (!state.laplaceTopVP || !state.lapaceBotVP) {
+        return null;
+    }
+
+    const isTop = mouseY < state.laplaceTopVP.height;
+    return {
+        panel: isTop ? 'top' : 'bot',
+        viewport: isTop ? state.laplaceTopVP : state.lapaceBotVP
+    };
+}
+
+function zoomLaplaceViewport(viewport, mouseX, mouseY, factor, centered = false) {
+    const anchorX = centered ? viewport.width / 2 : mouseX;
+    const anchorY = centered ? viewport.offsetY + viewport.height / 2 : mouseY;
+
+    const worldX = (anchorX - viewport.origin.x) / viewport.scale.x;
+    const worldY = (viewport.origin.y - anchorY) / viewport.scale.y;
+
+    viewport.scale.x *= factor;
+    viewport.scale.y *= factor;
+    viewport.origin.x = anchorX - worldX * viewport.scale.x;
+    viewport.origin.y = anchorY + worldY * viewport.scale.y;
+
+    updateLaplaceViewportRanges(viewport);
+}
+
+function bindCanvasInteractions() {
+    ['z', 'w'].forEach(planeType => {
+        const { canvas, planeParams, panState, isZCanvas } = getCanvasInteractionContext(planeType);
+
+        bindElementListener(canvas, 'mousemove', event => {
+            if (isSphereInteractionActive(isZCanvas)) {
+                return;
             }
 
+            const { x, y } = getCanvasMousePosition(canvas, event);
+
+            if (!isZCanvas && state.laplaceModeEnabled && state.laplaceDragging) {
+                const viewport = state.laplaceDragging.panel === 'top' ? state.laplaceTopVP : state.lapaceBotVP;
+                if (viewport) {
+                    viewport.origin.x = state.laplaceDragging.startOrigin.x + (x - state.laplaceDragging.startX);
+                    viewport.origin.y = state.laplaceDragging.startOrigin.y + (y - state.laplaceDragging.startY);
+                    updateLaplaceViewportRanges(viewport);
+                    requestRedrawAll();
+                }
+                return;
+            }
+
+            if (panState.isPanning) {
+                planeParams.origin.x = panState.panStartOrigin.x + (x - panState.panStart.x);
+                planeParams.origin.y = panState.panStartOrigin.y + (y - panState.panStart.y);
+                updatePlaneViewportRanges(planeParams);
+                requestDomainRedraw(true);
+                return;
+            }
+
+            if (isZCanvas && !state.panStateZ.isPanning && !state.panStateW.isPanning) {
+                const worldCoords = mapCanvasToWorldCoords(x, y, planeParams);
+                state.probeZ = { re: worldCoords.x, im: worldCoords.y };
+                state.probeActive = true;
+                requestRedrawAll();
+            }
+        });
+
+        bindElementListener(canvas, 'mousedown', event => {
+            if (isSphereInteractionActive(isZCanvas)) {
+                return;
+            }
+
+            const { x, y } = getCanvasMousePosition(canvas, event);
+
+            if (!isZCanvas && state.laplaceModeEnabled && state.laplaceTopVP && state.lapaceBotVP && event.button === 0) {
+                const target = getLaplaceViewportAtY(y);
+                if (target) {
+                    state.laplaceDragging = {
+                        panel: target.panel,
+                        startX: x,
+                        startY: y,
+                        startOrigin: { x: target.viewport.origin.x, y: target.viewport.origin.y }
+                    };
+                    canvas.style.cursor = 'grabbing';
+                    return;
+                }
+            }
+
+            if (isZCanvas && event.button === 0 && state.streamlineFlowEnabled) {
+                const worldCoords = mapCanvasToWorldCoords(x, y, planeParams);
+                state.manualSeedPoints.push({ re: worldCoords.x, im: worldCoords.y });
+                requestRedrawAll();
+                event.stopPropagation();
+                return;
+            }
+
+            if (event.button !== 0) {
+                return;
+            }
+
+            panState.isPanning = true;
+            panState.panStart.x = x;
+            panState.panStart.y = y;
+            panState.panStartOrigin.x = planeParams.origin.x;
+            panState.panStartOrigin.y = planeParams.origin.y;
+            canvas.style.cursor = 'grabbing';
+
+            if (isZCanvas) {
+                state.probeActive = false;
+            }
+
+            requestRedrawAll();
+        });
+
+        bindElementListener(canvas, 'mouseup', event => {
+            if (isSphereInteractionActive(isZCanvas)) {
+                return;
+            }
+
+            if (!isZCanvas && state.laplaceDragging) {
+                state.laplaceDragging = null;
+                canvas.style.cursor = 'crosshair';
+                return;
+            }
+
+            if (event.button !== 0 || !panState.isPanning) {
+                return;
+            }
+
+            panState.isPanning = false;
+            canvas.style.cursor = 'crosshair';
+
+            if (!isZCanvas) {
+                return;
+            }
+
+            const { x, y } = getCanvasMousePosition(canvas, event);
+            if (x >= 0 && x <= canvas.width && y >= 0 && y <= canvas.height) {
+                const worldCoords = mapCanvasToWorldCoords(x, y, planeParams);
+                state.probeZ = { re: worldCoords.x, im: worldCoords.y };
+                state.probeActive = true;
+            } else {
+                state.probeActive = false;
+            }
+
+            requestRedrawAll();
+        });
+
+        bindElementListener(canvas, 'mouseleave', () => {
+            if (isSphereInteractionActive(isZCanvas)) {
+                return;
+            }
+
+            if (!isZCanvas && state.laplaceDragging) {
+                state.laplaceDragging = null;
+                canvas.style.cursor = 'crosshair';
+            }
+
+            if (panState.isPanning) {
+                panState.isPanning = false;
+                canvas.style.cursor = 'crosshair';
+                domainColoringDirty = true;
+            }
+
+            if (isZCanvas) {
+                state.probeActive = false;
+            }
+
+            requestRedrawAll();
+        });
+
+        bindElementListener(canvas, 'wheel', event => {
+            if (isSphereInteractionActive(isZCanvas)) {
+                return;
+            }
+
+            event.preventDefault();
+            const { x, y } = getCanvasMousePosition(canvas, event);
+            const zoomFactor = event.deltaY < 0 ? ZOOM_IN_FACTOR : ZOOM_OUT_FACTOR;
+
+            if (!isZCanvas && state.laplaceModeEnabled && state.laplaceTopVP && state.lapaceBotVP) {
+                const target = getLaplaceViewportAtY(y);
+                if (!target) {
+                    return;
+                }
+
+                zoomLaplaceViewport(target.viewport, x, y, zoomFactor, false);
+                if (state.laplaceWindingSyncZoom) {
+                    const otherViewport = target.panel === 'top' ? state.lapaceBotVP : state.laplaceTopVP;
+                    zoomLaplaceViewport(otherViewport, x, y, zoomFactor, true);
+                }
+
+                requestRedrawAll();
+                return;
+            }
+
+            const worldMouseBefore = mapCanvasToWorldCoords(x, y, planeParams);
+            const zoomStateKey = isZCanvas ? 'zPlaneZoom' : 'wPlaneZoom';
+            const unclampedZoom = state[zoomStateKey] * zoomFactor;
+            const clampedZoom = Math.max(MIN_STATE_ZOOM_LEVEL, Math.min(MAX_STATE_ZOOM_LEVEL, unclampedZoom));
+            const actualZoomApplied = clampedZoom / state[zoomStateKey];
+
+            state[zoomStateKey] = clampedZoom;
+            planeParams.scale.x *= actualZoomApplied;
+            planeParams.scale.y *= actualZoomApplied;
+            planeParams.origin.x = x - worldMouseBefore.x * planeParams.scale.x;
+            planeParams.origin.y = y + worldMouseBefore.y * planeParams.scale.y;
+
+            updatePlaneViewportRanges(planeParams);
+            requestDomainRedraw(true);
+        });
+    });
+
+    bindElementListener(zCanvas, 'mousedown', event => {
+        handleSphereMouseDown(event, 'z');
+    });
+    bindElementListener(zCanvas, 'mousemove', event => {
+        handleSphereMouseMove(event, 'z');
+    });
+    bindElementListener(zCanvas, 'mouseup', () => {
+        handleSphereMouseUp('z');
+    });
+    bindElementListener(zCanvas, 'mouseleave', () => {
+        handleSphereMouseUp('z');
+    });
+
+    bindElementListener(wCanvas, 'mousedown', event => {
+        handleSphereMouseDown(event, 'w');
+    });
+    bindElementListener(wCanvas, 'mousemove', event => {
+        handleSphereMouseMove(event, 'w');
+    });
+    bindElementListener(wCanvas, 'mouseup', () => {
+        handleSphereMouseUp('w');
+    });
+    bindElementListener(wCanvas, 'mouseleave', () => {
+        handleSphereMouseUp('w');
+    });
+}
+
+function bindFullscreenControls() {
+    bindControlListener('toggleFullscreenZBtn', 'click', () => {
+        handleFullScreenToggle('z');
+    });
+
+    bindControlListener('toggleFullscreenWBtn', 'click', () => {
+        handleFullScreenToggle('w');
+    });
+
+    bindControlListener('toggleFullscreenLaplace3DBtn', 'click', () => {
+        const container3d = controls.laplace3DContainer;
+        const column3d = controls.laplace3DColumn;
+        const fullscreenContainer = controls.fullscreenContainer;
+
+        if (!container3d || !fullscreenContainer) {
+            return;
+        }
+
+        state.isLaplace3DFullScreen = !state.isLaplace3DFullScreen;
+
+        if (state.isLaplace3DFullScreen) {
+            state.originalLaplace3DParent = container3d.parentElement;
 
             fullscreenContainer.style.position = 'fixed';
             fullscreenContainer.style.top = '0';
@@ -1531,62 +1105,34 @@ function handleFullScreenToggle(planeType) {
             fullscreenContainer.style.width = '100vw';
             fullscreenContainer.style.height = '100vh';
             fullscreenContainer.style.zIndex = '1000';
-            fullscreenContainer.style.backgroundColor = 'var(--color-background-dark)';
+            fullscreenContainer.style.backgroundColor = '#000';
 
-            controls.closeFullscreenBtn.onclick = () => { try { handleFullScreenToggle(planeType); } catch (e) { console.error("Error in closeFullscreenBtn onclick handler:", e); } };
+            controls.closeFullscreenBtn.onclick = () => {
+                controls.toggleFullscreenLaplace3DBtn.click();
+            };
             fullscreenContainer.appendChild(controls.closeFullscreenBtn);
             controls.closeFullscreenBtn.classList.remove('hidden');
 
-            fullscreenContainer.appendChild(currentElement);
+            container3d.style.width = '100%';
+            container3d.style.height = '100%';
+            fullscreenContainer.appendChild(container3d);
             document.body.appendChild(fullscreenContainer);
             fullscreenContainer.classList.remove('hidden');
 
-            if (canvasCard) canvasCard.classList.add('hidden-visually');
-
-            if (isPlotlyCase) {
-                if (wCanvas) wCanvas.classList.add('hidden');
-                currentElement.classList.remove('hidden');
-
-                currentElement.style.width = '100%';
-                currentElement.style.height = '100%';
-            } else {
-                currentElement.style.width = '100%';
-                currentElement.style.height = '100%';
+            if (column3d) {
+                column3d.classList.add('hidden-visually');
             }
 
-            // Move sync button if w-plane
-            if (!isZPlane) {
-                const syncBtn = document.getElementById('laplace_winding_sync_btn');
-                if (syncBtn) {
-                    fullscreenContainer.appendChild(syncBtn);
-                    syncBtn.style.top = '50px'; // Move down a bit to avoid close button
-                    syncBtn.style.right = '20px';
-                }
-            }
-
-            toggleButton.textContent = "✖ Exit";
-
+            controls.toggleFullscreenLaplace3DBtn.textContent = '✖ Exit';
         } else {
-            const originalParent = isZPlane ? state.originalZParent : state.originalWParent;
-            const originalStyle = isZPlane ? state.originalZStyle : state.originalWStyle;
-
-            if (originalParent) {
-                originalParent.appendChild(currentElement);
-                if (originalStyle) {
-                    currentElement.style.width = originalStyle.width;
-                    currentElement.style.height = originalStyle.height;
-                } else {
-                    currentElement.style.width = '';
-                    currentElement.style.height = '';
-                }
-            } else {
-                if (canvasCard && canvasCard.querySelector('div')) {
-                    canvasCard.querySelector('div').appendChild(currentElement);
-                }
-                console.warn("Original parent for fullscreen element was not found, attempting fallback restoration.");
+            if (state.originalLaplace3DParent) {
+                state.originalLaplace3DParent.appendChild(container3d);
             }
 
+            container3d.style.width = '100%';
+            container3d.style.height = '100%';
             fullscreenContainer.classList.add('hidden');
+
             if (fullscreenContainer.parentElement === document.body) {
                 document.body.removeChild(fullscreenContainer);
             }
@@ -1594,17 +1140,8 @@ function handleFullScreenToggle(planeType) {
                 fullscreenContainer.removeChild(controls.closeFullscreenBtn);
                 controls.closeFullscreenBtn.classList.add('hidden');
             }
-            if (canvasCard) canvasCard.classList.remove('hidden-visually');
-
-            // Move sync button back if w-plane
-            if (!isZPlane) {
-                const syncBtn = document.getElementById('laplace_winding_sync_btn');
-                // state.originalWParent should be the div wrapper where the button belongs
-                if (syncBtn && state.originalWParent) {
-                    state.originalWParent.appendChild(syncBtn);
-                    syncBtn.style.top = '8px';
-                    syncBtn.style.right = '8px';
-                }
+            if (column3d) {
+                column3d.classList.remove('hidden-visually');
             }
 
             fullscreenContainer.style.position = '';
@@ -1615,40 +1152,343 @@ function handleFullScreenToggle(planeType) {
             fullscreenContainer.style.zIndex = '';
             fullscreenContainer.style.backgroundColor = '';
 
-            toggleButton.textContent = "Fullscreen";
+            controls.toggleFullscreenLaplace3DBtn.textContent = 'Fullscreen';
         }
 
+        requestAnimationFrame(() => {
+            setTimeout(() => {
+                try {
+                    Plotly.Plots.resize(container3d);
+                } catch (error) {
+                    console.error('Error resizing Laplace 3D Plotly surface:', error);
+                }
+            }, state.isLaplace3DFullScreen ? 150 : 100);
+        });
+    });
 
-
-        setupVisualParameters(true, true);
-
-        if (isPlotlyCase) {
-            const plotlyDivToResize = currentElement;
-
-
-            requestAnimationFrame(() => {
-                setTimeout(() => {
-                    if (isNowFullScreenGlobalState) {
-                        plotlyDivToResize.classList.remove('hidden');
-
-                        plotlyDivToResize.style.width = '100%';
-                        plotlyDivToResize.style.height = '100%';
-                        attemptPlotlyResize(plotlyDivToResize, 5, 150);
-                    } else {
-
-                        attemptPlotlyResize(plotlyDivToResize, 3, 100);
-                    }
-                }, isNowFullScreenGlobalState ? 100 : 50);
-            });
-        } else {
-
-
+    bindElementListener(document, 'keydown', event => {
+        if (event.key !== 'Escape') {
+            return;
         }
 
-        domainColoringDirty = true;
-        requestRedrawAll();
+        if (state.isZFullScreen) {
+            handleFullScreenToggle('z');
+        }
+        if (state.isWFullScreen) {
+            handleFullScreenToggle('w');
+        }
+        if (state.isLaplace3DFullScreen && controls.toggleFullscreenLaplace3DBtn) {
+            controls.toggleFullscreenLaplace3DBtn.click();
+        }
+    });
+}
 
-    } catch (error) {
-        console.error(`Error in handleFullScreenToggle (${planeType}):`, error);
+window.setupEventListeners = function () {
+    if (uiEventListenersBound) {
+        return;
     }
+
+    uiEventListenersBound = true;
+
+    bindBaseParameterControls();
+    bindMobiusControls();
+    bindFunctionButtons();
+    bindImageControls();
+    bindPolynomialControls();
+    bindDomainColoringControls();
+    bindViewControls();
+    bindVectorFieldControls();
+    bindTaylorControls();
+    bindRadialAndZetaControls();
+    bindParticleControls();
+    bindFourierControls();
+    bindLaplaceControls();
+
+    bindSelector('inputShapeSelector', 'currentInputShape', () => {
+        requestDomainRedraw(true);
+    });
+
+    BASIC_SLIDER_BINDINGS
+        .filter(({ controlKey }) => !new Set([
+            'vectorFieldScaleSlider',
+            'vectorArrowThicknessSlider',
+            'vectorArrowHeadSizeSlider',
+            'streamlineStepSizeSlider',
+            'streamlineMaxLengthSlider',
+            'streamlineThicknessSlider',
+            'streamlineSeedDensityFactorSlider',
+            'particleDensitySlider',
+            'particleSpeedSlider',
+            'particleMaxLifetimeSlider',
+            'imageResolutionSlider',
+            'imageSizeSlider',
+            'imageOpacitySlider',
+            'zPlaneZoomSlider',
+            'wPlaneZoomSlider',
+            'taylorSeriesOrderSlider',
+            'radialDiscreteStepsCountSlider',
+            'laplaceAnimationSpeedSlider',
+            'fourierFrequencySlider',
+            'fourierAmplitudeSlider',
+            'fourierTimeWindowSlider',
+            'fourierSamplesSlider',
+            'fourierWindingFrequencySlider',
+            'fourierWindingTimeSlider',
+            'laplaceFrequencySlider',
+            'laplaceDampingSlider',
+            'laplaceSigmaSlider',
+            'laplaceOmegaSlider',
+            'laplaceClipHeightSlider'
+        ]).has(controlKey))
+        .forEach(({ controlKey, stateKey, parser }) => {
+            bindSlider(controlKey, stateKey, parser);
+        });
+
+    BASIC_CHECKBOX_BINDINGS
+        .filter(({ controlKey }) => !new Set([
+            'enableSplitViewCb',
+            'enableVectorFieldCb',
+            'enableStreamlineFlowCb',
+            'enableRadialDiscreteStepsCb',
+            'enableRiemannSphereCb',
+            'enablePlotly3DCb',
+            'enableTaylorSeriesCb',
+            'enableTaylorSeriesCustomCenterCb',
+            'laplaceShowROCCb',
+            'laplaceShowPolesZerosCb',
+            'laplaceShowFourierLineCb',
+            'laplaceAnimationLoopCb',
+            'enableParticleAnimationCb',
+            'showVectorFieldPanelCb',
+            'enableDomainColoringCb',
+            'toggleSphereAxesGridCb',
+            'togglePlotlySphereGridCb'
+        ]).has(controlKey))
+        .forEach(({ controlKey, stateKey }) => {
+            bindCheckbox(controlKey, stateKey);
+        });
+
+    BASIC_SELECTOR_BINDINGS
+        .filter(({ controlKey }) => !new Set([
+            'inputShapeSelector',
+            'vectorFieldFunctionSelector',
+            'fourierFunctionSelector',
+            'laplaceFunctionSelector',
+            'laplaceVizModeSelector'
+        ]).has(controlKey))
+        .forEach(({ controlKey, stateKey }) => {
+            bindSelector(controlKey, stateKey);
+        });
+
+    bindCanvasInteractions();
+    bindFullscreenControls();
+    updateModePanels();
+};
+
+function attemptPlotlyResize(plotlyDiv, maxAttempts = 3, delay = 100, currentAttempt = 1) {
+    if (!plotlyDiv) {
+        return;
+    }
+
+    const width = plotlyDiv.offsetWidth;
+    const height = plotlyDiv.offsetHeight;
+
+    if (width > 0 && height > 0) {
+        try {
+            Plotly.Plots.resize(plotlyDiv);
+        } catch (error) {
+            console.error(`Error during Plotly.Plots.resize (attempt ${currentAttempt}):`, error);
+        }
+        return;
+    }
+
+    if (currentAttempt >= maxAttempts) {
+        console.warn(`Plotly container ${plotlyDiv.id} still has zero dimensions after ${maxAttempts} attempts.`);
+        return;
+    }
+
+    setTimeout(() => {
+        attemptPlotlyResize(plotlyDiv, maxAttempts, delay, currentAttempt + 1);
+    }, delay);
+}
+
+function handleSphereMouseDown(event, planeType) {
+    const sphereParams = planeType === 'z' ? sphereViewParams.z : sphereViewParams.w;
+    const isActiveSphere = planeType === 'z'
+        ? state.riemannSphereViewEnabled && !state.splitViewEnabled
+        : state.riemannSphereViewEnabled || state.splitViewEnabled;
+
+    if (!isActiveSphere) {
+        return;
+    }
+
+    sphereParams.dragging = true;
+    sphereParams.lastMouseX = event.clientX;
+    sphereParams.lastMouseY = event.clientY;
+    (planeType === 'z' ? zCanvas : wCanvas).style.cursor = 'grabbing';
+}
+
+function handleSphereMouseMove(event, planeType) {
+    const sphereParams = planeType === 'z' ? sphereViewParams.z : sphereViewParams.w;
+    const isActiveSphere = planeType === 'z'
+        ? state.riemannSphereViewEnabled && !state.splitViewEnabled
+        : state.riemannSphereViewEnabled || state.splitViewEnabled;
+
+    if (!isActiveSphere || !sphereParams.dragging) {
+        return;
+    }
+
+    const dx = event.clientX - sphereParams.lastMouseX;
+    const dy = event.clientY - sphereParams.lastMouseY;
+
+    sphereParams.rotY += dx * SPHERE_SENSITIVITY;
+    sphereParams.rotX += dy * SPHERE_SENSITIVITY;
+    sphereParams.rotX = Math.max(-Math.PI / 2 + 0.01, Math.min(Math.PI / 2 - 0.01, sphereParams.rotX));
+    sphereParams.lastMouseX = event.clientX;
+    sphereParams.lastMouseY = event.clientY;
+
+    requestDomainRedraw(true);
+}
+
+function handleSphereMouseUp(planeType) {
+    const sphereParams = planeType === 'z' ? sphereViewParams.z : sphereViewParams.w;
+    const isActiveSphere = planeType === 'z'
+        ? state.riemannSphereViewEnabled && !state.splitViewEnabled
+        : state.riemannSphereViewEnabled || state.splitViewEnabled;
+
+    if (!isActiveSphere && !sphereParams.dragging) {
+        return;
+    }
+
+    sphereParams.dragging = false;
+    (planeType === 'z' ? zCanvas : wCanvas).style.cursor = 'crosshair';
+}
+
+function handleFullScreenToggle(planeType) {
+    const isZPlane = planeType === 'z';
+    const plotlyContainer = controls.wPlanePlotlyContainer;
+    const isPlotlyCase = !isZPlane && state.plotly3DEnabled && state.riemannSphereViewEnabled && plotlyContainer;
+    const currentElement = isZPlane ? zCanvas : (isPlotlyCase ? plotlyContainer : wCanvas);
+
+    if (!currentElement) {
+        console.error('Fullscreen target element not found for plane:', planeType);
+        return;
+    }
+
+    const canvasCard = isZPlane ? controls.zCanvasCard : controls.wCanvasCard;
+    const toggleButton = isZPlane ? controls.toggleFullscreenZBtn : controls.toggleFullscreenWBtn;
+    const fullscreenContainer = controls.fullscreenContainer;
+
+    if (isZPlane) {
+        state.isZFullScreen = !state.isZFullScreen;
+    } else {
+        state.isWFullScreen = !state.isWFullScreen;
+    }
+
+    const isNowFullScreen = isZPlane ? state.isZFullScreen : state.isWFullScreen;
+
+    if (isNowFullScreen) {
+        if (isZPlane) {
+            state.originalZParent = currentElement.parentElement;
+            state.originalZStyle = { width: currentElement.style.width, height: currentElement.style.height };
+        } else {
+            state.originalWParent = currentElement.parentElement;
+            state.originalWStyle = { width: currentElement.style.width, height: currentElement.style.height };
+        }
+
+        fullscreenContainer.style.position = 'fixed';
+        fullscreenContainer.style.top = '0';
+        fullscreenContainer.style.left = '0';
+        fullscreenContainer.style.width = '100vw';
+        fullscreenContainer.style.height = '100vh';
+        fullscreenContainer.style.zIndex = '1000';
+        fullscreenContainer.style.backgroundColor = 'var(--color-background-dark)';
+
+        controls.closeFullscreenBtn.onclick = () => {
+            handleFullScreenToggle(planeType);
+        };
+        fullscreenContainer.appendChild(controls.closeFullscreenBtn);
+        controls.closeFullscreenBtn.classList.remove('hidden');
+
+        fullscreenContainer.appendChild(currentElement);
+        document.body.appendChild(fullscreenContainer);
+        fullscreenContainer.classList.remove('hidden');
+
+        if (canvasCard) {
+            canvasCard.classList.add('hidden-visually');
+        }
+
+        currentElement.style.width = '100%';
+        currentElement.style.height = '100%';
+
+        if (isPlotlyCase && wCanvas) {
+            wCanvas.classList.add('hidden');
+        }
+
+        if (!isZPlane && controls.laplaceWindingSyncBtn) {
+            fullscreenContainer.appendChild(controls.laplaceWindingSyncBtn);
+            controls.laplaceWindingSyncBtn.style.top = '50px';
+            controls.laplaceWindingSyncBtn.style.right = '20px';
+        }
+
+        toggleButton.textContent = '✖ Exit';
+    } else {
+        const originalParent = isZPlane ? state.originalZParent : state.originalWParent;
+        const originalStyle = isZPlane ? state.originalZStyle : state.originalWStyle;
+
+        if (originalParent) {
+            originalParent.appendChild(currentElement);
+            currentElement.style.width = originalStyle && originalStyle.width ? originalStyle.width : '';
+            currentElement.style.height = originalStyle && originalStyle.height ? originalStyle.height : '';
+        } else if (canvasCard && canvasCard.querySelector('div')) {
+            canvasCard.querySelector('div').appendChild(currentElement);
+        }
+
+        fullscreenContainer.classList.add('hidden');
+        if (fullscreenContainer.parentElement === document.body) {
+            document.body.removeChild(fullscreenContainer);
+        }
+        if (controls.closeFullscreenBtn.parentElement === fullscreenContainer) {
+            fullscreenContainer.removeChild(controls.closeFullscreenBtn);
+            controls.closeFullscreenBtn.classList.add('hidden');
+        }
+        if (canvasCard) {
+            canvasCard.classList.remove('hidden-visually');
+        }
+
+        if (!isZPlane && controls.laplaceWindingSyncBtn && state.originalWParent) {
+            state.originalWParent.appendChild(controls.laplaceWindingSyncBtn);
+            controls.laplaceWindingSyncBtn.style.top = '8px';
+            controls.laplaceWindingSyncBtn.style.right = '8px';
+        }
+
+        fullscreenContainer.style.position = '';
+        fullscreenContainer.style.top = '';
+        fullscreenContainer.style.left = '';
+        fullscreenContainer.style.width = '';
+        fullscreenContainer.style.height = '';
+        fullscreenContainer.style.zIndex = '';
+        fullscreenContainer.style.backgroundColor = '';
+
+        toggleButton.textContent = 'Fullscreen';
+    }
+
+    setupVisualParameters(true, true);
+
+    if (isPlotlyCase) {
+        requestAnimationFrame(() => {
+            setTimeout(() => {
+                if (isNowFullScreen) {
+                    currentElement.classList.remove('hidden');
+                    currentElement.style.width = '100%';
+                    currentElement.style.height = '100%';
+                    attemptPlotlyResize(currentElement, 5, 150);
+                } else {
+                    attemptPlotlyResize(currentElement, 3, 100);
+                }
+            }, isNowFullScreen ? 100 : 50);
+        });
+    }
+
+    requestDomainRedraw(true);
 }

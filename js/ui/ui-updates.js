@@ -39,9 +39,8 @@ function updateSliderLabelsAndDisplay() {
             controls.stripHorizontalParamsSliders.classList.toggle('hidden', !isStripH);
             controls.sectorAngularParamsSliders.classList.toggle('hidden', !isSectorA);
             
-            const imageControlsDiv = document.getElementById('image_upload_controls');
-            if (imageControlsDiv) {
-                imageControlsDiv.classList.toggle('hidden', !isImage);
+            if (controls.imageUploadControls) {
+                controls.imageUploadControls.classList.toggle('hidden', !isImage);
             }
 
             if (showCommonParams || isImage) {
@@ -133,9 +132,8 @@ function updateSliderLabelsAndDisplay() {
         controls.taylorSeriesCustomCenterImInput.value = state.taylorSeriesCustomCenter.im.toFixed(1);
     }
 
-    const streamlineFlowCheckbox = controls.enableStreamlineFlowCb || document.getElementById('enable_streamline_flow_cb');
-    if (streamlineFlowCheckbox) {
-        streamlineFlowCheckbox.checked = state.streamlineFlowEnabled;
+    if (controls.enableStreamlineFlowCb) {
+        controls.enableStreamlineFlowCb.checked = state.streamlineFlowEnabled;
     }
     
     if (controls.streamlineOptionsDetailsDiv && controls.enableStreamlineFlowCb) {
@@ -230,6 +228,13 @@ function updateSliderLabelsAndDisplay() {
         }
     }
 
+    if (typeof syncLaplacePlayPauseButton === 'function') {
+        syncLaplacePlayPauseButton();
+    }
+    if (typeof syncLaplaceWindingSyncButton === 'function') {
+        syncLaplaceWindingSyncButton();
+    }
+
     
     } catch (error) {
         console.error("Error in updateSliderLabelsAndDisplay:", error);
@@ -319,15 +324,14 @@ function updateTitlesAndGlobalUI() {
         controls.inputShapeSelector.disabled = true;
         
         // Update 3D panel title based on visualization mode
-        const laplace3DTitle = document.querySelector('#laplace_3d_column .section-title span');
-        if (laplace3DTitle) {
+        if (controls.laplace3DTitleLabel) {
             const vizMode = state.laplaceVizMode || 'magnitude';
             if (vizMode === 'magnitude') {
-                laplace3DTitle.innerHTML = '3D Surface: |F(s)| Magnitude';
+                controls.laplace3DTitleLabel.innerHTML = '3D Surface: |F(s)| Magnitude';
             } else if (vizMode === 'phase') {
-                laplace3DTitle.innerHTML = '3D Surface: ∠F(s) Phase';
+                controls.laplace3DTitleLabel.innerHTML = '3D Surface: ∠F(s) Phase';
             } else {
-                laplace3DTitle.innerHTML = '3D Surface: Combined View';
+                controls.laplace3DTitleLabel.innerHTML = '3D Surface: Combined View';
             }
         }
         

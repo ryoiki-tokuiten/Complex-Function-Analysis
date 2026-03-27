@@ -98,14 +98,6 @@ function buildPlanarLayerCacheKey(isWPlane) {
     return keyParts.join('|');
 }
 
-function buildWPlanarTransformedLayerCacheKey() {
-    return buildPlanarLayerCacheKey(true);
-}
-
-function buildZPlanarInputLayerCacheKey() {
-    return buildPlanarLayerCacheKey(false);
-}
-
 function ensurePlanarLayerCacheCanvas(cacheObj, width, height) {
     if (width <= 0 || height <= 0) return null;
     if (!cacheObj.canvas) {
@@ -124,14 +116,6 @@ function ensurePlanarLayerCacheCanvas(cacheObj, width, height) {
     return cacheObj.canvas;
 }
 
-function ensureWPlanarTransformedLayerCacheCanvas(width, height) {
-    return ensurePlanarLayerCacheCanvas(wPlanarTransformedLayerCache, width, height);
-}
-
-function ensureZPlanarInputLayerCacheCanvas(width, height) {
-    return ensurePlanarLayerCacheCanvas(zPlanarInputLayerCache, width, height);
-}
-
 function shouldUseWPlanarTransformedLayerCache() {
     if (state.taylorSeriesEnabled) return false;
     if (state.riemannSphereViewEnabled || state.splitViewEnabled) return false;
@@ -145,27 +129,6 @@ function shouldUseZPlanarInputLayerCache() {
     if (state.riemannSphereViewEnabled && !state.splitViewEnabled) return false;
     if (state.panStateZ && state.panStateZ.isPanning) return false;
     return true;
-}
-
-function ensureZPlanarInputLayerCacheCanvas(width, height) {
-    if (width <= 0 || height <= 0) return null;
-    if (!zPlanarInputLayerCache.canvas) {
-        zPlanarInputLayerCache.canvas = document.createElement('canvas');
-        zPlanarInputLayerCache.ctx = zPlanarInputLayerCache.canvas.getContext('2d');
-        if (!zPlanarInputLayerCache.ctx) {
-            zPlanarInputLayerCache.canvas = null;
-            return null;
-        }
-    }
-    if (
-        zPlanarInputLayerCache.canvas.width !== width ||
-        zPlanarInputLayerCache.canvas.height !== height
-    ) {
-        zPlanarInputLayerCache.canvas.width = width;
-        zPlanarInputLayerCache.canvas.height = height;
-        zPlanarInputLayerCache.key = null;
-    }
-    return zPlanarInputLayerCache.canvas;
 }
 
 function drawZetaUndefinedRegionOverlay(ctx, planeParams) {
@@ -309,7 +272,7 @@ function drawZPlaneContent(){
             if (state.probeActive) {
                 drawSphereProbeAndNeighborhood(layerCtx, cSP, state.probeZ, state.probeNeighborhoodSize, null);
             }
-        }, 'raster');
+        }, 'capture');
     }else{ 
         
         if(state.domainColoringEnabled && domainColoringDirty){renderPlanarDomainColoring(zDomainColorCtx,zPlaneParams,false,curFunc);} 
@@ -345,9 +308,9 @@ function drawZPlaneContent(){
         } else {
             const useCachedInputLayer = shouldUseZPlanarInputLayerCache();
             if (useCachedInputLayer) {
-                const cacheCanvas = ensureZPlanarInputLayerCacheCanvas(zPlaneParams.width, zPlaneParams.height);
+                const cacheCanvas = ensurePlanarLayerCacheCanvas(zPlanarInputLayerCache, zPlaneParams.width, zPlaneParams.height);
                 const cacheCtx = zPlanarInputLayerCache.ctx;
-                const cacheKey = buildZPlanarInputLayerCacheKey();
+                const cacheKey = buildPlanarLayerCacheKey(false);
                 if (cacheCanvas && cacheCtx) {
                     if (zPlanarInputLayerCache.key !== cacheKey) {
                         cacheCtx.setTransform(1, 0, 0, 1, 0, 0);
@@ -469,6 +432,16 @@ function drawWPlaneContent() {
 
         if (state.taylorSeriesEnabled && !isRiemannW) {
             drawPlaneLayer(wCtx, wPlaneParams, 'w', (layerCtx) => {
+                drawTaylorAxes(
+                    layerCtx,
+                    wPlaneParams,
+                    state.taylorSeriesColorAxisX,
+                    state.taylorSeriesColorAxisY,
+                    'Re(w_approx)',
+                    'Im(w_approx)'
+                );
+            }, 'raster');
+            drawPlaneLayer(wCtx, wPlaneParams, 'w', (layerCtx) => {
                 drawPlanarTaylorApproximation(
                     layerCtx,
                     wPlaneParams,
@@ -476,9 +449,10 @@ function drawWPlaneContent() {
                     state.taylorSeriesCenter,
                     state.taylorSeriesOrder,
                     state.taylorSeriesColorAxisX,
-                    state.taylorSeriesColorAxisY
+                    state.taylorSeriesColorAxisY,
+                    { includeAxes: false }
                 );
-            }, 'raster');
+            }, 'capture');
         } else { // This 'else' corresponds to !(state.taylorSeriesEnabled && !isRiemannW)
             if (isRiemannW) { // This is for the 2D canvas Riemann sphere
                  const cSP = sphereViewParams.w;
@@ -494,13 +468,13 @@ function drawWPlaneContent() {
                 drawPlaneLayer(wCtx, wPlaneParams, 'w', (layerCtx) => {
                     drawRiemannSphereBase(layerCtx, cSP, wPlaneParams);
                     drawSphereGridAndShape(layerCtx, cSP, wPlaneParams, true, curFunc);
-                }, 'raster');
+                }, 'capture');
             } else { // Planar w-plane view
                 const useCachedLayer = shouldUseWPlanarTransformedLayerCache();
                 if (useCachedLayer) {
-                    const cacheCanvas = ensureWPlanarTransformedLayerCacheCanvas(wPlaneParams.width, wPlaneParams.height);
+                    const cacheCanvas = ensurePlanarLayerCacheCanvas(wPlanarTransformedLayerCache, wPlaneParams.width, wPlaneParams.height);
                     const cacheCtx = wPlanarTransformedLayerCache.ctx;
-                    const cacheKey = buildWPlanarTransformedLayerCacheKey();
+                    const cacheKey = buildPlanarLayerCacheKey(true);
                     if (cacheCanvas && cacheCtx) {
                         if (wPlanarTransformedLayerCache.key !== cacheKey) {
                             cacheCtx.setTransform(1, 0, 0, 1, 0, 0);
@@ -554,7 +528,7 @@ function drawWPlaneContent() {
                 const cSP = sphereViewParams.w;
                 drawPlaneLayer(wCtx, wPlaneParams, 'w', (layerCtx) => {
                     drawSphereProbeAndNeighborhood(layerCtx, cSP, state.probeZ, state.probeNeighborhoodSize, curFunc);
-                }, 'raster');
+                }, 'capture');
             } else { // Planar W-plane
                 drawPlaneLayer(wCtx, wPlaneParams, 'w', (layerCtx) => {
                     drawPlanarTransformedProbe(layerCtx, wPlaneParams, curFunc);

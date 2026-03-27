@@ -93,53 +93,28 @@ function drawMappedLineSetOnSphere(ctx, cSP, z_pts_src_arr, col, isWP, tf) {
     });
 }
 
+function getSphereSourcePointSets(isWP) {
+    const pointSets = generateCurrentInputShapePointSets(zPlaneParams, {
+        currentFunction: state.currentFunction,
+        zetaContinuationEnabled: state.zetaContinuationEnabled,
+        curvePoints: NUM_POINTS_CURVE
+    });
 
-function getSphereSourcePoints(inputShape, zPlaneParams, sphereCenterRe, sphereCenterIm, sphereRadius) {
-    const { currentVisXRange: zxR_cv, currentVisYRange: zyR_cv } = zPlaneParams;
-    const zpgd = state.gridDensity;
-    const pps_other_shapes = NUM_POINTS_CURVE / 2; 
-    let point_sets = []; 
-
-    if (inputShape === 'grid_cartesian') {
-        const nL = SPHERE_GRID_LINES; 
-        const range = Math.max(5, sphereRadius * 2.5); 
-
-        for(let i=0; i<=nL; i++) {
-            const yv = sphereCenterIm - range/2 + (i/nL)*range;
-            let lps = []; for(let j=0; j<=pps_other_shapes; j++) lps.push({re: sphereCenterRe - range/2 + (j/pps_other_shapes)*range, im:yv});
-            point_sets.push({points:lps, color: COLOR_Z_GRID_HORZ}); 
-        }
-        for(let i=0; i<=nL; i++) {
-            const xv = sphereCenterRe - range/2 + (i/nL)*range;
-            let lps = []; for(let j=0; j<=pps_other_shapes; j++) lps.push({re:xv, im: sphereCenterIm - range/2 + (j/pps_other_shapes)*range});
-            point_sets.push({points:lps, color: COLOR_Z_GRID_VERT});
-        }
-    } else if (inputShape === 'grid_polar') {
-        const maxR_input = Math.max(Math.abs(zxR_cv[0]), Math.abs(zxR_cv[1]), Math.abs(zyR_cv[0]), Math.abs(zyR_cv[1]), 0.1);
-        const numRadial = zpgd; const numAngular = Math.max(4, zpgd);
-        for (let i = 0; i < numAngular; i++) {const a = (i / numAngular) * 2 * Math.PI; let pts = []; for (let j = 0; j <= pps_other_shapes; j++) pts.push({ re: (j / pps_other_shapes) * maxR_input * Math.cos(a), im: (j / pps_other_shapes) * maxR_input * Math.sin(a) }); point_sets.push({ points: pts, color: COLOR_POLAR_ANGULAR });}
-        for (let i = 1; i <= numRadial; i++) {const r = (i / numRadial) * maxR_input; let pts = []; for (let j = 0; j <= pps_other_shapes; j++) { const t = (j / pps_other_shapes) * 2 * Math.PI; pts.push({ re: r * Math.cos(t), im: r * Math.sin(t) }); } point_sets.push({ points: pts, color: COLOR_POLAR_RADIAL });}
-    } else if (inputShape === 'grid_logpolar') {
-        const maxR_input = Math.max(Math.abs(zxR_cv[0]), Math.abs(zxR_cv[1]), Math.abs(zyR_cv[0]), Math.abs(zyR_cv[1]), 0.1); const minR_input = 0.05; const maxLogR = Math.log(maxR_input); const minLogR = Math.log(minR_input); const numLogRadial = zpgd; const numAngular = Math.max(4, zpgd);
-        for (let i = 0; i < numAngular; i++) {const a = (i / numAngular) * 2 * Math.PI; let pts = []; for (let j = 0; j <= pps_other_shapes; j++) { const lr = minLogR + (j/pps_other_shapes) * (maxLogR - minLogR); pts.push({ re: Math.exp(lr) * Math.cos(a), im: Math.exp(lr) * Math.sin(a) });} point_sets.push({ points: pts, color: COLOR_LOGPOLAR_ANGULAR });}
-        for (let i = 0; i <= numLogRadial; i++) {const lr = minLogR + (i / numLogRadial) * (maxLogR - minLogR); const r = Math.exp(lr); let pts = []; for (let j = 0; j <= pps_other_shapes; j++) { const t = (j / pps_other_shapes) * 2 * Math.PI; pts.push({ re: r * Math.cos(t), im: r * Math.sin(t) }); } point_sets.push({ points: pts, color: COLOR_LOGPOLAR_EXP_R });}
-    } else if (inputShape === 'empty_grid') { }
-    else if (inputShape === 'strip_horizontal') {let p1 = [], p2 = []; for(let i=0; i<=pps_other_shapes; ++i) { const x = zxR_cv[0] + i * (zxR_cv[1] - zxR_cv[0]) / pps_other_shapes; p1.push({re: x, im: state.stripY1}); p2.push({re: x, im: state.stripY2});} point_sets.push({points: p1, color: COLOR_STRIP_LINES}); point_sets.push({points: p2, color: COLOR_STRIP_LINES});}
-    else if (inputShape === 'sector_angular') {const a1 = state.sectorAngle1 * Math.PI / 180, a2 = state.sectorAngle2 * Math.PI / 180; const rMin = state.sectorRMin, rMax = state.sectorRMax; let rd1=[], rd2=[], acMin=[], acMax=[]; for(let i=0; i<=pps_other_shapes/2; ++i) { rd1.push({re: (rMin + i*(rMax-rMin)/(pps_other_shapes/2)) * Math.cos(a1), im: (rMin + i*(rMax-rMin)/(pps_other_shapes/2)) * Math.sin(a1)}); } for(let i=0; i<=pps_other_shapes/2; ++i) { rd2.push({re: (rMin + i*(rMax-rMin)/(pps_other_shapes/2)) * Math.cos(a2), im: (rMin + i*(rMax-rMin)/(pps_other_shapes/2)) * Math.sin(a2)}); } for(let i=0; i<=pps_other_shapes/2; ++i) { const ang = a1 + i*(a2-a1)/(pps_other_shapes/2); acMin.push({re: rMin * Math.cos(ang), im: rMin * Math.sin(ang)}); } for(let i=0; i<=pps_other_shapes/2; ++i) { const ang = a1 + i*(a2-a1)/(pps_other_shapes/2); acMax.push({re: rMax * Math.cos(ang), im: rMax * Math.sin(ang)}); } point_sets.push({points:rd1, color: COLOR_SECTOR_LINES}); point_sets.push({points:rd2, color: COLOR_SECTOR_LINES}); point_sets.push({points:acMin, color: COLOR_SECTOR_LINES}); point_sets.push({points:acMax, color: COLOR_SECTOR_LINES});}
-    else if (inputShape === 'line') {
-        let hzp = generateLinePoints(zxR_cv[0], zxR_cv[1], state.b0, pps_other_shapes);
-        point_sets.push({points:hzp,color:COLOR_INPUT_SHAPE_Z});
-        let vzp = generateVerticalLinePoints(state.a0, zyR_cv[0], zyR_cv[1], pps_other_shapes);
-        point_sets.push({points:vzp,color:COLOR_INPUT_LINE_IM_Z});
+    if (!isWP) {
+        return pointSets;
     }
-    else { 
-        let spm=[], col = COLOR_INPUT_SHAPE_Z;
-        if(inputShape==='circle') spm = generateCirclePoints(state.a0, state.b0, state.circleR, pps_other_shapes);
-        else if(inputShape==='ellipse') spm = generateEllipsePoints(state.a0, state.b0, state.ellipseA, state.ellipseB, pps_other_shapes);
-        else if(inputShape==='hyperbola') spm = generateHyperbolaPoints(state.a0, state.b0, state.hyperbolaA, state.hyperbolaB, pps_other_shapes);
-        point_sets.push({points:spm, color:col});
+
+    return prepareInputShapePointSetsForMapping(pointSets, {
+        currentFunction: state.currentFunction,
+        zetaContinuationEnabled: state.zetaContinuationEnabled
+    });
+}
+
+function getSpherePointSetColor(pointSet, isWP) {
+    if (!isWP) {
+        return COLOR_SPHERE_GRID;
     }
-    return point_sets;
+    return pointSet.color || COLOR_SPHERE_GRID;
 }
 
 function drawSphereGridAndShape(ctx, cSP, cDOMP, isWP, tf = null) {
@@ -167,29 +142,17 @@ function drawSphereGridAndShape(ctx, cSP, cDOMP, isWP, tf = null) {
         return;
     }
 
-    const sphereCenterRe = (zPlaneParams.currentVisXRange[0] + zPlaneParams.currentVisXRange[1]) / 2;
-    const sphereCenterIm = (zPlaneParams.currentVisYRange[0] + zPlaneParams.currentVisYRange[1]) / 2;
-    const sphereRadius = Math.max(zPlaneParams.currentVisXRange[1]-sphereCenterRe, zPlaneParams.currentVisYRange[1]-sphereCenterIm);
-
-    const sourcePointSets = getSphereSourcePoints(state.currentInputShape, zPlaneParams, sphereCenterRe, sphereCenterIm, sphereRadius);
+    const sourcePointSets = getSphereSourcePointSets(isWP);
 
     sourcePointSets.forEach(set => {
-        let colorToUse = set.color;
-        if (!isWP) { 
-            colorToUse = COLOR_SPHERE_GRID; 
-        } else { 
-            if (state.currentFunction === 'zeta') {
-                const avgRe = set.points.reduce((acc, p) => acc + (p ? p.re : 0), 0) / (set.points.filter(p=>p).length || 1) ;
-                if (state.zetaContinuationEnabled && avgRe < ZETA_REFLECTION_POINT_RE) {
-                     if (colorToUse === COLOR_Z_GRID_HORZ) colorToUse = COLOR_Z_GRID_HORZ_FUNCTIONAL_EQ;
-                     if (colorToUse === COLOR_Z_GRID_VERT) colorToUse = COLOR_Z_GRID_VERT_FUNCTIONAL_EQ;
-                } else if (!state.zetaContinuationEnabled && avgRe <= ZETA_REFLECTION_POINT_RE && colorToUse === COLOR_Z_GRID_VERT) {
-                     colorToUse = COLOR_Z_GRID_ZETA_UNDEFINED_SUM_REGION;
-                }
-            }
-        }
-        
-        drawMappedLineSetOnSphere(ctx, cSP, [set.points], colorToUse, isWP, isWP ? tf : null);
+        drawMappedLineSetOnSphere(
+            ctx,
+            cSP,
+            [set.points],
+            getSpherePointSetColor(set, isWP),
+            isWP,
+            isWP ? tf : null
+        );
     });
 }
 

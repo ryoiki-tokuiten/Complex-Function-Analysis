@@ -1,94 +1,92 @@
 
+function pushPlotlyLineTrace(traces, xCoords, yCoords, zCoords, options = {}) {
+    if (xCoords.length < 2) {
+        return;
+    }
+
+    traces.push({
+        type: 'scatter3d',
+        mode: 'lines',
+        x: [...xCoords],
+        y: [...yCoords],
+        z: [...zCoords],
+        text: options.text ? [...options.text] : undefined,
+        name: options.name,
+        line: {
+            color: options.color || '#FFFFFF',
+            width: options.width || 2,
+            shape: options.shape || 'spline'
+        },
+        hoverinfo: options.hoverinfo || 'text'
+    });
+}
+
+function appendMappedSphereLineTraces(traces, sourcePoints, transformPoint, options = {}) {
+    const xCoords = [];
+    const yCoords = [];
+    const zCoords = [];
+    const textCoords = [];
+
+    const flush = () => {
+        pushPlotlyLineTrace(traces, xCoords, yCoords, zCoords, {
+            color: options.color,
+            name: options.name,
+            text: options.includeText ? textCoords : undefined,
+            hoverinfo: options.hoverinfo,
+            shape: options.shape
+        });
+        xCoords.length = 0;
+        yCoords.length = 0;
+        zCoords.length = 0;
+        textCoords.length = 0;
+    };
+
+    sourcePoints.forEach(sourcePoint => {
+        if (!sourcePoint || sourcePoint.re === undefined || sourcePoint.im === undefined) {
+            flush();
+            return;
+        }
+
+        const mappedPoint = transformPoint(sourcePoint);
+        if (!mappedPoint || !Number.isFinite(mappedPoint.re) || !Number.isFinite(mappedPoint.im)) {
+            flush();
+            return;
+        }
+
+        const spherePoint = complexToSphere(mappedPoint.re, mappedPoint.im);
+        xCoords.push(spherePoint.x);
+        yCoords.push(spherePoint.y);
+        zCoords.push(spherePoint.z);
+
+        if (options.includeText) {
+            textCoords.push(`w = ${mappedPoint.re.toFixed(3)} + ${mappedPoint.im.toFixed(3)}i`);
+        }
+    });
+
+    flush();
+}
+
 function getPlotlyMappedData(transformFunc) {
     const traces = [];
-    const currentInputShape = state.currentInputShape;
-
-    
-    
-    const currentZPlaneParams = zPlaneParams; 
-
-    
-    
-    const centerRe = (currentZPlaneParams.currentVisXRange[0] + currentZPlaneParams.currentVisXRange[1]) / 2;
-    const centerIm = (currentZPlaneParams.currentVisYRange[0] + currentZPlaneParams.currentVisYRange[1]) / 2;
-    
-    const radiusX = (currentZPlaneParams.currentVisXRange[1] - currentZPlaneParams.currentVisXRange[0]) / 2;
-    const radiusY = (currentZPlaneParams.currentVisYRange[1] - currentZPlaneParams.currentVisYRange[0]) / 2;
-    const viewRadius = Math.sqrt(radiusX * radiusX + radiusY * radiusY); 
-    
-    const inputRadius = Math.max(viewRadius, 0.1);
-
-
-    const sourcePointSets = getSphereSourcePoints(
-        currentInputShape,
-        currentZPlaneParams, 
-        centerRe,           
-        centerIm,           
-        inputRadius         
-    );
+    const sourcePointSets = getSphereSourcePointSets(true);
 
     sourcePointSets.forEach(set => {
-        if (!set.points || set.points.length === 0) return;
-
-        const xCoords = [];
-        const yCoords = [];
-        const zCoords = [];
-        const textCoords = []; 
-        let segmentActive = false;
-
-        for (const z_orig of set.points) {
-            if (!z_orig || z_orig.re === undefined || z_orig.im === undefined) {
-                if (segmentActive) { 
-                    traces.push({
-                        type: 'scatter3d', mode: 'lines',
-                        x: [...xCoords], y: [...yCoords], z: [...zCoords], text: [...textCoords],
-                        line: { color: set.color || '#FFFFFF', width: 2, shape: 'spline' },
-                        hoverinfo: 'text'
-                    });
-                    xCoords.length = 0; yCoords.length = 0; zCoords.length = 0; textCoords.length = 0;
-                    segmentActive = false;
+        appendMappedSphereLineTraces(
+            traces,
+            set.points,
+            sourcePoint => {
+                if (state.currentFunction === 'zeta' && !state.zetaContinuationEnabled && sourcePoint.re <= ZETA_REFLECTION_POINT_RE) {
+                    return null;
                 }
-                continue;
+                return transformFunc ? transformFunc(sourcePoint.re, sourcePoint.im) : sourcePoint;
+            },
+            {
+                color: getSpherePointSetColor(set, true),
+                includeText: true,
+                hoverinfo: 'text',
+                shape: 'spline'
             }
-
-            let transformedPoint = { re: NaN, im: NaN };
-            if (state.currentFunction === 'zeta' && !state.zetaContinuationEnabled && z_orig.re <= ZETA_REFLECTION_POINT_RE) {
-                
-            } else {
-                transformedPoint = transformFunc ? transformFunc(z_orig.re, z_orig.im) : z_orig;
-            }
-
-            if (isNaN(transformedPoint.re) || isNaN(transformedPoint.im) || !isFinite(transformedPoint.re) || !isFinite(transformedPoint.im)) {
-                if (segmentActive) { 
-                    traces.push({
-                        type: 'scatter3d', mode: 'lines',
-                        x: [...xCoords], y: [...yCoords], z: [...zCoords], text: [...textCoords],
-                        line: { color: set.color || '#FFFFFF', width: 2, shape: 'spline' },
-                        hoverinfo: 'text'
-                    });
-                    xCoords.length = 0; yCoords.length = 0; zCoords.length = 0; textCoords.length = 0;
-                    segmentActive = false;
-                }
-                continue;
-            }
-
-            
-            const spherePoint = complexToSphere(transformedPoint.re, transformedPoint.im);
-            xCoords.push(spherePoint.x);
-            yCoords.push(spherePoint.y);
-            zCoords.push(spherePoint.z);
-            textCoords.push(`w = ${transformedPoint.re.toFixed(3)} + ${transformedPoint.im.toFixed(3)}i`);
-            segmentActive = true;
-        }
-
-        if (segmentActive && xCoords.length > 1) { 
-            traces.push({
-                type: 'scatter3d', mode: 'lines',
-                x: xCoords, y: yCoords, z: zCoords, text: textCoords,
-                line: { color: set.color || '#FFFFFF', width: 2, shape: 'spline' },
-                hoverinfo: 'text'
-            });
-        }
+        );
     });
 
     
@@ -110,57 +108,37 @@ function getPlotlyMappedData(transformFunc) {
 
         
         const n_pts_circle = 30;
-        const circle_x = [], circle_y = [], circle_z = [];
+        const circlePoints = [];
         for (let i = 0; i <= n_pts_circle; i++) {
             const angle = (i / n_pts_circle) * 2 * Math.PI;
-            const z_circle_pt = {
+            circlePoints.push({
                 re: sourceProbeZ.re + neighborhoodSize * Math.cos(angle),
                 im: sourceProbeZ.im + neighborhoodSize * Math.sin(angle)
-            };
-            const w_circle_pt = transformFunc(z_circle_pt.re, z_circle_pt.im);
-            if (!isNaN(w_circle_pt.re) && !isNaN(w_circle_pt.im) && isFinite(w_circle_pt.re) && isFinite(w_circle_pt.im)) {
-                const sphere_w_pt = complexToSphere(w_circle_pt.re, w_circle_pt.im);
-                circle_x.push(sphere_w_pt.x);
-                circle_y.push(sphere_w_pt.y);
-                circle_z.push(sphere_w_pt.z);
-            } else { 
-                if (circle_x.length > 1) traces.push({ type: 'scatter3d', mode: 'lines', x: [...circle_x], y: [...circle_y], z: [...circle_z], name: 'Probe Neighborhood', line: { color: COLOR_PROBE_NEIGHBORHOOD, width: 2 }, hoverinfo: 'name' });
-                circle_x.length = 0; circle_y.length = 0; circle_z.length = 0;
-            }
+            });
         }
-        if (circle_x.length > 1) traces.push({ type: 'scatter3d', mode: 'lines', x: circle_x, y: circle_y, z: circle_z, name: 'Probe Neighborhood', line: { color: COLOR_PROBE_NEIGHBORHOOD, width: 2 }, hoverinfo: 'name' });
+        appendMappedSphereLineTraces(traces, circlePoints, point => transformFunc(point.re, point.im), {
+            color: COLOR_PROBE_NEIGHBORHOOD,
+            name: 'Probe Neighborhood',
+            hoverinfo: 'name'
+        });
 
-        
-        
-        const horz_x = [], horz_y = [], horz_z = [];
         const h_segment = neighborhoodSize / PROBE_CROSSHAIR_SIZE_FACTOR;
-        for(let i = -1; i <= 1; i+=0.1) { 
-            const z_h_pt = { re: sourceProbeZ.re + i * h_segment, im: sourceProbeZ.im };
-            const w_h_pt = transformFunc(z_h_pt.re, z_h_pt.im);
-             if (!isNaN(w_h_pt.re) && !isNaN(w_h_pt.im) && isFinite(w_h_pt.re) && isFinite(w_h_pt.im)) {
-                const sphere_w_h_pt = complexToSphere(w_h_pt.re, w_h_pt.im);
-                horz_x.push(sphere_w_h_pt.x); horz_y.push(sphere_w_h_pt.y); horz_z.push(sphere_w_h_pt.z);
-             } else {
-                if (horz_x.length > 1) traces.push({ type: 'scatter3d', mode: 'lines', x: [...horz_x], y: [...horz_y], z: [...horz_z], name: 'Probe Crosshair (Horizontal)', line: { color: COLOR_PROBE_CONFORMAL_LINE_W_H, width: 2 }, hoverinfo: 'name' });
-                horz_x.length = 0; horz_y.length = 0; horz_z.length = 0;
-             }
+        const horizontalProbePoints = [];
+        const verticalProbePoints = [];
+        for (let i = -1; i <= 1; i += 0.1) {
+            horizontalProbePoints.push({ re: sourceProbeZ.re + i * h_segment, im: sourceProbeZ.im });
+            verticalProbePoints.push({ re: sourceProbeZ.re, im: sourceProbeZ.im + i * h_segment });
         }
-        if (horz_x.length > 1) traces.push({ type: 'scatter3d', mode: 'lines', x: horz_x, y: horz_y, z: horz_z, name: 'Probe Crosshair (Horizontal)', line: { color: COLOR_PROBE_CONFORMAL_LINE_W_H, width: 2 }, hoverinfo: 'name' });
-
-        
-        const vert_x = [], vert_y = [], vert_z = [];
-         for(let i = -1; i <= 1; i+=0.1) { 
-            const z_v_pt = { re: sourceProbeZ.re, im: sourceProbeZ.im + i * h_segment };
-            const w_v_pt = transformFunc(z_v_pt.re, z_v_pt.im);
-             if (!isNaN(w_v_pt.re) && !isNaN(w_v_pt.im) && isFinite(w_v_pt.re) && isFinite(w_v_pt.im)) {
-                const sphere_w_v_pt = complexToSphere(w_v_pt.re, w_v_pt.im);
-                vert_x.push(sphere_w_v_pt.x); vert_y.push(sphere_w_v_pt.y); vert_z.push(sphere_w_v_pt.z);
-             } else {
-                if (vert_x.length > 1) traces.push({ type: 'scatter3d', mode: 'lines', x: [...vert_x], y: [...vert_y], z: [...vert_z], name: 'Probe Crosshair (Vertical)', line: { color: COLOR_PROBE_CONFORMAL_LINE_W_V, width: 2 }, hoverinfo: 'name' });
-                vert_x.length = 0; vert_y.length = 0; vert_z.length = 0;
-             }
-        }
-        if (vert_x.length > 1) traces.push({ type: 'scatter3d', mode: 'lines', x: vert_x, y: vert_y, z: vert_z, name: 'Probe Crosshair (Vertical)', line: { color: COLOR_PROBE_CONFORMAL_LINE_W_V, width: 2 }, hoverinfo: 'name' });
+        appendMappedSphereLineTraces(traces, horizontalProbePoints, point => transformFunc(point.re, point.im), {
+            color: COLOR_PROBE_CONFORMAL_LINE_W_H,
+            name: 'Probe Crosshair (Horizontal)',
+            hoverinfo: 'name'
+        });
+        appendMappedSphereLineTraces(traces, verticalProbePoints, point => transformFunc(point.re, point.im), {
+            color: COLOR_PROBE_CONFORMAL_LINE_W_V,
+            name: 'Probe Crosshair (Vertical)',
+            hoverinfo: 'name'
+        });
     }
 
 

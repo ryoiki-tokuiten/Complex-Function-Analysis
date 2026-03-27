@@ -14,6 +14,9 @@ function startLaplaceAnimation() {
     
     state.laplaceAnimationPlaying = true;
     state.laplaceAnimationTime = 0; // Start from beginning
+    if (typeof syncLaplacePlayPauseButton === 'function') {
+        syncLaplacePlayPauseButton();
+    }
     laplaceLastFrameTime = performance.now();
     
     function animateFrame(timestamp) {
@@ -66,6 +69,9 @@ function stopLaplaceAnimation() {
         cancelAnimationFrame(laplaceAnimationHandle);
         laplaceAnimationHandle = null;
     }
+    if (typeof syncLaplacePlayPauseButton === 'function') {
+        syncLaplacePlayPauseButton();
+    }
 }
 
 /**
@@ -85,6 +91,9 @@ function toggleLaplaceAnimation() {
 function resetLaplaceAnimation() {
     stopLaplaceAnimation();
     state.laplaceAnimationTime = 0;
+    if (typeof syncLaplacePlayPauseButton === 'function') {
+        syncLaplacePlayPauseButton();
+    }
     requestRedrawAll();
 }
 
@@ -94,5 +103,8 @@ function resetLaplaceAnimation() {
 function showFullLaplaceSpiral() {
     stopLaplaceAnimation();
     state.laplaceAnimationTime = 1.0;
+    if (typeof syncLaplacePlayPauseButton === 'function') {
+        syncLaplacePlayPauseButton();
+    }
     requestRedrawAll();
 }

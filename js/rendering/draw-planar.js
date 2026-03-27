@@ -1,71 +1,115 @@
-const MAX_VECTOR_DISPLAY_LENGTH_CANVAS = 75; 
+const MAX_VECTOR_DISPLAY_LENGTH_CANVAS = 75;
 
-function drawRadialDiscreteSteps(ctx, planeParams, currentFunctionKey, stepsCount) {
-    if (stepsCount < 2) return;
+function isRenderableComplexPoint(point) {
+    return !!(
+        point &&
+        typeof point.re === 'number' &&
+        typeof point.im === 'number' &&
+        Number.isFinite(point.re) &&
+        Number.isFinite(point.im)
+    );
+}
 
-    const transformFunc = transformFunctions[currentFunctionKey];
-    if (!transformFunc) return;
+function drawComplexLineSetOnPlane(ctx, planeParams, points) {
+    ctx.beginPath();
+    let segmentOpen = false;
 
-    let xMin, xMax;
-    switch (currentFunctionKey) {
-        case 'cos':
-        case 'sin':
-        case 'tan':
-        case 'sec':
-            xMin = 0; xMax = Math.PI / 2;
-            break;
-        case 'exp':
-            xMin = -5; xMax = 5;
-            break;
-        case 'ln':
-            xMin = 0.01; xMax = 10;
-            break;
-        case 'polynomial':
-            xMin = 0; xMax = 5;
-            break;
-        case 'mobius':
-        case 'reciprocal':
-            xMin = -5; xMax = 5;
-            break;
-        case 'zeta':
-            xMin = -10; xMax = 10;
-            break;
-        default:
-            xMin = -5; xMax = 5;
+    points.forEach(point => {
+        if (!isRenderableComplexPoint(point)) {
+            if (segmentOpen) {
+                ctx.stroke();
+                ctx.beginPath();
+                segmentOpen = false;
+            }
+            return;
+        }
+
+        const canvasPoint = mapToCanvasCoords(point.re, point.im, planeParams);
+        if (!segmentOpen) {
+            ctx.moveTo(canvasPoint.x, canvasPoint.y);
+            segmentOpen = true;
+        } else {
+            ctx.lineTo(canvasPoint.x, canvasPoint.y);
+        }
+    });
+
+    if (segmentOpen) {
+        ctx.stroke();
+    }
+}
+
+function drawPointSetCollectionOnPlane(ctx, planeParams, pointSets, options = {}) {
+    if (!pointSets || pointSets.length === 0) {
+        return;
     }
 
+    const colorResolver = options.colorResolver || (pointSet => pointSet.color);
+    const lineWidthResolver = options.lineWidthResolver || (pointSet => pointSet.lineWidth || LINE_WIDTH_NORMAL);
+    const preparePointSet = options.preparePointSet || (pointSet => pointSet);
+    const transformFunc = options.transformFunc || null;
+
     ctx.save();
-    ctx.setLineDash([4, 4]);
-    ctx.strokeStyle = 'rgba(255, 255, 0, 0.7)'; 
-    ctx.lineWidth = 1;
     ctx.lineJoin = 'round';
     ctx.lineCap = 'round';
 
-    const centerCanvas = mapToCanvasCoords(0, 0, planeParams); 
-
-    for (let i = 0; i < stepsCount; i++) {
-        const x = xMin + (i / (stepsCount - 1)) * (xMax - xMin);
-
-        if (currentFunctionKey === 'zeta' && Math.abs(x - 1.0) < 1e-9) continue;
-        if (currentFunctionKey === 'reciprocal' && Math.abs(x) < 1e-9) continue;
-        if (currentFunctionKey === 'ln' && x <= 1e-9) continue;
-
-        const w = transformFunc(x, 0);
-
-        if (w && typeof w.re === 'number' && typeof w.im === 'number' &&
-            isFinite(w.re) && isFinite(w.im)) {
-
-            const radiusWorld = Math.sqrt(w.re * w.re + w.im * w.im);
-            const radiusCanvas = radiusWorld * planeParams.scale.x; 
-
-            if (radiusCanvas < 0.5) continue; 
-
-            ctx.beginPath();
-            ctx.arc(centerCanvas.x, centerCanvas.y, radiusCanvas, 0, 2 * Math.PI);
-            ctx.stroke();
-        }
+    if (options.lineDash) {
+        ctx.setLineDash(options.lineDash);
     }
+    if (options.globalAlpha !== undefined) {
+        ctx.globalAlpha = options.globalAlpha;
+    }
+
+    pointSets.forEach(pointSet => {
+        const preparedPointSet = preparePointSet(pointSet, transformFunc);
+        const color = colorResolver(preparedPointSet);
+        const lineWidth = lineWidthResolver(preparedPointSet);
+        if (!color || !lineWidth) {
+            return;
+        }
+
+        ctx.lineWidth = lineWidth;
+        if (transformFunc) {
+            drawPlanarTransformedLine(ctx, planeParams, transformFunc, preparedPointSet.points, color);
+        } else {
+            ctx.strokeStyle = color;
+            drawComplexLineSetOnPlane(ctx, planeParams, preparedPointSet.points);
+        }
+    });
+
     ctx.restore();
+}
+
+function buildCurrentInputShapePointSets(planeParams, options = {}) {
+    return generateCurrentInputShapePointSets(planeParams, {
+        currentFunction: state.currentFunction,
+        zetaContinuationEnabled: state.zetaContinuationEnabled,
+        ...options
+    });
+}
+
+function buildMappedInputShapePointSets(options = {}) {
+    const basePointSets = buildCurrentInputShapePointSets(zPlaneParams, options);
+    return prepareInputShapePointSetsForMapping(basePointSets, {
+        currentFunction: options.currentFunction ?? state.currentFunction,
+        zetaContinuationEnabled: options.zetaContinuationEnabled ?? state.zetaContinuationEnabled
+    });
+}
+
+function drawRadialDiscreteSteps(ctx, planeParams, currentFunctionKey, stepsCount) {
+    const transformFunc = transformFunctions[currentFunctionKey];
+    if (typeof transformFunc !== 'function') {
+        return;
+    }
+
+    const radialPointSets = generateRadialDiscreteStepPointSets(currentFunctionKey, transformFunc, stepsCount)
+        .filter(pointSet => {
+            const radiusPoint = pointSet.points.find(Boolean);
+            return radiusPoint && Math.abs(radiusPoint.re * planeParams.scale.x) >= 0.5;
+        });
+
+    drawPointSetCollectionOnPlane(ctx, planeParams, radialPointSets, {
+        lineDash: [4, 4]
+    });
 }
 
 function drawStreamlinesOnZPlane(ctx, planeParams, state) {
@@ -154,58 +198,47 @@ function drawStreamlinesOnZPlane(ctx, planeParams, state) {
     ctx.restore();
 }
 
-function drawPlanarInputShape(ctx,planeParams){
-    ctx.save();
-    ctx.lineJoin = 'round';
-    ctx.lineCap = 'round';
-    let inputShapeToDraw=state.currentInputShape;let radiusToUse=state.circleR;ctx.lineWidth = (state.cauchyIntegralModeEnabled && (inputShapeToDraw === 'circle' || inputShapeToDraw === 'ellipse')) ? 3.5 : 2.5;ctx.strokeStyle = (state.cauchyIntegralModeEnabled && (inputShapeToDraw === 'circle' || inputShapeToDraw === 'ellipse')) ? COLOR_CAUCHY_CONTOUR_Z : COLOR_INPUT_SHAPE_Z;
-    if (inputShapeToDraw === 'image') {
+function drawPlanarInputShape(ctx, planeParams) {
+    const inputShape = state.currentInputShape;
+
+    if (inputShape === 'image') {
         if (typeof drawImageWithWebGL === 'function' && drawImageWithWebGL(ctx, planeParams, false)) {
-            // WebGL rendering successful
-        } else if (state.imagePoints && state.imagePoints.length > 0) {
+            return;
+        }
+
+        if (state.imagePoints && state.imagePoints.length > 0) {
+            ctx.save();
             ctx.globalAlpha = state.imageOpacity || 1.0;
             const size = state.imageSize || 2.0;
             const cx = state.a0 || 0;
             const cy = state.b0 || 0;
+
             for (let i = 0; i < state.imagePoints.length; i++) {
-                const pt = state.imagePoints[i];
-                const re = cx + pt.nx * (size / 2);
-                const im = cy + pt.ny * (size / 2);
-                const p_c = mapToCanvasCoords(re, im, planeParams);
-                ctx.fillStyle = pt.color;
-                ctx.fillRect(p_c.x - 1, p_c.y - 1, 2, 2); // 2x2 px dots
+                const point = state.imagePoints[i];
+                const re = cx + point.nx * (size / 2);
+                const im = cy + point.ny * (size / 2);
+                const canvasPoint = mapToCanvasCoords(re, im, planeParams);
+                ctx.fillStyle = point.color;
+                ctx.fillRect(canvasPoint.x - 1, canvasPoint.y - 1, 2, 2);
             }
-            ctx.globalAlpha = 1.0;
+
+            ctx.restore();
         }
-    } else if(inputShapeToDraw==='grid_cartesian'){
-    ctx.lineWidth = 1.5;
-    ctx.lineJoin = 'round';
-    ctx.lineCap = 'round';
-    const{currentVisXRange:xR,currentVisYRange:yR}=planeParams;const nL=state.gridDensity;for(let i=0;i<=nL;i++){const yv=yR[0]+(i/nL)*(yR[1]-yR[0]);ctx.strokeStyle=COLOR_Z_GRID_HORZ;ctx.beginPath();const ps=mapToCanvasCoords(xR[0],yv,planeParams),pe=mapToCanvasCoords(xR[1],yv,planeParams);ctx.moveTo(ps.x,ps.y);ctx.lineTo(pe.x,pe.y);ctx.stroke();}for(let i=0;i<=nL;i++){const xv=xR[0]+(i/nL)*(xR[1]-xR[0]);ctx.strokeStyle=(state.currentFunction==='zeta'&&!state.zetaContinuationEnabled&&xv<=ZETA_REFLECTION_POINT_RE)?COLOR_Z_GRID_ZETA_UNDEFINED_SUM_REGION:COLOR_Z_GRID_VERT;ctx.beginPath();const ps=mapToCanvasCoords(xv,yR[0],planeParams),pe=mapToCanvasCoords(xv,yR[1],planeParams);ctx.moveTo(ps.x,ps.y);ctx.lineTo(pe.x,pe.y);ctx.stroke();}}else if (inputShapeToDraw === 'grid_polar') {
-    ctx.lineWidth = 1.5;
-    ctx.lineJoin = 'round';
-    ctx.lineCap = 'round';
-    const { currentVisXRange: xR, currentVisYRange: yR } = planeParams;const maxR = Math.max(Math.abs(xR[0]), Math.abs(xR[1]), Math.abs(yR[0]), Math.abs(yR[1]), 0.1);const numRadialLines = state.gridDensity;const numAngularLines = Math.max(4, state.gridDensity); ctx.strokeStyle = COLOR_POLAR_ANGULAR;for (let i = 0; i < numAngularLines; i++) {const angle = (i / numAngularLines) * 2 * Math.PI;ctx.beginPath();const start = mapToCanvasCoords(0, 0, planeParams); const end = mapToCanvasCoords(maxR * Math.cos(angle), maxR * Math.sin(angle), planeParams);ctx.moveTo(start.x, start.y);ctx.lineTo(end.x, end.y);ctx.stroke();}ctx.strokeStyle = COLOR_POLAR_RADIAL;for (let i = 1; i <= numRadialLines; i++) {const r_val = (i / numRadialLines) * maxR;ctx.beginPath();for (let j = 0; j <= NUM_POINTS_CURVE; j++) {const t = (j / NUM_POINTS_CURVE) * 2 * Math.PI;const p_canvas = mapToCanvasCoords(r_val * Math.cos(t), r_val * Math.sin(t), planeParams);if (j === 0) ctx.moveTo(p_canvas.x, p_canvas.y);else ctx.lineTo(p_canvas.x, p_canvas.y);}ctx.closePath();ctx.stroke();}} else if (inputShapeToDraw === 'grid_logpolar') {
-    ctx.lineWidth = 1.5;
-    ctx.lineJoin = 'round';
-    ctx.lineCap = 'round';
-    const { currentVisXRange: xR, currentVisYRange: yR } = planeParams;const maxRVis = Math.max(Math.abs(xR[0]), Math.abs(xR[1]), Math.abs(yR[0]), Math.abs(yR[1]), 0.1);const minRVis = 0.05; const maxLogR = Math.log(maxRVis);const minLogR = Math.log(minRVis);const numLogRadialSteps = state.gridDensity;const numAngularLines = Math.max(4, state.gridDensity);ctx.strokeStyle = COLOR_LOGPOLAR_ANGULAR;for (let i = 0; i < numAngularLines; i++) {const angle = (i / numAngularLines) * 2 * Math.PI;ctx.beginPath();const start = mapToCanvasCoords(minRVis * Math.cos(angle), minRVis * Math.sin(angle), planeParams);const end = mapToCanvasCoords(maxRVis * Math.cos(angle), maxRVis * Math.sin(angle), planeParams);ctx.moveTo(start.x, start.y);ctx.lineTo(end.x, end.y);ctx.stroke();}ctx.strokeStyle = COLOR_LOGPOLAR_EXP_R;for (let i = 0; i <= numLogRadialSteps; i++) {const logR = minLogR + (i / numLogRadialSteps) * (maxLogR - minLogR);const r_val = Math.exp(logR);if (r_val > maxRVis * 1.1) continue; ctx.beginPath();for (let j = 0; j <= NUM_POINTS_CURVE; j++) {const t = (j / NUM_POINTS_CURVE) * 2 * Math.PI;const p_canvas = mapToCanvasCoords(r_val * Math.cos(t), r_val * Math.sin(t), planeParams);if (j === 0) ctx.moveTo(p_canvas.x, p_canvas.y);else ctx.lineTo(p_canvas.x, p_canvas.y);}ctx.closePath();ctx.stroke();}} else if (inputShapeToDraw === 'empty_grid') {} else if (inputShapeToDraw === 'strip_horizontal') {
-    ctx.lineWidth = 2.0;
-    ctx.lineJoin = 'round';
-    ctx.lineCap = 'round';
-    ctx.strokeStyle = COLOR_STRIP_LINES;const { currentVisXRange: xR } = planeParams;const y1_c = mapToCanvasCoords(0, state.stripY1, planeParams).y;const y2_c = mapToCanvasCoords(0, state.stripY2, planeParams).y;const x_min_c = mapToCanvasCoords(xR[0], 0, planeParams).x;const x_max_c = mapToCanvasCoords(xR[1], 0, planeParams).x;ctx.beginPath(); ctx.moveTo(x_min_c, y1_c); ctx.lineTo(x_max_c, y1_c); ctx.stroke();ctx.beginPath(); ctx.moveTo(x_min_c, y2_c); ctx.lineTo(x_max_c, y2_c); ctx.stroke();} else if (inputShapeToDraw === 'sector_angular') {
-    ctx.lineWidth = 2.0;
-    ctx.lineJoin = 'round';
-    ctx.lineCap = 'round';
-    ctx.strokeStyle = COLOR_SECTOR_LINES;const angle1_rad = state.sectorAngle1 * Math.PI / 180;const angle2_rad = state.sectorAngle2 * Math.PI / 180;const rMin = state.sectorRMin;const rMax = state.sectorRMax;let p_c;ctx.beginPath();p_c = mapToCanvasCoords(rMin * Math.cos(angle1_rad), rMin * Math.sin(angle1_rad), planeParams);ctx.moveTo(p_c.x, p_c.y);p_c = mapToCanvasCoords(rMax * Math.cos(angle1_rad), rMax * Math.sin(angle1_rad), planeParams);ctx.lineTo(p_c.x, p_c.y);ctx.stroke();ctx.beginPath();p_c = mapToCanvasCoords(rMin * Math.cos(angle2_rad), rMin * Math.sin(angle2_rad), planeParams);ctx.moveTo(p_c.x, p_c.y);p_c = mapToCanvasCoords(rMax * Math.cos(angle2_rad), rMax * Math.sin(angle2_rad), planeParams);ctx.lineTo(p_c.x, p_c.y);ctx.stroke();const N_ARC_POINTS = Math.max(10, NUM_POINTS_CURVE / 8);ctx.beginPath();for (let i = 0; i <= N_ARC_POINTS; i++) { const angle = angle1_rad + (i / N_ARC_POINTS) * (angle2_rad - angle1_rad);p_c = mapToCanvasCoords(rMin * Math.cos(angle), rMin * Math.sin(angle), planeParams);if (i === 0) ctx.moveTo(p_c.x, p_c.y); else ctx.lineTo(p_c.x, p_c.y);}ctx.stroke();ctx.beginPath();for (let i = 0; i <= N_ARC_POINTS; i++) {const angle = angle1_rad + (i / N_ARC_POINTS) * (angle2_rad - angle1_rad);p_c = mapToCanvasCoords(rMax * Math.cos(angle), rMax * Math.sin(angle), planeParams);if (i === 0) ctx.moveTo(p_c.x, p_c.y); else ctx.lineTo(p_c.x, p_c.y);}ctx.stroke();} else if(inputShapeToDraw==='line'){
-    ctx.lineWidth = 2.5;
-    ctx.lineJoin = 'round';
-    ctx.lineCap = 'round';
-    ctx.strokeStyle=COLOR_INPUT_SHAPE_Z; ctx.beginPath();const yb0c=mapToCanvasCoords(0,scY,planeParams).y,xminc=mapToCanvasCoords(planeParams.currentVisXRange[0],scY,planeParams).x,xmaxc=mapToCanvasCoords(planeParams.currentVisXRange[1],scY,planeParams).x;ctx.moveTo(xminc,yb0c);ctx.lineTo(xmaxc,yb0c);ctx.stroke();ctx.strokeStyle=COLOR_INPUT_LINE_IM_Z; ctx.beginPath();const xa0c=mapToCanvasCoords(scX,0,planeParams).x,yminc=mapToCanvasCoords(scX,planeParams.currentVisYRange[0],planeParams).y,ymaxc=mapToCanvasCoords(scX,planeParams.currentVisYRange[1],planeParams).y;ctx.moveTo(xa0c,yminc);ctx.lineTo(xa0c,ymaxc);ctx.stroke();} else if (inputShapeToDraw !== 'image'){ ctx.beginPath();let fPt=true;let scX = state.a0 || 0; let scY = state.b0 || 0; const getPts=(s)=>{if(s==='circle')return generateCirclePoints(scX,scY,radiusToUse,NUM_POINTS_CURVE).map(p=>({x:p.re,y:p.im}));if(s==='ellipse')return generateEllipsePoints(scX,scY,state.ellipseA,state.ellipseB,NUM_POINTS_CURVE).map(p=>({x:p.re,y:p.im}));if(s==='hyperbola')return generateHyperbolaPoints(scX,scY,state.hyperbolaA,state.hyperbolaB,NUM_POINTS_CURVE).map(p=>p?{x:p.re,y:p.im}:null);return [];};getPts(inputShapeToDraw).forEach(pt=>{if(!pt){ctx.stroke();ctx.beginPath();fPt=true;return;}const p_canvas=mapToCanvasCoords(pt.x,pt.y,planeParams);if(fPt){ctx.moveTo(p_canvas.x,p_canvas.y);fPt=false;}else{ctx.lineTo(p_canvas.x,p_canvas.y);}});ctx.stroke();}
-    if (state.radialDiscreteStepsEnabled && state.currentFunction !== 'poincare') {
-        drawRadialDiscreteSteps(ctx, planeParams, state.currentFunction, state.radialDiscreteStepsCount);
+        return;
     }
-ctx.restore();}
+
+    const pointSets = buildCurrentInputShapePointSets(planeParams);
+    const highlightContour = state.cauchyIntegralModeEnabled && (inputShape === 'circle' || inputShape === 'ellipse');
+
+    drawPointSetCollectionOnPlane(ctx, planeParams, pointSets, {
+        colorResolver: pointSet => highlightContour && pointSet.role === 'shape-curve'
+            ? COLOR_CAUCHY_CONTOUR_Z
+            : pointSet.color,
+        lineWidthResolver: pointSet => highlightContour && pointSet.role === 'shape-curve'
+            ? 3.5
+            : (pointSet.lineWidth || LINE_WIDTH_NORMAL)
+    });
+}
 
 function initializeSingleParticle(planeParams) {
     
@@ -345,366 +378,201 @@ function calculateDynamicPointsForSegment(p1_world, p2_world, tf) {
     return num_points;
 }
 
+const LINEAR_SOURCE_POINT_SET_ROLES = new Set([
+    'grid-horizontal',
+    'grid-vertical',
+    'polar-angular',
+    'logpolar-angular',
+    'strip-boundary',
+    'sector-radial',
+    'line-horizontal',
+    'line-vertical'
+]);
 
-function drawTransformedCartesianGrid(ctx, planeParams, tf) {
-    ctx.lineWidth = 1.5;
-    ctx.lineJoin = 'round';
-    ctx.lineCap = 'round';
-    const { currentVisXRange: zxR, currentVisYRange: zyR } = zPlaneParams; 
-    const nL = state.gridDensity;
-
-    if (state.currentFunction === 'zeta' && state.zetaContinuationEnabled) {
-        for (let i = 0; i <= nL; ++i) {
-            const y_val = zyR[0] + (i / nL) * (zyR[1] - zyR[0]);
-            let zlp_direct = [], zlp_reflected = [];
-            const directStartRe = ZETA_REFLECTION_POINT_RE; 
-            const directEndRe = zxR[1];
-            if (directStartRe < directEndRe) {
-                let ptsCount = calculateDynamicPointsForSegment({re: directStartRe, im: y_val}, {re: directEndRe, im: y_val}, tf);
-                for (let j = 0; j <= ptsCount; ++j) zlp_direct.push({ re: directStartRe + (j / ptsCount) * (directEndRe - directStartRe), im: y_val });
-                drawPlanarTransformedLine(ctx, planeParams, tf, zlp_direct, COLOR_Z_GRID_HORZ);
-            }
-            const reflectedStartRe = zxR[0];
-            const reflectedEndRe = ZETA_REFLECTION_POINT_RE;
-             if (reflectedStartRe < reflectedEndRe) {
-                let ptsCount = calculateDynamicPointsForSegment({re: reflectedStartRe, im: y_val}, {re: reflectedEndRe, im: y_val}, tf);
-                for (let j = 0; j <= ptsCount; ++j) zlp_reflected.push({ re: reflectedStartRe + (j / ptsCount) * (reflectedEndRe - reflectedStartRe), im: y_val });
-                drawPlanarTransformedLine(ctx, planeParams, tf, zlp_reflected, COLOR_Z_GRID_HORZ_FUNCTIONAL_EQ);
-            }
-        }
-        for (let i = 0; i <= nL; ++i) {
-            const x_val = zxR[0] + (i / nL) * (zxR[1] - zxR[0]);
-            let zlp = [];
-            let ptsCount = calculateDynamicPointsForSegment({re: x_val, im: zyR[0]}, {re: x_val, im: zyR[1]}, tf);
-            for (let j = 0; j <= ptsCount; ++j) zlp.push({ re: x_val, im: zyR[0] + (j / ptsCount) * (zyR[1] - zyR[0]) });
-            const lineColor = (x_val < ZETA_REFLECTION_POINT_RE) ? COLOR_Z_GRID_VERT_FUNCTIONAL_EQ : COLOR_Z_GRID_VERT;
-            drawPlanarTransformedLine(ctx, planeParams, tf, zlp, lineColor);
-        }
-
-    } else { 
-        for (let i = 0; i <= nL; ++i) { 
-            const yv = zyR[0] + (i / nL) * (zyR[1] - zyR[0]);
-            let zlp = [];
-            let pointsForThisLine = (state.currentFunction === 'zeta') ? calculateDynamicPointsForSegment({ re: zxR[0], im: yv }, { re: zxR[1], im: yv }, tf) : DEFAULT_POINTS_PER_LINE;
-            for (let j = 0; j <= pointsForThisLine; ++j) zlp.push({ re: zxR[0] + (j / pointsForThisLine) * (zxR[1] - zxR[0]), im: yv });
-            drawPlanarTransformedLine(ctx, planeParams, tf, zlp, COLOR_Z_GRID_HORZ);
-        }
-        for (let i = 0; i <= nL; ++i) { 
-            const xv = zxR[0] + (i / nL) * (zxR[1] - zxR[0]);
-            let zlp = [];
-            let pointsForThisLine = (state.currentFunction === 'zeta') ? calculateDynamicPointsForSegment({ re: xv, im: zyR[0] }, { re: xv, im: zyR[1] }, tf) : DEFAULT_POINTS_PER_LINE;
-            let vertLineColor = (state.currentFunction === 'zeta' && !state.zetaContinuationEnabled && xv <= ZETA_REFLECTION_POINT_RE) ? COLOR_Z_GRID_ZETA_UNDEFINED_SUM_REGION : COLOR_Z_GRID_VERT;
-            for (let j = 0; j <= pointsForThisLine; ++j) zlp.push({ re: xv, im: zyR[0] + (j / pointsForThisLine) * (zyR[1] - zyR[0]) });
-            drawPlanarTransformedLine(ctx, planeParams, tf, zlp, vertLineColor);
-        }
+function generateLinearSegmentPoints(startPoint, endPoint, sampleCount) {
+    const points = [];
+    for (let i = 0; i <= sampleCount; i++) {
+        const t = i / sampleCount;
+        points.push({
+            re: startPoint.re + t * (endPoint.re - startPoint.re),
+            im: startPoint.im + t * (endPoint.im - startPoint.im)
+        });
     }
+    return points;
 }
 
-function drawTransformedPolarGrid(ctx, planeParams, tf) {
-    ctx.lineWidth = 1.5;
-    ctx.lineJoin = 'round';
-    ctx.lineCap = 'round';
-    const { currentVisXRange: zxR, currentVisYRange: zyR } = zPlaneParams;
-    const maxR_input = Math.max(Math.abs(zxR[0]), Math.abs(zxR[1]), Math.abs(zyR[0]), Math.abs(zyR[1]), 0.1);
-    const numRadialLines = state.gridDensity;
-    const numAngularLines = Math.max(4, state.gridDensity);
-
-    for (let i = 0; i < numAngularLines; i++) { 
-        const angle = (i / numAngularLines) * 2 * Math.PI;
-        let zlp = [];
-        for (let j = 0; j <= DEFAULT_POINTS_PER_LINE; j++) {
-            const r_val = (j / DEFAULT_POINTS_PER_LINE) * maxR_input;
-            zlp.push({ re: r_val * Math.cos(angle), im: r_val * Math.sin(angle) });
-        }
-        drawPlanarTransformedLine(ctx, planeParams, tf, zlp, COLOR_POLAR_ANGULAR);
+function getPointSetEndpoints(pointSet) {
+    const validPoints = pointSet.points.filter(Boolean);
+    if (validPoints.length < 2) {
+        return null;
     }
-    for (let i = 1; i <= numRadialLines; i++) { 
-        const r = (i / numRadialLines) * maxR_input;
-        let zlp = [];
-        for (let j = 0; j <= NUM_POINTS_CURVE; j++) {
-            const t = (j / NUM_POINTS_CURVE) * 2 * Math.PI;
-            zlp.push({ re: r * Math.cos(t), im: r * Math.sin(t) });
-        }
-        drawPlanarTransformedLine(ctx, planeParams, tf, zlp, COLOR_POLAR_RADIAL);
+    return {
+        start: validPoints[0],
+        end: validPoints[validPoints.length - 1]
+    };
+}
+
+function preparePointSetForMappedPlane(pointSet, transformFunc, options = {}) {
+    if (!LINEAR_SOURCE_POINT_SET_ROLES.has(pointSet.role)) {
+        return pointSet;
     }
-}
 
-function drawTransformedLogPolarGrid(ctx, planeParams, tf) {
-    ctx.lineWidth = 1.5;
-    ctx.lineJoin = 'round';
-    ctx.lineCap = 'round';
-    const { currentVisXRange: zxR, currentVisYRange: zyR } = zPlaneParams;
-    const maxR_input = Math.max(Math.abs(zxR[0]), Math.abs(zxR[1]), Math.abs(zyR[0]), Math.abs(zyR[1]), 0.1);
-    const minR_input = 0.05; 
-    const maxLogR_input = Math.log(maxR_input);
-    const minLogR_input = Math.log(minR_input);
-    const numLogRadialSteps = state.gridDensity;
-    const numAngularLines = Math.max(4, state.gridDensity);
-
-    for (let i = 0; i < numAngularLines; i++) { 
-        const angle = (i / numAngularLines) * 2 * Math.PI;
-        let zlp = [];
-        for (let j = 0; j <= DEFAULT_POINTS_PER_LINE; j++) {
-             const logR_val = minLogR_input + (j/DEFAULT_POINTS_PER_LINE) * (maxLogR_input - minLogR_input);
-             const r_val = Math.exp(logR_val);
-             if (r_val > maxR_input * 1.1) continue; 
-             zlp.push({ re: r_val * Math.cos(angle), im: r_val * Math.sin(angle) });
-        }
-        if (zlp.length === 0 && DEFAULT_POINTS_PER_LINE > 0) { 
-            zlp.push({re: minR_input * Math.cos(angle), im: minR_input * Math.sin(angle)});
-            zlp.push({re: maxR_input * Math.cos(angle), im: maxR_input * Math.sin(angle)});
-        }
-        drawPlanarTransformedLine(ctx, planeParams, tf, zlp, COLOR_LOGPOLAR_ANGULAR);
+    const endpoints = getPointSetEndpoints(pointSet);
+    if (!endpoints) {
+        return pointSet;
     }
-    for (let i = 0; i <= numLogRadialSteps; i++) { 
-        const logR = minLogR_input + (i / numLogRadialSteps) * (maxLogR_input - minLogR_input);
-        const r = Math.exp(logR);
-        if (r > maxR_input * 1.1) continue;
-        let zlp = [];
-        for (let j = 0; j <= NUM_POINTS_CURVE; j++) {
-            const t = (j / NUM_POINTS_CURVE) * 2 * Math.PI;
-            zlp.push({ re: r * Math.cos(t), im: r * Math.sin(t) });
-        }
-        drawPlanarTransformedLine(ctx, planeParams, tf, zlp, COLOR_LOGPOLAR_EXP_R);
+
+    const sampleCount = options.sampleCountResolver
+        ? options.sampleCountResolver(pointSet, endpoints, transformFunc)
+        : DEFAULT_POINTS_PER_LINE;
+
+    return {
+        ...pointSet,
+        points: generateLinearSegmentPoints(endpoints.start, endpoints.end, Math.max(2, sampleCount))
+    };
+}
+
+function drawFunctionFociOverlay(ctx, planeParams) {
+    if (state.currentFunction !== 'cos' && state.currentFunction !== 'sin') {
+        return;
     }
-}
 
-function drawTransformedStripHorizontal(ctx, planeParams, tf) {
-    ctx.lineWidth = 2.0;
-    ctx.lineJoin = 'round';
-    ctx.lineCap = 'round';
-    const { currentVisXRange: zxR } = zPlaneParams;
-    let zlp1 = [], zlp2 = [];
-    for(let i=0; i<=NUM_POINTS_CURVE; ++i) {
-        const x_val = zxR[0] + i * (zxR[1] - zxR[0]) / NUM_POINTS_CURVE;
-        zlp1.push({re: x_val, im: state.stripY1});
-        zlp2.push({re: x_val, im: state.stripY2});
-    }
-    drawPlanarTransformedLine(ctx, planeParams, tf, zlp1, COLOR_STRIP_LINES);
-    drawPlanarTransformedLine(ctx, planeParams, tf, zlp2, COLOR_STRIP_LINES);
-}
-
-function drawTransformedSectorAngular(ctx, planeParams, tf) {
-    ctx.lineWidth = 2.0;
-    ctx.lineJoin = 'round';
-    ctx.lineCap = 'round';
-    const angle1_rad = state.sectorAngle1 * Math.PI / 180;
-    const angle2_rad = state.sectorAngle2 * Math.PI / 180;
-    const rMin = state.sectorRMin;
-    const rMax = state.sectorRMax;
-    const N_LINE_POINTS = NUM_POINTS_CURVE / 2;
-    const N_ARC_POINTS = NUM_POINTS_CURVE / 4;
-
-    let zlp_rad1 = [], zlp_rad2 = [], zlp_arc_min = [], zlp_arc_max = [];
-    for(let i=0; i<=N_LINE_POINTS; ++i) { const r = rMin + i * (rMax - rMin) / N_LINE_POINTS; zlp_rad1.push({re: r * Math.cos(angle1_rad), im: r * Math.sin(angle1_rad)}); }
-    for(let i=0; i<=N_LINE_POINTS; ++i) { const r = rMin + i * (rMax - rMin) / N_LINE_POINTS; zlp_rad2.push({re: r * Math.cos(angle2_rad), im: r * Math.sin(angle2_rad)}); }
-    for(let i=0; i<=N_ARC_POINTS; ++i) { const a = angle1_rad + i * (angle2_rad - angle1_rad) / N_ARC_POINTS; zlp_arc_min.push({re: rMin * Math.cos(a), im: rMin * Math.sin(a)}); }
-    for(let i=0; i<=N_ARC_POINTS; ++i) { const a = angle1_rad + i * (angle2_rad - angle1_rad) / N_ARC_POINTS; zlp_arc_max.push({re: rMax * Math.cos(a), im: rMax * Math.sin(a)}); }
-
-    drawPlanarTransformedLine(ctx, planeParams, tf, zlp_rad1, COLOR_SECTOR_LINES);
-    drawPlanarTransformedLine(ctx, planeParams, tf, zlp_rad2, COLOR_SECTOR_LINES);
-    drawPlanarTransformedLine(ctx, planeParams, tf, zlp_arc_min, COLOR_SECTOR_LINES);
-    drawPlanarTransformedLine(ctx, planeParams, tf, zlp_arc_max, COLOR_SECTOR_LINES);
-}
-
-function drawTransformedLinesFixedReIm(ctx, planeParams, tf) {
-    ctx.lineWidth = 2.5;
-    ctx.lineJoin = 'round';
-    ctx.lineCap = 'round';
-    const scX = state.a0, scY = state.b0;
-    if((state.currentFunction==='cos'||state.currentFunction==='sin')){ctx.save();ctx.fillStyle=COLOR_FOCI;const f1c=mapToCanvasCoords(1,0,planeParams),f2c=mapToCanvasCoords(-1,0,planeParams);ctx.beginPath();ctx.arc(f1c.x,f1c.y,4,0,2*Math.PI);ctx.fill();ctx.beginPath();ctx.arc(f2c.x,f2c.y,4,0,2*Math.PI);ctx.fill();ctx.font="10px 'SF Pro Text',sans-serif";ctx.textAlign="center";ctx.fillStyle=COLOR_TEXT_ON_CANVAS;ctx.fillText("Foci: ±1",planeParams.origin.x,f1c.y+(f1c.y<20?15:-10));ctx.restore();}
-
-    let hz_pts=[]; for(let i=0;i<=NUM_POINTS_CURVE;++i)hz_pts.push({re:zPlaneParams.currentVisXRange[0]+i*(zPlaneParams.currentVisXRange[1]-zPlaneParams.currentVisXRange[0])/NUM_POINTS_CURVE,im:scY});
-    drawPlanarTransformedLine(ctx,planeParams,tf,hz_pts,COLOR_INPUT_SHAPE_Z);
-    let vz_pts=[]; for(let i=0;i<=NUM_POINTS_CURVE;++i)vz_pts.push({re:scX,im:zPlaneParams.currentVisYRange[0]+i*(zPlaneParams.currentVisYRange[1]-zPlaneParams.currentVisYRange[0])/NUM_POINTS_CURVE});
-    drawPlanarTransformedLine(ctx,planeParams,tf,vz_pts,COLOR_INPUT_LINE_IM_Z);
-}
-
-function drawTransformedGeometricShape(ctx, planeParams, tf, shapeType, baseColor) {
-    const scX = state.a0, scY = state.b0;
-    const radiusToUse = state.circleR;
-    let z_pts=[];
-    if(shapeType==='circle') z_pts = generateCirclePoints(scX,scY,radiusToUse,NUM_POINTS_CURVE);
-    else if(shapeType==='ellipse') z_pts = generateEllipsePoints(scX,scY,state.ellipseA,state.ellipseB,NUM_POINTS_CURVE);
-    else if(shapeType==='hyperbola') z_pts = generateHyperbolaPoints(scX,scY,state.hyperbolaA,state.hyperbolaB,NUM_POINTS_CURVE);
-    drawPlanarTransformedLine(ctx,planeParams,tf,z_pts,baseColor);
-}
-
-function drawPlanarTransformedShape(ctx, planeParams, tf) {
     ctx.save();
-    const inputShape = state.currentInputShape;
-    ctx.lineWidth = (state.cauchyIntegralModeEnabled && (inputShape === 'circle' || inputShape === 'ellipse')) ? 3.5 : 2.5;
-    ctx.lineJoin = 'round';
-    ctx.lineCap = 'round';
-    let baseColor = (state.cauchyIntegralModeEnabled && (inputShape === 'circle' || inputShape === 'ellipse')) ? COLOR_CAUCHY_CONTOUR_W : COLOR_INPUT_SHAPE_Z;
-
-    if (inputShape === 'grid_cartesian') drawTransformedCartesianGrid(ctx, planeParams, tf);
-    else if (inputShape === 'grid_polar') drawTransformedPolarGrid(ctx, planeParams, tf);
-    else if (inputShape === 'grid_logpolar') drawTransformedLogPolarGrid(ctx, planeParams, tf);
-    else if (inputShape === 'empty_grid') { }
-    else if (inputShape === 'strip_horizontal') drawTransformedStripHorizontal(ctx, planeParams, tf);
-    else if (inputShape === 'sector_angular') drawTransformedSectorAngular(ctx, planeParams, tf);
-    else if (inputShape === 'line') drawTransformedLinesFixedReIm(ctx, planeParams, tf);
-    else if (['circle', 'ellipse', 'hyperbola'].includes(inputShape)) {
-        drawTransformedGeometricShape(ctx, planeParams, tf, inputShape, baseColor);
-    }
-    else if (inputShape === 'image') {
-        if (typeof drawImageWithWebGL === 'function' && drawImageWithWebGL(ctx, planeParams, true)) {
-            // WebGL drawn
-        } else if (state.imagePoints && state.imagePoints.length > 0) {
-            ctx.globalAlpha = state.imageOpacity || 1.0;
-            const size = state.imageSize || 2.0;
-            const cx = state.a0 || 0;
-            const cy = state.b0 || 0;
-            for (let i = 0; i < state.imagePoints.length; i++) {
-                const pt = state.imagePoints[i];
-                const re = cx + pt.nx * (size / 2);
-                const im = cy + pt.ny * (size / 2);
-                const w = tf(re, im);
-                if (w && isFinite(w.re) && isFinite(w.im)) {
-                    const p_c = mapToCanvasCoords(w.re, w.im, planeParams);
-                    ctx.fillStyle = pt.color;
-                    ctx.fillRect(p_c.x - 1, p_c.y - 1, 2, 2);
-                }
-            }
-            ctx.globalAlpha = 1.0;
-        }
-    }
+    ctx.fillStyle = COLOR_FOCI;
+    const focus1Canvas = mapToCanvasCoords(1, 0, planeParams);
+    const focus2Canvas = mapToCanvasCoords(-1, 0, planeParams);
+    ctx.beginPath();
+    ctx.arc(focus1Canvas.x, focus1Canvas.y, 4, 0, TWO_PI);
+    ctx.fill();
+    ctx.beginPath();
+    ctx.arc(focus2Canvas.x, focus2Canvas.y, 4, 0, TWO_PI);
+    ctx.fill();
+    ctx.font = "10px 'SF Pro Text',sans-serif";
+    ctx.textAlign = 'center';
+    ctx.fillStyle = COLOR_TEXT_ON_CANVAS;
+    ctx.fillText('Foci: ±1', planeParams.origin.x, focus1Canvas.y + (focus1Canvas.y < 20 ? 15 : -10));
     ctx.restore();
 }
 
-function drawPlanarTaylorApproximation(ctx, wPlaneParamsOriginal, originalFuncKey, taylorCenter, taylorOrder, axisColorX, axisColorY) {
-    drawTaylorAxes(ctx, wPlaneParamsOriginal, axisColorX, axisColorY, "Re(w_approx)", "Im(w_approx)");
+function shouldDrawPlanarFunctionFociOverlay() {
+    return state.currentInputShape === 'line' && (state.currentFunction === 'cos' || state.currentFunction === 'sin');
+}
 
-    const taylorApproxFunc = (re, im) => {
+function shouldDrawPlanarRadialOverlay() {
+    return state.radialDiscreteStepsEnabled && state.currentFunction !== 'poincare';
+}
+
+function drawPlanarTransformedShape(ctx, planeParams, tf, options = {}) {
+    const includeGeometry = options.includeGeometry !== false;
+    const includeOverlays = options.includeOverlays !== false;
+    const inputShape = state.currentInputShape;
+    const highlightContour = state.cauchyIntegralModeEnabled && (inputShape === 'circle' || inputShape === 'ellipse');
+
+    if (includeGeometry) {
+        if (inputShape === 'image') {
+            if (typeof drawImageWithWebGL === 'function' && drawImageWithWebGL(ctx, planeParams, true)) {
+                return;
+            }
+
+            if (state.imagePoints && state.imagePoints.length > 0) {
+                ctx.save();
+                ctx.globalAlpha = state.imageOpacity || 1.0;
+                const size = state.imageSize || 2.0;
+                const cx = state.a0 || 0;
+                const cy = state.b0 || 0;
+
+                for (let i = 0; i < state.imagePoints.length; i++) {
+                    const point = state.imagePoints[i];
+                    const re = cx + point.nx * (size / 2);
+                    const im = cy + point.ny * (size / 2);
+                    const w = tf(re, im);
+                    if (isRenderableComplexPoint(w)) {
+                        const canvasPoint = mapToCanvasCoords(w.re, w.im, planeParams);
+                        ctx.fillStyle = point.color;
+                        ctx.fillRect(canvasPoint.x - 1, canvasPoint.y - 1, 2, 2);
+                    }
+                }
+                ctx.restore();
+            }
+
+        } else {
+            const pointSets = buildMappedInputShapePointSets();
+            drawPointSetCollectionOnPlane(ctx, planeParams, pointSets, {
+                transformFunc: tf,
+                colorResolver: pointSet => highlightContour && pointSet.role === 'shape-curve'
+                    ? COLOR_CAUCHY_CONTOUR_W
+                    : pointSet.color,
+                lineWidthResolver: pointSet => highlightContour && pointSet.role === 'shape-curve'
+                    ? 3.5
+                    : (pointSet.lineWidth || LINE_WIDTH_NORMAL),
+                preparePointSet: pointSet => preparePointSetForMappedPlane(pointSet, tf, {
+                    sampleCountResolver: (currentPointSet, endpoints, transformFunc) => state.currentFunction === 'zeta'
+                        ? calculateDynamicPointsForSegment(endpoints.start, endpoints.end, transformFunc)
+                        : DEFAULT_POINTS_PER_LINE
+                })
+            });
+        }
+    }
+
+    if (includeOverlays && shouldDrawPlanarFunctionFociOverlay()) {
+        drawFunctionFociOverlay(ctx, planeParams);
+    }
+
+    if (includeOverlays && shouldDrawPlanarRadialOverlay()) {
+        drawRadialDiscreteSteps(ctx, planeParams, state.currentFunction, state.radialDiscreteStepsCount);
+    }
+}
+
+function createTaylorApproximationTransform(functionKey, taylorCenter, taylorOrder) {
+    return (re, im) => {
         const zInputComplex = new Complex(re, im);
         const z0Complex = new Complex(taylorCenter.re, taylorCenter.im);
-        const result = calculateTaylorApproximation(originalFuncKey, zInputComplex, z0Complex, taylorOrder);
-        return {re: result.real, im: result.imag}; 
+        const result = calculateTaylorApproximation(functionKey, zInputComplex, z0Complex, taylorOrder);
+        return { re: result.re, im: result.im };
     };
+}
 
-    ctx.save();
-    ctx.lineWidth = 1.5; 
-    ctx.lineJoin = 'round';
-    ctx.lineCap = 'round';
-
-    const inputShape = state.currentInputShape;
-    const { currentVisXRange: zxR_source, currentVisYRange: zyR_source } = zPlaneParams; 
-    const nL_source = state.gridDensity;
-    const scX_source = state.a0;
-    const scY_source = state.b0;
-    const radiusToUse_source = state.circleR;
-
-    if (inputShape === 'grid_cartesian') {
-        for (let i = 0; i <= nL_source; ++i) {
-            const yv = zyR_source[0] + (i / nL_source) * (zyR_source[1] - zyR_source[0]);
-            let z_points_horizontal = [];
-            for (let j = 0; j <= DEFAULT_POINTS_PER_LINE; ++j) z_points_horizontal.push({ re: zxR_source[0] + (j / DEFAULT_POINTS_PER_LINE) * (zxR_source[1] - zxR_source[0]), im: yv });
-            drawPlanarTransformedLine(ctx, wPlaneParamsOriginal, taylorApproxFunc, z_points_horizontal, axisColorY); 
-        }
-        for (let i = 0; i <= nL_source; ++i) {
-            const xv = zxR_source[0] + (i / nL_source) * (zxR_source[1] - zxR_source[0]);
-            let z_points_vertical = [];
-            for (let j = 0; j <= DEFAULT_POINTS_PER_LINE; ++j) z_points_vertical.push({ re: xv, im: zyR_source[0] + (j / DEFAULT_POINTS_PER_LINE) * (zyR_source[1] - zyR_source[0]) });
-            drawPlanarTransformedLine(ctx, wPlaneParamsOriginal, taylorApproxFunc, z_points_vertical, axisColorX); 
-        }
-    } else if (inputShape === 'grid_polar') {
-        const maxR_input_source = Math.max(Math.abs(zxR_source[0]), Math.abs(zxR_source[1]), Math.abs(zyR_source[0]), Math.abs(zyR_source[1]), 0.1);
-        const numRadialLines_source = nL_source;
-        const numAngularLines_source = Math.max(4, nL_source);
-        for (let i = 0; i < numAngularLines_source; i++) {
-            const angle = (i / numAngularLines_source) * 2 * Math.PI;
-            let zlp = [];
-            for (let j = 0; j <= DEFAULT_POINTS_PER_LINE; j++) {
-                const r_val = (j / DEFAULT_POINTS_PER_LINE) * maxR_input_source;
-                zlp.push({ re: r_val * Math.cos(angle), im: r_val * Math.sin(angle) });
-            }
-            drawPlanarTransformedLine(ctx, wPlaneParamsOriginal, taylorApproxFunc, zlp, axisColorY); 
-        }
-        for (let i = 1; i <= numRadialLines_source; i++) {
-            const r = (i / numRadialLines_source) * maxR_input_source;
-            let zlp = [];
-            for (let j = 0; j <= NUM_POINTS_CURVE; j++) {
-                const t = (j / NUM_POINTS_CURVE) * 2 * Math.PI;
-                zlp.push({ re: r * Math.cos(t), im: r * Math.sin(t) });
-            }
-            drawPlanarTransformedLine(ctx, wPlaneParamsOriginal, taylorApproxFunc, zlp, axisColorX); 
-        }
-    } else if (inputShape === 'grid_logpolar') {
-        const maxR_input_source = Math.max(Math.abs(zxR_source[0]), Math.abs(zxR_source[1]), Math.abs(zyR_source[0]), Math.abs(zyR_source[1]), 0.1);
-        const minR_input_source = 0.05;
-        const maxLogR_input_source = Math.log(maxR_input_source);
-        const minLogR_input_source = Math.log(minR_input_source);
-        const numLogRadialSteps_source = nL_source;
-        const numAngularLines_source = Math.max(4, nL_source);
-        for (let i = 0; i < numAngularLines_source; i++) {
-            const angle = (i / numAngularLines_source) * 2 * Math.PI;
-            let zlp = [];
-            for (let j = 0; j <= DEFAULT_POINTS_PER_LINE; j++) {
-                 const logR_val = minLogR_input_source + (j/DEFAULT_POINTS_PER_LINE) * (maxLogR_input_source - minLogR_input_source);
-                 const r_val = Math.exp(logR_val);
-                 if (r_val > maxR_input_source * 1.1) continue;
-                 zlp.push({ re: r_val * Math.cos(angle), im: r_val * Math.sin(angle) });
-            }
-            if (zlp.length === 0 && DEFAULT_POINTS_PER_LINE > 0) { zlp.push({re: minR_input_source * Math.cos(angle), im: minR_input_source * Math.sin(angle)}); zlp.push({re: maxR_input_source * Math.cos(angle), im: maxR_input_source * Math.sin(angle)}); }
-            drawPlanarTransformedLine(ctx, wPlaneParamsOriginal, taylorApproxFunc, zlp, axisColorY); 
-        }
-        for (let i = 0; i <= numLogRadialSteps_source; i++) {
-            const logR = minLogR_input_source + (i / numLogRadialSteps_source) * (maxLogR_input_source - minLogR_input_source);
-            const r = Math.exp(logR);
-            if (r > maxR_input_source * 1.1) continue;
-            let zlp = [];
-            for (let j = 0; j <= NUM_POINTS_CURVE; j++) {
-                const t = (j / NUM_POINTS_CURVE) * 2 * Math.PI;
-                zlp.push({ re: r * Math.cos(t), im: r * Math.sin(t) });
-            }
-            drawPlanarTransformedLine(ctx, wPlaneParamsOriginal, taylorApproxFunc, zlp, axisColorX); 
-        }
-    } else if (inputShape === 'line') {
-        let hz_pts=[]; for(let i=0;i<=NUM_POINTS_CURVE;++i)hz_pts.push({re:zxR_source[0]+i*(zxR_source[1]-zxR_source[0])/NUM_POINTS_CURVE,im:scY_source});
-        drawPlanarTransformedLine(ctx,wPlaneParamsOriginal,taylorApproxFunc,hz_pts,axisColorY); 
-        let vz_pts=[]; for(let i=0;i<=NUM_POINTS_CURVE;++i)vz_pts.push({re:scX_source,im:zyR_source[0]+i*(zyR_source[1]-zyR_source[0])/NUM_POINTS_CURVE});
-        drawPlanarTransformedLine(ctx,wPlaneParamsOriginal,taylorApproxFunc,vz_pts,axisColorX); 
-    } else if (['circle', 'ellipse', 'hyperbola'].includes(inputShape)) {
-        let z_pts=[];
-        if(inputShape==='circle') z_pts = generateCirclePoints(scX_source,scY_source,radiusToUse_source,NUM_POINTS_CURVE);
-        else if(inputShape==='ellipse') z_pts = generateEllipsePoints(scX_source,scY_source,state.ellipseA,state.ellipseB,NUM_POINTS_CURVE);
-        else if(inputShape==='hyperbola') z_pts = generateHyperbolaPoints(scX_source,scY_source,state.hyperbolaA,state.hyperbolaB,NUM_POINTS_CURVE);
-        drawPlanarTransformedLine(ctx,wPlaneParamsOriginal,taylorApproxFunc,z_pts, axisColorX); 
-    } else if (inputShape === 'strip_horizontal') {
-        let zlp1 = [], zlp2 = [];
-        for(let i=0; i<=NUM_POINTS_CURVE; ++i) { const x_val = zxR_source[0] + i * (zxR_source[1] - zxR_source[0]) / NUM_POINTS_CURVE; zlp1.push({re: x_val, im: state.stripY1}); zlp2.push({re: x_val, im: state.stripY2});}
-        drawPlanarTransformedLine(ctx, wPlaneParamsOriginal, taylorApproxFunc, zlp1, axisColorY);
-        drawPlanarTransformedLine(ctx, wPlaneParamsOriginal, taylorApproxFunc, zlp2, axisColorY);
-    } else if (inputShape === 'sector_angular') {
-        const angle1_rad_source = state.sectorAngle1 * Math.PI / 180; const angle2_rad_source = state.sectorAngle2 * Math.PI / 180;
-        const rMin_source = state.sectorRMin; const rMax_source = state.sectorRMax;
-        const N_LINE_POINTS = NUM_POINTS_CURVE / 2; const N_ARC_POINTS = NUM_POINTS_CURVE / 4;
-        let zlp_rad1 = [], zlp_rad2 = [], zlp_arc_min = [], zlp_arc_max = [];
-        for(let i=0; i<=N_LINE_POINTS; ++i) { const r = rMin_source + i * (rMax_source - rMin_source) / N_LINE_POINTS; zlp_rad1.push({re: r * Math.cos(angle1_rad_source), im: r * Math.sin(angle1_rad_source)}); }
-        for(let i=0; i<=N_LINE_POINTS; ++i) { const r = rMin_source + i * (rMax_source - rMin_source) / N_LINE_POINTS; zlp_rad2.push({re: r * Math.cos(angle2_rad_source), im: r * Math.sin(angle2_rad_source)}); }
-        for(let i=0; i<=N_ARC_POINTS; ++i) { const a = angle1_rad_source + i * (angle2_rad_source - angle1_rad_source) / N_ARC_POINTS; zlp_arc_min.push({re: rMin_source * Math.cos(a), im: rMin_source * Math.sin(a)}); }
-        for(let i=0; i<=N_ARC_POINTS; ++i) { const a = angle1_rad_source + i * (angle2_rad_source - angle1_rad_source) / N_ARC_POINTS; zlp_arc_max.push({re: rMax_source * Math.cos(a), im: rMax_source * Math.sin(a)}); }
-        drawPlanarTransformedLine(ctx, wPlaneParamsOriginal, taylorApproxFunc, zlp_rad1, axisColorX); 
-        drawPlanarTransformedLine(ctx, wPlaneParamsOriginal, taylorApproxFunc, zlp_rad2, axisColorX); 
-        drawPlanarTransformedLine(ctx, wPlaneParamsOriginal, taylorApproxFunc, zlp_arc_min, axisColorY); 
-        drawPlanarTransformedLine(ctx, wPlaneParamsOriginal, taylorApproxFunc, zlp_arc_max, axisColorY); 
-    } else if (inputShape === 'empty_grid') {
-        
+function getTaylorPointSetColor(pointSet, axisColorX, axisColorY) {
+    switch (pointSet.role) {
+        case 'grid-horizontal':
+        case 'polar-angular':
+        case 'logpolar-angular':
+        case 'strip-boundary':
+        case 'line-horizontal':
+        case 'sector-arc':
+            return axisColorY;
+        default:
+            return axisColorX;
     }
-    ctx.restore();
+}
+
+function drawPlanarTaylorApproximation(ctx, wPlaneParamsOriginal, originalFuncKey, taylorCenter, taylorOrder, axisColorX, axisColorY, options = {}) {
+    if (options.includeAxes !== false) {
+        drawTaylorAxes(ctx, wPlaneParamsOriginal, axisColorX, axisColorY, 'Re(w_approx)', 'Im(w_approx)');
+    }
+
+    const taylorApproxFunc = createTaylorApproximationTransform(originalFuncKey, taylorCenter, taylorOrder);
+    const pointSets = buildCurrentInputShapePointSets(zPlaneParams);
+
+    drawPointSetCollectionOnPlane(ctx, wPlaneParamsOriginal, pointSets, {
+        transformFunc: taylorApproxFunc,
+        colorResolver: pointSet => getTaylorPointSetColor(pointSet, axisColorX, axisColorY),
+        lineWidthResolver: pointSet => pointSet.lineWidth || LINE_WIDTH_NORMAL,
+        preparePointSet: pointSet => preparePointSetForMappedPlane(pointSet, taylorApproxFunc, {
+            sampleCountResolver: () => DEFAULT_POINTS_PER_LINE
+        })
+    });
 }
 
 
 function drawPlanarTransformedProbe(ctx,planeParams,tf){
     let effectiveTransformFunc = tf;
     if (state.taylorSeriesEnabled && (!state.riemannSphereViewEnabled || state.splitViewEnabled)) {
-        effectiveTransformFunc = (re, im) => {
-            const zInputComplex = new Complex(re, im);
-            const z0Complex = new Complex(state.taylorSeriesCenter.re, state.taylorSeriesCenter.im);
-            const result = calculateTaylorApproximation(state.currentFunction, zInputComplex, z0Complex, state.taylorSeriesOrder);
-            return {re: result.real, im: result.imag }; 
-        };
+        effectiveTransformFunc = createTaylorApproximationTransform(
+            state.currentFunction,
+            state.taylorSeriesCenter,
+            state.taylorSeriesOrder
+        );
     }
 
     const pW=effectiveTransformFunc(state.probeZ.re,state.probeZ.im);

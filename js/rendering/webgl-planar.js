@@ -862,27 +862,31 @@ function drawWithWebGLRaster(ctx, planeParams, planeKey, drawCallback, options =
 }
 
 function canUseWebGLForPlanarInputShape() {
-    if (state.radialDiscreteStepsEnabled && state.currentFunction !== 'poincare') {
-        return false;
-    }
     return true;
 }
 
 function drawPlanarTransformedShapeHybrid(ctx, planeParams, tf, planeKey) {
-    const captureDisabledByRadialSteps = state.radialDiscreteStepsEnabled && state.currentFunction !== 'poincare';
-    const captureDisabledByLineMode = state.currentInputShape === 'line' && (state.currentFunction === 'cos' || state.currentFunction === 'sin');
-    const canUseCapture = !captureDisabledByRadialSteps && !captureDisabledByLineMode;
+    let geometryRendered = drawWithWebGLCapture(ctx, planeParams, planeKey, (captureCtx) => {
+        drawPlanarTransformedShape(captureCtx, planeParams, tf, { includeOverlays: false });
+    });
 
-    if (canUseCapture) {
-        const renderedByCapture = drawWithWebGLCapture(ctx, planeParams, planeKey, (captureCtx) => {
-            drawPlanarTransformedShape(captureCtx, planeParams, tf);
+    if (!geometryRendered) {
+        geometryRendered = drawWithWebGLRaster(ctx, planeParams, planeKey, (rasterCtx) => {
+            drawPlanarTransformedShape(rasterCtx, planeParams, tf, { includeOverlays: false });
         });
-        if (renderedByCapture) return true;
     }
 
-    return drawWithWebGLRaster(ctx, planeParams, planeKey, (rasterCtx) => {
-        drawPlanarTransformedShape(rasterCtx, planeParams, tf);
-    }, { renderScaleOverride: 1, directDrawIfNativeScale: false });
+    if (!geometryRendered) {
+        return false;
+    }
+
+    if (shouldDrawPlanarFunctionFociOverlay() || shouldDrawPlanarRadialOverlay()) {
+        drawWithWebGLRaster(ctx, planeParams, planeKey, (rasterCtx) => {
+            drawPlanarTransformedShape(rasterCtx, planeParams, tf, { includeGeometry: false });
+        });
+    }
+
+    return true;
 }
 
 function drawPlanarInputShapeHybrid(ctx, planeParams, planeKey) {
@@ -895,5 +899,5 @@ function drawPlanarInputShapeHybrid(ctx, planeParams, planeKey) {
 
     return drawWithWebGLRaster(ctx, planeParams, planeKey, (rasterCtx) => {
         drawPlanarInputShape(rasterCtx, planeParams);
-    }, { renderScaleOverride: 1, directDrawIfNativeScale: false });
+    });
 }

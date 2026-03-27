@@ -1,4 +1,6 @@
 const DOM_BINDINGS = [
+    { key: 'zPlaneCanvas', id: 'z_plane_canvas' },
+    { key: 'wPlaneCanvas', id: 'w_plane_canvas' },
     { key: 'zCanvasCard', id: 'z_plane_column' },
     { key: 'wCanvasCard', id: 'w_plane_column' },
     { key: 'toggleFullscreenZBtn', id: 'toggle_fullscreen_z_btn' },
@@ -108,11 +110,29 @@ const DOM_BINDINGS = [
     { key: 'vectorFieldScaleValueDisplay', id: 'vector_field_scale_value_display' },
     { key: 'enableCauchyIntegralModeCb', id: 'enable_cauchy_integral_mode_cb' },
     { key: 'cauchyIntegralResultsInfo', id: 'cauchy_integral_results_info' },
+    { key: 'imageUploadControls', id: 'image_upload_controls' },
+    { key: 'imageUploadInput', id: 'image_upload_input' },
+    { key: 'imageResolutionSlider', id: 'image_resolution_slider' },
+    { key: 'imageResolutionValueDisplay', id: 'image_resolution_value_display' },
+    { key: 'imageSizeSlider', id: 'image_size_slider' },
+    { key: 'imageSizeValueDisplay', id: 'image_size_value_display' },
+    { key: 'imageOpacitySlider', id: 'image_opacity_slider' },
+    { key: 'imageOpacityValueDisplay', id: 'image_opacity_value_display' },
     { key: 'enableRadialDiscreteStepsCb', id: 'enable_radial_discrete_steps_cb' },
     { key: 'radialDiscreteStepsOptionsDiv', id: 'radial_discrete_steps_options_div' },
     { key: 'radialDiscreteStepsCountSlider', id: 'radial_discrete_steps_count_slider' },
     { key: 'radialDiscreteStepsCountValueDisplay', id: 'radial_discrete_steps_count_value_display' },
     { key: 'enableSplitViewCb', id: 'enable_split_view_cb' },
+    { key: 'enablePlotly3DCb', id: 'enable_plotly_3d_cb' },
+    { key: 'wPlanePlotlyContainer', id: 'w_plane_plotly_container' },
+    { key: 'plotly3DOptionsDiv', id: 'plotly_3d_options_div' },
+    { key: 'riemannSphereOptionsDiv', id: 'riemann_sphere_options_div' },
+    { key: 'toggleSphereAxesGridCb', id: 'toggle_sphere_axes_grid_cb' },
+    { key: 'plotlySphereOpacitySlider', id: 'plotly_sphere_opacity_slider' },
+    { key: 'plotlySphereOpacityValueDisplay', id: 'plotly_sphere_opacity_value_display' },
+    { key: 'plotlyGridDensitySlider', id: 'plotly_grid_density_slider' },
+    { key: 'plotlyGridDensityValueDisplay', id: 'plotly_grid_density_value_display' },
+    { key: 'togglePlotlySphereGridCb', id: 'toggle_plotly_sphere_grid_cb' },
     { key: 'sphereViewControlsDiv', id: 'sphere_view_controls_div' },
     { key: 'sphereViewNorthBtn', id: 'sphere_view_north_btn' },
     { key: 'sphereViewSouthBtn', id: 'sphere_view_south_btn' },
@@ -145,6 +165,18 @@ const DOM_BINDINGS = [
     { key: 'particleSpeedValueDisplay', id: 'particle_speed_value_display' },
     { key: 'particleMaxLifetimeSlider', id: 'particle_max_lifetime_slider' },
     { key: 'particleMaxLifetimeValueDisplay', id: 'particle_max_lifetime_value_display' },
+    { key: 'laplaceAnimationSpeedSlider', id: 'laplace_animation_speed_slider' },
+    { key: 'laplaceAnimationSpeedDisplay', id: 'laplace_animation_speed_display' },
+    { key: 'laplaceAnimationLoopCb', id: 'laplace_animation_loop_cb' },
+    { key: 'laplacePlayPauseBtn', id: 'laplace_play_pause_btn' },
+    { key: 'laplaceShowFullBtn', id: 'laplace_show_full_btn' },
+    { key: 'laplaceWindingSyncBtn', id: 'laplace_winding_sync_btn' },
+    { key: 'toggleFullscreenLaplace3DBtn', id: 'toggle_fullscreen_laplace_3d_btn' },
+    { key: 'laplaceResetBtn', id: 'laplace_reset_btn' },
+    { key: 'laplace3DColumn', id: 'laplace_3d_column' },
+    { key: 'laplace3DTitleLabel', id: 'laplace_3d_title_label' },
+    { key: 'laplace3DContainer', id: 'laplace_3d_container' },
+    { key: 'preloader', id: 'preloader' },
     { key: 'functionControlsPanel', id: 'function-controls-panel' },
     { key: 'visualizationOptionsPanel', id: 'visualization-options-panel' }
 ];
@@ -168,6 +200,9 @@ function setupDOMReferences() {
     DOM_BINDINGS.forEach(binding => {
         controls[binding.key] = document.getElementById(binding.id);
     });
+    controls.cauchy_integral_results_info = controls.cauchyIntegralResultsInfo;
+    controls.zPlaneCanvas = zCanvas;
+    controls.wPlaneCanvas = wCanvas;
 
     zDomainColorCanvas = document.createElement('canvas'); wDomainColorCanvas = document.createElement('canvas');
     zDomainColorCtx = zDomainColorCanvas.getContext('2d', { willReadFrequently: true });
