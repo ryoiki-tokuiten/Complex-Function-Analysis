@@ -321,6 +321,11 @@ function generateCurrentInputShapePointSets(planeParams, options = {}) {
     return generateInputShapePointSets(buildInputShapeGeometryConfig(planeParams, options));
 }
 
+function generateCurrentMappedInputShapePointSets(planeParams, options = {}) {
+    const pointSets = generateCurrentInputShapePointSets(planeParams, options);
+    return prepareInputShapePointSetsForMapping(pointSets, options);
+}
+
 function cloneLineSet(pointSet, overrides = {}) {
     return {
         points: pointSet.points,

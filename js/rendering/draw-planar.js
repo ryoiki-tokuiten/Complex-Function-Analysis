@@ -79,22 +79,6 @@ function drawPointSetCollectionOnPlane(ctx, planeParams, pointSets, options = {}
     ctx.restore();
 }
 
-function buildCurrentInputShapePointSets(planeParams, options = {}) {
-    return generateCurrentInputShapePointSets(planeParams, {
-        currentFunction: state.currentFunction,
-        zetaContinuationEnabled: state.zetaContinuationEnabled,
-        ...options
-    });
-}
-
-function buildMappedInputShapePointSets(options = {}) {
-    const basePointSets = buildCurrentInputShapePointSets(zPlaneParams, options);
-    return prepareInputShapePointSetsForMapping(basePointSets, {
-        currentFunction: options.currentFunction ?? state.currentFunction,
-        zetaContinuationEnabled: options.zetaContinuationEnabled ?? state.zetaContinuationEnabled
-    });
-}
-
 function drawRadialDiscreteSteps(ctx, planeParams, currentFunctionKey, stepsCount) {
     const transformFunc = transformFunctions[currentFunctionKey];
     if (typeof transformFunc !== 'function') {
@@ -227,7 +211,10 @@ function drawPlanarInputShape(ctx, planeParams) {
         return;
     }
 
-    const pointSets = buildCurrentInputShapePointSets(planeParams);
+    const pointSets = generateCurrentInputShapePointSets(planeParams, {
+        currentFunction: state.currentFunction,
+        zetaContinuationEnabled: state.zetaContinuationEnabled
+    });
     const highlightContour = state.cauchyIntegralModeEnabled && (inputShape === 'circle' || inputShape === 'ellipse');
 
     drawPointSetCollectionOnPlane(ctx, planeParams, pointSets, {
@@ -458,8 +445,25 @@ function shouldDrawPlanarFunctionFociOverlay() {
     return state.currentInputShape === 'line' && (state.currentFunction === 'cos' || state.currentFunction === 'sin');
 }
 
-function shouldDrawPlanarRadialOverlay() {
+function shouldDrawPlanarInputRadialOverlay() {
     return state.radialDiscreteStepsEnabled && state.currentFunction !== 'poincare';
+}
+
+function isWithinTaylorConvergenceRegion(zInputComplex, z0Complex) {
+    const radius = state.taylorSeriesConvergenceRadius;
+    if (!Number.isFinite(radius)) {
+        return true;
+    }
+
+    const dx = zInputComplex.re - z0Complex.re;
+    const dy = zInputComplex.im - z0Complex.im;
+    return dx * dx + dy * dy <= (radius * radius * 1.000001);
+}
+
+function drawPlanarInputOverlays(ctx, planeParams) {
+    if (shouldDrawPlanarInputRadialOverlay()) {
+        drawRadialDiscreteSteps(ctx, planeParams, state.currentFunction, state.radialDiscreteStepsCount);
+    }
 }
 
 function drawPlanarTransformedShape(ctx, planeParams, tf, options = {}) {
@@ -496,7 +500,10 @@ function drawPlanarTransformedShape(ctx, planeParams, tf, options = {}) {
             }
 
         } else {
-            const pointSets = buildMappedInputShapePointSets();
+            const pointSets = generateCurrentMappedInputShapePointSets(zPlaneParams, {
+                currentFunction: state.currentFunction,
+                zetaContinuationEnabled: state.zetaContinuationEnabled
+            });
             drawPointSetCollectionOnPlane(ctx, planeParams, pointSets, {
                 transformFunc: tf,
                 colorResolver: pointSet => highlightContour && pointSet.role === 'shape-curve'
@@ -517,17 +524,22 @@ function drawPlanarTransformedShape(ctx, planeParams, tf, options = {}) {
     if (includeOverlays && shouldDrawPlanarFunctionFociOverlay()) {
         drawFunctionFociOverlay(ctx, planeParams);
     }
-
-    if (includeOverlays && shouldDrawPlanarRadialOverlay()) {
-        drawRadialDiscreteSteps(ctx, planeParams, state.currentFunction, state.radialDiscreteStepsCount);
-    }
 }
 
 function createTaylorApproximationTransform(functionKey, taylorCenter, taylorOrder) {
+    const z0Complex = new Complex(taylorCenter.re, taylorCenter.im);
+    const coefficients = computeTaylorSeriesCoefficients(functionKey, z0Complex, taylorOrder);
+
     return (re, im) => {
+        if (!coefficients) {
+            return { re: NaN, im: NaN };
+        }
+
         const zInputComplex = new Complex(re, im);
-        const z0Complex = new Complex(taylorCenter.re, taylorCenter.im);
-        const result = calculateTaylorApproximation(functionKey, zInputComplex, z0Complex, taylorOrder);
+        if (!isWithinTaylorConvergenceRegion(zInputComplex, z0Complex)) {
+            return { re: NaN, im: NaN };
+        }
+        const result = evaluateTaylorSeries(coefficients, zInputComplex, z0Complex);
         return { re: result.re, im: result.im };
     };
 }
@@ -552,7 +564,10 @@ function drawPlanarTaylorApproximation(ctx, wPlaneParamsOriginal, originalFuncKe
     }
 
     const taylorApproxFunc = createTaylorApproximationTransform(originalFuncKey, taylorCenter, taylorOrder);
-    const pointSets = buildCurrentInputShapePointSets(zPlaneParams);
+    const pointSets = generateCurrentInputShapePointSets(zPlaneParams, {
+        currentFunction: state.currentFunction,
+        zetaContinuationEnabled: state.zetaContinuationEnabled
+    });
 
     drawPointSetCollectionOnPlane(ctx, wPlaneParamsOriginal, pointSets, {
         transformFunc: taylorApproxFunc,

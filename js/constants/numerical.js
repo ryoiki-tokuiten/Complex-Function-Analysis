@@ -1,6 +1,7 @@
 // js/constants/numerical.js
 
 const TWO_PI = 2 * Math.PI;
+const PI = TWO_PI / 2;
 
 const NUM_POINTS_CURVE = 1000;
 const NUM_ZETA_TERMS_DIRECT_SUM = 100;
@@ -34,3 +35,37 @@ const PROBE_CROSSHAIR_SIZE_FACTOR = 3.5;
 const RADIAL_STEPS_MIN = 0;
 const RADIAL_STEPS_MAX = 800;
 const DEFAULT_RADIAL_STEPS = 200;
+const DEFAULT_TAYLOR_SERIES_CENTER = Object.freeze({ re: 0, im: 0 });
+const TAYLOR_CENTER_PRESET_GROUPS = Object.freeze([
+    Object.freeze({
+        label: 'Real Axis',
+        presets: Object.freeze([
+            Object.freeze({ label: '0', re: 0, im: 0 }),
+            Object.freeze({ label: '+1', re: 1, im: 0 }),
+            Object.freeze({ label: '-1', re: -1, im: 0 }),
+            Object.freeze({ label: 'pi/4', re: PI / 4, im: 0 }),
+            Object.freeze({ label: '-pi/4', re: -PI / 4, im: 0 }),
+            Object.freeze({ label: 'pi/2', re: PI / 2, im: 0 }),
+            Object.freeze({ label: '-pi/2', re: -PI / 2, im: 0 }),
+            Object.freeze({ label: '3pi/4', re: (3 * PI) / 4, im: 0 }),
+            Object.freeze({ label: 'pi', re: PI, im: 0 }),
+            Object.freeze({ label: '-pi', re: -PI, im: 0 }),
+            Object.freeze({ label: '2pi', re: TWO_PI, im: 0 }),
+            Object.freeze({ label: '-2pi', re: -TWO_PI, im: 0 }),
+            Object.freeze({ label: '4pi', re: 2 * TWO_PI, im: 0 }),
+            Object.freeze({ label: '-4pi', re: -2 * TWO_PI, im: 0 })
+        ])
+    }),
+    Object.freeze({
+        label: 'Imaginary Axis',
+        presets: Object.freeze([
+            Object.freeze({ label: 'i', re: 0, im: 1 }),
+            Object.freeze({ label: '-i', re: 0, im: -1 }),
+            Object.freeze({ label: 'pi*i', re: 0, im: PI }),
+            Object.freeze({ label: '-pi*i', re: 0, im: -PI }),
+            Object.freeze({ label: '2pi*i', re: 0, im: TWO_PI }),
+            Object.freeze({ label: '-2pi*i', re: 0, im: -TWO_PI })
+        ])
+    })
+]);
+const TAYLOR_CENTER_PRESETS = Object.freeze(TAYLOR_CENTER_PRESET_GROUPS.flatMap(group => group.presets));

@@ -88,10 +88,12 @@ const DOM_BINDINGS = [
     { key: 'enableRiemannSphereCb', id: 'enable_riemann_sphere_cb' },
     { key: 'enableTaylorSeriesCb', id: 'enable_taylor_series_cb' },
     { key: 'taylorSeriesOptionsDetailDiv', id: 'taylor_series_options_detail_div' },
+    { key: 'taylorSeriesCenterStatus', id: 'taylor_series_center_status' },
     { key: 'taylorSeriesOrderSlider', id: 'taylor_series_order_slider' },
     { key: 'taylorSeriesOrderValueDisplay', id: 'taylor_series_order_value_display' },
     { key: 'enableTaylorSeriesCustomCenterCb', id: 'enable_taylor_series_custom_center_cb' },
     { key: 'taylorSeriesCustomCenterInputsDiv', id: 'taylor_series_custom_center_inputs_div' },
+    { key: 'taylorSeriesPresetGroups', id: 'taylor_series_preset_groups' },
     { key: 'taylorSeriesCustomCenterReInput', id: 'taylor_series_custom_center_re_input' },
     { key: 'taylorSeriesCustomCenterImInput', id: 'taylor_series_custom_center_im_input' },
     { key: 'zPlaneProbeInfo', id: 'z_plane_probe_info' },
@@ -181,6 +183,58 @@ const DOM_BINDINGS = [
     { key: 'visualizationOptionsPanel', id: 'visualization-options-panel' }
 ];
 
+function formatTaylorNumericValue(value) {
+    if (!Number.isFinite(value)) {
+        return '0';
+    }
+
+    const normalizedValue = Math.abs(value) < 1e-10 ? 0 : value;
+    return Number(normalizedValue.toFixed(6)).toString();
+}
+
+function findTaylorCenterPreset(re, im) {
+    return TAYLOR_CENTER_PRESETS.find(preset =>
+        Math.abs(preset.re - re) < 1e-9 &&
+        Math.abs(preset.im - im) < 1e-9
+    ) || null;
+}
+
+function renderTaylorPresetGroups() {
+    if (!controls.taylorSeriesPresetGroups) {
+        return;
+    }
+
+    const fragment = document.createDocumentFragment();
+
+    TAYLOR_CENTER_PRESET_GROUPS.forEach(group => {
+        const groupElement = document.createElement('div');
+        groupElement.className = 'taylor-series-preset-group';
+
+        const headingElement = document.createElement('div');
+        headingElement.className = 'taylor-series-preset-group-title';
+        headingElement.textContent = group.label;
+        groupElement.appendChild(headingElement);
+
+        const buttonRow = document.createElement('div');
+        buttonRow.className = 'taylor-series-preset-buttons';
+
+        group.presets.forEach(preset => {
+            const button = document.createElement('button');
+            button.type = 'button';
+            button.className = 'taylor-series-preset-btn';
+            button.textContent = preset.label;
+            button.dataset.taylorPresetRe = String(preset.re);
+            button.dataset.taylorPresetIm = String(preset.im);
+            buttonRow.appendChild(button);
+        });
+
+        groupElement.appendChild(buttonRow);
+        fragment.appendChild(groupElement);
+    });
+
+    controls.taylorSeriesPresetGroups.replaceChildren(fragment);
+}
+
 function setupDOMReferences() {
     zCanvas = document.getElementById('z_plane_canvas'); wCanvas = document.getElementById('w_plane_canvas');
     zCtx = zCanvas.getContext('2d');
@@ -200,6 +254,7 @@ function setupDOMReferences() {
     DOM_BINDINGS.forEach(binding => {
         controls[binding.key] = document.getElementById(binding.id);
     });
+    renderTaylorPresetGroups();
     controls.cauchy_integral_results_info = controls.cauchyIntegralResultsInfo;
     controls.zPlaneCanvas = zCanvas;
     controls.wPlaneCanvas = wCanvas;

@@ -54,11 +54,10 @@ function buildPlanarLayerCacheKey(isWPlane) {
     const params = isWPlane ? wPlaneParams : zPlaneParams;
     let keyParts = [
         `f:${state.currentFunction}`,
+        `taylor:${isWPlane && state.taylorSeriesEnabled ? 1 : 0}`,
         `shape:${state.currentInputShape}`,
         `grid:${state.gridDensity}`,
         `zetaC:${state.zetaContinuationEnabled ? 1 : 0}`,
-        `radialD:${state.radialDiscreteStepsEnabled ? 1 : 0}`,
-        `radialN:${state.radialDiscreteStepsCount}`,
         `a0:${toCacheKeyNumber(state.a0)}`,
         `b0:${toCacheKeyNumber(state.b0)}`,
         `circleR:${toCacheKeyNumber(state.circleR)}`,
@@ -85,6 +84,10 @@ function buildPlanarLayerCacheKey(isWPlane) {
     ];
 
     if (isWPlane) {
+        if (state.taylorSeriesEnabled) {
+            appendPointToCacheKey(keyParts, 'tC', state.taylorSeriesCenter);
+            keyParts.push(`tO:${state.taylorSeriesOrder}`);
+        }
         appendPointToCacheKey(keyParts, 'mA', state.mobiusA);
         appendPointToCacheKey(keyParts, 'mB', state.mobiusB);
         appendPointToCacheKey(keyParts, 'mC', state.mobiusC);
@@ -117,7 +120,6 @@ function ensurePlanarLayerCacheCanvas(cacheObj, width, height) {
 }
 
 function shouldUseWPlanarTransformedLayerCache() {
-    if (state.taylorSeriesEnabled) return false;
     if (state.riemannSphereViewEnabled || state.splitViewEnabled) return false;
     if (state.panStateZ && state.panStateZ.isPanning) return false;
     if (state.panStateW && state.panStateW.isPanning) return false;
@@ -267,8 +269,8 @@ function drawZPlaneContent(){
             }
         }, 'raster');
         drawPlaneLayer(zCtx, zPlaneParams, 'z', (layerCtx) => {
-            drawRiemannSphereBase(layerCtx, cSP, zPlaneParams);
-            drawSphereGridAndShape(layerCtx, cSP, zPlaneParams, false);
+            drawRiemannSphereBase(layerCtx, cSP);
+            drawSphereGridAndShape(layerCtx, cSP, false);
             if (state.probeActive) {
                 drawSphereProbeAndNeighborhood(layerCtx, cSP, state.probeZ, state.probeNeighborhoodSize, null);
             }
@@ -340,6 +342,12 @@ function drawZPlaneContent(){
                 if (!renderedInputByWebGL) {
                     drawPlanarInputShape(zCtx, zPlaneParams);
                 }
+            }
+
+            if (state.radialDiscreteStepsEnabled && state.currentFunction !== 'poincare') {
+                drawPlaneLayer(zCtx, zPlaneParams, 'z', (layerCtx) => {
+                    drawPlanarInputOverlays(layerCtx, zPlaneParams);
+                }, 'raster');
             }
         }
         if (state.showZerosPoles) {
@@ -441,18 +449,58 @@ function drawWPlaneContent() {
                     'Im(w_approx)'
                 );
             }, 'raster');
-            drawPlaneLayer(wCtx, wPlaneParams, 'w', (layerCtx) => {
-                drawPlanarTaylorApproximation(
-                    layerCtx,
-                    wPlaneParams,
-                    state.currentFunction,
-                    state.taylorSeriesCenter,
-                    state.taylorSeriesOrder,
-                    state.taylorSeriesColorAxisX,
-                    state.taylorSeriesColorAxisY,
-                    { includeAxes: false }
-                );
-            }, 'capture');
+            const useCachedTaylorLayer = shouldUseWPlanarTransformedLayerCache();
+            if (useCachedTaylorLayer) {
+                const cacheCanvas = ensurePlanarLayerCacheCanvas(wPlanarTransformedLayerCache, wPlaneParams.width, wPlaneParams.height);
+                const cacheCtx = wPlanarTransformedLayerCache.ctx;
+                const cacheKey = buildPlanarLayerCacheKey(true);
+
+                if (cacheCanvas && cacheCtx) {
+                    if (wPlanarTransformedLayerCache.key !== cacheKey) {
+                        cacheCtx.setTransform(1, 0, 0, 1, 0, 0);
+                        cacheCtx.clearRect(0, 0, cacheCanvas.width, cacheCanvas.height);
+                        drawPlanarTaylorApproximation(
+                            cacheCtx,
+                            wPlaneParams,
+                            state.currentFunction,
+                            state.taylorSeriesCenter,
+                            state.taylorSeriesOrder,
+                            state.taylorSeriesColorAxisX,
+                            state.taylorSeriesColorAxisY,
+                            { includeAxes: false }
+                        );
+                        wPlanarTransformedLayerCache.key = cacheKey;
+                    }
+                    wCtx.drawImage(cacheCanvas, 0, 0);
+                } else {
+                    drawPlaneLayer(wCtx, wPlaneParams, 'w', (layerCtx) => {
+                        drawPlanarTaylorApproximation(
+                            layerCtx,
+                            wPlaneParams,
+                            state.currentFunction,
+                            state.taylorSeriesCenter,
+                            state.taylorSeriesOrder,
+                            state.taylorSeriesColorAxisX,
+                            state.taylorSeriesColorAxisY,
+                            { includeAxes: false }
+                        );
+                    }, 'capture');
+                }
+            } else {
+                wPlanarTransformedLayerCache.key = null;
+                drawPlaneLayer(wCtx, wPlaneParams, 'w', (layerCtx) => {
+                    drawPlanarTaylorApproximation(
+                        layerCtx,
+                        wPlaneParams,
+                        state.currentFunction,
+                        state.taylorSeriesCenter,
+                        state.taylorSeriesOrder,
+                        state.taylorSeriesColorAxisX,
+                        state.taylorSeriesColorAxisY,
+                        { includeAxes: false }
+                    );
+                }, 'capture');
+            }
         } else { // This 'else' corresponds to !(state.taylorSeriesEnabled && !isRiemannW)
             if (isRiemannW) { // This is for the 2D canvas Riemann sphere
                  const cSP = sphereViewParams.w;
@@ -466,8 +514,8 @@ function drawWPlaneContent() {
                     }
                 }, 'raster');
                 drawPlaneLayer(wCtx, wPlaneParams, 'w', (layerCtx) => {
-                    drawRiemannSphereBase(layerCtx, cSP, wPlaneParams);
-                    drawSphereGridAndShape(layerCtx, cSP, wPlaneParams, true, curFunc);
+                    drawRiemannSphereBase(layerCtx, cSP);
+                    drawSphereGridAndShape(layerCtx, cSP, true, curFunc);
                 }, 'capture');
             } else { // Planar w-plane view
                 const useCachedLayer = shouldUseWPlanarTransformedLayerCache();

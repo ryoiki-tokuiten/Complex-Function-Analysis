@@ -68,7 +68,11 @@ function appendMappedSphereLineTraces(traces, sourcePoints, transformPoint, opti
 
 function getPlotlyMappedData(transformFunc) {
     const traces = [];
-    const sourcePointSets = getSphereSourcePointSets(true);
+    const sourcePointSets = generateCurrentMappedInputShapePointSets(zPlaneParams, {
+        currentFunction: state.currentFunction,
+        zetaContinuationEnabled: state.zetaContinuationEnabled,
+        curvePoints: NUM_POINTS_CURVE
+    });
 
     sourcePointSets.forEach(set => {
         appendMappedSphereLineTraces(

@@ -394,6 +394,32 @@ function initializeCustomTaylorCenter() {
     }
 }
 
+function syncTaylorCustomCenterInputs() {
+    if (controls.taylorSeriesCustomCenterReInput && document.activeElement !== controls.taylorSeriesCustomCenterReInput) {
+        controls.taylorSeriesCustomCenterReInput.value = formatTaylorNumericValue(state.taylorSeriesCustomCenter.re);
+    }
+    if (controls.taylorSeriesCustomCenterImInput && document.activeElement !== controls.taylorSeriesCustomCenterImInput) {
+        controls.taylorSeriesCustomCenterImInput.value = formatTaylorNumericValue(state.taylorSeriesCustomCenter.im);
+    }
+}
+
+function setTaylorCustomCenter(re, im, shouldRedraw = true) {
+    state.taylorSeriesCustomCenter.re = re;
+    state.taylorSeriesCustomCenter.im = im;
+    syncTaylorCustomCenterInputs();
+
+    if (typeof syncTaylorSeriesCenterStatus === 'function') {
+        syncTaylorSeriesCenterStatus();
+    }
+    if (typeof syncTaylorSeriesPresetSelection === 'function') {
+        syncTaylorSeriesPresetSelection();
+    }
+
+    if (shouldRedraw) {
+        requestRedrawAll();
+    }
+}
+
 function initializeScalarBindings() {
     sliderParamKeys.forEach(key => {
         readSliderState(`${key}Slider`, key, parseFloat);
@@ -628,7 +654,7 @@ function bindTaylorControls() {
         if (controls.taylorSeriesOptionsDetailDiv) {
             controls.taylorSeriesOptionsDetailDiv.classList.toggle('hidden', !state.taylorSeriesEnabled);
         }
-        requestDomainRedraw(true);
+        requestRedrawAll();
     });
 
     bindSlider('taylorSeriesOrderSlider', 'taylorSeriesOrder', parseInteger);
@@ -637,27 +663,49 @@ function bindTaylorControls() {
         if (controls.taylorSeriesCustomCenterInputsDiv) {
             controls.taylorSeriesCustomCenterInputsDiv.classList.toggle('hidden', !state.taylorSeriesCustomCenterEnabled);
         }
+        if (typeof syncTaylorSeriesCenterStatus === 'function') {
+            syncTaylorSeriesCenterStatus();
+        }
         requestRedrawAll();
+    });
+
+    bindElementListener(controls.taylorSeriesPresetGroups, 'click', event => {
+        const presetButton = event.target.closest('[data-taylor-preset-re][data-taylor-preset-im]');
+        if (!presetButton) {
+            return;
+        }
+
+        const presetRe = parseFloat(presetButton.dataset.taylorPresetRe);
+        const presetIm = parseFloat(presetButton.dataset.taylorPresetIm);
+        if (Number.isNaN(presetRe) || Number.isNaN(presetIm)) {
+            return;
+        }
+
+        setTaylorCustomCenter(presetRe, presetIm);
     });
 
     bindControlListener('taylorSeriesCustomCenterReInput', 'input', (_event, input) => {
         const parsed = parseFloat(input.value);
         state.taylorSeriesCustomCenter.re = Number.isNaN(parsed) ? 0 : parsed;
+        if (typeof syncTaylorSeriesPresetSelection === 'function') {
+            syncTaylorSeriesPresetSelection();
+        }
     });
     bindControlListener('taylorSeriesCustomCenterReInput', 'change', (_event, input) => {
         const parsed = parseFloat(input.value);
-        state.taylorSeriesCustomCenter.re = Number.isNaN(parsed) ? 0 : parsed;
-        requestRedrawAll();
+        setTaylorCustomCenter(Number.isNaN(parsed) ? 0 : parsed, state.taylorSeriesCustomCenter.im);
     });
 
     bindControlListener('taylorSeriesCustomCenterImInput', 'input', (_event, input) => {
         const parsed = parseFloat(input.value);
         state.taylorSeriesCustomCenter.im = Number.isNaN(parsed) ? 0 : parsed;
+        if (typeof syncTaylorSeriesPresetSelection === 'function') {
+            syncTaylorSeriesPresetSelection();
+        }
     });
     bindControlListener('taylorSeriesCustomCenterImInput', 'change', (_event, input) => {
         const parsed = parseFloat(input.value);
-        state.taylorSeriesCustomCenter.im = Number.isNaN(parsed) ? 0 : parsed;
-        requestRedrawAll();
+        setTaylorCustomCenter(state.taylorSeriesCustomCenter.re, Number.isNaN(parsed) ? 0 : parsed);
     });
 }
 

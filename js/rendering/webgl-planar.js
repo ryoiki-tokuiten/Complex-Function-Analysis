@@ -861,10 +861,6 @@ function drawWithWebGLRaster(ctx, planeParams, planeKey, drawCallback, options =
     }
 }
 
-function canUseWebGLForPlanarInputShape() {
-    return true;
-}
-
 function drawPlanarTransformedShapeHybrid(ctx, planeParams, tf, planeKey) {
     let geometryRendered = drawWithWebGLCapture(ctx, planeParams, planeKey, (captureCtx) => {
         drawPlanarTransformedShape(captureCtx, planeParams, tf, { includeOverlays: false });
@@ -880,7 +876,7 @@ function drawPlanarTransformedShapeHybrid(ctx, planeParams, tf, planeKey) {
         return false;
     }
 
-    if (shouldDrawPlanarFunctionFociOverlay() || shouldDrawPlanarRadialOverlay()) {
+    if (shouldDrawPlanarFunctionFociOverlay()) {
         drawWithWebGLRaster(ctx, planeParams, planeKey, (rasterCtx) => {
             drawPlanarTransformedShape(rasterCtx, planeParams, tf, { includeGeometry: false });
         });
@@ -890,12 +886,10 @@ function drawPlanarTransformedShapeHybrid(ctx, planeParams, tf, planeKey) {
 }
 
 function drawPlanarInputShapeHybrid(ctx, planeParams, planeKey) {
-    if (canUseWebGLForPlanarInputShape()) {
-        const renderedByCapture = drawWithWebGLCapture(ctx, planeParams, planeKey, (captureCtx) => {
-            drawPlanarInputShape(captureCtx, planeParams);
-        });
-        if (renderedByCapture) return true;
-    }
+    const renderedByCapture = drawWithWebGLCapture(ctx, planeParams, planeKey, (captureCtx) => {
+        drawPlanarInputShape(captureCtx, planeParams);
+    });
+    if (renderedByCapture) return true;
 
     return drawWithWebGLRaster(ctx, planeParams, planeKey, (rasterCtx) => {
         drawPlanarInputShape(rasterCtx, planeParams);

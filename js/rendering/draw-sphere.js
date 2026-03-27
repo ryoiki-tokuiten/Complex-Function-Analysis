@@ -1,4 +1,4 @@
-function drawRiemannSphereBase(ctx,cSP,cDOMP){const{centerX:cX,centerY:cY,radius:r}=cSP;ctx.save();ctx.strokeStyle=COLOR_SPHERE_OUTLINE;ctx.lineWidth=1.5;ctx.beginPath();ctx.arc(cX,cY,r,0,2*Math.PI);ctx.stroke();ctx.restore();}
+function drawRiemannSphereBase(ctx,cSP){const{centerX:cX,centerY:cY,radius:r}=cSP;ctx.save();ctx.strokeStyle=COLOR_SPHERE_OUTLINE;ctx.lineWidth=1.5;ctx.beginPath();ctx.arc(cX,cY,r,0,2*Math.PI);ctx.stroke();ctx.restore();}
 
 function drawMappedLineSetOnSphere(ctx, cSP, z_pts_src_arr, col, isWP, tf) {
     const { centerX: cX, centerY: cY, radius: r, rotX, rotY } = cSP;
@@ -93,23 +93,6 @@ function drawMappedLineSetOnSphere(ctx, cSP, z_pts_src_arr, col, isWP, tf) {
     });
 }
 
-function getSphereSourcePointSets(isWP) {
-    const pointSets = generateCurrentInputShapePointSets(zPlaneParams, {
-        currentFunction: state.currentFunction,
-        zetaContinuationEnabled: state.zetaContinuationEnabled,
-        curvePoints: NUM_POINTS_CURVE
-    });
-
-    if (!isWP) {
-        return pointSets;
-    }
-
-    return prepareInputShapePointSetsForMapping(pointSets, {
-        currentFunction: state.currentFunction,
-        zetaContinuationEnabled: state.zetaContinuationEnabled
-    });
-}
-
 function getSpherePointSetColor(pointSet, isWP) {
     if (!isWP) {
         return COLOR_SPHERE_GRID;
@@ -117,7 +100,7 @@ function getSpherePointSetColor(pointSet, isWP) {
     return pointSet.color || COLOR_SPHERE_GRID;
 }
 
-function drawSphereGridAndShape(ctx, cSP, cDOMP, isWP, tf = null) {
+function drawSphereGridAndShape(ctx, cSP, isWP, tf = null) {
     if (state.currentInputShape === 'image' && state.imagePoints && state.imagePoints.length > 0) {
         const size = state.imageSize || 2.0;
         const cx = state.a0 || 0;
@@ -142,7 +125,17 @@ function drawSphereGridAndShape(ctx, cSP, cDOMP, isWP, tf = null) {
         return;
     }
 
-    const sourcePointSets = getSphereSourcePointSets(isWP);
+    const sourcePointSets = isWP
+        ? generateCurrentMappedInputShapePointSets(zPlaneParams, {
+            currentFunction: state.currentFunction,
+            zetaContinuationEnabled: state.zetaContinuationEnabled,
+            curvePoints: NUM_POINTS_CURVE
+        })
+        : generateCurrentInputShapePointSets(zPlaneParams, {
+            currentFunction: state.currentFunction,
+            zetaContinuationEnabled: state.zetaContinuationEnabled,
+            curvePoints: NUM_POINTS_CURVE
+        });
 
     sourcePointSets.forEach(set => {
         drawMappedLineSetOnSphere(

@@ -1086,210 +1086,172 @@ select:focus {
 #taylor_series_custom_center_re_input,
 #taylor_series_custom_center_im_input {
     pointer-events: auto !important;
-    z-index: 10; /* Ensure they are not hidden behind other panel elements */
+    z-index: 10;
 }
 
-/* --- Taylor Series Panel Styling --- */
+/* Taylor Series Panel */
 .taylor-series-panel {
-    background: rgba(40, 45, 60, 0.85); /* Slightly darker, more sophisticated background */
-    border-radius: 8px;
-    padding: 18px;
-    margin-top: 15px;
-    border: 1px solid rgba(100, 110, 130, 0.5);
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
-    transition: all 0.3s ease-in-out;
-}
-
-.taylor-series-panel:hover {
-    box-shadow: 0 6px 18px rgba(0, 0, 0, 0.4);
-}
-
-.taylor-series-control-group {
-    margin-bottom: 18px;
-    padding: 12px;
-    background: rgba(45, 50, 65, 0.7); /* Subtle background for groups */
-    border-radius: 6px;
-    border: 1px solid rgba(80, 90, 110, 0.4);
-}
-
-.taylor-series-control-group:last-child {
-    margin-bottom: 0;
-}
-
-.taylor-series-label,
-.taylor-series-checkbox-label,
-.taylor-series-input-label {
-    display: block; /* Ensure labels take full width for alignment */
-    color: #d0d8e8; /* Lighter text for contrast */
-    font-size: 0.9rem;
-    font-weight: 500; /* Slightly bolder labels */
-    margin-bottom: 8px;
-    transition: color 0.2s ease;
-}
-
-.taylor-series-panel:hover .taylor-series-label {
-    /* color: #e0e8f8; Optional: slightly brighten label on panel hover */
-}
-
-/* Specific for checkbox label to align with custom checkbox */
-.taylor-series-checkbox-label {
-    position: relative;
-    padding-left: 28px; /* Space for custom checkbox */
-    cursor: pointer;
-    display: flex; /* Align checkbox and text nicely */
-    align-items: center;
-    min-height: 22px; /* Ensure clickable area */
-}
-
-.taylor-series-slider {
-    width: 100%;
-    appearance: none; /* Remove default styling */
-    -webkit-appearance: none;
-    height: 8px;
-    background: rgba(0,0,0,0.3); /* Darker track */
-    border-radius: 4px;
-    outline: none;
-    transition: background 0.3s ease;
-}
-
-.taylor-series-slider::-webkit-slider-thumb {
-    -webkit-appearance: none;
-    appearance: none;
-    width: 18px;
-    height: 18px;
-    background: #82aaff; /* Accent color for thumb */
-    border-radius: 50%;
-    border: 2px solid #fff;
-    cursor: pointer;
-    transition: background 0.3s ease, transform 0.2s ease;
-    box-shadow: 0 0 5px rgba(130, 170, 255, 0.5);
-}
-
-.taylor-series-slider::-moz-range-thumb {
-    width: 16px;
-    height: 16px;
-    background: #82aaff;
-    border-radius: 50%;
-    border: 2px solid #fff;
-    cursor: pointer;
-    transition: background 0.3s ease, transform 0.2s ease;
-    box-shadow: 0 0 5px rgba(130, 170, 255, 0.5);
-}
-
-.taylor-series-slider:hover::-webkit-slider-thumb {
-    background: #9ac0ff;
-    transform: scale(1.1);
-}
-.taylor-series-slider:hover::-moz-range-thumb {
-    background: #9ac0ff;
-    transform: scale(1.1);
-}
-.taylor-series-slider:active::-webkit-slider-thumb {
-    background: #6a9bff;
-    transform: scale(1.2);
-}
-.taylor-series-slider:active::-moz-range-thumb {
-    background: #6a9bff;
-    transform: scale(1.2);
-}
-
-
-/* Custom Checkbox for Taylor Series Panel */
-.taylor-series-checkbox {
-    opacity: 0; /* Hide original checkbox */
-    width: 0;
-    height: 0;
-    position: absolute;
-}
-
-.taylor-series-checkbox-label .custom-checkbox-visual {
-    /* Use existing custom checkbox visual if it's globally styled,
-       or define a new one here if needed for Taylor series specifically.
-       Assuming .custom-checkbox-visual is already defined globally.
-       If not, here's a basic version: */
-    position: absolute;
-    left: 0;
-    top: 50%;
-    transform: translateY(-50%);
-    height: 18px;
-    width: 18px;
-    background-color: rgba(0,0,0,0.2);
-    border: 1px solid rgba(120,130,150,0.7);
-    border-radius: 4px;
-    transition: background-color 0.2s ease, border-color 0.2s ease;
-}
-
-.taylor-series-checkbox-label:hover .custom-checkbox-visual {
-    border-color: #82aaff;
-}
-
-.taylor-series-checkbox:checked + .custom-checkbox-visual {
-    background-color: #82aaff;
-    border-color: #7095e0;
-}
-
-.taylor-series-checkbox:checked + .custom-checkbox-visual::after {
-    content: "";
-    position: absolute;
-    left: 6px;
-    top: 2px;
-    width: 5px;
-    height: 10px;
-    border: solid white;
-    border-width: 0 2px 2px 0;
-    transform: rotate(45deg);
-}
-
-/* Text Inputs for Taylor Series Panel */
-.taylor-series-text-input {
-    width: calc(50% - 10px); /* Adjust width as they are inline */
-    padding: 8px 10px;
-    background-color: rgba(0,0,0,0.25);
-    border: 1px solid rgba(100, 110, 130, 0.6);
-    border-radius: 4px;
-    color: #e0e8f8;
-    font-size: 0.85rem;
-    transition: border-color 0.3s ease, background-color 0.3s ease, box-shadow 0.3s ease;
-}
-
-.taylor-series-text-input:focus {
-    background-color: rgba(0,0,0,0.3);
-    border-color: #82aaff; /* Accent color on focus */
-    box-shadow: 0 0 8px rgba(130, 170, 255, 0.3);
-    outline: none;
-}
-
-.taylor-series-input-group {
+    margin-top: 0.4rem;
+    padding: 1rem;
+    border: 1px solid color-mix(in srgb, var(--accent-purple) 24%, transparent);
+    border-radius: 16px;
+    background:
+        linear-gradient(145deg, rgba(38, 24, 76, 0.74), rgba(18, 16, 45, 0.88)),
+        rgba(var(--bg-color-rgb), 0.4);
+    box-shadow: inset 0 1px 0 rgba(255,255,255,0.05), 0 10px 28px rgba(0, 0, 0, 0.22);
     display: flex;
-    justify-content: space-between; /* Space out Re and Im inputs */
+    flex-direction: column;
+    gap: 0.85rem;
 }
 
-.taylor-series-input-group .taylor-series-input-label {
-    width: auto; /* Labels for Re/Im inputs should not be full width */
-    margin-right: 5px; /* Space between label and input if they were on same line, but they are not */
-}
-
-/* Styling for the input groups (Re and Im parts) if they have individual labels */
-.taylor-series-input-group > label[for*="re_input"],
-.taylor-series-input-group > label[for*="im_input"] {
-    /* This selector might be too broad if structure changes.
-       The HTML has <label>Re(z0): <input></label> <label>Im(z0): <input></label>
-       So, the .taylor-series-input-label class on the label is better.
-    */
-}
-
-.taylor-series-input-group .small-number-input { /* This is the existing class on the inputs */
-    width: auto; /* Let them size based on content or a fixed small width */
-    flex-grow: 1; /* Allow them to take available space within their parent label if needed */
-}
-
-/* Adjust spacing for the specific Re/Im input structure if they are side-by-side */
-#taylor_series_custom_center_inputs_div label { /* Target labels within the Re/Im input div */
+.taylor-series-header {
     display: flex;
-    flex-direction: column; /* Stack label text above input */
     align-items: flex-start;
-    width: 48%; /* Each takes roughly half the space */
+    justify-content: space-between;
+    gap: 1rem;
+    padding-bottom: 0.2rem;
 }
-#taylor_series_custom_center_inputs_div label .taylor-series-text-input {
-    width: 100%; /* Input takes full width of its label container */
+
+.taylor-series-header-copy {
+    display: flex;
+    flex-direction: column;
+    gap: 0.2rem;
+    min-width: 0;
+}
+
+.taylor-series-eyebrow {
+    font-size: 0.72rem;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    color: color-mix(in srgb, var(--accent-pink) 52%, var(--text-secondary-color));
+}
+
+.taylor-series-title {
+    font-size: 1rem;
+    font-weight: 600;
+    color: var(--text-color);
+}
+
+.taylor-series-description,
+.taylor-series-inline-copy,
+.taylor-series-section-head .taylor-series-inline-copy {
+    font-size: 0.8rem;
+    line-height: 1.45;
+    color: var(--text-secondary-color);
+}
+
+.taylor-series-center-status {
+    flex-shrink: 0;
+    padding: 0.55rem 0.8rem;
+    border-radius: 999px;
+    border: 1px solid color-mix(in srgb, var(--accent-purple) 34%, transparent);
+    background: rgba(11, 14, 34, 0.45);
+    color: var(--text-color);
+    font-size: 0.8rem;
+    font-weight: 600;
+    letter-spacing: 0.01em;
+}
+
+.taylor-series-card {
+    padding: 0.95rem 1rem;
+    border-radius: 14px;
+    border: 1px solid rgba(128, 137, 255, 0.16);
+    background: rgba(9, 13, 33, 0.24);
+}
+
+.taylor-series-card label {
+    color: var(--text-color);
+}
+
+.taylor-series-section-label {
+    color: var(--text-color);
+    font-weight: 600;
+}
+
+.taylor-series-toggle-label {
+    color: var(--text-color);
+}
+
+.taylor-series-custom-block {
+    gap: 0.85rem;
+}
+
+.taylor-series-section-head {
+    display: flex;
+    flex-direction: column;
+    gap: 0.2rem;
+}
+
+.taylor-series-preset-groups {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+    gap: 0.75rem;
+}
+
+.taylor-series-preset-group {
+    display: flex;
+    flex-direction: column;
+    gap: 0.55rem;
+}
+
+.taylor-series-preset-group-title {
+    font-size: 0.72rem;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: color-mix(in srgb, var(--accent-purple) 45%, var(--text-secondary-color));
+}
+
+.taylor-series-preset-buttons {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.45rem;
+}
+
+.taylor-series-preset-btn {
+    padding: 0.45rem 0.7rem;
+    border-radius: 999px;
+    background: rgba(255,255,255,0.03);
+    border-color: rgba(128, 137, 255, 0.2);
+    font-size: 0.78rem;
+}
+
+.taylor-series-preset-btn.toggle-active {
+    border-color: var(--accent-purple);
+    box-shadow: 0 0 0 1px rgba(255,255,255,0.05), 0 0 16px rgba(167, 139, 250, 0.22);
+}
+
+.taylor-series-input-row {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 0.75rem;
+}
+
+.taylor-series-input-field {
+    display: flex;
+    flex-direction: column;
+    align-items: stretch !important;
+    justify-content: flex-start;
+    gap: 0.35rem;
+}
+
+.taylor-series-input-caption {
+    font-size: 0.8rem;
+    color: var(--text-secondary-color);
+}
+
+.taylor-series-text-input {
+    width: 100%;
+    height: 40px;
+    background: rgba(var(--bg-color-rgb), 0.38);
+}
+
+@media (max-width: 960px) {
+    .taylor-series-header {
+        flex-direction: column;
+        align-items: stretch;
+    }
+
+    .taylor-series-input-row {
+        grid-template-columns: 1fr;
+    }
 }

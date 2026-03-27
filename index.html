@@ -4,7 +4,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Advanced Complex Function Visualization</title>
+    <title>Complex Analysis Visualization</title>
     <link rel="stylesheet" href="css/styles.css">
     <link rel="stylesheet" href="css/control-sections.css">
     <script src="https://cdn.plot.ly/plotly-2.29.1.min.js"></script>
@@ -964,15 +964,25 @@
                 <div class="control-group">
                     <label for="enable_taylor_series_cb" class="control-label tooltip-label">
                         <input type="checkbox" id="enable_taylor_series_cb" class="control-checkbox"
-                            data-tooltip="Toggle Taylor series approximation of f(z) in the w-plane, centered at origin or mouse probe. Shows disk of convergence on z-plane.">
+                            data-tooltip="Toggle the Taylor series approximation of f(z) in the w-plane. The default expansion center is z0 = 0, and the convergence disk is shown on the z-plane.">
                         <span class="custom-checkbox-visual"></span>
                         Taylor Series Approximation
                     </label>
                 </div>
                 <div id="taylor_series_options_detail_div" class="dependent-settings-block hidden taylor-series-panel">
-                    <div class="control-group taylor-series-control-group taylor-series-slider-group">
-                        <label for="taylor_series_order_slider" class="taylor-series-label">
-                            Taylor Series Terms:
+                    <div class="taylor-series-header">
+                        <div class="taylor-series-header-copy">
+                            <span class="taylor-series-eyebrow">Local Approximation</span>
+                            <h4 class="taylor-series-title">Expand Around z0</h4>
+                            <p class="taylor-series-description">
+                                Taylor series is local. By default the expansion stays centered at the origin. Pin a custom center when you want to inspect a different neighborhood.
+                            </p>
+                        </div>
+                        <div id="taylor_series_center_status" class="taylor-series-center-status">z0 = 0</div>
+                    </div>
+                    <div class="control-group taylor-series-card">
+                        <label for="taylor_series_order_slider" class="taylor-series-section-label">
+                            Taylor Series Terms
                             <output id="taylor_series_order_value_display">3</output>
                         </label>
                         <div class="slider-container">
@@ -982,29 +992,36 @@
                                 class="taylor-series-slider">
                         </div>
                     </div>
-                    <div class="control-group taylor-series-control-group taylor-series-toggle-group">
+                    <div class="control-group taylor-series-card">
                         <label for="enable_taylor_series_custom_center_cb"
-                            class="control-label tooltip-label taylor-series-checkbox-label">
+                            class="control-label tooltip-label taylor-series-toggle-label">
                             <input type="checkbox" id="enable_taylor_series_custom_center_cb"
-                                class="control-checkbox taylor-series-checkbox"
-                                data-tooltip="Use a custom complex number as the center for Taylor series expansion. Overrides mouse probe/origin.">
+                                class="control-checkbox"
+                                data-tooltip="Pin a custom complex number as the center for the Taylor expansion. When disabled, the expansion stays centered at z0 = 0.">
                             <span class="custom-checkbox-visual"></span>
-                            Custom Expansion Center
+                            Use Custom Expansion Center
                         </label>
+                        <p class="taylor-series-inline-copy">Use presets for common centers or enter Re(z0) and Im(z0) directly.</p>
                     </div>
                     <div id="taylor_series_custom_center_inputs_div"
-                        class="control-group dependent-settings-block hidden taylor-series-control-group taylor-series-input-group">
-                        <label for="taylor_series_custom_center_re_input" class="taylor-series-input-label">
-                            Center Re(z₀):
-                            <input type="text" id="taylor_series_custom_center_re_input" value="0.0"
-                                class="small-number-input taylor-series-text-input">
-                        </label>
-                        <label for="taylor_series_custom_center_im_input" style="margin-left: 10px;"
-                            class="taylor-series-input-label">
-                            Center Im(z₀):
-                            <input type="text" id="taylor_series_custom_center_im_input" value="0.0"
-                                class="small-number-input taylor-series-text-input">
-                        </label>
+                        class="control-group dependent-settings-block hidden taylor-series-card taylor-series-custom-block">
+                        <div class="taylor-series-section-head">
+                            <span class="taylor-series-section-label">Quick Centers</span>
+                            <span class="taylor-series-inline-copy">Pick a common expansion point, then fine-tune it below if needed.</span>
+                        </div>
+                        <div id="taylor_series_preset_groups" class="taylor-series-preset-groups"></div>
+                        <div class="taylor-series-input-row">
+                            <label for="taylor_series_custom_center_re_input" class="taylor-series-input-field">
+                                <span class="taylor-series-input-caption">Center Re(z0)</span>
+                                <input type="text" id="taylor_series_custom_center_re_input" value="0"
+                                    class="small-number-input taylor-series-text-input">
+                            </label>
+                            <label for="taylor_series_custom_center_im_input" class="taylor-series-input-field">
+                                <span class="taylor-series-input-caption">Center Im(z0)</span>
+                                <input type="text" id="taylor_series_custom_center_im_input" value="0"
+                                    class="small-number-input taylor-series-text-input">
+                            </label>
+                        </div>
                     </div>
                 </div>
 

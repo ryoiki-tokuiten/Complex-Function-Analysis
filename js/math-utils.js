@@ -576,10 +576,22 @@ function isFiniteComplex(c) {
     return isFinite(c.re) && isFinite(c.im);
 }
 
+function getTaylorDerivativeStep(zComplex, order, hBase = 1e-4) {
+    const scale = Math.max(1, Math.abs(zComplex.re), Math.abs(zComplex.im));
+    const multipliers = {
+        1: 1,
+        2: 2,
+        3: 8,
+        4: 24
+    };
+    const multiplier = multipliers[order] || Math.max(24, order * order * 2);
+    return hBase * multiplier * scale;
+}
+
 function numericDerivativeNthOrder(funcWrapper, zComplex, order, h_base = 1e-5) {
     if (order < 1) return funcWrapper(zComplex);
 
-    let h = h_base;
+    let h = getTaylorDerivativeStep(zComplex, order, h_base);
 
     if (order === 1) {
         const f_plus_h = funcWrapper({ re: zComplex.re + h, im: zComplex.im });
@@ -625,79 +637,166 @@ function numericDerivativeNthOrder(funcWrapper, zComplex, order, h_base = 1e-5) 
     return { re: NaN, im: NaN };
 }
 
-function calculateTaylorApproximation(originalTransformFuncKey, zInputComplex, z0Complex, order) {
+const taylorSeriesCoefficientCache = {
+    key: null,
+    coefficients: null
+};
+
+function toTaylorCacheNumber(value) {
+    return Number.isFinite(value) ? value.toFixed(9) : `${value}`;
+}
+
+function appendTaylorCacheComplexParts(parts, prefix, value) {
+    const safeValue = value || DEFAULT_TAYLOR_SERIES_CENTER;
+    parts.push(`${prefix}r:${toTaylorCacheNumber(safeValue.re)}`);
+    parts.push(`${prefix}i:${toTaylorCacheNumber(safeValue.im)}`);
+}
+
+function buildTaylorSeriesCoefficientCacheKey(functionKey, z0Complex, order) {
+    const keyParts = [
+        `f:${functionKey}`,
+        `order:${order}`,
+        `z0r:${toTaylorCacheNumber(z0Complex.re)}`,
+        `z0i:${toTaylorCacheNumber(z0Complex.im)}`
+    ];
+
+    if (functionKey === 'zeta') {
+        keyParts.push(`zetaC:${state.zetaContinuationEnabled ? 1 : 0}`);
+    } else if (functionKey === 'mobius') {
+        appendTaylorCacheComplexParts(keyParts, 'mA', state.mobiusA);
+        appendTaylorCacheComplexParts(keyParts, 'mB', state.mobiusB);
+        appendTaylorCacheComplexParts(keyParts, 'mC', state.mobiusC);
+        appendTaylorCacheComplexParts(keyParts, 'mD', state.mobiusD);
+    } else if (functionKey === 'polynomial') {
+        const degree = Math.max(0, Math.min(MAX_POLY_DEGREE, Number.isFinite(state.polynomialN) ? state.polynomialN : 0));
+        keyParts.push(`polyN:${degree}`);
+        for (let i = 0; i <= degree; i++) {
+            appendTaylorCacheComplexParts(keyParts, `p${i}`, state.polynomialCoeffs && state.polynomialCoeffs[i]);
+        }
+    }
+
+    return keyParts.join('|');
+}
+
+function getTaylorContourRadius(z0Complex) {
+    const convergenceRadius = state && Number.isFinite(state.taylorSeriesConvergenceRadius)
+        ? state.taylorSeriesConvergenceRadius
+        : null;
+
+    if (convergenceRadius !== null) {
+        if (convergenceRadius <= 1e-9) {
+            return 0;
+        }
+        return Math.max(1e-3, Math.min(1.25, convergenceRadius * 0.45));
+    }
+
+    const centerScale = Math.max(1, Math.abs(z0Complex.re), Math.abs(z0Complex.im));
+    return Math.max(0.25, Math.min(1.25, centerScale * 0.35));
+}
+
+function computeTaylorSeriesCoefficients(originalTransformFuncKey, z0Complex, order) {
     const originalTransformFunc = transformFunctions[originalTransformFuncKey];
     if (!originalTransformFunc) {
         console.error("Taylor: Original transform function not found for key:", originalTransformFuncKey);
+        return null;
+    }
+
+    const cacheKey = buildTaylorSeriesCoefficientCacheKey(originalTransformFuncKey, z0Complex, order);
+    if (taylorSeriesCoefficientCache.key === cacheKey) {
+        return taylorSeriesCoefficientCache.coefficients;
+    }
+
+    const contourRadius = getTaylorContourRadius(z0Complex);
+    if (!(contourRadius > 0)) {
+        taylorSeriesCoefficientCache.key = cacheKey;
+        taylorSeriesCoefficientCache.coefficients = null;
+        return null;
+    }
+
+    const contourStepCount = Math.max(192, 48 * (order + 1));
+    const contourPoints = getContourPoints('circle', {
+        cx: z0Complex.re,
+        cy: z0Complex.im,
+        r: contourRadius
+    }, contourStepCount);
+
+    if (!Array.isArray(contourPoints) || contourPoints.length < 2) {
+        taylorSeriesCoefficientCache.key = cacheKey;
+        taylorSeriesCoefficientCache.coefficients = null;
+        return null;
+    }
+
+    const coefficients = [];
+
+    for (let n = 0; n <= order; n++) {
+        const integrand = (re, im) => {
+            const functionValue = originalTransformFunc(re, im);
+            if (!isFiniteComplex(functionValue)) {
+                return { re: NaN, im: NaN };
+            }
+
+            const delta = { re: re - z0Complex.re, im: im - z0Complex.im };
+            const deltaPower = complexPow(delta.re, delta.im, n + 1, 0);
+            if (!isFiniteComplex(deltaPower)) {
+                return { re: NaN, im: NaN };
+            }
+
+            return complexDivide(functionValue, deltaPower);
+        };
+
+        const contourIntegral = numericalLineIntegral(integrand, contourPoints);
+        if (!isFiniteComplex(contourIntegral)) {
+            taylorSeriesCoefficientCache.key = cacheKey;
+            taylorSeriesCoefficientCache.coefficients = null;
+            return null;
+        }
+
+        const coefficient = complexDivide(contourIntegral, { re: 0, im: TWO_PI });
+        if (!isFiniteComplex(coefficient)) {
+            taylorSeriesCoefficientCache.key = cacheKey;
+            taylorSeriesCoefficientCache.coefficients = null;
+            return null;
+        }
+
+        coefficients.push(coefficient);
+    }
+
+    taylorSeriesCoefficientCache.key = cacheKey;
+    taylorSeriesCoefficientCache.coefficients = coefficients;
+    return coefficients;
+}
+
+function evaluateTaylorSeries(coefficients, zInputComplex, z0Complex) {
+    if (!Array.isArray(coefficients) || coefficients.length === 0) {
         return { re: NaN, im: NaN };
     }
 
-    const funcWrapper = (z_complex) => {
-        return originalTransformFunc(z_complex.re, z_complex.im);
-    };
-
+    const delta = complexSub(zInputComplex, z0Complex);
     let seriesSum = { re: 0, im: 0 };
+    let deltaPower = { re: 1, im: 0 };
 
-    for (let n = 0; n <= order; n++) {
-        const nthDerivativeAtZ0 = numericDerivativeNthOrder(funcWrapper, z0Complex, n);
-        if (!isFiniteComplex(nthDerivativeAtZ0)) {
-            if (n === 0) return { re: NaN, im: NaN };
-            const equals = Math.abs(zInputComplex.re - z0Complex.re) < 1e-9 && Math.abs(zInputComplex.im - z0Complex.im) < 1e-9;
-            if (!equals) {
-                console.warn(`Taylor: Derivative order ${n} at z0=${z0Complex.re}+${z0Complex.im}i is not finite: ${nthDerivativeAtZ0.re}+${nthDerivativeAtZ0.im}i. Term might be non-finite.`);
-            }
+    for (let n = 0; n < coefficients.length; n++) {
+        const coefficient = coefficients[n];
+        if (isFiniteComplex(coefficient)) {
+            seriesSum = complexAdd(seriesSum, complexMul(coefficient, deltaPower));
         }
-
-        const fact_n = factorial(n);
-        if (isNaN(fact_n) || fact_n === 0) {
-            console.error("Taylor: Factorial is NaN or zero for n=", n);
-            return { re: NaN, im: NaN };
-        }
-
-        let z_minus_z0_pow_n;
-        if (n === 0) {
-            z_minus_z0_pow_n = { re: 1, im: 0 };
-        } else {
-            const z_minus_z0 = complexSub(zInputComplex, z0Complex);
-            z_minus_z0_pow_n = complexPow(z_minus_z0.re, z_minus_z0.im, n, 0);
-        }
-
-        if (!isFiniteComplex(z_minus_z0_pow_n)) {
-            if (Math.sqrt(nthDerivativeAtZ0.re * nthDerivativeAtZ0.re + nthDerivativeAtZ0.im * nthDerivativeAtZ0.im) > 1e-9) {
-            } else {
-                continue;
-            }
-        }
-
-        const derivative_div_factorial = complexDivide(nthDerivativeAtZ0, { re: fact_n, im: 0 });
-        const term = complexMul(derivative_div_factorial, z_minus_z0_pow_n);
-
-        if (!isFiniteComplex(term)) {
-            const equals = Math.abs(zInputComplex.re - z0Complex.re) < 1e-9 && Math.abs(zInputComplex.im - z0Complex.im) < 1e-9;
-            if (n === 0 && equals) {
-                return { re: NaN, im: NaN };
-            } else if (n > 0 && equals) {
-            } else if (Math.sqrt(term.re * term.re + term.im * term.im) > POLE_MAGNITUDE_THRESHOLD * 100 && n > 0) {
-            }
-        }
-        seriesSum = complexAdd(seriesSum, term);
+        deltaPower = complexMul(deltaPower, delta);
     }
+
     return seriesSum;
 }
 
 function updateTaylorSeriesCenterAndRadius() {
-    const zIsPlanar = !state.riemannSphereViewEnabled || state.splitViewEnabled;
-
     if (state.taylorSeriesCustomCenterEnabled) {
         state.taylorSeriesCenter = {
             re: state.taylorSeriesCustomCenter.re,
             im: state.taylorSeriesCustomCenter.im
         };
-    } else if (state.probeActive && zIsPlanar && state.probeZ && typeof state.probeZ.re === 'number' && typeof state.probeZ.im === 'number') {
-        state.taylorSeriesCenter = { re: state.probeZ.re, im: state.probeZ.im };
     } else {
-        
-        state.taylorSeriesCenter = { re: 0, im: 0 };
+        state.taylorSeriesCenter = {
+            re: DEFAULT_TAYLOR_SERIES_CENTER.re,
+            im: DEFAULT_TAYLOR_SERIES_CENTER.im
+        };
     }
 
     let minDistanceSq = Infinity;

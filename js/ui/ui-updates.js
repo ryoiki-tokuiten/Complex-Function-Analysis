@@ -125,11 +125,13 @@ function updateSliderLabelsAndDisplay() {
         controls.taylorSeriesCustomCenterInputsDiv.classList.toggle('hidden', !state.taylorSeriesCustomCenterEnabled);
         controls.enableTaylorSeriesCustomCenterCb.checked = state.taylorSeriesCustomCenterEnabled;
     }
-    if (controls.taylorSeriesCustomCenterReInput) {
-        controls.taylorSeriesCustomCenterReInput.value = state.taylorSeriesCustomCenter.re.toFixed(1);
+    syncTaylorSeriesCenterStatus();
+    syncTaylorSeriesPresetSelection();
+    if (controls.taylorSeriesCustomCenterReInput && document.activeElement !== controls.taylorSeriesCustomCenterReInput) {
+        controls.taylorSeriesCustomCenterReInput.value = formatTaylorNumericValue(state.taylorSeriesCustomCenter.re);
     }
-    if (controls.taylorSeriesCustomCenterImInput) {
-        controls.taylorSeriesCustomCenterImInput.value = state.taylorSeriesCustomCenter.im.toFixed(1);
+    if (controls.taylorSeriesCustomCenterImInput && document.activeElement !== controls.taylorSeriesCustomCenterImInput) {
+        controls.taylorSeriesCustomCenterImInput.value = formatTaylorNumericValue(state.taylorSeriesCustomCenter.im);
     }
 
     if (controls.enableStreamlineFlowCb) {
@@ -239,6 +241,54 @@ function updateSliderLabelsAndDisplay() {
     } catch (error) {
         console.error("Error in updateSliderLabelsAndDisplay:", error);
     }
+}
+
+function getTaylorDisplayCenter() {
+    return state.taylorSeriesCustomCenterEnabled
+        ? state.taylorSeriesCustomCenter
+        : DEFAULT_TAYLOR_SERIES_CENTER;
+}
+
+function formatTaylorCenterStatusText(center) {
+    const preset = findTaylorCenterPreset(center.re, center.im);
+    if (preset) {
+        return `z0 = ${preset.label}`;
+    }
+
+    const re = formatTaylorNumericValue(center.re);
+    const imMagnitude = formatTaylorNumericValue(Math.abs(center.im));
+    const sign = center.im >= 0 ? '+' : '-';
+    return `z0 = ${re} ${sign} ${imMagnitude}i`;
+}
+
+function syncTaylorSeriesCenterStatus() {
+    if (!controls.taylorSeriesCenterStatus) {
+        return;
+    }
+
+    controls.taylorSeriesCenterStatus.textContent = formatTaylorCenterStatusText(getTaylorDisplayCenter());
+}
+
+function syncTaylorSeriesPresetSelection() {
+    if (!controls.taylorSeriesPresetGroups) {
+        return;
+    }
+
+    const activePreset = findTaylorCenterPreset(
+        state.taylorSeriesCustomCenter.re,
+        state.taylorSeriesCustomCenter.im
+    );
+
+    controls.taylorSeriesPresetGroups
+        .querySelectorAll('.taylor-series-preset-btn')
+        .forEach(button => {
+            const buttonRe = parseFloat(button.dataset.taylorPresetRe);
+            const buttonIm = parseFloat(button.dataset.taylorPresetIm);
+            const isActive = activePreset &&
+                Math.abs(buttonRe - activePreset.re) < 1e-9 &&
+                Math.abs(buttonIm - activePreset.im) < 1e-9;
+            button.classList.toggle('toggle-active', Boolean(isActive));
+        });
 }
 
 function updateProbeInfo(){
