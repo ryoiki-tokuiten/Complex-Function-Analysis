@@ -592,6 +592,60 @@
                     </div>
                 </div>
 
+                <div id="video_upload_controls" class="dependent-settings-block hidden image-upload-panel">
+                    <div class="panel-inline-heading">
+                        <span class="panel-inline-title">Video Upload</span>
+                        <span class="panel-inline-copy">Map video frames through the active complex function with controllable playback, FPS sampling, and scale.</span>
+                    </div>
+                    <div class="control-group image-upload-field">
+                        <label for="video_upload_input" class="upload-control-label">
+                            <span class="upload-control-title">Choose Source Video</span>
+                            <span class="upload-control-copy">MP4, WEBM, MOV, OGG, or any browser-playable video</span>
+                        </label>
+                        <input type="file" id="video_upload_input" accept="video/*" class="control-file-input">
+                    </div>
+                    <div class="media-status-row">
+                        <button id="video_play_pause_btn" type="button" disabled>▶ Play</button>
+                        <div id="video_status_display" class="media-status-text">No video loaded.</div>
+                    </div>
+                    <div class="control-group">
+                        <label for="video_resolution_slider">
+                            Resolution (pts):
+                            <output id="video_resolution_value_display">300</output>
+                        </label>
+                        <div class="slider-container">
+                            <input type="range" id="video_resolution_slider" name="video_resolution_slider" min="50" max="1000" step="10" value="300" data-tooltip="Set max resolution for video processing. Higher is prettier but slower.">
+                        </div>
+                    </div>
+                    <div class="control-group">
+                        <label for="video_fps_slider">
+                            Processing FPS:
+                            <output id="video_fps_value_display">24</output>
+                        </label>
+                        <div class="slider-container">
+                            <input type="range" id="video_fps_slider" name="video_fps_slider" min="1" max="60" step="1" value="24" data-tooltip="Set how often the uploaded video is sampled and redrawn.">
+                        </div>
+                    </div>
+                    <div class="control-group">
+                        <label for="video_size_slider">
+                            Video Base Size:
+                            <output id="video_size_value_display">2.0</output>
+                        </label>
+                        <div class="slider-container">
+                            <input type="range" id="video_size_slider" name="video_size_slider" min="0.5" max="10" step="0.1" value="2.0" data-tooltip="Set logical size of the video in the complex plane.">
+                        </div>
+                    </div>
+                    <div class="control-group">
+                        <label for="video_opacity_slider">
+                            Opacity:
+                            <output id="video_opacity_value_display">1.0</output>
+                        </label>
+                        <div class="slider-container">
+                            <input type="range" id="video_opacity_slider" name="video_opacity_slider" min="0.1" max="1.0" step="0.05" value="1.0" data-tooltip="Set transparency of the drawn video points.">
+                        </div>
+                    </div>
+                </div>
+
                 <div id="strip_horizontal_params_sliders" class="dependent-settings-block hidden">
                     <div class="control-group">
                         <label>Horizontal Strip Parameters:</label>
@@ -1373,6 +1427,7 @@
                                 <option value="strip_horizontal">Strip (Horizontal)</option>
                                 <option value="sector_angular">Sector (Angular)</option>
                                 <option value="image">Image Upload</option>
+                                <option value="video">Video Upload</option>
                             </select>
                             <button id="toggle_fullscreen_z_btn" class="icon-button canvas-icon-button" type="button"
                                 data-tooltip="Toggle fullscreen view for z-plane" aria-label="Toggle fullscreen view for z-plane">
@@ -1464,6 +1519,7 @@
     <!-- Utilities -->
     <script src="js/utils/canvas-utils.js"></script>
     <script src="js/utils/dom-utils.js"></script>
+    <script src="js/utils/raster-media.js"></script>
 
     <!-- Analysis Modules -->
     <script src="js/analysis/feature-detection.js"></script>

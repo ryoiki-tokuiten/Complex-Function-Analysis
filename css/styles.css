@@ -799,6 +799,21 @@ hr.panel-separator {
     box-shadow: 0 8px 18px rgba(140, 112, 208, 0.25);
 }
 
+.media-status-row {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    flex-wrap: wrap;
+}
+
+.media-status-text {
+    flex: 1 1 220px;
+    min-height: 1.2rem;
+    font-size: 0.8rem;
+    line-height: 1.45;
+    color: var(--text-secondary-color);
+}
+
 #domain_coloring_key {
     position: absolute;
     top: 10px;

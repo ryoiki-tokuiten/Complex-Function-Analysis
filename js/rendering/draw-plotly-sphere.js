@@ -66,32 +66,88 @@ function appendMappedSphereLineTraces(traces, sourcePoints, transformPoint, opti
     flush();
 }
 
-function getPlotlyMappedData(transformFunc) {
-    const traces = [];
-    const sourcePointSets = generateCurrentMappedInputShapePointSets(zPlaneParams, {
-        currentFunction: state.currentFunction,
-        zetaContinuationEnabled: state.zetaContinuationEnabled,
-        curvePoints: NUM_POINTS_CURVE
+function appendMappedSphereRasterTrace(traces, rasterPoints, transformPoint, options = {}) {
+    if (!Array.isArray(rasterPoints) || rasterPoints.length === 0) {
+        return;
+    }
+
+    const xCoords = [];
+    const yCoords = [];
+    const zCoords = [];
+    const colors = [];
+
+    rasterPoints.forEach(point => {
+        const worldPoint = mapRasterPointToWorld(point, state.currentInputShape);
+        const mappedPoint = transformPoint(worldPoint);
+        if (!mappedPoint || !Number.isFinite(mappedPoint.re) || !Number.isFinite(mappedPoint.im)) {
+            return;
+        }
+
+        const spherePoint = complexToSphere(mappedPoint.re, mappedPoint.im);
+        xCoords.push(spherePoint.x);
+        yCoords.push(spherePoint.y);
+        zCoords.push(spherePoint.z);
+        colors.push(point.color);
     });
 
-    sourcePointSets.forEach(set => {
-        appendMappedSphereLineTraces(
+    if (xCoords.length === 0) {
+        return;
+    }
+
+    traces.push({
+        type: 'scatter3d',
+        mode: 'markers',
+        x: xCoords,
+        y: yCoords,
+        z: zCoords,
+        hoverinfo: 'none',
+        marker: {
+            size: options.size || 2,
+            color: colors,
+            opacity: options.opacity !== undefined ? options.opacity : 1
+        },
+        name: options.name || 'Mapped Raster Media'
+    });
+}
+
+function getPlotlyMappedData(transformFunc) {
+    const traces = [];
+    if (isRasterInputShape(state.currentInputShape)) {
+        appendMappedSphereRasterTrace(
             traces,
-            set.points,
-            sourcePoint => {
-                if (state.currentFunction === 'zeta' && !state.zetaContinuationEnabled && sourcePoint.re <= ZETA_REFLECTION_POINT_RE) {
-                    return null;
-                }
-                return transformFunc ? transformFunc(sourcePoint.re, sourcePoint.im) : sourcePoint;
-            },
+            getRasterPointsForShape(state.currentInputShape),
+            sourcePoint => transformFunc ? transformFunc(sourcePoint.re, sourcePoint.im) : sourcePoint,
             {
-                color: getSpherePointSetColor(set, true),
-                includeText: true,
-                hoverinfo: 'text',
-                shape: 'spline'
+                opacity: getRasterOpacityForShape(state.currentInputShape),
+                name: 'Mapped Raster Media'
             }
         );
-    });
+    } else {
+        const sourcePointSets = generateCurrentMappedInputShapePointSets(zPlaneParams, {
+            currentFunction: state.currentFunction,
+            zetaContinuationEnabled: state.zetaContinuationEnabled,
+            curvePoints: NUM_POINTS_CURVE
+        });
+
+        sourcePointSets.forEach(set => {
+            appendMappedSphereLineTraces(
+                traces,
+                set.points,
+                sourcePoint => {
+                    if (state.currentFunction === 'zeta' && !state.zetaContinuationEnabled && sourcePoint.re <= ZETA_REFLECTION_POINT_RE) {
+                        return null;
+                    }
+                    return transformFunc ? transformFunc(sourcePoint.re, sourcePoint.im) : sourcePoint;
+                },
+                {
+                    color: getSpherePointSetColor(set, true),
+                    includeText: true,
+                    hoverinfo: 'text',
+                    shape: 'spline'
+                }
+            );
+        });
+    }
 
     
     if (state.probeActive && state.probeZ) {

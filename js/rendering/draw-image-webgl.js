@@ -1,4 +1,4 @@
-// WebGL-based image transformation renderer for high-resolution point clouds
+// WebGL-based raster media transformation renderer for high-resolution point clouds
 const webglImageSupport = {
     available: false,
     reason: 'not-initialized',
@@ -108,7 +108,8 @@ function createWebGLImageRenderer() {
 
     return {
         canvas, gl, program, uvBuffer, texture, locations,
-        uploadedImage: null,
+        uploadedSource: null,
+        uploadedSourceToken: -1,
         pointCount: 0,
         currentResolution: 0
     };
@@ -129,13 +130,29 @@ function initWebGLImageSupportIfNeeded() {
 
 function updateImageWebGLTextureAndBuffer(renderer) {
     const gl = renderer.gl;
-    const currentRes = state.imageResolution || 300;
-    
-    // Only upload texture if new image available or not uploaded yet
-    if (state.uploadedImage && state.uploadedImage !== renderer.uploadedImage) {
-        renderer.uploadedImage = state.uploadedImage;
+    const currentShape = state.currentInputShape;
+    const source = getRasterSourceForShape(currentShape);
+    const currentRes = getRasterResolutionForShape(currentShape) || 300;
+    const sourceToken = getRasterVersionTokenForShape(currentShape);
+
+    if (!source) {
+        renderer.uploadedSource = null;
+        renderer.uploadedSourceToken = -1;
+        renderer.pointCount = 0;
+        return;
+    }
+
+    const isVideoSource = currentShape === 'video';
+    if (isVideoSource && source.readyState < HTMLMediaElement.HAVE_CURRENT_DATA) {
+        return;
+    }
+
+    // Upload a new texture when the source changes or when a new video frame is processed.
+    if (renderer.uploadedSource !== source || renderer.uploadedSourceToken !== sourceToken) {
+        renderer.uploadedSource = source;
+        renderer.uploadedSourceToken = sourceToken;
         gl.bindTexture(gl.TEXTURE_2D, renderer.texture);
-        gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, state.uploadedImage);
+        gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, source);
         gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
         gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
         gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
@@ -163,8 +180,11 @@ function updateImageWebGLTextureAndBuffer(renderer) {
 
 function drawImageWithWebGL(targetCtx, planeParams, isWP) {
     initWebGLImageSupportIfNeeded();
-    if (!webglImageSupport.available || !state.uploadedImage) return false;
-    
+    const currentShape = state.currentInputShape;
+    const source = getRasterSourceForShape(currentShape);
+    if (!webglImageSupport.available || !isRasterInputShape(currentShape) || !source) return false;
+    if (currentShape === 'video' && source.readyState < HTMLMediaElement.HAVE_CURRENT_DATA) return false;
+
     const renderer = webglImageSupport.renderer;
     const gl = renderer.gl;
     const loc = renderer.locations;
@@ -195,11 +215,11 @@ function drawImageWithWebGL(targetCtx, planeParams, isWP) {
     gl.blendFunc(gl.ONE, gl.ONE_MINUS_SRC_ALPHA);
     
     // Setup Uniforms
-    const size = state.imageSize || 2.0;
+    const { width: mediaWidth, height: mediaHeight } = getRasterDisplayDimensions(currentShape);
     const cx = state.a0 || 0;
     const cy = state.b0 || 0;
     
-    gl.uniform2f(loc.uImageSize, size, size); // Can make this respect aspect ratio if wanted
+    gl.uniform2f(loc.uImageSize, mediaWidth, mediaHeight);
     gl.uniform2f(loc.uCenter, cx, cy);
     
     const xRange = planeParams.currentVisXRange || planeParams.xRange;
@@ -209,12 +229,13 @@ function drawImageWithWebGL(targetCtx, planeParams, isWP) {
     // Compute point size based on zoom and density.
     // If we map a domain of size W across N points, spacing is W/N.
     // Screen size is ViewportSize * (W/N) / xRangeSpan.
-    const pointScreenSpacing = (width * (size / renderer.currentResolution)) / (xRange[1] - xRange[0]);
+    const mediaSpan = Math.max(mediaWidth, mediaHeight);
+    const pointScreenSpacing = (width * (mediaSpan / renderer.currentResolution)) / (xRange[1] - xRange[0]);
     // Add 1.5 to overlap points slightly to avoid gaps.
     gl.uniform1f(loc.uPointSize, Math.max(1.5, pointScreenSpacing * 1.5));
     
     gl.uniform1f(loc.uIsWPlane, isWP ? 1 : 0);
-    gl.uniform1f(loc.uOpacity, typeof state.imageOpacity === 'number' ? state.imageOpacity : 1.0);
+    gl.uniform1f(loc.uOpacity, getRasterOpacityForShape(currentShape));
     
     if (isWP) {
         // Assume getWebGLDomainColorFunctionIdShared exists in webgl-shared.js

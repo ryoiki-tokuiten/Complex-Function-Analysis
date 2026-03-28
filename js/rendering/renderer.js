@@ -94,6 +94,15 @@ function buildPlanarLayerCacheKey(isWPlane) {
         `sectorA2:${toCacheKeyNumber(state.sectorAngle2)}`,
         `sectorRMin:${toCacheKeyNumber(state.sectorRMin)}`,
         `sectorRMax:${toCacheKeyNumber(state.sectorRMax)}`,
+        `imgRes:${state.imageResolution || 0}`,
+        `imgSize:${toCacheKeyNumber(state.imageSize)}`,
+        `imgOpacity:${toCacheKeyNumber(state.imageOpacity)}`,
+        `imgVer:${state.imageContentVersion || 0}`,
+        `vidRes:${state.videoResolution || 0}`,
+        `vidFps:${state.videoProcessingFps || 0}`,
+        `vidSize:${toCacheKeyNumber(state.videoSize)}`,
+        `vidOpacity:${toCacheKeyNumber(state.videoOpacity)}`,
+        `vidVer:${state.videoFrameVersion || 0}`,
         `zX0:${toCacheKeyNumber(zPlaneParams.currentVisXRange[0])}`,
         `zX1:${toCacheKeyNumber(zPlaneParams.currentVisXRange[1])}`,
         `zY0:${toCacheKeyNumber(zPlaneParams.currentVisYRange[0])}`,
@@ -137,6 +146,7 @@ function ensurePlanarLayerCacheCanvas(cacheObj, width, height) {
 
 function shouldUseWPlanarTransformedLayerCache() {
     if (state.riemannSphereViewEnabled || state.splitViewEnabled) return false;
+    if (state.currentInputShape === 'video') return false;
     if (state.panStateZ && state.panStateZ.isPanning) return false;
     if (state.panStateW && state.panStateW.isPanning) return false;
     return true;
@@ -145,6 +155,7 @@ function shouldUseWPlanarTransformedLayerCache() {
 function shouldUseZPlanarInputLayerCache() {
     if (state.vectorFieldEnabled) return false;
     if (state.riemannSphereViewEnabled && !state.splitViewEnabled) return false;
+    if (state.currentInputShape === 'video') return false;
     if (state.panStateZ && state.panStateZ.isPanning) return false;
     return true;
 }

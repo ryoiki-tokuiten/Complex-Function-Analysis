@@ -312,6 +312,7 @@ function generateInputShapePointSets(config) {
             return generateGeometricShapePointSets(config);
         case 'empty_grid':
         case 'image':
+        case 'video':
         default:
             return [];
     }

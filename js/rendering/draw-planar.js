@@ -185,23 +185,20 @@ function drawStreamlinesOnZPlane(ctx, planeParams, state) {
 function drawPlanarInputShape(ctx, planeParams) {
     const inputShape = state.currentInputShape;
 
-    if (inputShape === 'image') {
+    if (isRasterInputShape(inputShape)) {
         if (typeof drawImageWithWebGL === 'function' && drawImageWithWebGL(ctx, planeParams, false)) {
             return;
         }
 
-        if (state.imagePoints && state.imagePoints.length > 0) {
+        const rasterPoints = getRasterPointsForShape(inputShape);
+        if (rasterPoints && rasterPoints.length > 0) {
             ctx.save();
-            ctx.globalAlpha = state.imageOpacity || 1.0;
-            const size = state.imageSize || 2.0;
-            const cx = state.a0 || 0;
-            const cy = state.b0 || 0;
+            ctx.globalAlpha = getRasterOpacityForShape(inputShape) || 1.0;
 
-            for (let i = 0; i < state.imagePoints.length; i++) {
-                const point = state.imagePoints[i];
-                const re = cx + point.nx * (size / 2);
-                const im = cy + point.ny * (size / 2);
-                const canvasPoint = mapToCanvasCoords(re, im, planeParams);
+            for (let i = 0; i < rasterPoints.length; i++) {
+                const point = rasterPoints[i];
+                const worldPoint = mapRasterPointToWorld(point, inputShape);
+                const canvasPoint = mapToCanvasCoords(worldPoint.re, worldPoint.im, planeParams);
                 ctx.fillStyle = point.color;
                 ctx.fillRect(canvasPoint.x - 1, canvasPoint.y - 1, 2, 2);
             }
@@ -473,23 +470,20 @@ function drawPlanarTransformedShape(ctx, planeParams, tf, options = {}) {
     const highlightContour = state.cauchyIntegralModeEnabled && (inputShape === 'circle' || inputShape === 'ellipse');
 
     if (includeGeometry) {
-        if (inputShape === 'image') {
+        if (isRasterInputShape(inputShape)) {
             if (typeof drawImageWithWebGL === 'function' && drawImageWithWebGL(ctx, planeParams, true)) {
                 return;
             }
 
-            if (state.imagePoints && state.imagePoints.length > 0) {
+            const rasterPoints = getRasterPointsForShape(inputShape);
+            if (rasterPoints && rasterPoints.length > 0) {
                 ctx.save();
-                ctx.globalAlpha = state.imageOpacity || 1.0;
-                const size = state.imageSize || 2.0;
-                const cx = state.a0 || 0;
-                const cy = state.b0 || 0;
+                ctx.globalAlpha = getRasterOpacityForShape(inputShape) || 1.0;
 
-                for (let i = 0; i < state.imagePoints.length; i++) {
-                    const point = state.imagePoints[i];
-                    const re = cx + point.nx * (size / 2);
-                    const im = cy + point.ny * (size / 2);
-                    const w = tf(re, im);
+                for (let i = 0; i < rasterPoints.length; i++) {
+                    const point = rasterPoints[i];
+                    const worldPoint = mapRasterPointToWorld(point, inputShape);
+                    const w = tf(worldPoint.re, worldPoint.im);
                     if (isRenderableComplexPoint(w)) {
                         const canvasPoint = mapToCanvasCoords(w.re, w.im, planeParams);
                         ctx.fillStyle = point.color;

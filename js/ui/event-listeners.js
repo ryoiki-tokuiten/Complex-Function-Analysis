@@ -14,6 +14,8 @@ const DOMAIN_DIRTY_STATE_KEYS = new Set([
     'sectorRMax',
     'imageSize',
     'imageOpacity',
+    'videoSize',
+    'videoOpacity',
     'vectorFieldScale',
     'zPlaneZoom',
     'wPlaneZoom'
@@ -45,6 +47,10 @@ const BASIC_SLIDER_BINDINGS = [
     { controlKey: 'imageResolutionSlider', stateKey: 'imageResolution', parser: parseInteger },
     { controlKey: 'imageSizeSlider', stateKey: 'imageSize', parser: parseFloat },
     { controlKey: 'imageOpacitySlider', stateKey: 'imageOpacity', parser: parseFloat },
+    { controlKey: 'videoResolutionSlider', stateKey: 'videoResolution', parser: parseInteger },
+    { controlKey: 'videoFpsSlider', stateKey: 'videoProcessingFps', parser: parseInteger },
+    { controlKey: 'videoSizeSlider', stateKey: 'videoSize', parser: parseFloat },
+    { controlKey: 'videoOpacitySlider', stateKey: 'videoOpacity', parser: parseFloat },
     { controlKey: 'zPlaneZoomSlider', stateKey: 'zPlaneZoom', parser: parseFloat },
     { controlKey: 'wPlaneZoomSlider', stateKey: 'wPlaneZoom', parser: parseFloat },
     { controlKey: 'laplaceAnimationSpeedSlider', stateKey: 'laplaceAnimationSpeed', parser: parseFloat },
@@ -273,6 +279,9 @@ function activateFunctionMode(key) {
     if (state.laplaceModeEnabled && !enteringLaplace && typeof stopLaplaceAnimation === 'function') {
         stopLaplaceAnimation();
     }
+    if ((enteringFourier || enteringLaplace) && state.currentInputShape === 'video' && typeof pauseUploadedVideoPlayback === 'function') {
+        pauseUploadedVideoPlayback();
+    }
 
     state.currentFunction = key;
     state.fourierModeEnabled = enteringFourier;
@@ -312,61 +321,24 @@ function readImageFile(file, callback) {
 }
 
 function processUploadedImage(img) {
-    if (!img) {
-        return;
+    if (processUploadedImageSource(img)) {
+        requestDomainRedraw(true);
     }
-
-    state.uploadedImage = img;
-
-    const targetResolution = Math.max(1, state.imageResolution || 300);
-    const cpuResolution = Math.min(targetResolution, 150);
-
-    let width = img.width;
-    let height = img.height;
-    if (width > height) {
-        height = Math.round((height * cpuResolution) / width);
-        width = cpuResolution;
-    } else {
-        width = Math.round((width * cpuResolution) / height);
-        height = cpuResolution;
-    }
-
-    const canvas = document.createElement('canvas');
-    canvas.width = Math.max(1, width);
-    canvas.height = Math.max(1, height);
-
-    const ctx = canvas.getContext('2d');
-    ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
-
-    const imgData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-    const xDivisor = Math.max(1, canvas.width - 1);
-    const yDivisor = Math.max(1, canvas.height - 1);
-    const imagePoints = [];
-
-    for (let y = 0; y < canvas.height; y += 1) {
-        for (let x = 0; x < canvas.width; x += 1) {
-            const idx = (y * canvas.width + x) * 4;
-            const alpha = imgData.data[idx + 3];
-            if (alpha <= 20) {
-                continue;
-            }
-
-            imagePoints.push({
-                nx: (x / xDivisor) * 2 - 1,
-                ny: -((y / yDivisor) * 2 - 1),
-                color: `rgba(${imgData.data[idx]},${imgData.data[idx + 1]},${imgData.data[idx + 2]},${alpha / 255})`
-            });
-        }
-    }
-
-    state.imagePoints = imagePoints;
-    requestDomainRedraw(true);
 }
 
 function reprocessUploadedImage() {
     if (state.uploadedImage) {
         processUploadedImage(state.uploadedImage);
     }
+}
+
+function reprocessUploadedVideo() {
+    if (!state.uploadedVideo) {
+        return;
+    }
+
+    processUploadedVideoFrame(true);
+    requestDomainRedraw(true);
 }
 
 function initializeMobiusState() {
@@ -445,6 +417,9 @@ window.initializeStateFromControls = function () {
     initializeScalarBindings();
     updateModePanels();
     setActiveFunctionButton(state.currentFunction);
+    if (typeof syncVideoPlaybackUI === 'function') {
+        syncVideoPlaybackUI();
+    }
 };
 
 function bindBaseParameterControls() {
@@ -543,6 +518,42 @@ function bindImageControls() {
     });
 
     bindSlider('imageOpacitySlider', 'imageOpacity', parseFloat, () => {
+        requestDomainRedraw(true);
+    });
+}
+
+function bindVideoControls() {
+    bindControlListener('videoUploadInput', 'change', event => {
+        const [file] = event.target.files || [];
+        if (!file) {
+            return;
+        }
+
+        loadUploadedVideoFile(file);
+    });
+
+    bindControlListener('videoPlayPauseBtn', 'click', () => {
+        toggleUploadedVideoPlayback();
+    });
+
+    bindSlider('videoResolutionSlider', 'videoResolution', parseInteger, () => {
+        reprocessUploadedVideo();
+        requestRedrawAll();
+    });
+
+    bindSlider('videoFpsSlider', 'videoProcessingFps', parseInteger, () => {
+        syncVideoPlaybackUI();
+        if (state.videoIsPlaying && state.currentInputShape === 'video') {
+            startVideoProcessingLoop();
+        }
+        requestRedrawAll();
+    });
+
+    bindSlider('videoSizeSlider', 'videoSize', parseFloat, () => {
+        requestDomainRedraw(true);
+    });
+
+    bindSlider('videoOpacitySlider', 'videoOpacity', parseFloat, () => {
         requestDomainRedraw(true);
     });
 }
@@ -1281,6 +1292,7 @@ window.setupEventListeners = function () {
     bindMobiusControls();
     bindFunctionButtons();
     bindImageControls();
+    bindVideoControls();
     bindPolynomialControls();
     bindDomainColoringControls();
     bindViewControls();
@@ -1291,7 +1303,12 @@ window.setupEventListeners = function () {
     bindFourierControls();
     bindLaplaceControls();
 
-    bindSelector('inputShapeSelector', 'currentInputShape', () => {
+    bindSelector('inputShapeSelector', 'currentInputShape', (_event, value) => {
+        if (value !== 'video' && state.videoIsPlaying && typeof pauseUploadedVideoPlayback === 'function') {
+            pauseUploadedVideoPlayback();
+        } else if (value === 'video' && state.uploadedVideo && state.videoIsPlaying && typeof startVideoProcessingLoop === 'function') {
+            startVideoProcessingLoop();
+        }
         requestDomainRedraw(true);
     });
 
@@ -1310,6 +1327,10 @@ window.setupEventListeners = function () {
             'imageResolutionSlider',
             'imageSizeSlider',
             'imageOpacitySlider',
+            'videoResolutionSlider',
+            'videoFpsSlider',
+            'videoSizeSlider',
+            'videoOpacitySlider',
             'zPlaneZoomSlider',
             'wPlaneZoomSlider',
             'taylorSeriesOrderSlider',

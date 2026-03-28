@@ -35,6 +35,7 @@ function updateSliderLabelsAndDisplay() {
             const isStripH = state.currentInputShape === 'strip_horizontal';
             const isSectorA = state.currentInputShape === 'sector_angular';
             const isImage = state.currentInputShape === 'image';
+            const isVideo = state.currentInputShape === 'video';
 
             const showCommonParams = isLine || isCircle || isEllipse || isHyperbola;
             controls.commonParamsSliders.classList.toggle('hidden', !showCommonParams);
@@ -54,14 +55,20 @@ function updateSliderLabelsAndDisplay() {
             if (controls.imageUploadControls) {
                 controls.imageUploadControls.classList.toggle('hidden', !isImage);
             }
+            if (controls.videoUploadControls) {
+                controls.videoUploadControls.classList.toggle('hidden', !isVideo);
+            }
 
-            if (showCommonParams || isImage) {
+            if (showCommonParams || isImage || isVideo) {
                 if (isLine) {
                     if (controls.a0LabelDesc) controls.a0LabelDesc.innerHTML = `Fixed Re(z) (<code>a<sub>0</sub></code>):`;
                     if (controls.b0LabelDesc) controls.b0LabelDesc.innerHTML = `Fixed Im(z) (<code>b<sub>0</sub></code>):`;
                 } else if (isImage) {
                     if (controls.a0LabelDesc) controls.a0LabelDesc.innerHTML = `Image Center Re (<code>a<sub>0</sub></code>):`;
                     if (controls.b0LabelDesc) controls.b0LabelDesc.innerHTML = `Image Center Im (<code>b<sub>0</sub></code>):`;
+                } else if (isVideo) {
+                    if (controls.a0LabelDesc) controls.a0LabelDesc.innerHTML = `Video Center Re (<code>a<sub>0</sub></code>):`;
+                    if (controls.b0LabelDesc) controls.b0LabelDesc.innerHTML = `Video Center Im (<code>b<sub>0</sub></code>):`;
                 } else {
                     if (controls.a0LabelDesc) controls.a0LabelDesc.innerHTML = `Center Re(z<sub>0</sub>) (<code>a<sub>0</sub></code>):`;
                     if (controls.b0LabelDesc) controls.b0LabelDesc.innerHTML = `Center Im(z<sub>0</sub>) (<code>b<sub>0</sub></code>):`;
@@ -118,6 +125,13 @@ function updateSliderLabelsAndDisplay() {
         if (controls.domainContrastValueDisplay) controls.domainContrastValueDisplay.textContent = state.domainContrast.toFixed(2);
         if (controls.domainSaturationValueDisplay) controls.domainSaturationValueDisplay.textContent = state.domainSaturation.toFixed(2);
         if (controls.domainLightnessCyclesValueDisplay) controls.domainLightnessCyclesValueDisplay.textContent = state.domainLightnessCycles.toFixed(2);
+        if (controls.imageResolutionValueDisplay) controls.imageResolutionValueDisplay.textContent = state.imageResolution;
+        if (controls.imageSizeValueDisplay) controls.imageSizeValueDisplay.textContent = state.imageSize.toFixed(1);
+        if (controls.imageOpacityValueDisplay) controls.imageOpacityValueDisplay.textContent = state.imageOpacity.toFixed(2);
+        if (controls.videoResolutionValueDisplay) controls.videoResolutionValueDisplay.textContent = state.videoResolution;
+        if (controls.videoFpsValueDisplay) controls.videoFpsValueDisplay.textContent = state.videoProcessingFps;
+        if (controls.videoSizeValueDisplay) controls.videoSizeValueDisplay.textContent = state.videoSize.toFixed(1);
+        if (controls.videoOpacityValueDisplay) controls.videoOpacityValueDisplay.textContent = state.videoOpacity.toFixed(2);
 
         if (controls.radialDiscreteStepsCountValueDisplay && typeof state.radialDiscreteStepsCount === 'number') {
             controls.radialDiscreteStepsCountValueDisplay.textContent = state.radialDiscreteStepsCount;
@@ -249,6 +263,9 @@ function updateSliderLabelsAndDisplay() {
     }
     if (typeof syncLaplaceWindingSyncButton === 'function') {
         syncLaplaceWindingSyncButton();
+    }
+    if (typeof syncVideoPlaybackUI === 'function') {
+        syncVideoPlaybackUI();
     }
 
     
@@ -445,6 +462,7 @@ function updateTitlesAndGlobalUI() {
     else if (state.currentInputShape === 'strip_horizontal') zPlaneTitleText += ": Horiz. Strip)";
     else if (state.currentInputShape === 'sector_angular') zPlaneTitleText += ": Ang. Sector)";
     else if (state.currentInputShape === 'image') zPlaneTitleText += ": Image)";
+    else if (state.currentInputShape === 'video') zPlaneTitleText += ": Video)";
     else if (state.currentInputShape === 'empty_grid') zPlaneTitleText += ": Empty)";
     else zPlaneTitleText += ")"; 
     if ((state.vectorFieldEnabled || state.streamlineFlowEnabled) && (!state.riemannSphereViewEnabled || state.splitViewEnabled)) {
