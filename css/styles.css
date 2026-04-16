@@ -1116,6 +1116,65 @@ input[type="range"]:focus::-moz-range-thumb {
     min-width: 300px;
 }
 
+/* Output Chaining Grid View Override */
+.two-column-layout.chaining-grid-view {
+    position: fixed !important;
+    inset: 0;
+    max-height: 100vh;
+    z-index: 10000;
+    background: var(--bg-color);
+    display: grid !important;
+    grid-template-columns: repeat(5, 1fr) !important;
+    grid-template-rows: none !important;
+    grid-auto-rows: min(calc(100vh / 5), 280px) !important;
+    gap: 3px;
+    padding: 6px !important;
+    margin: 0 !important;
+    border: none !important;
+    border-radius: 0 !important;
+    box-sizing: border-box;
+    overflow-x: hidden !important;
+    overflow-y: auto !important;
+    flex-wrap: unset !important;
+    align-items: stretch;
+    justify-items: stretch;
+}
+
+.two-column-layout.chaining-grid-view > div {
+    flex: unset !important;
+    min-width: 0 !important;
+    min-height: 0 !important;
+    width: 100% !important;
+    height: 100% !important;
+    overflow: hidden !important;
+    border-radius: 6px;
+    border: 1px solid var(--border-color);
+}
+
+.two-column-layout.chaining-grid-view .canvas-header-line {
+    display: none !important;
+}
+
+/* Custom vertical scrollbar for grid view */
+.two-column-layout.chaining-grid-view::-webkit-scrollbar {
+    width: 8px;
+}
+
+.two-column-layout.chaining-grid-view::-webkit-scrollbar-track {
+    background: rgba(0, 0, 0, 0.3);
+    border-radius: 4px;
+}
+
+.two-column-layout.chaining-grid-view::-webkit-scrollbar-thumb {
+    background-color: var(--accent-purple);
+    border-radius: 4px;
+    border: 1px solid rgba(0, 0, 0, 0.2);
+}
+
+.two-column-layout.chaining-grid-view::-webkit-scrollbar-thumb:hover {
+    background-color: var(--accent-purple-light);
+}
+
 @media (max-width: 800px) {
     .two-column-layout { flex-direction: column; overflow-x: hidden; }
     .two-column-layout > div { flex: 1 1 auto; width: 100%; min-width: 0; }

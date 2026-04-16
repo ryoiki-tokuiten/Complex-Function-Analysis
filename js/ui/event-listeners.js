@@ -1343,6 +1343,16 @@ window.setupEventListeners = function () {
         });
     }
 
+    if (controls.gridViewBtn) {
+        controls.gridViewBtn.addEventListener('click', () => {
+            const row = document.querySelector('.canvas-row.two-column-layout');
+            if (!row) return;
+            const isActive = row.classList.toggle('chaining-grid-view');
+            controls.gridViewBtn.textContent = isActive ? '⊟ Exit Grid View' : '⊞ Grid View';
+            window.dispatchEvent(new Event('resize'));
+        });
+    }
+
     BASIC_SLIDER_BINDINGS
         .filter(({ controlKey }) => !new Set([
             'vectorFieldScaleSlider',

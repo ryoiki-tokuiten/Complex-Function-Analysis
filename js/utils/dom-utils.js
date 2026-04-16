@@ -137,6 +137,8 @@ const DOM_BINDINGS = [
     { key: 'videoStatusDisplay', id: 'video_status_display' },
     { key: 'videoResolutionSlider', id: 'video_resolution_slider' },
     { key: 'videoResolutionValueDisplay', id: 'video_resolution_value_display' },
+    { key: 'gridViewBtn', id: 'grid_view_btn' },
+    { key: 'gridViewCloseBtn', id: 'grid_view_close_btn' },
     { key: 'videoFpsSlider', id: 'video_fps_slider' },
     { key: 'videoFpsValueDisplay', id: 'video_fps_value_display' },
     { key: 'videoSizeSlider', id: 'video_size_slider' },
@@ -449,10 +451,12 @@ function setupVisualParameters(updateZFromSlider = true, updateWFromSlider = tru
             const p = wPlaneParamsList[i];
             p.xRange = [...wPlaneParams.xRange];
             p.yRange = [...wPlaneParams.yRange];
-            p.scale.x = wPlaneParams.scale.x;
-            p.scale.y = wPlaneParams.scale.y;
-            p.origin.x = wPlaneParams.origin.x;
-            p.origin.y = wPlaneParams.origin.y;
+            // Recompute scale and origin per-canvas using its own dimensions
+            const pScaleX = p.width / xSpanW;
+            const pScaleY = p.height / ySpanW;
+            p.scale.x = p.scale.y = Math.min(pScaleX, pScaleY);
+            p.origin.x = (p.width / 2) - wWorldCenterX * p.scale.x;
+            p.origin.y = (p.height / 2) + wWorldCenterY * p.scale.y;
             updatePlaneViewportRanges(p);
         }
     }
