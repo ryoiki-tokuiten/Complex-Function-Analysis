@@ -1077,19 +1077,49 @@ input[type="range"]:focus::-moz-range-thumb {
 
 
 .two-column-layout {
-    display: grid;
-    grid-template-columns: 1fr 1fr; /* Changed this line */
-    gap: 1.5rem; /* Was 2.5rem, then 1.5rem, ensure it's the desired final value, let's assume 1.5rem is fine */
-    align-items: start; /* This is for the grid items (.control-group) themselves */
+    display: flex;
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    overflow-y: hidden;
+    gap: 1.5rem;
+    align-items: stretch;
+    padding-bottom: 0.5rem; /* Space for scrollbar */
+}
+
+.two-column-layout::-webkit-scrollbar {
+    height: 8px;
+}
+
+.two-column-layout::-webkit-scrollbar-track {
+    background: color-mix(in srgb, var(--panel-bg) 50%, transparent);
+    border-radius: 4px;
+}
+
+.two-column-layout::-webkit-scrollbar-thumb {
+    background-color: var(--accent-purple);
+    border-radius: 4px;
+    border: 1px solid var(--panel-bg);
+}
+
+.two-column-layout::-webkit-scrollbar-thumb:hover {
+    background-color: var(--accent-purple-light);
+}
+
+.two-column-layout > div {
+    flex: 0 0 calc(50% - 0.75rem);
+    min-width: 400px;
 }
 
 /* Three-column layout for Laplace mode */
-.two-column-layout:has(#laplace_3d_column:not(.hidden)) {
-    grid-template-columns: 1fr 1fr 1fr;
-    gap: 1rem;
+.two-column-layout:has(#laplace_3d_column:not(.hidden)) > div {
+    flex: 0 0 calc(33.333% - 1rem);
+    min-width: 300px;
 }
 
-@media (max-width: 800px) { .two-column-layout { grid-template-columns: 1fr; } }
+@media (max-width: 800px) {
+    .two-column-layout { flex-direction: column; overflow-x: hidden; }
+    .two-column-layout > div { flex: 1 1 auto; width: 100%; min-width: 0; }
+}
 
 /* .slider-pair-row is renamed to .slider-row and styled above */
 /*

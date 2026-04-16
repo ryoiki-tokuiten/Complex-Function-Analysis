@@ -1312,6 +1312,37 @@ window.setupEventListeners = function () {
         requestDomainRedraw(true);
     });
 
+    bindSlider('chainCountSlider', 'chainCount', parseInt, (val) => {
+        if (controls.chainCountValueDisplay) controls.chainCountValueDisplay.textContent = val;
+        if (typeof updateChainingColumns === 'function') {
+            updateChainingColumns(state.chainingEnabled ? val : 1);
+        }
+        requestRedrawAll();
+    });
+
+    if (controls.enableChainingCb) {
+        controls.enableChainingCb.addEventListener('change', (e) => {
+            state.chainingEnabled = e.target.checked;
+            if (controls.chainingControlsContainer) {
+                controls.chainingControlsContainer.style.display = state.chainingEnabled ? 'block' : 'none';
+            }
+            if (typeof updateChainingColumns === 'function') {
+                updateChainingColumns(state.chainingEnabled ? state.chainCount : 1);
+            }
+            requestRedrawAll();
+        });
+    }
+
+    if (controls.chainModeSelector) {
+        controls.chainModeSelector.addEventListener('change', (e) => {
+            state.chainingMode = e.target.value;
+            if (typeof updateChainingTitles === 'function') {
+                updateChainingTitles();
+            }
+            requestRedrawAll();
+        });
+    }
+
     BASIC_SLIDER_BINDINGS
         .filter(({ controlKey }) => !new Set([
             'vectorFieldScaleSlider',

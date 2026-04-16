@@ -402,6 +402,36 @@
                     </div>
                 </div>
 
+                <!-- Output Chaining Panel -->
+                <div id="chaining_params" class="control-group" style="padding-bottom: 0.5rem; border-bottom: 1px solid var(--border-color); margin-bottom: 0.5rem;">
+                    <label for="enable_chaining_cb" class="control-label tooltip-label slider-label" data-tooltip="Enable chained sequence of output transformations across multiple panels">
+                        <input type="checkbox" id="enable_chaining_cb" class="control-checkbox">
+                        <span class="custom-checkbox-visual"></span>
+                        Enable Output Chaining
+                    </label>
+
+                    <div id="chaining_controls_container" style="display: none; margin-top: 10px; padding-left: 10px; border-left: 2px solid var(--border-color);">
+                        <label for="chain_mode_selector" style="margin-top: 5px;">Chain Mode:</label>
+                        <select id="chain_mode_selector" class="control-select" style="margin-bottom: 10px;" data-tooltip="Mathematical operation to chain across outputs">
+                            <option value="recursion">Recursion: f(w)</option>
+                            <option value="power">Higher Powers: w * f(z)</option>
+                            <option value="sqrt">Square Root: sqrt(w)</option>
+                            <option value="ln">Natural Log: ln(w)</option>
+                            <option value="exp">Exponential: e^w</option>
+                            <option value="reciprocal">Reciprocal: 1/w</option>
+                        </select>
+
+                        <label for="chain_count_slider" style="margin-top: 5px;">
+                            Chain Depth:
+                            <output id="chain_count_value_display">1</output>
+                        </label>
+                        <div class="slider-container">
+                            <input type="range" id="chain_count_slider" name="chain_count_slider" min="1" max="48" step="1" value="1"
+                                data-tooltip="Number of repeated applications (max 48)">
+                        </div>
+                    </div>
+                </div>
+
                 <div id="common_params_sliders">
                     <div class="control-group">
                         <label for="a0_slider">

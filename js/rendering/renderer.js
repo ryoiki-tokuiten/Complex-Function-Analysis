@@ -25,11 +25,8 @@ function drawPlaneLayer(ctx, planeParams, planeKey, drawCallback, mode = 'captur
     drawCallback(ctx);
 }
 
-const wPlanarTransformedLayerCache = {
-    key: null,
-    canvas: null,
-    ctx: null
-};
+let wPlanarTransformedLayerCache;
+const wPlanarTransformedLayerCacheList = [];
 const zPlanarInputLayerCache = {
     key: null,
     canvas: null,
@@ -121,6 +118,9 @@ function buildPlanarLayerCacheKey(isWPlane) {
         if (state.taylorSeriesEnabled) {
             appendPointToCacheKey(keyParts, 'tC', state.taylorSeriesCenter);
             keyParts.push(`tO:${state.taylorSeriesOrder}`);
+        }
+        if (state.chainingEnabled) {
+            keyParts.push(`cM:${state.chainingMode}`);
         }
     }
     return keyParts.join('|');
@@ -474,24 +474,99 @@ function drawZPlaneContent(){
 }
 
 function drawWPlaneContent() {
-    // Handle Fourier Transform mode - use WINDING visualization!
-    if (state.fourierModeEnabled) {
-        drawPlaneLayer(wCtx, wPlaneParams, 'w', (layerCtx) => {
-            drawWindingVisualization(layerCtx, state.fourierTimeDomainSignal, wPlaneParams);
-        }, 'raster');
+    const baseFunc = transformFunctions[state.currentFunction];
+    if (state.fourierModeEnabled || state.laplaceModeEnabled) {
+        // Ensure lists exist to prevent errors during early setup
+        if (!wCanvasList || wCanvasList.length === 0) return;
+        _renderSingleWPlaneMode(0, baseFunc, true);
         return;
     }
     
-    // Handle Laplace Transform mode - MIDDLE panel uses winding visualization
-    if (state.laplaceModeEnabled) {
-        // Use the same beautiful winding function as Fourier!
-        drawPlaneLayer(wCtx, wPlaneParams, 'w', (layerCtx) => {
-            drawLaplaceWindingVisualization(layerCtx, state.laplaceTimeDomainSignal, wPlaneParams);
-        }, 'raster');
-        return;
-    }
+    if (!wCanvasList || wCanvasList.length === 0) return;
     
-    const curFunc = transformFunctions[state.currentFunction];
+    let curFunc = baseFunc;
+    const count = state.chainingEnabled ? state.chainCount : 1;
+    for (let i = 0; i < count; i++) {
+        if (i >= wCanvasList.length) break;
+        _renderSingleWPlaneMode(i, curFunc, false);
+        
+        // Prepare composed function for next recursive iteration
+        const prevFunc = curFunc;
+        switch(state.chainingMode) {
+            case 'power':
+                curFunc = (re, im) => {
+                    const temp = prevFunc(re, im);
+                    const w0 = baseFunc(re, im);
+                    return complexMul(temp, w0);
+                };
+                break;
+            case 'sqrt':
+                curFunc = (re, im) => {
+                    const temp = prevFunc(re, im);
+                    return complexPow(temp.re, temp.im, 0.5, 0);
+                };
+                break;
+            case 'ln':
+                curFunc = (re, im) => {
+                    const temp = prevFunc(re, im);
+                    return complexLn(temp.re, temp.im);
+                };
+                break;
+            case 'exp':
+                curFunc = (re, im) => {
+                    const temp = prevFunc(re, im);
+                    return complexExp(temp.re, temp.im);
+                };
+                break;
+            case 'reciprocal':
+                curFunc = (re, im) => {
+                    const temp = prevFunc(re, im);
+                    return complexReciprocal(temp.re, temp.im);
+                };
+                break;
+            case 'recursion':
+            default:
+                curFunc = (re, im) => {
+                    const temp = prevFunc(re, im);
+                    return baseFunc(temp.re, temp.im);
+                };
+                break;
+        }
+    }
+}
+
+function _renderSingleWPlaneMode(index, curFunc, isSpecialMode) {
+    while (wPlanarTransformedLayerCacheList.length <= index) {
+        wPlanarTransformedLayerCacheList.push({ key: null, canvas: null, ctx: null });
+    }
+    const origWPlanarTransformedLayerCache = wPlanarTransformedLayerCache;
+    wPlanarTransformedLayerCache = wPlanarTransformedLayerCacheList[index];
+
+    const origWCanvas = wCanvas;
+    const origWCtx = wCtx;
+    const origWPlaneParams = wPlaneParams;
+    const origWPlotlyContainer = controls.wPlanePlotlyContainer;
+    const origSphereParamsW = sphereViewParams.w;
+
+    wCanvas = wCanvasList[index];
+    wCtx = wCtxList[index];
+    wPlaneParams = wPlaneParamsList[index];
+    controls.wPlanePlotlyContainer = wPlanePlotlyContainersList[index];
+    sphereViewParams.w = sphereViewWParamsList[index];
+
+    try {
+        if (isSpecialMode) {
+            if (state.fourierModeEnabled) {
+                drawPlaneLayer(wCtx, wPlaneParams, 'w', (layerCtx) => {
+                    drawWindingVisualization(layerCtx, state.fourierTimeDomainSignal, wPlaneParams);
+                }, 'raster');
+            } else if (state.laplaceModeEnabled) {
+                drawPlaneLayer(wCtx, wPlaneParams, 'w', (layerCtx) => {
+                    drawLaplaceWindingVisualization(layerCtx, state.laplaceTimeDomainSignal, wPlaneParams);
+                }, 'raster');
+            }
+            return;
+        }
     const isRiemannW = state.riemannSphereViewEnabled || state.splitViewEnabled;
 
     if (state.plotly3DEnabled && isRiemannW) {
@@ -616,7 +691,7 @@ function drawWPlaneContent() {
                         if (wPlanarTransformedLayerCache.key !== cacheKey) {
                             cacheCtx.setTransform(1, 0, 0, 1, 0, 0);
                             cacheCtx.clearRect(0, 0, cacheCanvas.width, cacheCanvas.height);
-                            const renderedByWebGL = (typeof drawPlanarTransformedShapeHybrid === 'function')
+                            const renderedByWebGL = (index === 0 && typeof drawPlanarTransformedShapeHybrid === 'function')
                                 ? drawPlanarTransformedShapeHybrid(cacheCtx, wPlaneParams, curFunc, 'w')
                                 : false;
                             if (!renderedByWebGL) {
@@ -626,7 +701,7 @@ function drawWPlaneContent() {
                         }
                         wCtx.drawImage(cacheCanvas, 0, 0);
                     } else {
-                        const renderedByWebGL = (typeof drawPlanarTransformedShapeHybrid === 'function')
+                        const renderedByWebGL = (index === 0 && typeof drawPlanarTransformedShapeHybrid === 'function')
                             ? drawPlanarTransformedShapeHybrid(wCtx, wPlaneParams, curFunc, 'w')
                             : false;
                         if (!renderedByWebGL) {
@@ -635,7 +710,7 @@ function drawWPlaneContent() {
                     }
                 } else {
                     wPlanarTransformedLayerCache.key = null;
-                    const renderedByWebGL = (typeof drawPlanarTransformedShapeHybrid === 'function')
+                    const renderedByWebGL = (index === 0 && typeof drawPlanarTransformedShapeHybrid === 'function')
                         ? drawPlanarTransformedShapeHybrid(wCtx, wPlaneParams, curFunc, 'w')
                         : false;
                     if (!renderedByWebGL) {
@@ -674,7 +749,15 @@ function drawWPlaneContent() {
         }
 
         if (!isRiemannW) { // Only for planar w-plane
-            updateWindingNumberDisplay(curFunc);
+            if (index === 0) updateWindingNumberDisplay(curFunc);
         }
     }
-} // Closing brace for drawWPlaneContent
+    } finally {
+        wCanvas = origWCanvas;
+        wCtx = origWCtx;
+        wPlaneParams = origWPlaneParams;
+        controls.wPlanePlotlyContainer = origWPlotlyContainer;
+        sphereViewParams.w = origSphereParamsW;
+        wPlanarTransformedLayerCache = origWPlanarTransformedLayerCache;
+    }
+} // Closing brace for _renderSingleWPlaneMode

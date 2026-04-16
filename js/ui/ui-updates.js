@@ -486,7 +486,7 @@ function updateTitlesAndGlobalUI() {
         
     }
 
-    controls.inputShapeSelector.disabled = state.riemannSphereViewEnabled && !state.splitViewEnabled;
+    controls.inputShapeSelector.disabled = false;
 
     // Handle visibility of the main Riemann sphere options container
     if (controls.riemannSphereOptionsDiv) {

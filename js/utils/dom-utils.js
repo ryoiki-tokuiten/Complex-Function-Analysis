@@ -12,6 +12,12 @@ const DOM_BINDINGS = [
     { key: 'toggleFullscreenWBtn', id: 'toggle_fullscreen_w_btn' },
     { key: 'fullscreenContainer', id: 'fullscreen_container' },
     { key: 'closeFullscreenBtn', id: 'close_fullscreen_btn' },
+    { key: 'chainingParamsBlock', id: 'chaining_params' },
+    { key: 'enableChainingCb', id: 'enable_chaining_cb' },
+    { key: 'chainingControlsContainer', id: 'chaining_controls_container' },
+    { key: 'chainModeSelector', id: 'chain_mode_selector' },
+    { key: 'chainCountSlider', id: 'chain_count_slider' },
+    { key: 'chainCountValueDisplay', id: 'chain_count_value_display' },
     { key: 'commonParamsSliders', id: 'common_params_sliders' },
     { key: 'shapeParamsSliders', id: 'shape_params_sliders' },
     { key: 'mobiusParamsSliders', id: 'mobius_params_sliders' },
@@ -285,6 +291,12 @@ function setupDOMReferences() {
     wDomainColorCtx.imageSmoothingEnabled = true;
     wDomainColorCtx.imageSmoothingQuality = 'high';
 
+    wCanvasList = [wCanvas];
+    wCtxList = [wCtx];
+    wPlaneParamsList = [wPlaneParams];
+    wPlanePlotlyContainersList = [controls.wPlanePlotlyContainer];
+    sphereViewWParamsList = [sphereViewParams.w];
+
     sliderParamKeys.forEach(key => {
         controls[`${key}Slider`] = document.getElementById(`${key}_slider`);
         controls[`${key}ValueDisplay`] = document.getElementById(`${key}_value_display`);
@@ -376,7 +388,14 @@ function setupVisualParameters(updateZFromSlider = true, updateWFromSlider = tru
     let wWorldCenterY = (wPlaneParams.yRange[0] + wPlaneParams.yRange[1]) / 2;
 
     setupCanvasBaseParams(zPlaneParams, zCanvas, sphereViewParams.z, zIsFullscreen);
-    setupCanvasBaseParams(wPlaneParams, wCanvas, sphereViewParams.w, wIsFullscreen);
+
+    if (wCanvasList && wCanvasList.length > 0) {
+        for (let i = 0; i < wCanvasList.length; i++) {
+            setupCanvasBaseParams(wPlaneParamsList[i], wCanvasList[i], sphereViewWParamsList[i], wIsFullscreen);
+        }
+    } else {
+        setupCanvasBaseParams(wPlaneParams, wCanvas, sphereViewParams.w, wIsFullscreen);
+    }
 
     if (updateZFromSlider) { 
         const zoomZ = state.zPlaneZoom;
@@ -423,4 +442,147 @@ function setupVisualParameters(updateZFromSlider = true, updateWFromSlider = tru
     wPlaneParams.origin.x = (wPlaneParams.width / 2) - wWorldCenterX * wPlaneParams.scale.x;
     wPlaneParams.origin.y = (wPlaneParams.height / 2) + wWorldCenterY * wPlaneParams.scale.y;
     updatePlaneViewportRanges(wPlaneParams);
+
+    // Propagate zoom/pan to all recursive planes
+    if (wPlaneParamsList && wPlaneParamsList.length > 1) {
+        for (let i = 1; i < wPlaneParamsList.length; i++) {
+            const p = wPlaneParamsList[i];
+            p.xRange = [...wPlaneParams.xRange];
+            p.yRange = [...wPlaneParams.yRange];
+            p.scale.x = wPlaneParams.scale.x;
+            p.scale.y = wPlaneParams.scale.y;
+            p.origin.x = wPlaneParams.origin.x;
+            p.origin.y = wPlaneParams.origin.y;
+            updatePlaneViewportRanges(p);
+        }
+    }
+}
+
+function getChainingTitleHTML(i, mode) {
+    if (i === 0) return `w = f(z)`;
+    const prevSub = i === 1 ? `0` : `${i-1}`;
+    switch (mode) {
+        case 'recursion': return `w = f<sup>${i+1}</sup>(z)`;
+        case 'power': return `w = f(z)<sup>${i+1}</sup>`;
+        case 'sqrt': return `w = &radic;w<sub>${prevSub}</sub>`;
+        case 'ln': return `w = ln(w<sub>${prevSub}</sub>)`;
+        case 'exp': return `w = e<sup>w<sub>${prevSub}</sub></sup>`;
+        case 'reciprocal': return `w = 1 / w<sub>${prevSub}</sub>`;
+        default: return `w = f<sup>${i+1}</sup>(z)`;
+    }
+}
+
+function updateChainingTitles() {
+    if (!wCanvasList) return;
+    for (let i = 1; i < wCanvasList.length; i++) {
+        const titleSpan = document.getElementById(`w-plane-title_${i}`);
+        if (titleSpan) {
+            titleSpan.innerHTML = `w-plane (Chain ${i}: <code id="w-plane-title-func_${i}">${getChainingTitleHTML(i, state.chainingMode)}</code>)`;
+        }
+    }
+}
+
+function updateChainingColumns(count) {
+    if (!wCanvasList || wCanvasList.length === 0) {
+        wCanvasList = [wCanvas];
+        wCtxList = [wCtx];
+        wPlaneParamsList = [wPlaneParams];
+        wPlanePlotlyContainersList = [controls.wPlanePlotlyContainer];
+        sphereViewWParamsList = [sphereViewParams.w];
+    }
+    
+    count = Math.max(1, Math.min(48, Math.floor(count)));
+    const canvasesRow = document.querySelector('.canvas-row.two-column-layout');
+    if (!canvasesRow) return;
+
+    // Create more planes if needed
+    while (wCanvasList.length < count) {
+        const i = wCanvasList.length;
+        
+        // Clone the w-plane column
+        const originalCol = document.getElementById('w_plane_column');
+        const newCol = originalCol.cloneNode(true);
+        newCol.id = `w_plane_column_${i}`;
+        
+        // Update IDs within the new column
+        const titleSpan = newCol.querySelector('#w-plane-title');
+        if (titleSpan) {
+            titleSpan.id = `w-plane-title_${i}`;
+            titleSpan.innerHTML = `w-plane (Chain ${i}: <code id="w-plane-title-func_${i}">${getChainingTitleHTML(i, state.chainingMode)}</code>)`;
+        }
+        
+        const newCanvas = newCol.querySelector('#w_plane_canvas');
+        if (newCanvas) {
+            newCanvas.id = `w_plane_canvas_${i}`;
+        }
+        
+        const newPlotly = newCol.querySelector('#w_plane_plotly_container');
+        if (newPlotly) {
+            newPlotly.id = `w_plane_plotly_container_${i}`;
+        }
+
+        // Hide fullscreen toggle for recursive planes and make IDs unique
+        const fsBtn = newCol.querySelector('#toggle_fullscreen_w_btn');
+        if (fsBtn) {
+            fsBtn.id = `toggle_fullscreen_w_btn_${i}`;
+            fsBtn.style.display = 'none';
+        }
+        
+        const probeInfo = newCol.querySelector('#w_plane_probe_info');
+        if (probeInfo) probeInfo.id = `w_plane_probe_info_${i}`;
+        
+        const analysisInfo = newCol.querySelector('#w_plane_analysis_info');
+        if (analysisInfo) analysisInfo.id = `w_plane_analysis_info_${i}`;
+        
+        const cauchyInfo = newCol.querySelector('#cauchy_integral_results_info');
+        if (cauchyInfo) cauchyInfo.id = `cauchy_integral_results_info_${i}`;
+        
+        // Append to DOM
+        canvasesRow.appendChild(newCol);
+        
+        // Setup contexts and params
+        const ctx = newCanvas.getContext('2d');
+        ctx.imageSmoothingEnabled = true;
+        ctx.imageSmoothingQuality = 'high';
+        
+        const params = {
+            width: DEFAULT_CANVAS_WIDTH, height: DEFAULT_CANVAS_HEIGHT,
+            origin: {x:0, y:0}, scale: {x:1, y:1},
+            xRange: [...wPlaneInitialRanges.x], yRange: [...wPlaneInitialRanges.y]
+        };
+        
+        const sphereParams = { 
+            rotX: SPHERE_INITIAL_ROT_X, rotY: SPHERE_INITIAL_ROT_Y, 
+            dragging: false, lastMouseX: 0, lastMouseY: 0, 
+            radius: 0, centerX: 0, centerY: 0 
+        };
+        
+        wCanvasList.push(newCanvas);
+        wCtxList.push(ctx);
+        wPlaneParamsList.push(params);
+        wPlanePlotlyContainersList.push(newPlotly);
+        sphereViewWParamsList.push(sphereParams);
+    }
+    
+    // Remove planes if needed
+    while (wCanvasList.length > count) {
+        const i = wCanvasList.length - 1;
+        const colToRemove = document.getElementById(`w_plane_column_${i}`);
+        if (colToRemove) {
+            canvasesRow.removeChild(colToRemove);
+        }
+        wCanvasList.pop();
+        wCtxList.pop();
+        wPlaneParamsList.pop();
+        wPlanePlotlyContainersList.pop();
+        sphereViewWParamsList.pop();
+    }
+    
+    // Update the original w_plane title if needed
+    const wPlaneTitleFunc = document.getElementById('w-plane-title-func');
+    if (wPlaneTitleFunc && count > 1) {
+        wPlaneTitleFunc.innerHTML = `w = f(z)`;
+    }
+    
+    setupVisualParameters(false, false);
 }

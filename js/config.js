@@ -159,18 +159,21 @@ let state = {
     laplaceStability: null,
     isLaplace3DFullScreen: false,
     originalLaplace3DParent: null,
+    chainingEnabled: false,
+    chainingMode: 'recursion',
+    chainCount: 1,
 };
 
 
 const zPlaneInitialRanges = { x: [-3.5, 3.5], y: [-3.0, 3.0] };
 const wPlaneInitialRanges = { x: [-6.5, 6.5], y: [-6.5, 6.5] };
 
-const zPlaneParams = {
+let zPlaneParams = {
     width: DEFAULT_CANVAS_WIDTH, height: DEFAULT_CANVAS_HEIGHT,
     origin: {x:0, y:0}, scale: {x:1, y:1},
     currentVisXRange: [...zPlaneInitialRanges.x], currentVisYRange: [...zPlaneInitialRanges.y]
 };
-const wPlaneParams = {
+let wPlaneParams = {
     width: DEFAULT_CANVAS_WIDTH, height: DEFAULT_CANVAS_HEIGHT,
     origin: {x:0, y:0}, scale: {x:1, y:1},
     xRange: [...wPlaneInitialRanges.x], yRange: [...wPlaneInitialRanges.y]
@@ -190,6 +193,13 @@ const controls = {};
 const polynomialCoeffUIElements = [];
 let zCtx, wCtx, zDomainColorCtx, wDomainColorCtx;
 let zCanvas, wCanvas, zDomainColorCanvas, wDomainColorCanvas;
+
+// Lists for recursive W-planes
+let wCanvasList = [];
+let wCtxList = [];
+let wPlaneParamsList = [];
+let wPlanePlotlyContainersList = [];
+let sphereViewWParamsList = [];
 let webglSupport = {
     available: false,
     reason: 'not-initialized',
