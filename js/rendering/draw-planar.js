@@ -471,7 +471,8 @@ function drawPlanarTransformedShape(ctx, planeParams, tf, options = {}) {
 
     if (includeGeometry) {
         if (isRasterInputShape(inputShape)) {
-            if (typeof drawImageWithWebGL === 'function' && drawImageWithWebGL(ctx, planeParams, true)) {
+            const useWebGL = !(options.index > 0);
+            if (useWebGL && typeof drawImageWithWebGL === 'function' && drawImageWithWebGL(ctx, planeParams, true)) {
                 return;
             }
 
@@ -574,7 +575,7 @@ function drawPlanarTaylorApproximation(ctx, wPlaneParamsOriginal, originalFuncKe
 }
 
 
-function drawPlanarTransformedProbe(ctx,planeParams,tf){
+function drawPlanarTransformedProbe(ctx, planeParams, tf, index){
     let effectiveTransformFunc = tf;
     if (state.taylorSeriesEnabled && (!state.riemannSphereViewEnabled || state.splitViewEnabled)) {
         effectiveTransformFunc = createTaylorApproximationTransform(
@@ -591,6 +592,63 @@ function drawPlanarTransformedProbe(ctx,planeParams,tf){
         ctx.beginPath();
         ctx.arc(p_p_c.x,p_p_c.y,5,0,2*Math.PI);
         ctx.fill();
+        
+        // Output Chaining: "Spiderweb" Orbit Trajectory
+        if (index === 0 && state.chainingEnabled && state.chainCount > 1) {
+            const baseFunc = transformFunctions[state.currentFunction];
+            let w_prev = pW; 
+            let w_0 = pW;
+            let last_canvas_pt = p_p_c;
+
+            const orbitColor = 'rgba(0, 255, 200, 0.9)'; // Sleek glowing cyan
+            ctx.strokeStyle = orbitColor;
+            ctx.fillStyle = orbitColor;
+            ctx.lineWidth = 1.5;
+
+            for (let k = 1; k < state.chainCount; k++) {
+                let w_k;
+                switch (state.chainingMode) {
+                    case 'power': w_k = complexMul(w_prev, w_0); break;
+                    case 'sqrt': w_k = complexPow(w_prev.re, w_prev.im, 0.5, 0); break;
+                    case 'ln': w_k = complexLn(w_prev.re, w_prev.im); break;
+                    case 'exp': w_k = complexExp(w_prev.re, w_prev.im); break;
+                    case 'reciprocal': w_k = complexReciprocal(w_prev.re, w_prev.im); break;
+                    case 'recursion':
+                    default: w_k = baseFunc(w_prev.re, w_prev.im); break;
+                }
+                
+                if (!w_k || isNaN(w_k.re) || isNaN(w_k.im) || !isFinite(w_k.re) || !isFinite(w_k.im)) break;
+                if (Math.abs(w_k.re) > planeParams.xRange[1] * 30 || Math.abs(w_k.im) > planeParams.yRange[1] * 30) break;
+
+                const curr_canvas_pt = mapToCanvasCoords(w_k.re, w_k.im, planeParams);
+                
+                // Draw connecting orbital jump segment
+                ctx.beginPath();
+                ctx.moveTo(last_canvas_pt.x, last_canvas_pt.y);
+                ctx.lineTo(curr_canvas_pt.x, curr_canvas_pt.y);
+                ctx.stroke();
+                
+                // Draw vector arrow head indicating sequence direction
+                const angle = Math.atan2(curr_canvas_pt.y - last_canvas_pt.y, curr_canvas_pt.x - last_canvas_pt.x);
+                const aSize = 6;
+                ctx.beginPath();
+                ctx.moveTo(curr_canvas_pt.x, curr_canvas_pt.y);
+                ctx.lineTo(curr_canvas_pt.x - aSize * Math.cos(angle - Math.PI / 6),
+                           curr_canvas_pt.y - aSize * Math.sin(angle - Math.PI / 6));
+                ctx.lineTo(curr_canvas_pt.x - aSize * Math.cos(angle + Math.PI / 6),
+                           curr_canvas_pt.y - aSize * Math.sin(angle + Math.PI / 6));
+                ctx.closePath();
+                ctx.fill();
+
+                // Draw distinct terminal node 
+                ctx.beginPath();
+                ctx.arc(curr_canvas_pt.x, curr_canvas_pt.y, 3.5, 0, 2*Math.PI);
+                ctx.fill();
+
+                w_prev = w_k;
+                last_canvas_pt = curr_canvas_pt;
+            }
+        }
     }
 
     ctx.strokeStyle=COLOR_PROBE_NEIGHBORHOOD;

@@ -491,7 +491,7 @@ function updateChainingColumns(count) {
         sphereViewWParamsList = [sphereViewParams.w];
     }
     
-    count = Math.max(1, Math.min(48, Math.floor(count)));
+    count = Math.max(1, Math.min(25, Math.floor(count)));
     const canvasesRow = document.querySelector('.canvas-row.two-column-layout');
     if (!canvasesRow) return;
 

@@ -695,7 +695,7 @@ function _renderSingleWPlaneMode(index, curFunc, isSpecialMode) {
                                 ? drawPlanarTransformedShapeHybrid(cacheCtx, wPlaneParams, curFunc, 'w')
                                 : false;
                             if (!renderedByWebGL) {
-                                drawPlanarTransformedShape(cacheCtx, wPlaneParams, curFunc);
+                                drawPlanarTransformedShape(cacheCtx, wPlaneParams, curFunc, { index });
                             }
                             wPlanarTransformedLayerCache.key = cacheKey;
                         }
@@ -705,7 +705,7 @@ function _renderSingleWPlaneMode(index, curFunc, isSpecialMode) {
                             ? drawPlanarTransformedShapeHybrid(wCtx, wPlaneParams, curFunc, 'w')
                             : false;
                         if (!renderedByWebGL) {
-                            drawPlanarTransformedShape(wCtx, wPlaneParams, curFunc);
+                            drawPlanarTransformedShape(wCtx, wPlaneParams, curFunc, { index });
                         }
                     }
                 } else {
@@ -714,7 +714,7 @@ function _renderSingleWPlaneMode(index, curFunc, isSpecialMode) {
                         ? drawPlanarTransformedShapeHybrid(wCtx, wPlaneParams, curFunc, 'w')
                         : false;
                     if (!renderedByWebGL) {
-                        drawPlanarTransformedShape(wCtx, wPlaneParams, curFunc);
+                        drawPlanarTransformedShape(wCtx, wPlaneParams, curFunc, { index });
                     }
                 }
             }
@@ -743,7 +743,7 @@ function _renderSingleWPlaneMode(index, curFunc, isSpecialMode) {
                 }, 'capture');
             } else { // Planar W-plane
                 drawPlaneLayer(wCtx, wPlaneParams, 'w', (layerCtx) => {
-                    drawPlanarTransformedProbe(layerCtx, wPlaneParams, curFunc);
+                    drawPlanarTransformedProbe(layerCtx, wPlaneParams, curFunc, index);
                 }, 'capture');
             }
         }
