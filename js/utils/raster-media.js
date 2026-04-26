@@ -1,5 +1,4 @@
 const RASTER_INPUT_SHAPES = new Set(['image', 'video']);
-const RASTER_CPU_MAX_RESOLUTION = 150;
 const RASTER_MEDIA_TIME_EPSILON = 1e-4;
 
 let rasterMediaSampleCanvas = null;
@@ -117,7 +116,7 @@ function getRasterSamplingSize(source, targetResolution) {
         return { width: 0, height: 0 };
     }
 
-    const cpuResolution = Math.max(1, Math.min(targetResolution || 300, RASTER_CPU_MAX_RESOLUTION));
+    const cpuResolution = Math.max(1, targetResolution || 300);
     if (width >= height) {
         return {
             width: cpuResolution,
@@ -195,7 +194,20 @@ function processUploadedVideoFrame(force = false) {
 
     const { aspectRatio } = getRasterSourceDimensions(video);
     state.videoAspectRatio = aspectRatio;
-    state.videoPoints = sampleRasterSourceToPoints(video, state.videoResolution);
+
+    // Check if we need CPU points. Skip if WebGL is available and Riemann sphere is disabled.
+    if (typeof initWebGLImageSupportIfNeeded === 'function') {
+        initWebGLImageSupportIfNeeded();
+    }
+    const useWebGL = typeof webglImageSupport !== 'undefined' && webglImageSupport.available;
+    const needsCpuPoints = state.riemannSphereViewEnabled || !useWebGL;
+
+    if (needsCpuPoints) {
+        state.videoPoints = sampleRasterSourceToPoints(video, state.videoResolution);
+    } else if (state.videoPoints.length > 0) {
+        state.videoPoints = []; // Free memory
+    }
+
     state.videoFrameVersion += 1;
     state.videoLastProcessedMediaTime = currentTime;
     syncVideoPlaybackUI();

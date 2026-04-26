@@ -42,6 +42,53 @@ bool evaluateMappedValueBase(vec2 z, float isWPlane, float functionId, vec2 mA, 
 }
 `;
 
+const GLSL_COMPLEX_INVERSE_LIBRARY = `
+vec2 complexSqrt(vec2 z) {
+  float r = length(z);
+  if (r < 1.0e-20) return vec2(0.0);
+  float angle = atan(z.y, z.x) * 0.5;
+  float sr = sqrt(r);
+  return vec2(sr * cos(angle), sr * sin(angle));
+}
+vec2 complexArcsin(vec2 w) {
+  vec2 iw = vec2(-w.y, w.x);
+  vec2 wSq = complexMul(w, w);
+  vec2 s = complexSqrt(vec2(1.0 - wSq.x, -wSq.y));
+  vec2 lv = complexLn(complexAdd(iw, s));
+  return vec2(lv.y, -lv.x);
+}
+vec2 complexArccos(vec2 w) {
+  vec2 wSq = complexMul(w, w);
+  vec2 s = complexSqrt(vec2(1.0 - wSq.x, -wSq.y));
+  vec2 lv = complexLn(complexAdd(w, vec2(-s.y, s.x)));
+  return vec2(lv.y, -lv.x);
+}
+vec2 complexArctan(vec2 w) {
+  vec2 num = vec2(-w.x, 1.0 - w.y);
+  vec2 den = vec2(w.x, 1.0 + w.y);
+  if (dot(den, den) < 1.0e-18) return vec2(0.0);
+  vec2 lv = complexLn(complexDiv(num, den));
+  return vec2(-lv.y * 0.5, lv.x * 0.5);
+}
+bool evaluateInverseFunction(vec2 w, float functionId, vec2 mA, vec2 mB, vec2 mC, vec2 mD, int polyDeg, vec2 polyCoeffs[11], out vec2 z) {
+  float fId = floor(functionId + 0.5);
+  if (abs(fId - 1.0) < 0.5) { z = complexArccos(w); return isFiniteVec2Compat(z); }
+  if (abs(fId - 2.0) < 0.5) { z = complexArcsin(w); return isFiniteVec2Compat(z); }
+  if (abs(fId - 3.0) < 0.5) { z = complexArctan(w); return isFiniteVec2Compat(z); }
+  if (abs(fId - 4.0) < 0.5) { if (dot(w,w) < 1.0e-18) return false; z = complexArccos(complexDiv(vec2(1.0,0.0), w)); return isFiniteVec2Compat(z); }
+  if (abs(fId - 5.0) < 0.5) { if (dot(w,w) < 1.0e-20) return false; z = complexLn(w); return isFiniteVec2Compat(z); }
+  if (abs(fId - 6.0) < 0.5) { z = complexExp(w); return isFiniteVec2Compat(z); }
+  if (abs(fId - 7.0) < 0.5) { if (dot(w,w) < 1.0e-18) return false; z = complexDiv(vec2(1.0,0.0), w); return isFiniteVec2Compat(z); }
+  if (abs(fId - 8.0) < 0.5) { vec2 num = complexAdd(complexMul(mD, w), -mB); vec2 den = complexAdd(-complexMul(mC, w), mA); if (dot(den,den) < 1.0e-18) return false; z = complexDiv(num, den); return isFiniteVec2Compat(z); }
+  if (abs(fId - 9.0) < 0.5) {
+    if (polyDeg == 1) { vec2 den = polyCoeffs[1]; if (dot(den,den) < 1.0e-18) return false; z = complexDiv(w - polyCoeffs[0], den); return isFiniteVec2Compat(z); }
+    if (polyDeg == 2) { vec2 a=polyCoeffs[2]; vec2 b=polyCoeffs[1]; vec2 c=polyCoeffs[0]-w; vec2 disc=complexMul(b,b)-4.0*complexMul(a,c); vec2 sd=complexSqrt(disc); vec2 den=2.0*a; if(dot(den,den)<1.0e-18) return false; z=complexDiv(-b+sd,den); return isFiniteVec2Compat(z); }
+    return false;
+  }
+  return false;
+}
+`;
+
 
 function createWebGLShaderShared(gl, shaderType, source) {
     const shader = gl.createShader(shaderType);

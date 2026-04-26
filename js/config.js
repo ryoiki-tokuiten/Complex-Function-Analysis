@@ -59,7 +59,7 @@ let state = {
 
     videoPoints: [],
     videoResolution: 300,
-    videoProcessingFps: 24,
+    videoProcessingFps: 60,
     videoSize: 2.0,
     videoOpacity: 1.0,
     videoAspectRatio: 1.0,
