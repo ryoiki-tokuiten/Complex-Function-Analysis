@@ -43,10 +43,10 @@ let state = {
     vectorArrowThickness: 1.5,
     vectorArrowHeadSize: 6,
     streamlineFlowEnabled: false,
-    streamlineStepSize: 0.02,
-    streamlineMaxLength: 100,
-    streamlineThickness: 1.0,
-    streamlineSeedDensityFactor: 0.5,
+    streamlineStepSize: 0.06,
+    streamlineMaxLength: 400,
+    streamlineThickness: 1.5,
+    streamlineSeedDensityFactor: 0.8,
     manualSeedPoints: [], 
 
     imagePoints: [],
@@ -102,9 +102,9 @@ let state = {
     taylorSeriesColorConvergenceDiskStroke: 'rgba(150, 150, 150, 0.5)',
 
     particleAnimationEnabled: false,
-    particleDensity: 50, 
-    particleSpeed: 0.01, 
-    particleMaxLifetime: 200, 
+    particleDensity: 150,
+    particleSpeed: 0.04,
+    particleMaxLifetime: 300,
     particles: [], 
 
     vectorFlowOptionsEnabled: false, 

@@ -98,86 +98,51 @@ function drawRadialDiscreteSteps(ctx, planeParams, currentFunctionKey, stepsCoun
 
 function drawStreamlinesOnZPlane(ctx, planeParams, state) {
     ctx.save();
-    
-    ctx.lineWidth = state.streamlineThickness; 
+    ctx.lineWidth = state.streamlineThickness;
     ctx.lineJoin = 'round';
     ctx.lineCap = 'round';
 
     const { currentVisXRange: xR, currentVisYRange: yR } = planeParams;
-    const numSeedRows = Math.max(2, Math.floor(state.gridDensity * state.streamlineSeedDensityFactor));
-    const numSeedCols = Math.max(2, Math.floor(state.gridDensity * state.streamlineSeedDensityFactor));
 
-    
-    
+    // Always include auto grid, then add manual seed points on top
+    const seeds = [];
+    const rows = Math.max(2, Math.floor(state.gridDensity * state.streamlineSeedDensityFactor));
+    const cols = rows;
+    for (let i = 0; i <= rows; i++)
+        for (let j = 0; j <= cols; j++)
+            seeds.push(xR[0] + (j / cols) * (xR[1] - xR[0]), yR[0] + (i / rows) * (yR[1] - yR[0]));
+    if (state.manualSeedPoints && state.manualSeedPoints.length > 0)
+        for (const s of state.manualSeedPoints) seeds.push(s.re, s.im);
 
-    if (state.manualSeedPoints && state.manualSeedPoints.length > 0) {
-        
-        for (const seed of state.manualSeedPoints) {
-            const startX = seed.re;
-            const startY = seed.im;
+    // Bucket segments by quantized magnitude color (32 levels)
+    // This reduces ~112K individual beginPath/stroke calls to ~33 batched draws.
+    const B = 32;
+    const minM = STREAMLINE_COLOR_MIN_MAG;
+    const magR = Math.max(1e-6, STREAMLINE_COLOR_MAX_MAG - minM);
+    const buckets = [];
+    for (let b = 0; b <= B; b++) buckets.push([]);
 
-            const streamlinePath = calculateStreamline( 
-                startX, startY,
-                getVectorForStreamline,
-                planeParams,
-                
-                
-                state
-            );
-
-            if (streamlinePath && streamlinePath.length > 1) {
-                for (let k = 0; k < streamlinePath.length - 1; k++) {
-                    const p1 = streamlinePath[k];
-                    const p2 = streamlinePath[k+1];
-
-                    const canvasP1 = mapToCanvasCoords(p1.x, p1.y, planeParams);
-                    const canvasP2 = mapToCanvasCoords(p2.x, p2.y, planeParams);
-
-                    const segmentColor = getStreamlineColorByMagnitude(p1.magnitude);
-
-                    ctx.beginPath();
-                    ctx.strokeStyle = segmentColor;
-                    ctx.moveTo(canvasP1.x, canvasP1.y);
-                    ctx.lineTo(canvasP2.x, canvasP2.y);
-                    ctx.stroke();
-                }
-            }
+    for (let s = 0; s < seeds.length; s += 2) {
+        const path = calculateStreamline(seeds[s], seeds[s + 1], getVectorForStreamline, planeParams, state);
+        if (!path || path.length < 2) continue;
+        for (let k = 0; k < path.length - 1; k++) {
+            const c1 = mapToCanvasCoords(path[k].x, path[k].y, planeParams);
+            const c2 = mapToCanvasCoords(path[k + 1].x, path[k + 1].y, planeParams);
+            const t = Math.max(0, Math.min(1, (path[k].magnitude - minM) / magR));
+            buckets[Math.round(t * B)].push(c1.x, c1.y, c2.x, c2.y);
         }
-    } else {
-        
-        for (let i = 0; i <= numSeedRows; i++) {
-            for (let j = 0; j <= numSeedCols; j++) {
-                const startX = xR[0] + (j / numSeedCols) * (xR[1] - xR[0]);
-                const startY = yR[0] + (i / numSeedRows) * (yR[1] - yR[0]);
+    }
 
-                const streamlinePath = calculateStreamline( 
-                    startX, startY,
-                    getVectorForStreamline,
-                    planeParams,
-                    
-                    
-                    state
-                );
-
-                if (streamlinePath && streamlinePath.length > 1) {
-                    for (let k = 0; k < streamlinePath.length - 1; k++) {
-                        const p1 = streamlinePath[k];
-                        const p2 = streamlinePath[k+1];
-
-                        const canvasP1 = mapToCanvasCoords(p1.x, p1.y, planeParams);
-                        const canvasP2 = mapToCanvasCoords(p2.x, p2.y, planeParams);
-
-                        const segmentColor = getStreamlineColorByMagnitude(p1.magnitude);
-
-                        ctx.beginPath();
-                        ctx.strokeStyle = segmentColor;
-                        ctx.moveTo(canvasP1.x, canvasP1.y);
-                        ctx.lineTo(canvasP2.x, canvasP2.y);
-                        ctx.stroke();
-                    }
-                }
-            }
+    for (let b = 0; b <= B; b++) {
+        const segs = buckets[b];
+        if (segs.length === 0) continue;
+        ctx.strokeStyle = getStreamlineColorByMagnitude(minM + (b / B) * magR);
+        ctx.beginPath();
+        for (let i = 0; i < segs.length; i += 4) {
+            ctx.moveTo(segs[i], segs[i + 1]);
+            ctx.lineTo(segs[i + 2], segs[i + 3]);
         }
+        ctx.stroke();
     }
     ctx.restore();
 }
@@ -225,7 +190,7 @@ function drawPlanarInputShape(ctx, planeParams) {
 }
 
 function initializeSingleParticle(planeParams) {
-    
+
     const xMin = planeParams.currentVisXRange[0];
     const xMax = planeParams.currentVisXRange[1];
     const yMin = planeParams.currentVisYRange[0];
@@ -240,75 +205,95 @@ function initializeSingleParticle(planeParams) {
 
 function updateAndDrawParticles(ctx, planeParams, state) {
     if (!state.particleAnimationEnabled) {
-        state.particles = []; 
+        state.particles = [];
         return;
     }
 
-    
-    while (state.particles.length < state.particleDensity) {
+    while (state.particles.length < state.particleDensity)
         state.particles.push(initializeSingleParticle(planeParams));
-    }
-    
-    while (state.particles.length > state.particleDensity && state.particles.length > 0) { 
+    while (state.particles.length > state.particleDensity)
         state.particles.pop();
-    }
 
     ctx.save();
-    ctx.fillStyle = COLOR_PARTICLE; 
+    ctx.fillStyle = COLOR_PARTICLE;
 
     const xMin = planeParams.currentVisXRange[0];
     const xMax = planeParams.currentVisXRange[1];
     const yMin = planeParams.currentVisYRange[0];
     const yMax = planeParams.currentVisYRange[1];
 
+    // Scale speed to viewport so particles move consistently at any zoom
+    const viewSpan = Math.max(xMax - xMin, yMax - yMin);
+    const speed = state.particleSpeed * viewSpan * 0.1;
+
+    // Batch all particles into a single beginPath/fill call
+    ctx.beginPath();
     for (let i = 0; i < state.particles.length; i++) {
         let p = state.particles[i];
         p.lifetime++;
 
-        
-        
-        const vector = getVectorForStreamline(p.x, p.y, state.currentFunction, state.vectorFieldFunction, state);
+        // RK2 with normalized direction — same approach as streamlines
+        const k1 = getVectorForStreamline(p.x, p.y, state.currentFunction, state.vectorFieldFunction, state);
+        const k1Mag = Math.hypot(k1.vx, k1.vy);
 
-        
-        p.x += vector.vx * state.particleSpeed;
-        p.y += vector.vy * state.particleSpeed;
-
-        
-        if (p.lifetime > state.particleMaxLifetime ||
-            p.x < xMin || p.x > xMax ||
-            p.y < yMin || p.y > yMax ||
-            isNaN(p.x) || isNaN(p.y) || !isFinite(p.x) || !isFinite(p.y) ||
-            isNaN(vector.vx) || isNaN(vector.vy) || !isFinite(vector.vx) || !isFinite(vector.vy) ) { 
+        if (k1Mag < 1e-9 || !isFinite(k1.vx) || !isFinite(k1.vy)) {
             state.particles[i] = initializeSingleParticle(planeParams);
-            p = state.particles[i]; 
+            p = state.particles[i];
+        } else {
+            const k1nx = k1.vx / k1Mag, k1ny = k1.vy / k1Mag;
+            const midX = p.x + k1nx * speed * 0.5;
+            const midY = p.y + k1ny * speed * 0.5;
+            const k2 = getVectorForStreamline(midX, midY, state.currentFunction, state.vectorFieldFunction, state);
+            const k2Mag = Math.hypot(k2.vx, k2.vy);
+            const nx = k2Mag > 1e-9 ? k2.vx / k2Mag : k1nx;
+            const ny = k2Mag > 1e-9 ? k2.vy / k2Mag : k1ny;
+
+            p.x += nx * speed;
+            p.y += ny * speed;
         }
 
-        
+        if (p.lifetime > state.particleMaxLifetime ||
+            p.x < xMin || p.x > xMax || p.y < yMin || p.y > yMax ||
+            !isFinite(p.x) || !isFinite(p.y)) {
+            state.particles[i] = initializeSingleParticle(planeParams);
+            p = state.particles[i];
+        }
+
         const canvasP = mapToCanvasCoords(p.x, p.y, planeParams);
-        
         if (canvasP.x >= 0 && canvasP.x <= planeParams.width && canvasP.y >= 0 && canvasP.y <= planeParams.height) {
-             ctx.beginPath();
-             ctx.arc(canvasP.x, canvasP.y, PARTICLE_RADIUS, 0, 2 * Math.PI); 
-             ctx.fill();
+            ctx.moveTo(canvasP.x + PARTICLE_RADIUS, canvasP.y);
+            ctx.arc(canvasP.x, canvasP.y, PARTICLE_RADIUS, 0, 2 * Math.PI);
         }
     }
+    ctx.fill();
     ctx.restore();
 }
-function drawConformalityProbeSegments(ctx, planeParams, center_world, tf, isWPlane) {const h_segment = state.probeNeighborhoodSize / PROBE_CROSSHAIR_SIZE_FACTOR; const z_c = center_world;const z_h_plus  = { re: z_c.re + h_segment, im: z_c.im };const z_h_minus = { re: z_c.re - h_segment, im: z_c.im };const z_v_plus  = { re: z_c.re, im: z_c.im + h_segment };const z_v_minus = { re: z_c.re, im: z_c.im - h_segment };let p1_h_world, p2_h_world, p1_v_world, p2_v_world;let color_h, color_v;if (isWPlane) {p1_h_world = tf(z_h_minus.re, z_h_minus.im);p2_h_world = tf(z_h_plus.re, z_h_plus.im);p1_v_world = tf(z_v_minus.re, z_v_minus.im);p2_v_world = tf(z_v_plus.re, z_v_plus.im);color_h = COLOR_PROBE_CONFORMAL_LINE_W_H;color_v = COLOR_PROBE_CONFORMAL_LINE_W_V;} else {p1_h_world = z_h_minus;p2_h_world = z_h_plus;p1_v_world = z_v_minus;p2_v_world = z_v_plus;color_h = COLOR_PROBE_CONFORMAL_LINE_Z_H;color_v = COLOR_PROBE_CONFORMAL_LINE_Z_V;}const drawSegmentIfValid = (p1w, p2w, color) => {if (!isNaN(p1w.re) && !isNaN(p1w.im) && !isNaN(p2w.re) && !isNaN(p2w.im) &&isFinite(p1w.re) && isFinite(p1w.im) && isFinite(p2w.re) && isFinite(p2w.im)) {const p1_canvas = mapToCanvasCoords(p1w.re, p1w.im, planeParams);const p2_canvas = mapToCanvasCoords(p2w.re, p2w.im, planeParams);const canvasWidth = planeParams.width;const canvasHeight = planeParams.height;const margin = Math.max(canvasWidth, canvasHeight) * 2; if (p1_canvas.x > -margin && p1_canvas.x < canvasWidth + margin &&p1_canvas.y > -margin && p1_canvas.y < canvasHeight + margin &&p2_canvas.x > -margin && p2_canvas.x < canvasWidth + margin &&p2_canvas.y > -margin && p2_canvas.y < canvasHeight + margin) {ctx.save();ctx.strokeStyle = color;ctx.lineWidth = 2;
+function drawConformalityProbeSegments(ctx, planeParams, center_world, tf, isWPlane) {
+    const h_segment = state.probeNeighborhoodSize / PROBE_CROSSHAIR_SIZE_FACTOR; const z_c = center_world; const z_h_plus = { re: z_c.re + h_segment, im: z_c.im }; const z_h_minus = { re: z_c.re - h_segment, im: z_c.im }; const z_v_plus = { re: z_c.re, im: z_c.im + h_segment }; const z_v_minus = { re: z_c.re, im: z_c.im - h_segment }; let p1_h_world, p2_h_world, p1_v_world, p2_v_world; let color_h, color_v; if (isWPlane) { p1_h_world = tf(z_h_minus.re, z_h_minus.im); p2_h_world = tf(z_h_plus.re, z_h_plus.im); p1_v_world = tf(z_v_minus.re, z_v_minus.im); p2_v_world = tf(z_v_plus.re, z_v_plus.im); color_h = COLOR_PROBE_CONFORMAL_LINE_W_H; color_v = COLOR_PROBE_CONFORMAL_LINE_W_V; } else { p1_h_world = z_h_minus; p2_h_world = z_h_plus; p1_v_world = z_v_minus; p2_v_world = z_v_plus; color_h = COLOR_PROBE_CONFORMAL_LINE_Z_H; color_v = COLOR_PROBE_CONFORMAL_LINE_Z_V; } const drawSegmentIfValid = (p1w, p2w, color) => {
+        if (!isNaN(p1w.re) && !isNaN(p1w.im) && !isNaN(p2w.re) && !isNaN(p2w.im) && isFinite(p1w.re) && isFinite(p1w.im) && isFinite(p2w.re) && isFinite(p2w.im)) {
+            const p1_canvas = mapToCanvasCoords(p1w.re, p1w.im, planeParams); const p2_canvas = mapToCanvasCoords(p2w.re, p2w.im, planeParams); const canvasWidth = planeParams.width; const canvasHeight = planeParams.height; const margin = Math.max(canvasWidth, canvasHeight) * 2; if (p1_canvas.x > -margin && p1_canvas.x < canvasWidth + margin && p1_canvas.y > -margin && p1_canvas.y < canvasHeight + margin && p2_canvas.x > -margin && p2_canvas.x < canvasWidth + margin && p2_canvas.y > -margin && p2_canvas.y < canvasHeight + margin) {
+                ctx.save(); ctx.strokeStyle = color; ctx.lineWidth = 2;
+                ctx.lineJoin = 'round';
+                ctx.lineCap = 'round';
+                ctx.beginPath(); ctx.moveTo(p1_canvas.x, p1_canvas.y); ctx.lineTo(p2_canvas.x, p2_canvas.y); ctx.stroke(); ctx.restore();
+            }
+        }
+    }; drawSegmentIfValid(p1_h_world, p2_h_world, color_h); drawSegmentIfValid(p1_v_world, p2_v_world, color_v);
+}
+function drawPlanarProbe(ctx, planeParams) {
+    const p_p_c = mapToCanvasCoords(state.probeZ.re, state.probeZ.im, planeParams); ctx.fillStyle = COLOR_PROBE_MARKER; ctx.beginPath(); ctx.arc(p_p_c.x, p_p_c.y, 5, 0, 2 * Math.PI); ctx.fill(); ctx.strokeStyle = COLOR_PROBE_NEIGHBORHOOD; ctx.lineWidth = 1.5;
     ctx.lineJoin = 'round';
     ctx.lineCap = 'round';
-    ctx.beginPath();ctx.moveTo(p1_canvas.x, p1_canvas.y);ctx.lineTo(p2_canvas.x, p2_canvas.y);ctx.stroke();ctx.restore();}}};drawSegmentIfValid(p1_h_world, p2_h_world, color_h);drawSegmentIfValid(p1_v_world, p2_v_world, color_v);}
-function drawPlanarProbe(ctx,planeParams){const p_p_c=mapToCanvasCoords(state.probeZ.re,state.probeZ.im,planeParams);ctx.fillStyle=COLOR_PROBE_MARKER;ctx.beginPath();ctx.arc(p_p_c.x,p_p_c.y,5,0,2*Math.PI);ctx.fill();ctx.strokeStyle=COLOR_PROBE_NEIGHBORHOOD;ctx.lineWidth=1.5;
-    ctx.lineJoin = 'round';
-    ctx.lineCap = 'round';
-    ctx.beginPath();const r_l=state.probeNeighborhoodSize;for(let i=0;i<=60;++i){const a=(i/60)*2*Math.PI;const z_b={re:state.probeZ.re+r_l*Math.cos(a),im:state.probeZ.im+r_l*Math.sin(a)};const p_c=mapToCanvasCoords(z_b.re,z_b.im,planeParams);if(i===0)ctx.moveTo(p_c.x,p_c.y);else ctx.lineTo(p_c.x,p_c.y);}ctx.closePath();ctx.stroke();drawConformalityProbeSegments(ctx, planeParams, state.probeZ, null, false);}
+    ctx.beginPath(); const r_l = state.probeNeighborhoodSize; for (let i = 0; i <= 60; ++i) { const a = (i / 60) * 2 * Math.PI; const z_b = { re: state.probeZ.re + r_l * Math.cos(a), im: state.probeZ.im + r_l * Math.sin(a) }; const p_c = mapToCanvasCoords(z_b.re, z_b.im, planeParams); if (i === 0) ctx.moveTo(p_c.x, p_c.y); else ctx.lineTo(p_c.x, p_c.y); } ctx.closePath(); ctx.stroke(); drawConformalityProbeSegments(ctx, planeParams, state.probeZ, null, false);
+}
 
 function drawPlanarTransformedLine(ctx, planeParams, tf, z_pts, col) {
     ctx.strokeStyle = col;
     ctx.lineJoin = 'round';
     ctx.lineCap = 'round';
-    ctx.beginPath();let fV = true; let lastValidCanvasPoint = null;for (const z_pt of z_pts) {if (!z_pt || z_pt.re === undefined || z_pt.im === undefined) { if (!fV && lastValidCanvasPoint) ctx.stroke(); ctx.beginPath(); fV = true; lastValidCanvasPoint = null; continue;}let w;if (state.currentFunction === 'zeta' && !state.zetaContinuationEnabled && z_pt.re <= ZETA_REFLECTION_POINT_RE) {w = { re: NaN, im: NaN };} else {w = tf(z_pt.re, z_pt.im);}if (isNaN(w.re) || isNaN(w.im) || !isFinite(w.re) || !isFinite(w.im) ||Math.abs(w.re) > planeParams.xRange[1] * 10 || Math.abs(w.im) > planeParams.yRange[1] * 10) { if (!fV && lastValidCanvasPoint) {const edgePoint = findIntersectionWithViewport(lastValidCanvasPoint, {x: planeParams.origin.x + w.re * planeParams.scale.x, y: planeParams.origin.y - w.im * planeParams.scale.y}, planeParams);if (edgePoint) ctx.lineTo(edgePoint.x, edgePoint.y);ctx.stroke();}ctx.beginPath();fV = true;lastValidCanvasPoint = null;continue;}const p_c = mapToCanvasCoords(w.re, w.im, planeParams);if (fV) {ctx.moveTo(p_c.x, p_c.y);fV = false;} else {ctx.lineTo(p_c.x, p_c.y);}lastValidCanvasPoint = p_c;}if (!fV && lastValidCanvasPoint) {ctx.stroke();}}
-function findIntersectionWithViewport(p1, p2, planeParams) {const xmin = 0, xmax = planeParams.width;const ymin = 0, ymax = planeParams.height;let t = Infinity;if (p2.y < ymin && p1.y >= ymin) { t = Math.min(t, (ymin - p1.y) / (p2.y - p1.y)); }if (p2.y > ymax && p1.y <= ymax) { t = Math.min(t, (ymax - p1.y) / (p2.y - p1.y)); }if (p2.x < xmin && p1.x >= xmin) { t = Math.min(t, (xmin - p1.x) / (p2.x - p1.x)); }if (p2.x > xmax && p1.x <= xmax) { t = Math.min(t, (xmax - p1.x) / (p2.x - p1.x)); }if (isFinite(t) && t >= 0 && t <= 1) {return { x: p1.x + t * (p2.x - p1.x), y: p1.y + t * (p2.y - p1.y) };}return null;}
+    ctx.beginPath(); let fV = true; let lastValidCanvasPoint = null; for (const z_pt of z_pts) { if (!z_pt || z_pt.re === undefined || z_pt.im === undefined) { if (!fV && lastValidCanvasPoint) ctx.stroke(); ctx.beginPath(); fV = true; lastValidCanvasPoint = null; continue; } let w; if (state.currentFunction === 'zeta' && !state.zetaContinuationEnabled && z_pt.re <= ZETA_REFLECTION_POINT_RE) { w = { re: NaN, im: NaN }; } else { w = tf(z_pt.re, z_pt.im); } if (isNaN(w.re) || isNaN(w.im) || !isFinite(w.re) || !isFinite(w.im) || Math.abs(w.re) > planeParams.xRange[1] * 10 || Math.abs(w.im) > planeParams.yRange[1] * 10) { if (!fV && lastValidCanvasPoint) { const edgePoint = findIntersectionWithViewport(lastValidCanvasPoint, { x: planeParams.origin.x + w.re * planeParams.scale.x, y: planeParams.origin.y - w.im * planeParams.scale.y }, planeParams); if (edgePoint) ctx.lineTo(edgePoint.x, edgePoint.y); ctx.stroke(); } ctx.beginPath(); fV = true; lastValidCanvasPoint = null; continue; } const p_c = mapToCanvasCoords(w.re, w.im, planeParams); if (fV) { ctx.moveTo(p_c.x, p_c.y); fV = false; } else { ctx.lineTo(p_c.x, p_c.y); } lastValidCanvasPoint = p_c; } if (!fV && lastValidCanvasPoint) { ctx.stroke(); }
+}
+function findIntersectionWithViewport(p1, p2, planeParams) { const xmin = 0, xmax = planeParams.width; const ymin = 0, ymax = planeParams.height; let t = Infinity; if (p2.y < ymin && p1.y >= ymin) { t = Math.min(t, (ymin - p1.y) / (p2.y - p1.y)); } if (p2.y > ymax && p1.y <= ymax) { t = Math.min(t, (ymax - p1.y) / (p2.y - p1.y)); } if (p2.x < xmin && p1.x >= xmin) { t = Math.min(t, (xmin - p1.x) / (p2.x - p1.x)); } if (p2.x > xmax && p1.x <= xmax) { t = Math.min(t, (xmax - p1.x) / (p2.x - p1.x)); } if (isFinite(t) && t >= 0 && t <= 1) { return { x: p1.x + t * (p2.x - p1.x), y: p1.y + t * (p2.y - p1.y) }; } return null; }
 function calculateDynamicPointsForSegment(p1_world, p2_world, tf) {
     const v_re = p2_world.re - p1_world.re;
     const v_im = p2_world.im - p1_world.im;
@@ -471,8 +456,7 @@ function drawPlanarTransformedShape(ctx, planeParams, tf, options = {}) {
 
     if (includeGeometry) {
         if (isRasterInputShape(inputShape)) {
-            const useWebGL = !(options.index > 0);
-            if (useWebGL && typeof drawImageWithWebGL === 'function' && drawImageWithWebGL(ctx, planeParams, true)) {
+            if (typeof drawImageWithWebGL === 'function' && drawImageWithWebGL(ctx, planeParams, true, options.index || 0)) {
                 return;
             }
 
@@ -575,7 +559,7 @@ function drawPlanarTaylorApproximation(ctx, wPlaneParamsOriginal, originalFuncKe
 }
 
 
-function drawPlanarTransformedProbe(ctx, planeParams, tf, index){
+function drawPlanarTransformedProbe(ctx, planeParams, tf, index) {
     let effectiveTransformFunc = tf;
     if (state.taylorSeriesEnabled && (!state.riemannSphereViewEnabled || state.splitViewEnabled)) {
         effectiveTransformFunc = createTaylorApproximationTransform(
@@ -585,18 +569,18 @@ function drawPlanarTransformedProbe(ctx, planeParams, tf, index){
         );
     }
 
-    const pW=effectiveTransformFunc(state.probeZ.re,state.probeZ.im);
-    if(!isNaN(pW.re)&&!isNaN(pW.im)&&isFinite(pW.re)&&isFinite(pW.im)){
-        const p_p_c=mapToCanvasCoords(pW.re,pW.im,planeParams);
-        ctx.fillStyle=COLOR_PROBE_MARKER;
+    const pW = effectiveTransformFunc(state.probeZ.re, state.probeZ.im);
+    if (!isNaN(pW.re) && !isNaN(pW.im) && isFinite(pW.re) && isFinite(pW.im)) {
+        const p_p_c = mapToCanvasCoords(pW.re, pW.im, planeParams);
+        ctx.fillStyle = COLOR_PROBE_MARKER;
         ctx.beginPath();
-        ctx.arc(p_p_c.x,p_p_c.y,5,0,2*Math.PI);
+        ctx.arc(p_p_c.x, p_p_c.y, 5, 0, 2 * Math.PI);
         ctx.fill();
-        
+
         // Output Chaining: "Spiderweb" Orbit Trajectory
         if (index === 0 && state.chainingEnabled && state.chainCount > 1) {
             const baseFunc = transformFunctions[state.currentFunction];
-            let w_prev = pW; 
+            let w_prev = pW;
             let w_0 = pW;
             let last_canvas_pt = p_p_c;
 
@@ -616,33 +600,33 @@ function drawPlanarTransformedProbe(ctx, planeParams, tf, index){
                     case 'recursion':
                     default: w_k = baseFunc(w_prev.re, w_prev.im); break;
                 }
-                
+
                 if (!w_k || isNaN(w_k.re) || isNaN(w_k.im) || !isFinite(w_k.re) || !isFinite(w_k.im)) break;
                 if (Math.abs(w_k.re) > planeParams.xRange[1] * 30 || Math.abs(w_k.im) > planeParams.yRange[1] * 30) break;
 
                 const curr_canvas_pt = mapToCanvasCoords(w_k.re, w_k.im, planeParams);
-                
+
                 // Draw connecting orbital jump segment
                 ctx.beginPath();
                 ctx.moveTo(last_canvas_pt.x, last_canvas_pt.y);
                 ctx.lineTo(curr_canvas_pt.x, curr_canvas_pt.y);
                 ctx.stroke();
-                
+
                 // Draw vector arrow head indicating sequence direction
                 const angle = Math.atan2(curr_canvas_pt.y - last_canvas_pt.y, curr_canvas_pt.x - last_canvas_pt.x);
                 const aSize = 6;
                 ctx.beginPath();
                 ctx.moveTo(curr_canvas_pt.x, curr_canvas_pt.y);
                 ctx.lineTo(curr_canvas_pt.x - aSize * Math.cos(angle - Math.PI / 6),
-                           curr_canvas_pt.y - aSize * Math.sin(angle - Math.PI / 6));
+                    curr_canvas_pt.y - aSize * Math.sin(angle - Math.PI / 6));
                 ctx.lineTo(curr_canvas_pt.x - aSize * Math.cos(angle + Math.PI / 6),
-                           curr_canvas_pt.y - aSize * Math.sin(angle + Math.PI / 6));
+                    curr_canvas_pt.y - aSize * Math.sin(angle + Math.PI / 6));
                 ctx.closePath();
                 ctx.fill();
 
                 // Draw distinct terminal node 
                 ctx.beginPath();
-                ctx.arc(curr_canvas_pt.x, curr_canvas_pt.y, 3.5, 0, 2*Math.PI);
+                ctx.arc(curr_canvas_pt.x, curr_canvas_pt.y, 3.5, 0, 2 * Math.PI);
                 ctx.fill();
 
                 w_prev = w_k;
@@ -651,100 +635,114 @@ function drawPlanarTransformedProbe(ctx, planeParams, tf, index){
         }
     }
 
-    ctx.strokeStyle=COLOR_PROBE_NEIGHBORHOOD;
-    ctx.lineWidth=1.5;
+    ctx.strokeStyle = COLOR_PROBE_NEIGHBORHOOD;
+    ctx.lineWidth = 1.5;
     ctx.lineJoin = 'round';
     ctx.lineCap = 'round';
     ctx.beginPath();
-    const r_l=state.probeNeighborhoodSize;
-    let fPt=true;
-    for(let i=0;i<=60;++i){
-        const a=(i/60)*2*Math.PI;
-        const z_b={re:state.probeZ.re+r_l*Math.cos(a),im:state.probeZ.im+r_l*Math.sin(a)};
-        const w_b=effectiveTransformFunc(z_b.re,z_b.im); 
-        if(isNaN(w_b.re)||isNaN(w_b.im)||!isFinite(w_b.re)||!isFinite(w_b.im)||Math.abs(w_b.re)>planeParams.xRange[1]*10||Math.abs(w_b.im)>planeParams.yRange[1]*10){
-            if(!fPt)ctx.stroke();
+    const r_l = state.probeNeighborhoodSize;
+    let fPt = true;
+    for (let i = 0; i <= 60; ++i) {
+        const a = (i / 60) * 2 * Math.PI;
+        const z_b = { re: state.probeZ.re + r_l * Math.cos(a), im: state.probeZ.im + r_l * Math.sin(a) };
+        const w_b = effectiveTransformFunc(z_b.re, z_b.im);
+        if (isNaN(w_b.re) || isNaN(w_b.im) || !isFinite(w_b.re) || !isFinite(w_b.im) || Math.abs(w_b.re) > planeParams.xRange[1] * 10 || Math.abs(w_b.im) > planeParams.yRange[1] * 10) {
+            if (!fPt) ctx.stroke();
             ctx.beginPath();
-            fPt=true;
+            fPt = true;
             continue;
         }
-        const p_c=mapToCanvasCoords(w_b.re,w_b.im,planeParams);
-        if(fPt){ctx.moveTo(p_c.x,p_c.y);fPt=false;}
-        else{ctx.lineTo(p_c.x,p_c.y);}
+        const p_c = mapToCanvasCoords(w_b.re, w_b.im, planeParams);
+        if (fPt) { ctx.moveTo(p_c.x, p_c.y); fPt = false; }
+        else { ctx.lineTo(p_c.x, p_c.y); }
     }
-    if(!fPt){ctx.closePath();ctx.stroke();}
-    drawConformalityProbeSegments(ctx, planeParams, state.probeZ, effectiveTransformFunc, true); 
+    if (!fPt) { ctx.closePath(); ctx.stroke(); }
+    drawConformalityProbeSegments(ctx, planeParams, state.probeZ, effectiveTransformFunc, true);
 }
 
 function drawZPlaneVectorField(ctx, planeParams, currentFunctionStr, vectorFuncType) {
+    // Try GPU path first — zero CPU function evaluations, SDF arrows
+    if (typeof drawVectorFieldWithWebGL === 'function' && drawVectorFieldWithWebGL(ctx, planeParams)) return;
+
+    // CPU fallback: batch arrows by quantized color
     const { currentVisXRange: xR, currentVisYRange: yR } = planeParams;
     const density = Math.max(5, Math.min(25, Math.floor(state.gridDensity * 0.75)));
     const dx = (xR[1] - xR[0]) / density;
     const dy = (yR[1] - yR[0]) / density;
-    
+
+    // Batch all arrow geometry by quantized color to minimize draw calls.
+    // Reduces ~1250 individual stroke/fill calls to ~100 batched draws.
+    const PB = 36;
+    const shafts = new Map();
+    const heads = new Map();
+    const dots = new Map();
 
     for (let i = 0; i <= density; i++) {
         const z_re = xR[0] + i * dx;
         for (let j = 0; j <= density; j++) {
             const z_im = yR[0] + j * dy;
-            const z = { re: z_re, im: z_im };
-            const vectorVal = getVectorFieldValueAtPoint(z.re, z.im, currentFunctionStr, vectorFuncType, state);
+            const v = getVectorFieldValueAtPoint(z_re, z_im, currentFunctionStr, vectorFuncType, state);
+            if (!isFinite(v.re) || !isFinite(v.im)) continue;
 
-            if (isNaN(vectorVal.re) || isNaN(vectorVal.im) || !isFinite(vectorVal.re) || !isFinite(vectorVal.im)) {
+            const zc = mapToCanvasCoords(z_re, z_im, planeParams);
+            const tc = mapToCanvasCoords(z_re + v.re * state.vectorFieldScale, z_im + v.im * state.vectorFieldScale, planeParams);
+
+            // Quantize phase to PB bins for color batching
+            const qp = Math.round(Math.atan2(v.im, v.re) / (Math.PI * 2 / PB)) * (Math.PI * 2 / PB);
+            const qm = Math.round(Math.log(1 + Math.hypot(v.re, v.im)) * 4) / 4;
+            const color = getHSLColor(qp, qm, 1, state.domainBrightness, state.domainContrast, state.domainLightnessCycles, state.domainSaturation);
+
+            let ex = tc.x, ey = tc.y;
+            const dcx = ex - zc.x, dcy = ey - zc.y;
+
+            if (Math.abs(dcx) < 0.5 && Math.abs(dcy) < 0.5) {
+                if (!dots.has(color)) dots.set(color, []);
+                dots.get(color).push(zc.x, zc.y);
                 continue;
             }
 
-            const z_canvas = mapToCanvasCoords(z.re, z.im, planeParams);
-
-            
-            const vx_world_scaled = vectorVal.re * state.vectorFieldScale;
-            const vy_world_scaled = vectorVal.im * state.vectorFieldScale;
-
-            
-            const z_plus_v_re = z.re + vx_world_scaled;
-            const z_plus_v_im = z.im + vy_world_scaled;
-            const z_plus_v_canvas = mapToCanvasCoords(z_plus_v_re, z_plus_v_im, planeParams);
-
-            
-            const true_phase = Math.atan2(vectorVal.im, vectorVal.re); 
-            const true_color_mag_norm = Math.log(1 + Math.sqrt(vectorVal.re**2 + vectorVal.im**2)); 
-            const arrowColor = getHSLColor(true_phase, true_color_mag_norm, 1, state.domainBrightness, state.domainContrast, state.domainLightnessCycles, state.domainSaturation);
-
-            
-            
-            if (Math.abs(z_canvas.x - z_plus_v_canvas.x) < 0.5 && Math.abs(z_canvas.y - z_plus_v_canvas.y) < 0.5) {
-                ctx.fillStyle = arrowColor;
-                ctx.beginPath();
-                ctx.arc(z_canvas.x, z_canvas.y, 1.5, 0, 2 * Math.PI);
-                ctx.fill();
-                continue;
+            const lenSq = dcx * dcx + dcy * dcy;
+            if (lenSq > MAX_VECTOR_DISPLAY_LENGTH_CANVAS * MAX_VECTOR_DISPLAY_LENGTH_CANVAS) {
+                const s = MAX_VECTOR_DISPLAY_LENGTH_CANVAS / Math.sqrt(lenSq);
+                ex = zc.x + dcx * s; ey = zc.y + dcy * s;
             }
 
-            
-            let endX = z_plus_v_canvas.x;
-            let endY = z_plus_v_canvas.y;
+            if (!shafts.has(color)) shafts.set(color, []);
+            shafts.get(color).push(zc.x, zc.y, ex, ey);
 
-            const dx_canvas = endX - z_canvas.x;
-            const dy_canvas = endY - z_canvas.y;
-            const current_display_length_sq = dx_canvas * dx_canvas + dy_canvas * dy_canvas;
-
-            if (current_display_length_sq > 0 && current_display_length_sq > (MAX_VECTOR_DISPLAY_LENGTH_CANVAS * MAX_VECTOR_DISPLAY_LENGTH_CANVAS)) {
-                const current_display_length = Math.sqrt(current_display_length_sq);
-                const scale_factor = MAX_VECTOR_DISPLAY_LENGTH_CANVAS / current_display_length;
-                endX = z_canvas.x + dx_canvas * scale_factor;
-                endY = z_canvas.y + dy_canvas * scale_factor;
-            }
-
-            drawArrow(
-                ctx,
-                z_canvas.x,
-                z_canvas.y,
-                endX,
-                endY,
-                arrowColor,
-                state.vectorArrowHeadSize,
-                state.vectorArrowThickness
+            const angle = Math.atan2(ey - zc.y, ex - zc.x);
+            const hs = state.vectorArrowHeadSize;
+            if (!heads.has(color)) heads.set(color, []);
+            heads.get(color).push(
+                ex, ey,
+                ex - hs * Math.cos(angle - Math.PI / 6), ey - hs * Math.sin(angle - Math.PI / 6),
+                ex - hs * Math.cos(angle + Math.PI / 6), ey - hs * Math.sin(angle + Math.PI / 6)
             );
         }
     }
+
+    ctx.save();
+    ctx.lineWidth = state.vectorArrowThickness;
+    ctx.lineJoin = 'round';
+    ctx.lineCap = 'round';
+
+    for (const [color, segs] of shafts) {
+        ctx.strokeStyle = color;
+        ctx.beginPath();
+        for (let i = 0; i < segs.length; i += 4) { ctx.moveTo(segs[i], segs[i + 1]); ctx.lineTo(segs[i + 2], segs[i + 3]); }
+        ctx.stroke();
+    }
+    for (const [color, tris] of heads) {
+        ctx.fillStyle = color;
+        ctx.beginPath();
+        for (let i = 0; i < tris.length; i += 6) { ctx.moveTo(tris[i], tris[i + 1]); ctx.lineTo(tris[i + 2], tris[i + 3]); ctx.lineTo(tris[i + 4], tris[i + 5]); ctx.closePath(); }
+        ctx.fill();
+    }
+    for (const [color, pts] of dots) {
+        ctx.fillStyle = color;
+        ctx.beginPath();
+        for (let i = 0; i < pts.length; i += 2) { ctx.moveTo(pts[i] + 1.5, pts[i + 1]); ctx.arc(pts[i], pts[i + 1], 1.5, 0, 2 * Math.PI); }
+        ctx.fill();
+    }
+    ctx.restore();
 }

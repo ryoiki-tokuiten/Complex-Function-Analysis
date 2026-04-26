@@ -79,43 +79,37 @@ function calculateStreamline(startX, startY, getVectorAtPointCallback, zPlanePar
 
     const xMin = zPlaneParams.currentVisXRange[0];
     const xMax = zPlaneParams.currentVisXRange[1];
-    const yMin = zPlaneParams.currentVisYRange[0]; 
+    const yMin = zPlaneParams.currentVisYRange[0];
     const yMax = zPlaneParams.currentVisYRange[1];
 
-    for (let i = 0; i < state.streamlineMaxLength; i++) { 
-        
-        const k1_vector = getVectorAtPointCallback(currentX, currentY, state.currentFunction, state.vectorFieldFunction, state);
-        const currentMagnitude = Math.sqrt(k1_vector.vx * k1_vector.vx + k1_vector.vy * k1_vector.vy);
+    // Scale step size to viewport so it works at any zoom level
+    const viewSpan = Math.max(xMax - xMin, yMax - yMin);
+    const step = state.streamlineStepSize * viewSpan * 0.1;
 
-        
-        streamlinePoints.push({ x: currentX, y: currentY, magnitude: currentMagnitude });
+    for (let i = 0; i < state.streamlineMaxLength; i++) {
+        const k1 = getVectorAtPointCallback(currentX, currentY, state.currentFunction, state.vectorFieldFunction, state);
+        const k1Mag = Math.hypot(k1.vx, k1.vy);
 
-        
-        if (currentX < xMin || currentX > xMax || currentY < yMin || currentY > yMax) {
-            break; 
-        }
+        streamlinePoints.push({ x: currentX, y: currentY, magnitude: k1Mag });
 
-        
-        if (Math.abs(k1_vector.vx) < 1e-9 && Math.abs(k1_vector.vy) < 1e-9) {
-             break; 
-        }
+        if (currentX < xMin || currentX > xMax || currentY < yMin || currentY > yMax) break;
+        if (k1Mag < 1e-9) break;
 
-        
-        
-        const midX = currentX + k1_vector.vx * state.streamlineStepSize / 2; 
-        const midY = currentY + k1_vector.vy * state.streamlineStepSize / 2; 
+        // Normalize direction — streamlines trace direction, not speed.
+        // This prevents explosion when |f(z)| is large (e.g. sinh terms at wide zoom).
+        const k1nx = k1.vx / k1Mag, k1ny = k1.vy / k1Mag;
 
-        
-        const k2_midVector = getVectorAtPointCallback(midX, midY, state.currentFunction, state.vectorFieldFunction, state);
+        const midX = currentX + k1nx * step * 0.5;
+        const midY = currentY + k1ny * step * 0.5;
+        const k2 = getVectorAtPointCallback(midX, midY, state.currentFunction, state.vectorFieldFunction, state);
+        const k2Mag = Math.hypot(k2.vx, k2.vy);
 
-        
-        if (Math.abs(k2_midVector.vx) < 1e-9 && Math.abs(k2_midVector.vy) < 1e-9 || !isFinite(k2_midVector.vx) || !isFinite(k2_midVector.vy)) {
-            currentX += k1_vector.vx * state.streamlineStepSize; 
-            currentY += k1_vector.vy * state.streamlineStepSize; 
+        if (k2Mag < 1e-9 || !isFinite(k2.vx) || !isFinite(k2.vy)) {
+            currentX += k1nx * step;
+            currentY += k1ny * step;
         } else {
-            
-            currentX += k2_midVector.vx * state.streamlineStepSize; 
-            currentY += k2_midVector.vy * state.streamlineStepSize; 
+            currentX += (k2.vx / k2Mag) * step;
+            currentY += (k2.vy / k2Mag) * step;
         }
     }
 

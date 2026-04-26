@@ -983,7 +983,7 @@ function bindCanvasInteractions() {
                 }
             }
 
-            if (isZCanvas && event.button === 0 && state.streamlineFlowEnabled) {
+            if (isZCanvas && event.button === 0 && event.shiftKey && state.streamlineFlowEnabled) {
                 const worldCoords = mapCanvasToWorldCoords(x, y, planeParams);
                 state.manualSeedPoints.push({ re: worldCoords.x, im: worldCoords.y });
                 requestRedrawAll();

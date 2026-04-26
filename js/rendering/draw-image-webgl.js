@@ -58,35 +58,41 @@ function createWebGLImageRenderer() {
         'uniform vec2 u_mobiusD;',
         'uniform int u_polyDegree;',
         'uniform vec2 u_polyCoeffs[11];',
+        'uniform int u_chainIndex;',
+        'uniform int u_chainMode;',
         '',
         GLSL_COMPLEX_MATH_LIBRARY,
         GLSL_COMPLEX_INVERSE_LIBRARY,
         '',
+        'vec2 complexPowReal(vec2 b, float e) { vec2 l=complexLn(b); return complexExp(vec2(l.x*e,l.y*e)); }',
+        '',
         'void main() {',
-        '  float px = v_uv.x;',
-        '  float py = 1.0 - v_uv.y;',
         '  vec2 w = vec2(',
-        '    mix(u_viewBounds.x, u_viewBounds.y, px),',
-        '    mix(u_viewBounds.w, u_viewBounds.z, py)',
+        '    mix(u_viewBounds.x, u_viewBounds.y, v_uv.x),',
+        '    mix(u_viewBounds.w, u_viewBounds.z, 1.0-v_uv.y)',
         '  );',
         '',
-        '  vec2 z;',
+        '  vec2 z = w;',
         '  if (u_isWPlane > 0.5) {',
-        '    bool ok = evaluateInverseFunction(w, u_functionId, u_mobiusA, u_mobiusB, u_mobiusC, u_mobiusD, u_polyDegree, u_polyCoeffs, z);',
-        '    if (!ok) discard;',
-        '  } else {',
-        '    z = w;',
+        '    if (u_chainMode == 1) {',
+        '      for (int i=0;i<16;i++) { if(i>u_chainIndex) break; vec2 p=z; if(!evaluateInverseFunction(p,u_functionId,u_mobiusA,u_mobiusB,u_mobiusC,u_mobiusD,u_polyDegree,u_polyCoeffs,z)) discard; }',
+        '    } else {',
+        '      for (int i=0;i<16;i++) { if(i>=u_chainIndex) break;',
+        '        if(u_chainMode==2) { z=complexPowReal(z,1.0/float(u_chainIndex+1)); break; }',
+        '        if(u_chainMode==3) { z=complexPowReal(z,pow(2.0,float(u_chainIndex))); break; }',
+        '        if(u_chainMode==4) z=complexExp(z);',
+        '        if(u_chainMode==5) { if(dot(z,z)<1e-20) discard; z=complexLn(z); }',
+        '        if(u_chainMode==6) { if(dot(z,z)<1e-18) discard; z=complexDiv(vec2(1.0,0.0),z); }',
+        '      }',
+        '      vec2 p=z; if(!evaluateInverseFunction(p,u_functionId,u_mobiusA,u_mobiusB,u_mobiusC,u_mobiusD,u_polyDegree,u_polyCoeffs,z)) discard;',
+        '    }',
         '  }',
         '',
-        '  vec2 imgUV = vec2(',
-        '    0.5 + (z.x - u_center.x) / u_imageSize.x,',
-        '    0.5 - (z.y - u_center.y) / u_imageSize.y',
-        '  );',
-        '  if (imgUV.x < 0.0 || imgUV.x > 1.0 || imgUV.y < 0.0 || imgUV.y > 1.0) discard;',
-        '',
+        '  vec2 imgUV = vec2(0.5+(z.x-u_center.x)/u_imageSize.x, 0.5-(z.y-u_center.y)/u_imageSize.y);',
+        '  if (imgUV.x<0.0||imgUV.x>1.0||imgUV.y<0.0||imgUV.y>1.0) discard;',
         '  vec4 color = texture2D(u_texture, imgUV);',
-        '  if (color.a < 0.05) discard;',
-        '  gl_FragColor = vec4(color.rgb * color.a, color.a) * u_opacity;',
+        '  if (color.a<0.05) discard;',
+        '  gl_FragColor = vec4(color.rgb*color.a, color.a)*u_opacity;',
         '}'
     ].join('\n');
 
@@ -96,7 +102,6 @@ function createWebGLImageRenderer() {
     const forwardVS = [
         'attribute vec2 a_texCoord;',
         'varying vec2 v_uv;',
-        'varying vec2 v_mapped;',
         '',
         'uniform vec2 u_imageSize;',
         'uniform vec2 u_center;',
@@ -129,7 +134,6 @@ function createWebGLImageRenderer() {
         '    return;',
         '  }',
         '',
-        '  v_mapped = mappedValue;',
         '  float clipX = (mappedValue.x - u_viewBounds.x) / (u_viewBounds.y - u_viewBounds.x) * 2.0 - 1.0;',
         '  float clipY = (mappedValue.y - u_viewBounds.z) / (u_viewBounds.w - u_viewBounds.z) * 2.0 - 1.0;',
         '  gl_Position = vec4(clipX, clipY, 0.0, 1.0);',
@@ -139,7 +143,6 @@ function createWebGLImageRenderer() {
     const forwardFS = [
         'precision mediump float;',
         'varying vec2 v_uv;',
-        'varying vec2 v_mapped;',
         'uniform sampler2D u_texture;',
         'uniform float u_opacity;',
         'void main() {',
@@ -192,6 +195,8 @@ function createWebGLImageRenderer() {
     const inverseLocs = getLocs(inverseProgram, {
         aPosition: inverseProgram ? gl.getAttribLocation(inverseProgram, 'a_position') : -1,
         uResolution: inverseProgram ? gl.getUniformLocation(inverseProgram, 'u_resolution') : null,
+        uChainIndex: inverseProgram ? gl.getUniformLocation(inverseProgram, 'u_chainIndex') : null,
+        uChainMode: inverseProgram ? gl.getUniformLocation(inverseProgram, 'u_chainMode') : null,
     });
 
     const forwardLocs = getLocs(forwardProgram, {
@@ -331,7 +336,7 @@ function setImageUniforms(gl, locs, planeParams, isWP, currentShape) {
     }
 }
 
-function drawImageWithWebGL(targetCtx, planeParams, isWP) {
+function drawImageWithWebGL(targetCtx, planeParams, isWP, chainIndex) {
     initWebGLImageSupportIfNeeded();
     const currentShape = state.currentInputShape;
     const source = getRasterSourceForShape(currentShape);
@@ -340,6 +345,7 @@ function drawImageWithWebGL(targetCtx, planeParams, isWP) {
 
     const renderer = webglImageSupport.renderer;
     const gl = renderer.gl;
+    const ci = chainIndex || 0;
 
     // Resize canvas
     const width = targetCtx.canvas.width;
@@ -357,7 +363,6 @@ function drawImageWithWebGL(targetCtx, planeParams, isWP) {
     gl.enable(gl.BLEND);
     gl.blendFunc(gl.ONE, gl.ONE_MINUS_SRC_ALPHA);
 
-    // Bind texture
     gl.activeTexture(gl.TEXTURE0);
     gl.bindTexture(gl.TEXTURE_2D, renderer.texture);
 
@@ -365,7 +370,6 @@ function drawImageWithWebGL(targetCtx, planeParams, isWP) {
     const useInverse = !isWP || (isWP && isInverseImageRenderSupported());
 
     if (useInverse && renderer.inverseProgram) {
-        // ── Path 1: Inverse full-screen quad — O(1) geometry ──────────────
         const locs = renderer.inverseLocs;
         gl.useProgram(renderer.inverseProgram);
         gl.bindBuffer(gl.ARRAY_BUFFER, renderer.quadBuffer);
@@ -374,6 +378,10 @@ function drawImageWithWebGL(targetCtx, planeParams, isWP) {
         gl.uniform2f(locs.uResolution, width, height);
         setImageUniforms(gl, locs, planeParams, isWP, currentShape);
         gl.uniform1i(locs.uTexture, 0);
+        // Chain mode: 0=none,1=recursion,2=power,3=sqrt,4=ln,5=exp,6=reciprocal
+        const chainModeMap = {recursion:1,power:2,sqrt:3,ln:4,exp:5,reciprocal:6};
+        gl.uniform1i(locs.uChainIndex, ci);
+        gl.uniform1i(locs.uChainMode, (ci > 0 && state.chainingEnabled) ? (chainModeMap[state.chainingMode] || 1) : 0);
 
         gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
     } else if (renderer.forwardProgram) {
@@ -404,5 +412,164 @@ function drawImageWithWebGL(targetCtx, planeParams, isWP) {
     targetCtx.setTransform(1, 0, 0, 1, 0, 0);
     targetCtx.drawImage(renderer.canvas, 0, 0);
     targetCtx.restore();
+    return true;
+}
+
+// ── GPU Vector Field via SDF arrows ───────────────────────────────────────
+// Full-screen quad where the fragment shader evaluates f(z) at grid cell centers
+// and draws arrows using signed distance fields. Zero CPU function evaluations.
+let _vfProgram = null, _vfLocs = null;
+
+const _VF_FS = [
+    'precision mediump float;',
+    'varying vec2 v_uv;',
+    'uniform vec4 u_viewBounds;',
+    'uniform float u_density;',
+    'uniform float u_arrowScale;',
+    'uniform float u_thickness;',
+    'uniform float u_headSize;',
+    'uniform float u_vectorMode;',
+    'uniform float u_functionId;',
+    'uniform vec2 u_mobiusA, u_mobiusB, u_mobiusC, u_mobiusD;',
+    'uniform int u_polyDegree;',
+    'uniform vec2 u_polyCoeffs[11];',
+    'uniform float u_zetaContinuationEnabled;',
+    'uniform float u_zetaReflectionBoundary;',
+    'uniform float u_brightness;',
+    '',
+    GLSL_COMPLEX_MATH_LIBRARY,
+    '',
+    'vec3 hsl2rgb(float h,float s,float l){float c=(1.0-abs(2.0*l-1.0))*s;float x=c*(1.0-abs(mod(h*6.0,2.0)-1.0));float m=l-c*0.5;vec3 r;float hh=h*6.0;if(hh<1.0)r=vec3(c,x,0);else if(hh<2.0)r=vec3(x,c,0);else if(hh<3.0)r=vec3(0,c,x);else if(hh<4.0)r=vec3(0,x,c);else if(hh<5.0)r=vec3(x,0,c);else r=vec3(c,0,x);return r+m;}',
+    '',
+    'float sdfSeg(vec2 p,vec2 a,vec2 b){vec2 ab=b-a,ap=p-a;float t=clamp(dot(ap,ab)/max(dot(ab,ab),1e-12),0.0,1.0);return length(ap-ab*t);}',
+    '',
+    'bool inTri(vec2 p,vec2 a,vec2 b,vec2 c){float d1=(p.x-b.x)*(a.y-b.y)-(a.x-b.x)*(p.y-b.y);float d2=(p.x-c.x)*(b.y-c.y)-(b.x-c.x)*(p.y-c.y);float d3=(p.x-a.x)*(c.y-a.y)-(c.x-a.x)*(p.y-a.y);return(d1>=0.0&&d2>=0.0&&d3>=0.0)||(d1<=0.0&&d2<=0.0&&d3<=0.0);}',
+    '',
+    'void main(){',
+    '  vec2 w=vec2(mix(u_viewBounds.x,u_viewBounds.y,v_uv.x),mix(u_viewBounds.w,u_viewBounds.z,1.0-v_uv.y));',
+    '  float cellW=(u_viewBounds.y-u_viewBounds.x)/u_density;',
+    '  float cellH=(u_viewBounds.w-u_viewBounds.z)/u_density;',
+    '  float cell=min(cellW,cellH);',
+    '  vec2 cc=vec2(floor(w.x/cellW+0.5)*cellW, floor(w.y/cellH+0.5)*cellH);',
+    '',
+    '  vec2 fz;',
+    '  bool ok=evaluateMappedValueBase(cc,0.0,u_functionId,u_mobiusA,u_mobiusB,u_mobiusC,u_mobiusD,u_polyDegree,u_polyCoeffs,u_zetaContinuationEnabled,u_zetaReflectionBoundary,fz);',
+    '  if(!ok) discard;',
+    '',
+    '  if(u_vectorMode>0.5&&u_vectorMode<1.5){float m2=dot(fz,fz);if(m2<1e-12) discard;fz=vec2(fz.x/m2,-fz.y/m2);}',
+    '  if(u_vectorMode>1.5){float h=1e-5;vec2 fr,fl;evaluateMappedValueBase(cc+vec2(h,0),0.0,u_functionId,u_mobiusA,u_mobiusB,u_mobiusC,u_mobiusD,u_polyDegree,u_polyCoeffs,u_zetaContinuationEnabled,u_zetaReflectionBoundary,fr);evaluateMappedValueBase(cc-vec2(h,0),0.0,u_functionId,u_mobiusA,u_mobiusB,u_mobiusC,u_mobiusD,u_polyDegree,u_polyCoeffs,u_zetaContinuationEnabled,u_zetaReflectionBoundary,fl);fz=(fr-fl)/(2.0*h);}',
+    '',
+    '  float mag=length(fz);',
+    '  if(mag<1e-9) discard;',
+    '  vec2 dir=fz/mag;',
+    '  vec2 perp=vec2(-dir.y,dir.x);',
+    '',
+    '  float aLen=cell*0.38*u_arrowScale;',
+    '  float aW=cell*u_thickness*0.015;',
+    '  float hSz=cell*u_headSize*0.04;',
+    '  vec2 tip=cc+dir*aLen;',
+    '',
+    '  float dShaft=sdfSeg(w,cc,tip-dir*hSz*1.5);',
+    '  bool onHead=inTri(w,tip,tip-dir*hSz*2.5+perp*hSz,tip-dir*hSz*2.5-perp*hSz);',
+    '',
+    '  if(dShaft>aW&&!onHead) discard;',
+    '',
+    '  float phase=atan(fz.y,fz.x)/(2.0*PI);',
+    '  if(phase<0.0)phase+=1.0;',
+    '  float lm=log(1.0+mag);',
+    '  float lit=clamp(0.35+lm*0.08*u_brightness,0.2,0.85);',
+    '  vec3 col=hsl2rgb(phase,0.85,lit);',
+    '  float aa=onHead?1.0:1.0-smoothstep(aW*0.6,aW,dShaft);',
+    '  gl_FragColor=vec4(col*aa,aa);',
+    '}'
+].join('\n');
+
+function drawVectorFieldWithWebGL(ctx, planeParams) {
+    initWebGLImageSupportIfNeeded();
+    if (!webglImageSupport.available) return false;
+    const renderer = webglImageSupport.renderer;
+    const gl = renderer.gl;
+
+    // Lazy-create vector field shader program
+    if (!_vfProgram) {
+        const vs = 'attribute vec2 a_position;varying vec2 v_uv;void main(){v_uv=(a_position+1.0)*0.5;gl_Position=vec4(a_position,0.0,1.0);}';
+        _vfProgram = createWebGLProgramShared(gl, vs, _VF_FS);
+        if (!_vfProgram) return false;
+        _vfLocs = {
+            aPos: gl.getAttribLocation(_vfProgram, 'a_position'),
+            uViewBounds: gl.getUniformLocation(_vfProgram, 'u_viewBounds'),
+            uDensity: gl.getUniformLocation(_vfProgram, 'u_density'),
+            uArrowScale: gl.getUniformLocation(_vfProgram, 'u_arrowScale'),
+            uThickness: gl.getUniformLocation(_vfProgram, 'u_thickness'),
+            uHeadSize: gl.getUniformLocation(_vfProgram, 'u_headSize'),
+            uVectorMode: gl.getUniformLocation(_vfProgram, 'u_vectorMode'),
+            uFunctionId: gl.getUniformLocation(_vfProgram, 'u_functionId'),
+            uMobiusA: gl.getUniformLocation(_vfProgram, 'u_mobiusA'),
+            uMobiusB: gl.getUniformLocation(_vfProgram, 'u_mobiusB'),
+            uMobiusC: gl.getUniformLocation(_vfProgram, 'u_mobiusC'),
+            uMobiusD: gl.getUniformLocation(_vfProgram, 'u_mobiusD'),
+            uPolyDegree: gl.getUniformLocation(_vfProgram, 'u_polyDegree'),
+            uPolyCoeffs: [],
+            uZetaCont: gl.getUniformLocation(_vfProgram, 'u_zetaContinuationEnabled'),
+            uZetaRefl: gl.getUniformLocation(_vfProgram, 'u_zetaReflectionBoundary'),
+            uBrightness: gl.getUniformLocation(_vfProgram, 'u_brightness'),
+        };
+        for (let i = 0; i <= 10; i++) _vfLocs.uPolyCoeffs.push(gl.getUniformLocation(_vfProgram, `u_polyCoeffs[${i}]`));
+    }
+
+    const width = ctx.canvas.width, height = ctx.canvas.height;
+    if (renderer.canvas.width !== width || renderer.canvas.height !== height) {
+        renderer.canvas.width = width; renderer.canvas.height = height;
+    }
+    gl.viewport(0, 0, width, height);
+    gl.clearColor(0, 0, 0, 0);
+    gl.clear(gl.COLOR_BUFFER_BIT);
+    gl.enable(gl.BLEND);
+    gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
+
+    gl.useProgram(_vfProgram);
+    gl.bindBuffer(gl.ARRAY_BUFFER, renderer.quadBuffer);
+    gl.enableVertexAttribArray(_vfLocs.aPos);
+    gl.vertexAttribPointer(_vfLocs.aPos, 2, gl.FLOAT, false, 0, 0);
+
+    const xR = planeParams.currentVisXRange || planeParams.xRange;
+    const yR = planeParams.currentVisYRange || planeParams.yRange;
+    gl.uniform4f(_vfLocs.uViewBounds, xR[0], xR[1], yR[0], yR[1]);
+
+    const density = Math.max(5, Math.min(25, Math.floor(state.gridDensity * 0.75)));
+    gl.uniform1f(_vfLocs.uDensity, density);
+    gl.uniform1f(_vfLocs.uArrowScale, state.vectorFieldScale || 1);
+    gl.uniform1f(_vfLocs.uThickness, state.vectorArrowThickness || 1.5);
+    gl.uniform1f(_vfLocs.uHeadSize, state.vectorArrowHeadSize || 8);
+    gl.uniform1f(_vfLocs.uBrightness, state.domainBrightness || 1);
+
+    const modeMap = { 'f(z)': 0, '1/f(z)': 1, "f'(z)": 2 };
+    gl.uniform1f(_vfLocs.uVectorMode, modeMap[state.vectorFieldFunction] || 0);
+
+    const funcId = (typeof getWebGLDomainColorFunctionIdShared === 'function') ? getWebGLDomainColorFunctionIdShared(state.currentFunction) : 0;
+    gl.uniform1f(_vfLocs.uFunctionId, funcId);
+
+    const a = state.mobiusA || {re:1,im:0}, b = state.mobiusB || {re:0,im:0};
+    const c = state.mobiusC || {re:0,im:0}, d = state.mobiusD || {re:1,im:0};
+    gl.uniform2f(_vfLocs.uMobiusA, a.re||0, a.im||0);
+    gl.uniform2f(_vfLocs.uMobiusB, b.re||0, b.im||0);
+    gl.uniform2f(_vfLocs.uMobiusC, c.re||0, c.im||0);
+    gl.uniform2f(_vfLocs.uMobiusD, d.re||0, d.im||0);
+
+    const deg = Math.max(0, Math.min(10, Number.isFinite(state.polynomialN) ? state.polynomialN : 0));
+    gl.uniform1i(_vfLocs.uPolyDegree, deg);
+    for (let i = 0; i <= 10; i++) {
+        const co = (state.polynomialCoeffs && state.polynomialCoeffs[i]) || null;
+        gl.uniform2f(_vfLocs.uPolyCoeffs[i], co ? (co.re||0) : 0, co ? (co.im||0) : 0);
+    }
+    gl.uniform1f(_vfLocs.uZetaCont, state.zetaContinuationEnabled ? 1 : 0);
+    gl.uniform1f(_vfLocs.uZetaRefl, typeof ZETA_REFLECTION_POINT_RE !== 'undefined' ? ZETA_REFLECTION_POINT_RE : 0.5);
+
+    gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
+
+    ctx.save();
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    ctx.drawImage(renderer.canvas, 0, 0);
+    ctx.restore();
     return true;
 }

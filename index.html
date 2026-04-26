@@ -616,6 +616,10 @@
                             </label>
                             <input type="file" id="image_upload_input" accept="image/*" class="control-file-input">
                         </div>
+                        <!-- Resolution slider: Only affects non-invertible functions (poincaré, zeta, degree>2 poly)
+                             that use the forward mesh fallback. For all other functions, the inverse full-screen quad
+                             renderer in draw-image-webgl.js renders at native screen resolution (pixel-perfect),
+                             making this slider effectively a no-op. -->
                         <div class="control-group">
                             <label for="image_resolution_slider">
                                 Resolution (pts):
@@ -633,7 +637,7 @@
                                 <output id="image_size_value_display">2.0</output>
                             </label>
                             <div class="slider-container">
-                                <input type="range" id="image_size_slider" name="image_size_slider" min="0.5" max="10"
+                                <input type="range" id="image_size_slider" name="image_size_slider" min="0.5" max="20"
                                     step="0.1" value="2.0"
                                     data-tooltip="Set logical size of the image in the complex plane.">
                             </div>
@@ -1398,8 +1402,8 @@
                                         </label>
                                         <div class="slider-container">
                                             <input type="range" id="vector_field_scale_slider"
-                                                name="vector_field_scale_slider" min="0.01" max="1.0" step="0.01"
-                                                value="0.1"
+                                                name="vector_field_scale_slider" min="0.01" max="2.0" step="0.01"
+                                                value="1.0"
                                                 data-tooltip="Adjust the display scale/length of vectors in the field">
                                         </div>
                                     </div>
@@ -1422,7 +1426,7 @@
                                         <div class="slider-container">
                                             <input type="range" id="vector_arrow_head_size_slider"
                                                 name="vector_arrow_head_size_slider" min="2" max="15" step="0.5"
-                                                value="6" data-tooltip="Adjust size of the vector arrow heads">
+                                                value="2" data-tooltip="Adjust size of the vector arrow heads">
                                         </div>
                                     </div>
                                 </div>
@@ -1436,55 +1440,56 @@
                                 </div>
                                 <div class="vector-toolbar" id="streamline_details_div">
                                     <button id="clear_manual_seeds_btn" class="control-button"
-                                        data-tooltip="Clear all manually added seed points for streamlines">Clear Manual
+                                        data-tooltip="Clear manually added seed points (Shift+click on z-plane to add seeds)">Clear
+                                        Manual
                                         Seeds</button>
                                 </div>
                                 <div class="vector-settings-grid">
                                     <div class="control-group">
                                         <label for="streamline_step_size_slider" style="font-size:0.8rem;">
                                             Integration Step Size:
-                                            <output id="streamline_step_size_value_display">0.02</output>
+                                            <output id="streamline_step_size_value_display">0.06</output>
                                         </label>
                                         <div class="slider-container">
                                             <input type="range" id="streamline_step_size_slider"
-                                                name="streamline_step_size_slider" min="0.001" max="0.1" step="0.001"
-                                                value="0.02"
-                                                data-tooltip="Adjust integration step size for streamlines (smaller is more accurate but slower)">
+                                                name="streamline_step_size_slider" min="0.005" max="0.3" step="0.005"
+                                                value="0.06"
+                                                data-tooltip="Step length relative to viewport. Larger = faster but coarser.">
                                         </div>
                                     </div>
                                     <div class="control-group">
                                         <label for="streamline_max_length_slider" style="font-size:0.8rem;">
                                             Max Length (steps):
-                                            <output id="streamline_max_length_value_display">100</output>
+                                            <output id="streamline_max_length_value_display">400</output>
                                         </label>
                                         <div class="slider-container">
                                             <input type="range" id="streamline_max_length_slider"
-                                                name="streamline_max_length_slider" min="20" max="500" step="10"
-                                                value="100"
-                                                data-tooltip="Adjust maximum number of steps for a streamline">
+                                                name="streamline_max_length_slider" min="50" max="2000" step="50"
+                                                value="400"
+                                                data-tooltip="Max integration steps per streamline. Higher = longer lines.">
                                         </div>
                                     </div>
                                     <div class="control-group">
                                         <label for="streamline_thickness_slider" style="font-size:0.8rem;">
                                             Streamline Thickness:
-                                            <output id="streamline_thickness_value_display">1.0</output>
+                                            <output id="streamline_thickness_value_display">1.5</output>
                                         </label>
                                         <div class="slider-container">
                                             <input type="range" id="streamline_thickness_slider"
-                                                name="streamline_thickness_slider" min="0.5" max="3.0" step="0.1"
-                                                value="1.0" data-tooltip="Adjust thickness of streamline paths">
+                                                name="streamline_thickness_slider" min="0.5" max="4.0" step="0.1"
+                                                value="1.5" data-tooltip="Visual thickness of streamline paths">
                                         </div>
                                     </div>
                                     <div class="control-group">
                                         <label for="streamline_seed_density_factor_slider" style="font-size:0.8rem;">
                                             Seed Density Factor:
-                                            <output id="streamline_seed_density_factor_value_display">0.5</output>
+                                            <output id="streamline_seed_density_factor_value_display">0.8</output>
                                         </label>
                                         <div class="slider-container">
                                             <input type="range" id="streamline_seed_density_factor_slider"
-                                                name="streamline_seed_density_factor_slider" min="0.1" max="1.5"
-                                                step="0.05" value="0.5"
-                                                data-tooltip="Adjusts streamline seed density relative to grid density. Default 0.5">
+                                                name="streamline_seed_density_factor_slider" min="0.2" max="2.0"
+                                                step="0.05" value="0.8"
+                                                data-tooltip="Seed density relative to grid. Higher = more streamlines.">
                                         </div>
                                     </div>
                                 </div>
@@ -1501,23 +1506,24 @@
                                         <label for="particle_density_slider" class="slider-label">Particle
                                             Density:</label>
                                         <input type="range" id="particle_density_slider" class="control-slider" min="10"
-                                            max="500" step="10" value="50">
-                                        <span id="particle_density_value_display" class="slider-value-display">50</span>
+                                            max="1000" step="10" value="150">
+                                        <span id="particle_density_value_display"
+                                            class="slider-value-display">150</span>
                                     </div>
                                     <div class="slider-group">
                                         <label for="particle_speed_slider" class="slider-label">Particle Speed:</label>
                                         <input type="range" id="particle_speed_slider" class="control-slider"
-                                            min="0.001" max="0.05" step="0.001" value="0.01">
-                                        <span id="particle_speed_value_display" class="slider-value-display">0.01</span>
+                                            min="0.005" max="0.2" step="0.005" value="0.04">
+                                        <span id="particle_speed_value_display" class="slider-value-display">0.04</span>
                                     </div>
                                     <div class="slider-group">
                                         <label for="particle_max_lifetime_slider" class="slider-label">Particle Max
                                             Lifetime
                                             (frames):</label>
                                         <input type="range" id="particle_max_lifetime_slider" class="control-slider"
-                                            min="50" max="1000" step="50" value="200">
+                                            min="50" max="1500" step="50" value="300">
                                         <span id="particle_max_lifetime_value_display"
-                                            class="slider-value-display">200</span>
+                                            class="slider-value-display">300</span>
                                     </div>
                                 </div>
                             </div>
