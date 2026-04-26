@@ -13,11 +13,11 @@ const webglImageSupport = {
 function isInverseImageRenderSupported() {
     const funcId = (typeof getWebGLDomainColorFunctionIdShared === 'function')
         ? getWebGLDomainColorFunctionIdShared(state.currentFunction) : 0;
-    // poincare(10), zeta(11) have no closed-form inverse.
+    // zeta(11) has no closed-form inverse.
     // polynomial(9) only invertible for degree <= 2.
-    if (funcId === 10 || funcId === 11) return false;
+    if (funcId === 11) return false;
     if (funcId === 9) return (state.polynomialN || 0) <= 2;
-    return funcId >= 1 && funcId <= 8;
+    return funcId >= 1 && funcId <= 15;
 }
 
 function createWebGLImageRenderer() {
@@ -60,6 +60,7 @@ function createWebGLImageRenderer() {
         'uniform vec2 u_polyCoeffs[11];',
         'uniform int u_chainIndex;',
         'uniform int u_chainMode;',
+        'uniform float u_fracPower;',
         '',
         GLSL_COMPLEX_MATH_LIBRARY,
         GLSL_COMPLEX_INVERSE_LIBRARY,
@@ -75,7 +76,7 @@ function createWebGLImageRenderer() {
         '  vec2 z = w;',
         '  if (u_isWPlane > 0.5) {',
         '    if (u_chainMode == 1) {',
-        '      for (int i=0;i<16;i++) { if(i>u_chainIndex) break; vec2 p=z; if(!evaluateInverseFunction(p,u_functionId,u_mobiusA,u_mobiusB,u_mobiusC,u_mobiusD,u_polyDegree,u_polyCoeffs,z)) discard; }',
+        '      for (int i=0;i<16;i++) { if(i>u_chainIndex) break; vec2 p=z; if(!evaluateInverseFunction(p,u_functionId,u_mobiusA,u_mobiusB,u_mobiusC,u_mobiusD,u_polyDegree,u_polyCoeffs,u_fracPower,z)) discard; }',
         '    } else {',
         '      for (int i=0;i<16;i++) { if(i>=u_chainIndex) break;',
         '        if(u_chainMode==2) { z=complexPowReal(z,1.0/float(u_chainIndex+1)); break; }',
@@ -84,7 +85,7 @@ function createWebGLImageRenderer() {
         '        if(u_chainMode==5) { if(dot(z,z)<1e-20) discard; z=complexLn(z); }',
         '        if(u_chainMode==6) { if(dot(z,z)<1e-18) discard; z=complexDiv(vec2(1.0,0.0),z); }',
         '      }',
-        '      vec2 p=z; if(!evaluateInverseFunction(p,u_functionId,u_mobiusA,u_mobiusB,u_mobiusC,u_mobiusD,u_polyDegree,u_polyCoeffs,z)) discard;',
+        '      vec2 p=z; if(!evaluateInverseFunction(p,u_functionId,u_mobiusA,u_mobiusB,u_mobiusC,u_mobiusD,u_polyDegree,u_polyCoeffs,u_fracPower,z)) discard;',
         '    }',
         '  }',
         '',
@@ -117,6 +118,7 @@ function createWebGLImageRenderer() {
         'uniform vec2 u_polyCoeffs[11];',
         'uniform float u_zetaContinuationEnabled;',
         'uniform float u_zetaReflectionBoundary;',
+        'uniform float u_fracPower;',
         '',
         GLSL_COMPLEX_MATH_LIBRARY,
         '',
@@ -128,7 +130,7 @@ function createWebGLImageRenderer() {
         '',
         '  vec2 mappedValue = vec2(0.0);',
         '  float isWP = (u_isWPlane > 0.5) ? 0.0 : 1.0;',
-        '  bool ok = evaluateMappedValueBase(zInput, isWP, u_functionId, u_mobiusA, u_mobiusB, u_mobiusC, u_mobiusD, u_polyDegree, u_polyCoeffs, u_zetaContinuationEnabled, u_zetaReflectionBoundary, mappedValue);',
+        '  bool ok = evaluateMappedValueBase(zInput, isWP, u_functionId, u_mobiusA, u_mobiusB, u_mobiusC, u_mobiusD, u_polyDegree, u_polyCoeffs, u_zetaContinuationEnabled, u_zetaReflectionBoundary, u_fracPower, mappedValue);',
         '  if (!ok || !isFiniteVec2Compat(mappedValue)) {',
         '    gl_Position = vec4(10.0, 10.0, 10.0, 1.0);',
         '    return;',
@@ -197,12 +199,14 @@ function createWebGLImageRenderer() {
         uResolution: inverseProgram ? gl.getUniformLocation(inverseProgram, 'u_resolution') : null,
         uChainIndex: inverseProgram ? gl.getUniformLocation(inverseProgram, 'u_chainIndex') : null,
         uChainMode: inverseProgram ? gl.getUniformLocation(inverseProgram, 'u_chainMode') : null,
+        uFracPower: inverseProgram ? gl.getUniformLocation(inverseProgram, 'u_fracPower') : null,
     });
 
     const forwardLocs = getLocs(forwardProgram, {
         aTexCoord: forwardProgram ? gl.getAttribLocation(forwardProgram, 'a_texCoord') : -1,
         uZetaContinuationEnabled: forwardProgram ? gl.getUniformLocation(forwardProgram, 'u_zetaContinuationEnabled') : null,
         uZetaReflectionBoundary: forwardProgram ? gl.getUniformLocation(forwardProgram, 'u_zetaReflectionBoundary') : null,
+        uFracPower: forwardProgram ? gl.getUniformLocation(forwardProgram, 'u_fracPower') : null,
     });
 
     return {
@@ -332,6 +336,9 @@ function setImageUniforms(gl, locs, planeParams, isWP, currentShape) {
         for (let i = 0; i <= 10; i++) {
             const coeff = (state.polynomialCoeffs && state.polynomialCoeffs[i]) ? state.polynomialCoeffs[i] : null;
             gl.uniform2f(locs.uPolyCoeffs[i], coeff ? (coeff.re || 0) : 0, coeff ? (coeff.im || 0) : 0);
+        }
+        if (locs.uFracPower !== undefined && locs.uFracPower !== null) {
+            gl.uniform1f(locs.uFracPower, state.fractionalPowerN !== undefined ? state.fractionalPowerN : 0.5);
         }
     }
 }

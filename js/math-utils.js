@@ -111,6 +111,14 @@ function complexReciprocal(a, b) {
     const res = math.divide(1, toMathComplex(a, b));
     return { re: res.re, im: res.im };
 }
+function complexSinh(a, b) { const res = math.sinh(toMathComplex(a, b)); return { re: res.re, im: res.im }; }
+function complexCosh(a, b) { const res = math.cosh(toMathComplex(a, b)); return { re: res.re, im: res.im }; }
+function complexTanh(a, b) { const res = math.tanh(toMathComplex(a, b)); return { re: res.re, im: res.im }; }
+function complexPowerFractional(a, b) {
+    const n = state.fractionalPowerN !== undefined ? state.fractionalPowerN : 0.5;
+    const res = math.pow(toMathComplex(a, b), n);
+    return { re: res.re, im: res.im };
+}
 function complexPow(base_re, base_im, exp_re, exp_im) {
     if (base_re === 0 && base_im === 0) {
         if (exp_re > 0 || (exp_re === 0 && exp_im !== 0)) return { re: 0, im: 0 };
@@ -457,6 +465,8 @@ function numericDerivative(funcName, z, h = 1e-7) {
 const transformFunctions = {
     cos: complexCos, sin: complexSin, tan: complexTan, sec: complexSec,
     exp: complexExp, ln: complexLn, reciprocal: complexReciprocal,
+    sinh: complexSinh, cosh: complexCosh, tanh: complexTanh,
+    power: complexPowerFractional,
     mobius: complexMobius, zeta: complexRiemannZeta, polynomial: complexPolynomial,
     poincare: complexPoincareCustomMetric 
 };

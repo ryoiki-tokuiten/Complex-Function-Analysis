@@ -46,6 +46,10 @@
                             <button id="select_exp_btn" data-tooltip="Select w = e^z function">w =
                                 e<sup>z</sup></button>
                             <button id="select_ln_btn" data-tooltip="Select w = ln(z) function">w = ln(z)</button>
+                            <button id="select_sinh_btn" data-tooltip="Select w = sinh(z) function">w = sinh(z)</button>
+                            <button id="select_cosh_btn" data-tooltip="Select w = cosh(z) function">w = cosh(z)</button>
+                            <button id="select_tanh_btn" data-tooltip="Select w = tanh(z) function">w = tanh(z)</button>
+                            <button id="select_power_btn" data-tooltip="Select fractional power w = z^n">w = z<sup>n</sup></button>
                             <button id="select_reciprocal_btn" data-tooltip="Select w = 1/z function">w = 1/z</button>
                             <button id="select_mobius_btn"
                                 data-tooltip="Select w = (az+b)/(cz+d) Möbius transformation">Möbius</button>
@@ -959,6 +963,31 @@
                             </div>
                         </div>
                         <div id="polynomial_coeffs_container"></div>
+                    </div>
+                    <div id="fractional_power_params_sliders" class="dependent-settings-block hidden">
+                        <div class="control-group">
+                            <label class="panel-formula-label">Fractional Power: w = z<sup>n</sup></label>
+                        </div>
+                        <div class="control-group" style="min-width: 100%;">
+                            <label for="fractionalPowerN_slider">
+                                Power (n):
+                                <output id="fractionalPowerN_value_display">0.5</output>
+                            </label>
+                            <div class="slider-container">
+                                <input type="range" id="fractionalPowerN_slider" name="fractionalPowerN_slider" min="-5" max="5"
+                                    step="0.05" value="0.5" data-tooltip="Fractional power (n)">
+                            </div>
+                            <div class="slider-controls">
+                                <button id="play_fractionalPowerN_btn" data-tooltip="Animate n">Play</button>
+                                <select id="speed_fractionalPowerN_selector" class="animation-speed-selector" data-tooltip="Animation speed">
+                                    <option value="0.01">0.01x</option>
+                                    <option value="0.1">0.1x</option>
+                                    <option value="0.5">0.5x</option>
+                                    <option value="1" selected>1x</option>
+                                    <option value="2">2x</option>
+                                </select>
+                            </div>
+                        </div>
                     </div>
                 </div>
 

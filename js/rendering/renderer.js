@@ -68,6 +68,10 @@ function appendCurrentFunctionStateToCacheKey(parts) {
             appendPointToCacheKey(parts, `p${i}`, (state.polynomialCoeffs && state.polynomialCoeffs[i]) ? state.polynomialCoeffs[i] : null);
         }
     }
+    
+    if (state.currentFunction === 'power') {
+        parts.push(`fracN:${toCacheKeyNumber(state.fractionalPowerN !== undefined ? state.fractionalPowerN : 0.5)}`);
+    }
 }
 
 function buildPlanarLayerCacheKey(isWPlane) {

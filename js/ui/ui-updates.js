@@ -20,6 +20,7 @@ function updateSliderLabelsAndDisplay() {
             controls.commonParamsSliders.classList.add('hidden');
             controls.mobiusParamsSliders.classList.add('hidden');
             controls.polynomialParamsSliders.classList.add('hidden');
+            if (controls.fractionalPowerParamsSliders) controls.fractionalPowerParamsSliders.classList.add('hidden');
             controls.shapeParamsSliders.classList.add('hidden');
             controls.stripHorizontalParamsSliders.classList.add('hidden');
             controls.sectorAngularParamsSliders.classList.add('hidden');
@@ -32,6 +33,7 @@ function updateSliderLabelsAndDisplay() {
             const isHyperbola = state.currentInputShape === 'hyperbola';
             const isMobiusFunc = state.currentFunction === 'mobius';
             const isPolyFunc = state.currentFunction === 'polynomial';
+            const isPowerFunc = state.currentFunction === 'power';
             const isStripH = state.currentInputShape === 'strip_horizontal';
             const isSectorA = state.currentInputShape === 'sector_angular';
             const isImage = state.currentInputShape === 'image';
@@ -41,6 +43,7 @@ function updateSliderLabelsAndDisplay() {
             controls.commonParamsSliders.classList.toggle('hidden', !showCommonParams);
             controls.mobiusParamsSliders.classList.toggle('hidden', !isMobiusFunc);
             controls.polynomialParamsSliders.classList.toggle('hidden', !isPolyFunc);
+            if (controls.fractionalPowerParamsSliders) controls.fractionalPowerParamsSliders.classList.toggle('hidden', !isPowerFunc);
             const showShapeSpecificSliders = isCircle || isEllipse || isHyperbola;
             controls.shapeParamsSliders.classList.toggle('hidden', !showShapeSpecificSliders);
 
@@ -102,6 +105,7 @@ function updateSliderLabelsAndDisplay() {
             if (isStripH) { if (controls.stripY1ValueDisplay) controls.stripY1ValueDisplay.textContent = state.stripY1.toFixed(1); if (controls.stripY2ValueDisplay) controls.stripY2ValueDisplay.textContent = state.stripY2.toFixed(1); }
             if (isSectorA) { if (controls.sectorAngle1ValueDisplay) controls.sectorAngle1ValueDisplay.textContent = state.sectorAngle1.toFixed(0); if (controls.sectorAngle2ValueDisplay) controls.sectorAngle2ValueDisplay.textContent = state.sectorAngle2.toFixed(0); if (controls.sectorRMinValueDisplay) controls.sectorRMinValueDisplay.textContent = state.sectorRMin.toFixed(1); if (controls.sectorRMaxValueDisplay) controls.sectorRMaxValueDisplay.textContent = state.sectorRMax.toFixed(1); }
             if (isPolyFunc) { if (controls.polynomialNValueDisplay) controls.polynomialNValueDisplay.textContent = state.polynomialN; updatePolynomialCoeffDisplays(); }
+            if (isPowerFunc && controls.fractionalPowerNValueDisplay) controls.fractionalPowerNValueDisplay.textContent = state.fractionalPowerN !== undefined ? state.fractionalPowerN.toFixed(2) : "0.50";
         } // End else block for normal complex function mode
 
     // Only update and show these controls if NOT in Fourier or Laplace mode
@@ -449,6 +453,10 @@ function updateTitlesAndGlobalUI() {
     else if (state.currentFunction === 'mobius') fND = '(az+b)/(cz+d)';
     else if (state.currentFunction === 'zeta') fND = 'ζ(z)';
     else if (state.currentFunction === 'poincare') fND = 'Poincare Map';
+    else if (state.currentFunction === 'power') fND = 'z<sup>n</sup>';
+    else if (state.currentFunction === 'sinh') fND = 'sinh(z)';
+    else if (state.currentFunction === 'cosh') fND = 'cosh(z)';
+    else if (state.currentFunction === 'tanh') fND = 'tanh(z)';
     else fND = `${state.currentFunction}(z)`;
 
     let zPlaneTitleText = "z-plane (Input";

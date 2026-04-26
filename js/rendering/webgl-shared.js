@@ -24,7 +24,11 @@ vec2 evalPolynomial(vec2 z, int degree, vec2 coeffs[11]) { vec2 acc = vec2(0.0, 
 vec2 complexPowPositiveRealBase(float positiveBase, vec2 exponent) { float lnBase = log(max(positiveBase, 1.0e-30)); float magnitude = safeExp(exponent.x * lnBase); float angle = exponent.y * lnBase; return vec2(magnitude * cos(angle), magnitude * sin(angle)); }
 bool evaluateZeta(vec2 s, float contEnabled, float reflBoundary, out vec2 value) { if (abs(s.x - 1.0) < 1.0e-6 && abs(s.y) < 1.0e-6) return false; if (contEnabled < 0.5 && s.x <= reflBoundary) return false; vec2 etaSum = vec2(0.0, 0.0); vec2 negS = vec2(-s.x, -s.y); for (int n = 1; n <= ZETA_GPU_TERMS; n++) { vec2 nPowNegS = complexPowPositiveRealBase(float(n), negS); float alternatingSign = (mod(float(n), 2.0) < 0.5) ? -1.0 : 1.0; etaSum += nPowNegS * alternatingSign; } vec2 oneMinusS = vec2(1.0 - s.x, -s.y); vec2 twoPowOneMinusS = complexPowPositiveRealBase(2.0, oneMinusS); vec2 denominator = vec2(1.0, 0.0) - twoPowOneMinusS; if (dot(denominator, denominator) < 1.0e-18) return false; value = complexDiv(etaSum, denominator); return isFiniteVec2Compat(value); }
 
-bool evaluateMappedValueBase(vec2 z, float isWPlane, float functionId, vec2 mA, vec2 mB, vec2 mC, vec2 mD, int polyDeg, vec2 polyCoeffs[11], float zetaCont, float zetaRefl, out vec2 mapped) {
+vec2 complexSinh(vec2 z) { return vec2(sinhCompat(z.x) * cos(z.y), coshCompat(z.x) * sin(z.y)); }
+vec2 complexCosh(vec2 z) { return vec2(coshCompat(z.x) * cos(z.y), sinhCompat(z.x) * sin(z.y)); }
+vec2 complexTanh(vec2 z) { vec2 den = complexCosh(z); if (dot(den,den) < 1.0e-18) return vec2(0.0); return complexDiv(complexSinh(z), den); }
+
+bool evaluateMappedValueBase(vec2 z, float isWPlane, float functionId, vec2 mA, vec2 mB, vec2 mC, vec2 mD, int polyDeg, vec2 polyCoeffs[11], float zetaCont, float zetaRefl, float fracPower, out vec2 mapped) {
   if (isWPlane > 0.5 || isWPlane < 0.0) { mapped = z; return isFiniteVec2Compat(mapped); }
   float fId = floor(functionId + 0.5);
   if (abs(fId - 1.0) < 0.5) { mapped = complexCos(z); return isFiniteVec2Compat(mapped); }
@@ -38,6 +42,10 @@ bool evaluateMappedValueBase(vec2 z, float isWPlane, float functionId, vec2 mA, 
   if (abs(fId - 9.0) < 0.5) { mapped = evalPolynomial(z, polyDeg, polyCoeffs); return isFiniteVec2Compat(mapped); }
   if (abs(fId - 10.0) < 0.5) { if (z.y <= 1.0e-9) return false; float rootY = sqrt(max(z.y, 0.0)); if (!isFiniteFloatCompat(rootY) || rootY <= 1.0e-8) return false; mapped = vec2(z.x / rootY, rootY); return isFiniteVec2Compat(mapped); }
   if (abs(fId - 11.0) < 0.5) { return evaluateZeta(z, zetaCont, zetaRefl, mapped); }
+  if (abs(fId - 12.0) < 0.5) { mapped = complexSinh(z); return isFiniteVec2Compat(mapped); }
+  if (abs(fId - 13.0) < 0.5) { mapped = complexCosh(z); return isFiniteVec2Compat(mapped); }
+  if (abs(fId - 14.0) < 0.5) { mapped = complexTanh(z); return isFiniteVec2Compat(mapped); }
+  if (abs(fId - 15.0) < 0.5) { if (dot(z,z) < 1.0e-20) { mapped = vec2(0.0); return true; } vec2 lnZ = complexLn(z); mapped = complexExp(vec2(fracPower * lnZ.x, fracPower * lnZ.y)); return isFiniteVec2Compat(mapped); }
   return false;
 }
 `;
@@ -70,7 +78,24 @@ vec2 complexArctan(vec2 w) {
   vec2 lv = complexLn(complexDiv(num, den));
   return vec2(-lv.y * 0.5, lv.x * 0.5);
 }
-bool evaluateInverseFunction(vec2 w, float functionId, vec2 mA, vec2 mB, vec2 mC, vec2 mD, int polyDeg, vec2 polyCoeffs[11], out vec2 z) {
+vec2 complexArcsinh(vec2 w) {
+  vec2 wSq = complexMul(w, w);
+  vec2 s = complexSqrt(complexAdd(wSq, vec2(1.0, 0.0)));
+  return complexLn(complexAdd(w, s));
+}
+vec2 complexArccosh(vec2 w) {
+  vec2 wSq = complexMul(w, w);
+  vec2 s = complexSqrt(complexAdd(wSq, vec2(-1.0, 0.0)));
+  return complexLn(complexAdd(w, s));
+}
+vec2 complexArctanh(vec2 w) {
+  vec2 one = vec2(1.0, 0.0);
+  vec2 num = complexAdd(one, w);
+  vec2 den = complexAdd(one, -w);
+  if (dot(den,den) < 1.0e-18) return vec2(0.0);
+  return complexMul(vec2(0.5, 0.0), complexLn(complexDiv(num, den)));
+}
+bool evaluateInverseFunction(vec2 w, float functionId, vec2 mA, vec2 mB, vec2 mC, vec2 mD, int polyDeg, vec2 polyCoeffs[11], float fracPower, out vec2 z) {
   float fId = floor(functionId + 0.5);
   if (abs(fId - 1.0) < 0.5) { z = complexArccos(w); return isFiniteVec2Compat(z); }
   if (abs(fId - 2.0) < 0.5) { z = complexArcsin(w); return isFiniteVec2Compat(z); }
@@ -84,6 +109,18 @@ bool evaluateInverseFunction(vec2 w, float functionId, vec2 mA, vec2 mB, vec2 mC
     if (polyDeg == 1) { vec2 den = polyCoeffs[1]; if (dot(den,den) < 1.0e-18) return false; z = complexDiv(w - polyCoeffs[0], den); return isFiniteVec2Compat(z); }
     if (polyDeg == 2) { vec2 a=polyCoeffs[2]; vec2 b=polyCoeffs[1]; vec2 c=polyCoeffs[0]-w; vec2 disc=complexMul(b,b)-4.0*complexMul(a,c); vec2 sd=complexSqrt(disc); vec2 den=2.0*a; if(dot(den,den)<1.0e-18) return false; z=complexDiv(-b+sd,den); return isFiniteVec2Compat(z); }
     return false;
+  }
+  if (abs(fId - 10.0) < 0.5) { float wY = w.y; if (wY == 0.0) return false; z = vec2(w.x * w.y, w.y * w.y); return isFiniteVec2Compat(z); }
+  if (abs(fId - 12.0) < 0.5) { z = complexArcsinh(w); return isFiniteVec2Compat(z); }
+  if (abs(fId - 13.0) < 0.5) { z = complexArccosh(w); return isFiniteVec2Compat(z); }
+  if (abs(fId - 14.0) < 0.5) { z = complexArctanh(w); return isFiniteVec2Compat(z); }
+  if (abs(fId - 15.0) < 0.5) { 
+    if (abs(fracPower) < 1.0e-6) return false;
+    if (dot(w,w) < 1.0e-20) { z = vec2(0.0); return true; }
+    vec2 lnW = complexLn(w);
+    float invPower = 1.0 / fracPower;
+    z = complexExp(vec2(invPower * lnW.x, invPower * lnW.y));
+    return isFiniteVec2Compat(z);
   }
   return false;
 }
@@ -169,6 +206,10 @@ function getWebGLDomainColorFunctionIdShared(functionName) {
         case 'polynomial': return 9;
         case 'poincare': return 10;
         case 'zeta': return 11;
+        case 'sinh': return 12;
+        case 'cosh': return 13;
+        case 'tanh': return 14;
+        case 'power': return 15;
         default: return 0;
     }
 }

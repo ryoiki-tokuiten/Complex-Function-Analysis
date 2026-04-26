@@ -22,6 +22,7 @@ const DOM_BINDINGS = [
     { key: 'shapeParamsSliders', id: 'shape_params_sliders' },
     { key: 'mobiusParamsSliders', id: 'mobius_params_sliders' },
     { key: 'polynomialParamsSliders', id: 'polynomial_params_sliders' },
+    { key: 'fractionalPowerParamsSliders', id: 'fractional_power_params_sliders' },
     { key: 'polynomialNSlider', id: 'polynomialN_slider' },
     { key: 'polynomialNValueDisplay', id: 'polynomialN_value_display' },
     { key: 'polynomialCoeffsContainer', id: 'polynomial_coeffs_container' },
@@ -317,7 +318,7 @@ function setupDOMReferences() {
     });
 
     controls.funcButtons = {};
-    ['fourier', 'laplace', 'cos', 'sin', 'tan', 'sec', 'exp', 'ln', 'reciprocal', 'mobius', 'zeta', 'polynomial', 'poincare'].forEach(f => { 
+    ['fourier', 'laplace', 'cos', 'sin', 'tan', 'sec', 'exp', 'ln', 'reciprocal', 'mobius', 'zeta', 'polynomial', 'poincare', 'sinh', 'cosh', 'tanh', 'power'].forEach(f => { 
         controls.funcButtons[f] = document.getElementById(`select_${f}_btn`);
     });
     

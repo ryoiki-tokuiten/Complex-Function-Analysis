@@ -1,7 +1,7 @@
 
 
 
-const sliderParamKeys = ['a0', 'b0', 'circleR', 'ellipseA', 'ellipseB', 'hyperbolaA', 'hyperbolaB'];
+const sliderParamKeys = ['a0', 'b0', 'circleR', 'ellipseA', 'ellipseB', 'hyperbolaA', 'hyperbolaB', 'fractionalPowerN'];
 
 
 let state = {
@@ -13,6 +13,7 @@ let state = {
     mobiusD: { re: 1, im: 0 },
     polynomialN: 2,
     polynomialCoeffs: [], 
+    fractionalPowerN: 0.5,
     currentFunction: 'cos', 
     currentInputShape: 'grid_cartesian',
     domainColoringEnabled: false,

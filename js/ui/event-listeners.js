@@ -18,7 +18,8 @@ const DOMAIN_DIRTY_STATE_KEYS = new Set([
     'videoOpacity',
     'vectorFieldScale',
     'zPlaneZoom',
-    'wPlaneZoom'
+    'wPlaneZoom',
+    'fractionalPowerN'
 ]);
 
 const BASIC_SLIDER_BINDINGS = [

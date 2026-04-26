@@ -76,6 +76,7 @@ function createWebGLDomainColorRenderer() {
         'uniform vec2 u_polyCoeffs[11];',
         'uniform float u_zetaContinuationEnabled;',
         'uniform float u_zetaReflectionBoundary;',
+        'uniform float u_fracPower;',
         '',
         GLSL_COMPLEX_MATH_LIBRARY,
         '',
@@ -186,7 +187,7 @@ function createWebGLDomainColorRenderer() {
         '  }',
         '',
         '  vec2 mappedValue = vec2(0.0);',
-        '  bool ok = evaluateMappedValueBase(zInput, u_isWPlaneColoring, u_functionId, u_mobiusA, u_mobiusB, u_mobiusC, u_mobiusD, u_polyDegree, u_polyCoeffs, u_zetaContinuationEnabled, u_zetaReflectionBoundary, mappedValue);',
+        '  bool ok = evaluateMappedValueBase(zInput, u_isWPlaneColoring, u_functionId, u_mobiusA, u_mobiusB, u_mobiusC, u_mobiusD, u_polyDegree, u_polyCoeffs, u_zetaContinuationEnabled, u_zetaReflectionBoundary, u_fracPower, mappedValue);',
         '  if (!ok || !isFiniteVec2Compat(mappedValue)) {',
         '    float invalidAlpha = (u_useSphere > 0.5) ? 0.0 : 1.0;',
         '    gl_FragColor = vec4(0.0, 0.0, 0.0, invalidAlpha);',
@@ -237,6 +238,7 @@ function createWebGLDomainColorRenderer() {
     const uPolyDegree = gl.getUniformLocation(program, 'u_polyDegree');
     const uZetaContinuationEnabled = gl.getUniformLocation(program, 'u_zetaContinuationEnabled');
     const uZetaReflectionBoundary = gl.getUniformLocation(program, 'u_zetaReflectionBoundary');
+    const uFracPower = gl.getUniformLocation(program, 'u_fracPower');
 
     if (
         aPosition < 0 ||
@@ -285,7 +287,8 @@ function createWebGLDomainColorRenderer() {
         uPolyDegree,
         uPolyCoeffs,
         uZetaContinuationEnabled,
-        uZetaReflectionBoundary
+        uZetaReflectionBoundary,
+        uFracPower
     };
 }
 
@@ -499,6 +502,7 @@ function renderDomainColoringWithWebGL(targetCtx, planeParams, options = null) {
         gl.uniform1f(renderer.uFunctionId, isWPlaneColoring ? 0 : getWebGLDomainColorFunctionIdShared(functionName));
         gl.uniform1f(renderer.uZetaContinuationEnabled, state.zetaContinuationEnabled ? 1 : 0);
         gl.uniform1f(renderer.uZetaReflectionBoundary, ZETA_REFLECTION_POINT_RE);
+        gl.uniform1f(renderer.uFracPower, state.fractionalPowerN !== undefined ? state.fractionalPowerN : 0.5);
 
         setWebGLDomainColorMobiusUniforms(renderer);
         setWebGLDomainColorPolynomialUniforms(renderer);
