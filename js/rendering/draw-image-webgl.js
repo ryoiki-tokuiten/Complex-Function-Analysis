@@ -1,7 +1,7 @@
 // WebGL-based raster media transformation renderer
 // Two rendering paths:
-//   1. Inverse full-screen quad (O(1) geometry, pixel-perfect) for invertible functions
-//   2. Forward indexed mesh (fallback) for non-invertible functions (poincare, zeta, high-degree poly)
+//   1. Inverse full-screen quad (O(1) geometry, pixel-perfect) for analytically invertible functions
+//   2. Forward indexed mesh for non-invertible functions (zeta, polynomial deg > 2)
 
 const webglImageSupport = {
     available: false,
@@ -10,13 +10,14 @@ const webglImageSupport = {
 };
 
 // Returns true if the current function supports the O(1) inverse rendering path.
+// Newton-Raphson numerical inversion exists in the shader for zeta/poly>2 but is
+// not viable for image rendering: multi-valued functions converge to wrong branches
+// from an arbitrary initial guess. These fall back to the forward indexed mesh.
 function isInverseImageRenderSupported() {
     const funcId = (typeof getWebGLDomainColorFunctionIdShared === 'function')
         ? getWebGLDomainColorFunctionIdShared(state.currentFunction) : 0;
-    // zeta(11) has no closed-form inverse.
-    // polynomial(9) only invertible for degree <= 2.
-    if (funcId === 11) return false;
-    if (funcId === 9) return (state.polynomialN || 0) <= 2;
+    if (funcId === 11) return false; // zeta — no stable inverse
+    if (funcId === 9) return (state.polynomialN || 0) <= 2; // poly — analytic only for deg ≤ 2
     return funcId >= 1 && funcId <= 15;
 }
 
@@ -103,6 +104,7 @@ function createWebGLImageRenderer() {
     const forwardVS = [
         'attribute vec2 a_texCoord;',
         'varying vec2 v_uv;',
+        'varying float v_valid;',
         '',
         'uniform vec2 u_imageSize;',
         'uniform vec2 u_center;',
@@ -132,10 +134,12 @@ function createWebGLImageRenderer() {
         '  float isWP = (u_isWPlane > 0.5) ? 0.0 : 1.0;',
         '  bool ok = evaluateMappedValueBase(zInput, isWP, u_functionId, u_mobiusA, u_mobiusB, u_mobiusC, u_mobiusD, u_polyDegree, u_polyCoeffs, u_zetaContinuationEnabled, u_zetaReflectionBoundary, u_fracPower, mappedValue);',
         '  if (!ok || !isFiniteVec2Compat(mappedValue)) {',
+        '    v_valid = 0.0;',
         '    gl_Position = vec4(10.0, 10.0, 10.0, 1.0);',
         '    return;',
         '  }',
         '',
+        '  v_valid = 1.0;',
         '  float clipX = (mappedValue.x - u_viewBounds.x) / (u_viewBounds.y - u_viewBounds.x) * 2.0 - 1.0;',
         '  float clipY = (mappedValue.y - u_viewBounds.z) / (u_viewBounds.w - u_viewBounds.z) * 2.0 - 1.0;',
         '  gl_Position = vec4(clipX, clipY, 0.0, 1.0);',
@@ -145,9 +149,11 @@ function createWebGLImageRenderer() {
     const forwardFS = [
         'precision mediump float;',
         'varying vec2 v_uv;',
+        'varying float v_valid;',
         'uniform sampler2D u_texture;',
         'uniform float u_opacity;',
         'void main() {',
+        '  if (v_valid < 0.99) discard;',
         '  vec4 color = texture2D(u_texture, v_uv);',
         '  if (color.a < 0.05) discard;',
         '  gl_FragColor = vec4(color.rgb * color.a, color.a) * u_opacity;',
@@ -354,9 +360,11 @@ function drawImageWithWebGL(targetCtx, planeParams, isWP, chainIndex) {
     const gl = renderer.gl;
     const ci = chainIndex || 0;
 
+    if (!targetCtx || typeof targetCtx.drawImage !== 'function') return false;
+
     // Resize canvas
-    const width = targetCtx.canvas.width;
-    const height = targetCtx.canvas.height;
+    const width = (targetCtx.canvas && targetCtx.canvas.width) || planeParams.width;
+    const height = (targetCtx.canvas && targetCtx.canvas.height) || planeParams.height;
     if (renderer.canvas.width !== width || renderer.canvas.height !== height) {
         renderer.canvas.width = width;
         renderer.canvas.height = height;

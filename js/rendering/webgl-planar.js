@@ -783,7 +783,7 @@ function drawWithWebGLCapture(ctx, planeParams, planeKey, drawCallback) {
         const captureCtx = new PolylineCaptureContext();
         drawCallback(captureCtx);
         batches = captureCtx.getBatches();
-        if (!batches || batches.length === 0) return true;
+        if (!batches || batches.length === 0) return false;
 
         const rendered = renderWebGLPolylineBatches(renderer, planeParams.width, planeParams.height, batches);
         if (!rendered) {
