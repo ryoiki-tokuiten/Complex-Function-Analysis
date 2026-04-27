@@ -316,31 +316,7 @@ function getNormalizedSphereLightDirection() {
     return { x: lx / mag, y: ly / mag, z: lz / mag };
 }
 
-function setWebGLDomainColorMobiusUniforms(renderer) {
-    const gl = renderer.gl;
-    const a = state.mobiusA || { re: 1, im: 0 };
-    const b = state.mobiusB || { re: 0, im: 0 };
-    const c = state.mobiusC || { re: 0, im: 0 };
-    const d = state.mobiusD || { re: 1, im: 0 };
-    gl.uniform2f(renderer.uMobiusA, a.re || 0, a.im || 0);
-    gl.uniform2f(renderer.uMobiusB, b.re || 0, b.im || 0);
-    gl.uniform2f(renderer.uMobiusC, c.re || 0, c.im || 0);
-    gl.uniform2f(renderer.uMobiusD, d.re || 0, d.im || 0);
-}
 
-function setWebGLDomainColorPolynomialUniforms(renderer) {
-    const gl = renderer.gl;
-    const degree = Math.max(0, Math.min(MAX_POLY_DEGREE, Number.isFinite(state.polynomialN) ? state.polynomialN : 0));
-    gl.uniform1i(renderer.uPolyDegree, degree);
-    for (let i = 0; i <= 10; i++) {
-        const location = renderer.uPolyCoeffs[i];
-        if (!location) continue;
-        const coeff = (state.polynomialCoeffs && state.polynomialCoeffs[i]) ? state.polynomialCoeffs[i] : null;
-        const re = coeff && Number.isFinite(coeff.re) ? coeff.re : 0;
-        const im = coeff && Number.isFinite(coeff.im) ? coeff.im : 0;
-        gl.uniform2f(location, re, im);
-    }
-}
 
 function initializeWebGLDomainColoringSupport() {
     webglDomainColorSupport.available = false;
@@ -498,13 +474,7 @@ function renderDomainColoringWithWebGL(targetCtx, planeParams, options = null) {
     );
 
     gl.uniform1f(renderer.uIsWPlaneColoring, isWPlaneColoring ? 1 : 0);
-    gl.uniform1f(renderer.uFunctionId, isWPlaneColoring ? 0 : getWebGLDomainColorFunctionIdShared(functionName));
-    gl.uniform1f(renderer.uZetaContinuationEnabled, state.zetaContinuationEnabled ? 1 : 0);
-    gl.uniform1f(renderer.uZetaReflectionBoundary, ZETA_REFLECTION_POINT_RE);
-    gl.uniform1f(renderer.uFracPower, state.fractionalPowerN !== undefined ? state.fractionalPowerN : 0.5);
-
-    setWebGLDomainColorMobiusUniforms(renderer);
-    setWebGLDomainColorPolynomialUniforms(renderer);
+    setComplexFunctionUniformsShared(gl, renderer, state);
 
     gl.disable(gl.DEPTH_TEST);
     gl.disable(gl.BLEND);

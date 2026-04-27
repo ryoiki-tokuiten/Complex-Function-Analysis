@@ -2,35 +2,14 @@
 
 function getVectorFieldValueAtPoint(x, y, currentFunctionStr, vectorFieldTypeStr, runtimeState = state) {
     const z = { re: x, im: y };
-    const funcDefinition = transformFunctions[currentFunctionStr];
-    if (!funcDefinition) {
+    const baseFunc = transformFunctions[currentFunctionStr];
+    if (!baseFunc) {
         return { re: 0, im: 0 };
     }
 
-    let baseFunc;
-    if (typeof funcDefinition === 'function') {
-        baseFunc = funcDefinition;
-    } else if (funcDefinition && typeof funcDefinition.func === 'function') {
-        baseFunc = funcDefinition.func;
-    } else {
-        return { re: 0, im: 0 };
-    }
+    const f_z = baseFunc(z.re, z.im, runtimeState);
 
-    let f_z;
-    try {
-        f_z = baseFunc(z.re, z.im, runtimeState);
-    } catch (e) {
-        return { re: 0, im: 0 };
-    }
-
-    if (
-        f_z === undefined ||
-        f_z === null ||
-        isNaN(f_z.re) ||
-        isNaN(f_z.im) ||
-        !isFinite(f_z.re) ||
-        !isFinite(f_z.im)
-    ) {
+    if (!f_z || !isFinite(f_z.re) || !isFinite(f_z.im)) {
         return { re: 0, im: 0 };
     }
 

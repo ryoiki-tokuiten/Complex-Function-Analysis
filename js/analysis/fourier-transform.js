@@ -118,22 +118,23 @@ function generateTimeDomainSignal(funcType, frequency, amplitude, timeWindow, sa
  * @returns {Array} Array of {frequency, real, imag, magnitude, phase} objects
  */
 function computeDFT(signal) {
+    if (!signal || signal.length === 0) return [];
+    
+    // Extract real values
+    const values = signal.map(s => s.value);
+    
+    // Perform FFT
+    const fftResult = math.fft(values);
+    
     const N = signal.length;
     const dft = [];
     
-    for (let k = 0; k < N; k++) {
-        let real = 0;
-        let imag = 0;
-        
-        for (let n = 0; n < N; n++) {
-            const angle = -2 * Math.PI * k * n / N;
-            real += signal[n].value * Math.cos(angle);
-            imag += signal[n].value * Math.sin(angle);
-        }
+    for (let k = 0; k < fftResult.length; k++) {
+        const comp = fftResult[k];
         
         // Normalize by N
-        real /= N;
-        imag /= N;
+        const real = (comp.re || 0) / N;
+        const imag = (comp.im || 0) / N;
         
         const magnitude = Math.sqrt(real * real + imag * imag);
         const phase = Math.atan2(imag, real);
@@ -155,104 +156,6 @@ function computeDFT(signal) {
 }
 
 /**
- * Get frequency domain visualization points for complex plane
- * @param {Array} dft - DFT result array
- * @param {number} maxFreqIndex - Maximum frequency index to display
- * @returns {Array} Array of complex numbers {re, im}
- */
-function getFrequencyDomainPoints(dft, maxFreqIndex = null) {
-    const points = [];
-    const maxK = maxFreqIndex || Math.floor(dft.length / 2);
-    
-    for (let i = 0; i < maxK; i++) {
-        const component = dft[i];
-        points.push({
-            re: component.real,
-            im: component.imag,
-            k: component.k,
-            magnitude: component.magnitude,
-            phase: component.phase
-        });
-    }
-    
-    return points;
-}
-
-/**
- * Get magnitude spectrum for visualization
- * @param {Array} dft - DFT result array
- * @returns {Array} Array of {k, magnitude} pairs
- */
-function getMagnitudeSpectrum(dft) {
-    return dft.map(component => ({
-        k: component.k,
-        frequency: component.frequency,
-        magnitude: component.magnitude
-    }));
-}
-
-/**
- * Get phase spectrum for visualization
- * @param {Array} dft - DFT result array
- * @returns {Array} Array of {k, phase} pairs
- */
-function getPhaseSpectrum(dft) {
-    return dft.map(component => ({
-        k: component.k,
-        frequency: component.frequency,
-        phase: component.phase
-    }));
-}
-
-/**
- * Compute continuous Fourier transform approximation for display
- * @param {Array} signal - Time domain signal
- * @param {number} timeWindow - Time window
- * @param {number} freqPoints - Number of frequency points to compute
- * @returns {Array} Continuous frequency domain representation
- */
-function computeContinuousFT(signal, timeWindow, freqPoints = 100) {
-    const result = [];
-    const dt = timeWindow / signal.length;
-    const maxFreq = signal.length / (2 * timeWindow); // Nyquist frequency
-    const df = maxFreq / freqPoints;
-    
-    for (let i = 0; i < freqPoints; i++) {
-        const f = i * df;
-        const omega = 2 * Math.PI * f;
-        let real = 0;
-        let imag = 0;
-        
-        for (let n = 0; n < signal.length; n++) {
-            const t = n * dt;
-            real += signal[n].value * Math.cos(omega * t) * dt;
-            imag += signal[n].value * -Math.sin(omega * t) * dt;
-        }
-        
-        result.push({
-            frequency: f,
-            real: real,
-            imag: imag,
-            magnitude: Math.sqrt(real * real + imag * imag),
-            phase: Math.atan2(imag, real)
-        });
-    }
-    
-    return result;
-}
-
-/**
- * Get dominant frequencies from DFT
- * @param {Array} dft - DFT result
- * @param {number} threshold - Magnitude threshold for dominant frequencies
- * @returns {Array} Array of dominant frequency components
- */
-function getDominantFrequencies(dft, threshold = 0.1) {
-    const maxMag = Math.max(...dft.map(d => d.magnitude));
-    return dft.filter(d => d.magnitude > threshold * maxMag);
-}
-
-/**
  * Update Fourier transform calculations
  * Called when parameters change or when entering Fourier mode
  */
@@ -266,26 +169,20 @@ function updateFourierTransform() {
     const timeWindow = state.fourierTimeWindow || 4.0;
     const samples = state.fourierSamples || 128;
     
-    try {
-        // Generate time domain signal
-        state.fourierTimeDomainSignal = generateTimeDomainSignal(
-            funcType,
-            frequency,
-            amplitude,
-            timeWindow,
-            samples
-        );
-        
-        // Compute DFT
-        if (state.fourierTimeDomainSignal && state.fourierTimeDomainSignal.length > 0) {
-            state.fourierDFTResult = computeDFT(state.fourierTimeDomainSignal);
-        } else {
-            console.error('Failed to generate time domain signal');
-            state.fourierDFTResult = [];
-        }
-    } catch (error) {
-        console.error('Error in updateFourierTransform:', error);
-        state.fourierTimeDomainSignal = [];
+    // Generate time domain signal
+    state.fourierTimeDomainSignal = generateTimeDomainSignal(
+        funcType,
+        frequency,
+        amplitude,
+        timeWindow,
+        samples
+    );
+    
+    // Compute DFT
+    if (state.fourierTimeDomainSignal && state.fourierTimeDomainSignal.length > 0) {
+        state.fourierDFTResult = computeDFT(state.fourierTimeDomainSignal);
+    } else {
+        console.error('Failed to generate time domain signal');
         state.fourierDFTResult = [];
     }
 }

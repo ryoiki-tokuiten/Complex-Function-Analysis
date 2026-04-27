@@ -366,33 +366,7 @@ class PolylineCaptureContext {
         this._activeSubpath.closed = true;
     }
 
-    arc(x, y, radius, startAngle, endAngle, anticlockwise = false) {
-        if (!Number.isFinite(radius) || radius <= 0) return;
-
-        const fullTurn = Math.PI * 2;
-        let delta = endAngle - startAngle;
-        if (!anticlockwise && delta < 0) delta += fullTurn;
-        if (anticlockwise && delta > 0) delta -= fullTurn;
-        if (Math.abs(delta) < 1e-9) delta = anticlockwise ? -fullTurn : fullTurn;
-
-        const segmentCount = Math.max(
-            12,
-            Math.min(160, Math.ceil(Math.abs(delta) / (Math.PI / 18) * Math.sqrt(Math.max(1, radius / 8))))
-        );
-
-        for (let i = 0; i <= segmentCount; i++) {
-            const t = i / segmentCount;
-            const angle = startAngle + delta * t;
-            const px = x + radius * Math.cos(angle);
-            const py = y + radius * Math.sin(angle);
-            if (i === 0) {
-                if (!this._activeSubpath) this.moveTo(px, py);
-                else this.lineTo(px, py);
-            } else {
-                this.lineTo(px, py);
-            }
-        }
-    }
+    arc() {}
 
     stroke() {
         for (const subpath of this._subpaths) {
@@ -401,30 +375,8 @@ class PolylineCaptureContext {
         }
     }
 
-    fill() {
-        for (const subpath of this._subpaths) {
-            if (!subpath || !Array.isArray(subpath.points) || subpath.points.length < 6) continue;
-            const points = subpath.points.slice();
-            const sx = points[0];
-            const sy = points[1];
-            const lx = points[points.length - 2];
-            const ly = points[points.length - 1];
-            if (Math.abs(sx - lx) > 1e-6 || Math.abs(sy - ly) > 1e-6) {
-                points.push(sx, sy);
-            }
-            this._pushBatch('fill', points, this.fillStyle, 1, this.globalAlpha);
-        }
-    }
-
-    fillRect(x, y, width, height) {
-        const pts = [
-            x, y,
-            x + width, y,
-            x + width, y + height,
-            x, y + height
-        ];
-        this._pushBatch('fill', pts, this.fillStyle, 1, this.globalAlpha);
-    }
+    fill() {}
+    fillRect() {}
 
     strokeRect(x, y, width, height) {
         const pts = [
@@ -481,22 +433,11 @@ function renderWebGLPolylineBatches(renderer, width, height, batches) {
     let totalFloatCount = 0;
     for (const batch of batches) {
         if (!batch || !(batch.points instanceof Float32Array) || batch.points.length < 4) continue;
+        if (batch.mode !== 'line') continue;
 
         const alphaMultiplier = Number.isFinite(batch.alphaMultiplier) ? batch.alphaMultiplier : 1;
         const rgba = getCachedWebGLColor(renderer, batch.color, alphaMultiplier);
         gl.uniform4f(renderer.uColor, rgba[0], rgba[1], rgba[2], rgba[3]);
-
-        if (batch.mode === 'fill') {
-            totalFloatCount += batch.points.length;
-            if (totalFloatCount > WEBGL_LINE_BATCH_LIMIT) {
-                return false;
-            }
-            gl.bufferData(gl.ARRAY_BUFFER, batch.points, gl.STREAM_DRAW);
-            if (batch.points.length >= 6) {
-                gl.drawArrays(gl.TRIANGLE_FAN, 0, batch.points.length / 2);
-            }
-            continue;
-        }
 
         const halfWidth = Math.max(0.5, ((batch.lineWidth || 1) * renderer.renderScale) * 0.5);
         const useFeather = halfWidth >= 1.0;
@@ -580,6 +521,7 @@ function buildPolylineTriangles(points, halfWidth) {
     if (data.length === 0) return null;
     return new Float32Array(data);
 }
+
 
 function compositeWebGLToCanvas(ctx, renderer, width, height) {
     ctx.save();

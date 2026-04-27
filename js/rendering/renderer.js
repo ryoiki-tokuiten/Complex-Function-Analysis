@@ -3,21 +3,14 @@ function drawPlaneLayer(ctx, planeParams, planeKey, drawCallback, mode = 'captur
 
     if (mode === 'raster') {
         if (drawWithWebGLRaster(ctx, planeParams, planeKey, drawCallback)) return;
-        drawCallback(ctx);
-        return;
-    }
-
-    if (mode === 'auto') {
-        if (drawWithWebGLCapture(ctx, planeParams, planeKey, drawCallback)) return;
-        if (drawWithWebGLRaster(ctx, planeParams, planeKey, drawCallback)) return;
-        drawCallback(ctx);
+        console.error('WebGL raster rendering failed.');
         return;
     }
 
     // Default 'capture' mode
     if (drawWithWebGLCapture(ctx, planeParams, planeKey, drawCallback)) return;
     if (drawWithWebGLRaster(ctx, planeParams, planeKey, drawCallback)) return;
-    drawCallback(ctx);
+    console.error('WebGL capture/raster rendering failed.');
 }
 
 let wPlanarTransformedLayerCache;

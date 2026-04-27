@@ -197,9 +197,91 @@ function computeClosedFormLaplace(funcType, sigmaS, omegaS, params) {
             F_imag = 0;
             break;
             
+        case 'exponential_sine': {
+            const a_es = -damping * 0.3;
+            const s_plus_a_es_real = s_real + a_es;
+            const s_plus_a_es_imag = s_imag;
+            const sq_es_real = s_plus_a_es_real * s_plus_a_es_real - s_plus_a_es_imag * s_plus_a_es_imag;
+            const sq_es_imag = 2 * s_plus_a_es_real * s_plus_a_es_imag;
+            const denom_es_real = sq_es_real + omega * omega;
+            const denom_es_imag = sq_es_imag;
+            const denom_es_mag_sq = denom_es_real * denom_es_real + denom_es_imag * denom_es_imag;
+            if (denom_es_mag_sq > 0.001) {
+                F_real = amplitude * omega * denom_es_real / denom_es_mag_sq;
+                F_imag = -amplitude * omega * denom_es_imag / denom_es_mag_sq;
+            }
+            break;
+        }
+            
+        case 'underdamped': {
+            const zeta = 0.3;
+            const wd = omega * Math.sqrt(1 - zeta * zeta);
+            const a_ud = zeta * omega;
+            const s_plus_a_ud_real = s_real + a_ud;
+            const s_plus_a_ud_imag = s_imag;
+            const sq_ud_real = s_plus_a_ud_real * s_plus_a_ud_real - s_plus_a_ud_imag * s_plus_a_ud_imag;
+            const sq_ud_imag = 2 * s_plus_a_ud_real * s_plus_a_ud_imag;
+            const denom_ud_real = sq_ud_real + wd * wd;
+            const denom_ud_imag = sq_ud_imag;
+            const denom_ud_mag_sq = denom_ud_real * denom_ud_real + denom_ud_imag * denom_ud_imag;
+            if (denom_ud_mag_sq > 0.001) {
+                F_real = amplitude * wd * denom_ud_real / denom_ud_mag_sq;
+                F_imag = -amplitude * wd * denom_ud_imag / denom_ud_mag_sq;
+            }
+            break;
+        }
+            
+        case 'critically_damped': {
+            const a_cd = omega;
+            const s_plus_a_cd_real = s_real + a_cd;
+            const s_plus_a_cd_imag = s_imag;
+            const denom_cd_real = s_plus_a_cd_real * s_plus_a_cd_real - s_plus_a_cd_imag * s_plus_a_cd_imag;
+            const denom_cd_imag = 2 * s_plus_a_cd_real * s_plus_a_cd_imag;
+            const denom_cd_mag_sq = denom_cd_real * denom_cd_real + denom_cd_imag * denom_cd_imag;
+            
+            const num_cd_real = s_real + 2 * omega;
+            const num_cd_imag = s_imag;
+            
+            if (denom_cd_mag_sq > 0.001) {
+                F_real = amplitude * (num_cd_real * denom_cd_real + num_cd_imag * denom_cd_imag) / denom_cd_mag_sq;
+                F_imag = amplitude * (num_cd_imag * denom_cd_real - num_cd_real * denom_cd_imag) / denom_cd_mag_sq;
+            }
+            break;
+        }
+            
+        case 'overdamped': {
+            const zeta2 = 1.5;
+            const root = Math.sqrt(zeta2 * zeta2 - 1);
+            const a1 = (-zeta2 + root) * omega;
+            const a2 = (-zeta2 - root) * omega;
+            
+            const s_minus_a1_real = s_real - a1;
+            const s_minus_a1_imag = s_imag;
+            const mag_sq_1 = s_minus_a1_real * s_minus_a1_real + s_minus_a1_imag * s_minus_a1_imag;
+            
+            const s_minus_a2_real = s_real - a2;
+            const s_minus_a2_imag = s_imag;
+            const mag_sq_2 = s_minus_a2_real * s_minus_a2_real + s_minus_a2_imag * s_minus_a2_imag;
+            
+            let f1_real = 0, f1_imag = 0, f2_real = 0, f2_imag = 0;
+            if (mag_sq_1 > 0.001) {
+                f1_real = s_minus_a1_real / mag_sq_1;
+                f1_imag = -s_minus_a1_imag / mag_sq_1;
+            }
+            if (mag_sq_2 > 0.001) {
+                f2_real = s_minus_a2_real / mag_sq_2;
+                f2_imag = -s_minus_a2_imag / mag_sq_2;
+            }
+            
+            F_real = amplitude * 0.5 * (f1_real + f2_real);
+            F_imag = amplitude * 0.5 * (f1_imag + f2_imag);
+            break;
+        }
+            
         default:
-            // Use numerical integration for others
-            return null;
+            F_real = 0;
+            F_imag = 0;
+            break;
     }
     
     const magnitude = Math.sqrt(F_real * F_real + F_imag * F_imag);
@@ -208,57 +290,6 @@ function computeClosedFormLaplace(funcType, sigmaS, omegaS, params) {
     return { real: F_real, imag: F_imag, magnitude, phase };
 }
 
-/**
- * Compute Laplace Transform numerically using Simpson's rule
- * F(s) = ∫₀^∞ f(t)e^(-st) dt
- * @param {Array} signal - Time domain signal
- * @param {number} sigmaS - Real part of s
- * @param {number} omegaS - Imaginary part of s
- * @param {number} timeWindow - Time window
- * @returns {Object} {real, imag, magnitude, phase}
- */
-function computeNumericalLaplace(signal, sigmaS, omegaS, timeWindow) {
-    const N = signal.length;
-    const dt = timeWindow / N;
-    
-    let F_real = 0;
-    let F_imag = 0;
-    
-    // Simpson's rule: ∫f(x)dx ≈ (h/3)[f(x₀) + 4f(x₁) + 2f(x₂) + 4f(x₃) + ... + f(xₙ)]
-    for (let i = 0; i < N; i++) {
-        const t = signal[i].t;
-        const f_t = signal[i].value;
-        
-        // e^(-st) = e^(-(σ+jω)t) = e^(-σt)[cos(ωt) - j·sin(ωt)]
-        const exp_sigma_t = Math.exp(-sigmaS * t);
-        const cos_omega_t = Math.cos(omegaS * t);
-        const sin_omega_t = Math.sin(omegaS * t);
-        
-        const integrand_real = f_t * exp_sigma_t * cos_omega_t;
-        const integrand_imag = -f_t * exp_sigma_t * sin_omega_t;
-        
-        // Simpson's rule coefficients
-        let coeff = 1;
-        if (i === 0 || i === N - 1) {
-            coeff = 1;
-        } else if (i % 2 === 1) {
-            coeff = 4;
-        } else {
-            coeff = 2;
-        }
-        
-        F_real += coeff * integrand_real;
-        F_imag += coeff * integrand_imag;
-    }
-    
-    F_real *= dt / 3;
-    F_imag *= dt / 3;
-    
-    const magnitude = Math.sqrt(F_real * F_real + F_imag * F_imag);
-    const phase = Math.atan2(F_imag, F_real);
-    
-    return { real: F_real, imag: F_imag, magnitude, phase };
-}
 
 /**
  * Compute Laplace transform over a grid of s values for 3D surface
@@ -281,13 +312,7 @@ function computeLaplaceSurface(funcType, params, signal, timeWindow, grid) {
             const sigma = sigmaRange[0] + i * dSigma;
             const omega = omegaRange[0] + j * dOmega;
             
-            // Try closed form first
-            let result = computeClosedFormLaplace(funcType, sigma, omega, params);
-            
-            // Fallback to numerical if no closed form
-            if (!result && signal) {
-                result = computeNumericalLaplace(signal, sigma, omega, timeWindow);
-            }
+            const result = computeClosedFormLaplace(funcType, sigma, omega, params);
             
             if (result) {
                 surface.push({
@@ -453,11 +478,7 @@ function updateLaplaceEvaluationPoint() {
     const omega = state.laplaceOmega || 1;
     
     // Quick evaluation at current s point
-    let result = computeClosedFormLaplace(funcType, sigma, omega, { frequency, damping, amplitude });
-    if (!result && state.laplaceTimeDomainSignal) {
-        result = computeNumericalLaplace(state.laplaceTimeDomainSignal, sigma, omega, timeWindow);
-    }
-    state.laplaceCurrentValue = result;
+    state.laplaceCurrentValue = computeClosedFormLaplace(funcType, sigma, omega, { frequency, damping, amplitude });
 }
 
 /**
@@ -474,46 +495,38 @@ function updateLaplaceTransform() {
     const timeWindow = 5.0; // Fixed time window for Laplace
     const samples = 256;
     
-    try {
-        // Generate time domain signal
-        state.laplaceTimeDomainSignal = generateLaplaceTimeDomainSignal(
-            funcType, frequency, damping, amplitude, timeWindow, samples
-        );
-        
-        // Find poles and zeros
-        const pz = findPolesZeros(funcType, { frequency, damping, amplitude });
-        state.laplacePoles = pz.poles;
-        state.laplaceZeros = pz.zeros;
-        
-        // Compute ROC
-        state.laplaceROC = computeROC(pz.poles);
-        
-        // Analyze stability
-        state.laplaceStability = analyzeStability(pz.poles);
-        
-        // Compute surface for 3D visualization with higher resolution
-        const grid = {
-            sigmaRange: [-3, 2],
-            omegaRange: [-10, 10],
-            sigmaSteps: 70,  // Increased for smoother surface
-            omegaSteps: 70   // Increased for smoother surface
-        };
-        
-        state.laplaceSurface = computeLaplaceSurface(
-            funcType,
-            { frequency, damping, amplitude },
-            state.laplaceTimeDomainSignal,
-            timeWindow,
-            grid
-        );
-        
-        // Also update evaluation point
-        updateLaplaceEvaluationPoint();
-        
-    } catch (error) {
-        console.error('Error in updateLaplaceTransform:', error);
-        state.laplaceTimeDomainSignal = [];
-        state.laplacePoles = [];
-        state.laplaceZeros = [];
-    }
+    // Generate time domain signal
+    state.laplaceTimeDomainSignal = generateLaplaceTimeDomainSignal(
+        funcType, frequency, damping, amplitude, timeWindow, samples
+    );
+    
+    // Find poles and zeros
+    const pz = findPolesZeros(funcType, { frequency, damping, amplitude });
+    state.laplacePoles = pz.poles;
+    state.laplaceZeros = pz.zeros;
+    
+    // Compute ROC
+    state.laplaceROC = computeROC(pz.poles);
+    
+    // Analyze stability
+    state.laplaceStability = analyzeStability(pz.poles);
+    
+    // Compute surface for 3D visualization with higher resolution
+    const grid = {
+        sigmaRange: [-3, 2],
+        omegaRange: [-10, 10],
+        sigmaSteps: 70,  // Increased for smoother surface
+        omegaSteps: 70   // Increased for smoother surface
+    };
+    
+    state.laplaceSurface = computeLaplaceSurface(
+        funcType,
+        { frequency, damping, amplitude },
+        state.laplaceTimeDomainSignal,
+        timeWindow,
+        grid
+    );
+    
+    // Also update evaluation point
+    updateLaplaceEvaluationPoint();
 }

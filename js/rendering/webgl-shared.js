@@ -213,3 +213,31 @@ function getWebGLDomainColorFunctionIdShared(functionName) {
         default: return 0;
     }
 }
+
+function setComplexFunctionUniformsShared(gl, locs, state) {
+    if (locs.uFunctionId !== undefined && locs.uFunctionId !== null) {
+        gl.uniform1f(locs.uFunctionId, getWebGLDomainColorFunctionIdShared(state.currentFunction));
+    }
+
+    const a = state.mobiusA || {re:1,im:0}, b = state.mobiusB || {re:0,im:0};
+    const c = state.mobiusC || {re:0,im:0}, d = state.mobiusD || {re:1,im:0};
+    if (locs.uMobiusA !== undefined && locs.uMobiusA !== null) gl.uniform2f(locs.uMobiusA, a.re||0, a.im||0);
+    if (locs.uMobiusB !== undefined && locs.uMobiusB !== null) gl.uniform2f(locs.uMobiusB, b.re||0, b.im||0);
+    if (locs.uMobiusC !== undefined && locs.uMobiusC !== null) gl.uniform2f(locs.uMobiusC, c.re||0, c.im||0);
+    if (locs.uMobiusD !== undefined && locs.uMobiusD !== null) gl.uniform2f(locs.uMobiusD, d.re||0, d.im||0);
+
+    const deg = Math.max(0, Math.min(10, Number.isFinite(state.polynomialN) ? state.polynomialN : 0));
+    if (locs.uPolyDegree !== undefined && locs.uPolyDegree !== null) gl.uniform1i(locs.uPolyDegree, deg);
+    if (locs.uPolyCoeffs) {
+        for (let i = 0; i <= 10; i++) {
+            if (locs.uPolyCoeffs[i] !== undefined && locs.uPolyCoeffs[i] !== null) {
+                const co = (state.polynomialCoeffs && state.polynomialCoeffs[i]) || null;
+                gl.uniform2f(locs.uPolyCoeffs[i], co ? (co.re||0) : 0, co ? (co.im||0) : 0);
+            }
+        }
+    }
+
+    if (locs.uZetaCont !== undefined && locs.uZetaCont !== null) gl.uniform1f(locs.uZetaCont, state.zetaContinuationEnabled ? 1 : 0);
+    if (locs.uZetaRefl !== undefined && locs.uZetaRefl !== null) gl.uniform1f(locs.uZetaRefl, typeof ZETA_REFLECTION_POINT_RE !== 'undefined' ? ZETA_REFLECTION_POINT_RE : 0.5);
+    if (locs.uFracPower !== undefined && locs.uFracPower !== null) gl.uniform1f(locs.uFracPower, state.fractionalPowerN !== undefined ? state.fractionalPowerN : 0.5);
+}
