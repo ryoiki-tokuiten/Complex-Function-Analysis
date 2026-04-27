@@ -151,9 +151,7 @@ function drawPlanarInputShape(ctx, planeParams) {
     const inputShape = state.currentInputShape;
 
     if (isRasterInputShape(inputShape)) {
-        if (typeof drawImageWithWebGL === 'function') {
-            drawImageWithWebGL(ctx, planeParams, false);
-        }
+        drawImageWithWebGL(ctx, planeParams, false);
         return;
     }
 
@@ -440,9 +438,7 @@ function drawPlanarTransformedShape(ctx, planeParams, tf, options = {}) {
 
     if (includeGeometry) {
         if (isRasterInputShape(inputShape)) {
-            if (typeof drawImageWithWebGL === 'function') {
-                drawImageWithWebGL(ctx, planeParams, true, options.index || 0);
-            }
+            drawImageWithWebGL(ctx, planeParams, true, options.index || 0);
         } else {
             const pointSets = generateCurrentMappedInputShapePointSets(zPlaneParams, {
                 currentFunction: state.currentFunction,
@@ -626,88 +622,5 @@ function drawPlanarTransformedProbe(ctx, planeParams, tf, index) {
 }
 
 function drawZPlaneVectorField(ctx, planeParams, currentFunctionStr, vectorFuncType) {
-    // Try GPU path first — zero CPU function evaluations, SDF arrows
-    if (typeof drawVectorFieldWithWebGL === 'function' && drawVectorFieldWithWebGL(ctx, planeParams)) return;
-
-    // CPU fallback: batch arrows by quantized color
-    const { currentVisXRange: xR, currentVisYRange: yR } = planeParams;
-    const density = Math.max(5, Math.min(25, Math.floor(state.gridDensity * 0.75)));
-    const dx = (xR[1] - xR[0]) / density;
-    const dy = (yR[1] - yR[0]) / density;
-
-    // Batch all arrow geometry by quantized color to minimize draw calls.
-    // Reduces ~1250 individual stroke/fill calls to ~100 batched draws.
-    const PB = 36;
-    const shafts = new Map();
-    const heads = new Map();
-    const dots = new Map();
-
-    for (let i = 0; i <= density; i++) {
-        const z_re = xR[0] + i * dx;
-        for (let j = 0; j <= density; j++) {
-            const z_im = yR[0] + j * dy;
-            const v = getVectorFieldValueAtPoint(z_re, z_im, currentFunctionStr, vectorFuncType, state);
-            if (!isFinite(v.re) || !isFinite(v.im)) continue;
-
-            const zc = mapToCanvasCoords(z_re, z_im, planeParams);
-            const tc = mapToCanvasCoords(z_re + v.re * state.vectorFieldScale, z_im + v.im * state.vectorFieldScale, planeParams);
-
-            // Quantize phase to PB bins for color batching
-            const qp = Math.round(Math.atan2(v.im, v.re) / (Math.PI * 2 / PB)) * (Math.PI * 2 / PB);
-            const qm = Math.round(Math.log(1 + Math.hypot(v.re, v.im)) * 4) / 4;
-            const color = getHSLColor(qp, qm, 1, state.domainBrightness, state.domainContrast, state.domainLightnessCycles, state.domainSaturation);
-
-            let ex = tc.x, ey = tc.y;
-            const dcx = ex - zc.x, dcy = ey - zc.y;
-
-            if (Math.abs(dcx) < 0.5 && Math.abs(dcy) < 0.5) {
-                if (!dots.has(color)) dots.set(color, []);
-                dots.get(color).push(zc.x, zc.y);
-                continue;
-            }
-
-            const lenSq = dcx * dcx + dcy * dcy;
-            if (lenSq > MAX_VECTOR_DISPLAY_LENGTH_CANVAS * MAX_VECTOR_DISPLAY_LENGTH_CANVAS) {
-                const s = MAX_VECTOR_DISPLAY_LENGTH_CANVAS / Math.sqrt(lenSq);
-                ex = zc.x + dcx * s; ey = zc.y + dcy * s;
-            }
-
-            if (!shafts.has(color)) shafts.set(color, []);
-            shafts.get(color).push(zc.x, zc.y, ex, ey);
-
-            const angle = Math.atan2(ey - zc.y, ex - zc.x);
-            const hs = state.vectorArrowHeadSize;
-            if (!heads.has(color)) heads.set(color, []);
-            heads.get(color).push(
-                ex, ey,
-                ex - hs * Math.cos(angle - Math.PI / 6), ey - hs * Math.sin(angle - Math.PI / 6),
-                ex - hs * Math.cos(angle + Math.PI / 6), ey - hs * Math.sin(angle + Math.PI / 6)
-            );
-        }
-    }
-
-    ctx.save();
-    ctx.lineWidth = state.vectorArrowThickness;
-    ctx.lineJoin = 'round';
-    ctx.lineCap = 'round';
-
-    for (const [color, segs] of shafts) {
-        ctx.strokeStyle = color;
-        ctx.beginPath();
-        for (let i = 0; i < segs.length; i += 4) { ctx.moveTo(segs[i], segs[i + 1]); ctx.lineTo(segs[i + 2], segs[i + 3]); }
-        ctx.stroke();
-    }
-    for (const [color, tris] of heads) {
-        ctx.fillStyle = color;
-        ctx.beginPath();
-        for (let i = 0; i < tris.length; i += 6) { ctx.moveTo(tris[i], tris[i + 1]); ctx.lineTo(tris[i + 2], tris[i + 3]); ctx.lineTo(tris[i + 4], tris[i + 5]); ctx.closePath(); }
-        ctx.fill();
-    }
-    for (const [color, pts] of dots) {
-        ctx.fillStyle = color;
-        ctx.beginPath();
-        for (let i = 0; i < pts.length; i += 2) { ctx.moveTo(pts[i] + 1.5, pts[i + 1]); ctx.arc(pts[i], pts[i + 1], 1.5, 0, 2 * Math.PI); }
-        ctx.fill();
-    }
-    ctx.restore();
+    drawVectorFieldWithWebGL(ctx, planeParams);
 }

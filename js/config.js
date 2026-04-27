@@ -50,7 +50,7 @@ let state = {
     streamlineSeedDensityFactor: 0.8,
     manualSeedPoints: [], 
 
-    imagePoints: [],
+
     imageResolution: 300,
     imageSize: 2.0,
     imageOpacity: 1.0,
@@ -58,7 +58,7 @@ let state = {
     imageContentVersion: 0,
     uploadedImage: null,
 
-    videoPoints: [],
+
     videoResolution: 300,
     videoProcessingFps: 60,
     videoSize: 2.0,

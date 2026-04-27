@@ -14,9 +14,7 @@ function startLaplaceAnimation() {
     
     state.laplaceAnimationPlaying = true;
     state.laplaceAnimationTime = 0; // Start from beginning
-    if (typeof syncLaplacePlayPauseButton === 'function') {
-        syncLaplacePlayPauseButton();
-    }
+    syncLaplacePlayPauseButton();
     laplaceLastFrameTime = performance.now();
     
     function animateFrame(timestamp) {
@@ -47,11 +45,7 @@ function startLaplaceAnimation() {
         }
         
         // Trigger redraw
-        if (typeof requestRedrawAll === 'function') {
-            requestRedrawAll();
-        } else if (typeof drawWPlaneContent === 'function') {
-            drawWPlaneContent();
-        }
+        requestRedrawAll();
         
         // Continue animation
         laplaceAnimationHandle = requestAnimationFrame(animateFrame);
@@ -69,9 +63,7 @@ function stopLaplaceAnimation() {
         cancelAnimationFrame(laplaceAnimationHandle);
         laplaceAnimationHandle = null;
     }
-    if (typeof syncLaplacePlayPauseButton === 'function') {
-        syncLaplacePlayPauseButton();
-    }
+    syncLaplacePlayPauseButton();
 }
 
 /**
@@ -91,9 +83,7 @@ function toggleLaplaceAnimation() {
 function resetLaplaceAnimation() {
     stopLaplaceAnimation();
     state.laplaceAnimationTime = 0;
-    if (typeof syncLaplacePlayPauseButton === 'function') {
-        syncLaplacePlayPauseButton();
-    }
+    syncLaplacePlayPauseButton();
     requestRedrawAll();
 }
 
@@ -103,8 +93,6 @@ function resetLaplaceAnimation() {
 function showFullLaplaceSpiral() {
     stopLaplaceAnimation();
     state.laplaceAnimationTime = 1.0;
-    if (typeof syncLaplacePlayPauseButton === 'function') {
-        syncLaplacePlayPauseButton();
-    }
+    syncLaplacePlayPauseButton();
     requestRedrawAll();
 }

@@ -589,14 +589,6 @@ function compositeWebGLToCanvas(ctx, renderer, width, height) {
     ctx.restore();
 }
 
-function compositeRasterToCanvas(ctx, sourceCanvas, width, height) {
-    if (!ctx || !sourceCanvas) return;
-    ctx.save();
-    if (ctx.imageSmoothingEnabled !== undefined) ctx.imageSmoothingEnabled = true;
-    if (ctx.imageSmoothingQuality !== undefined) ctx.imageSmoothingQuality = 'high';
-    ctx.drawImage(sourceCanvas, 0, 0, sourceCanvas.width, sourceCanvas.height, 0, 0, width, height);
-    ctx.restore();
-}
 
 function ensureRasterCanvasSize(renderer, width, height) {
     if (!renderer || !renderer.rasterCanvas) return null;

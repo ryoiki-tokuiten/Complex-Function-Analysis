@@ -2,26 +2,21 @@ function drawPlaneLayer(ctx, planeParams, planeKey, drawCallback, mode = 'captur
     if (!ctx || !planeParams || typeof drawCallback !== 'function') return;
 
     if (mode === 'raster') {
-        if (typeof drawWithWebGLRaster === 'function' && drawWithWebGLRaster(ctx, planeParams, planeKey, drawCallback)) {
-            return;
-        }
+        if (drawWithWebGLRaster(ctx, planeParams, planeKey, drawCallback)) return;
         drawCallback(ctx);
         return;
     }
 
     if (mode === 'auto') {
-        if (typeof drawWithWebGLCapture === 'function' && drawWithWebGLCapture(ctx, planeParams, planeKey, drawCallback)) {
-            return;
-        }
-        if (typeof drawWithWebGLRaster === 'function' && drawWithWebGLRaster(ctx, planeParams, planeKey, drawCallback)) {
-            return;
-        }
+        if (drawWithWebGLCapture(ctx, planeParams, planeKey, drawCallback)) return;
+        if (drawWithWebGLRaster(ctx, planeParams, planeKey, drawCallback)) return;
         drawCallback(ctx);
         return;
     }
 
-    if (typeof drawWithWebGLCapture === 'function' && drawWithWebGLCapture(ctx, planeParams, planeKey, drawCallback)) return;
-    if (typeof drawWithWebGLRaster === 'function' && drawWithWebGLRaster(ctx, planeParams, planeKey, drawCallback)) return;
+    // Default 'capture' mode
+    if (drawWithWebGLCapture(ctx, planeParams, planeKey, drawCallback)) return;
+    if (drawWithWebGLRaster(ctx, planeParams, planeKey, drawCallback)) return;
     drawCallback(ctx);
 }
 
@@ -95,11 +90,11 @@ function buildPlanarLayerCacheKey(isWPlane) {
         `sectorA2:${toCacheKeyNumber(state.sectorAngle2)}`,
         `sectorRMin:${toCacheKeyNumber(state.sectorRMin)}`,
         `sectorRMax:${toCacheKeyNumber(state.sectorRMax)}`,
-        `imgRes:${state.imageResolution || 0}`,
+
         `imgSize:${toCacheKeyNumber(state.imageSize)}`,
         `imgOpacity:${toCacheKeyNumber(state.imageOpacity)}`,
         `imgVer:${state.imageContentVersion || 0}`,
-        `vidRes:${state.videoResolution || 0}`,
+
         `vidFps:${state.videoProcessingFps || 0}`,
         `vidSize:${toCacheKeyNumber(state.videoSize)}`,
         `vidOpacity:${toCacheKeyNumber(state.videoOpacity)}`,
@@ -208,9 +203,7 @@ function renderZPlaneFlowLayer(targetCtx, planeParams) {
         return;
     }
 
-    drawPlaneLayer(targetCtx, planeParams, 'z', layerCtx => {
-        drawZPlaneVectorField(layerCtx, planeParams, state.currentFunction, state.vectorFieldFunction);
-    }, 'capture');
+    drawZPlaneVectorField(targetCtx, planeParams, state.currentFunction, state.vectorFieldFunction);
 }
 
 function drawZetaUndefinedRegionOverlay(ctx, planeParams) {
@@ -410,28 +403,16 @@ function drawZPlaneContent(){
                     if (zPlanarInputLayerCache.key !== cacheKey) {
                         cacheCtx.setTransform(1, 0, 0, 1, 0, 0);
                         cacheCtx.clearRect(0, 0, cacheCanvas.width, cacheCanvas.height);
-                        if (typeof drawPlanarInputShapeHybrid === 'function') {
-                            drawPlanarInputShapeHybrid(cacheCtx, zPlaneParams, 'z');
-                        } else {
-                            drawPlanarInputShape(cacheCtx, zPlaneParams);
-                        }
+                        drawPlanarInputShapeHybrid(cacheCtx, zPlaneParams, 'z');
                         zPlanarInputLayerCache.key = cacheKey;
                     }
                     zCtx.drawImage(cacheCanvas, 0, 0);
                 } else {
-                    if (typeof drawPlanarInputShapeHybrid === 'function') {
-                        drawPlanarInputShapeHybrid(zCtx, zPlaneParams, 'z');
-                    } else {
-                        drawPlanarInputShape(zCtx, zPlaneParams);
-                    }
+                    drawPlanarInputShapeHybrid(zCtx, zPlaneParams, 'z');
                 }
             } else {
                 zPlanarInputLayerCache.key = null;
-                if (typeof drawPlanarInputShapeHybrid === 'function') {
-                    drawPlanarInputShapeHybrid(zCtx, zPlaneParams, 'z');
-                } else {
-                    drawPlanarInputShape(zCtx, zPlaneParams);
-                }
+                drawPlanarInputShapeHybrid(zCtx, zPlaneParams, 'z');
             }
 
             if (state.radialDiscreteStepsEnabled && state.currentFunction !== 'poincare') {
@@ -692,7 +673,7 @@ function _renderSingleWPlaneMode(index, curFunc, isSpecialMode) {
                         if (wPlanarTransformedLayerCache.key !== cacheKey) {
                             cacheCtx.setTransform(1, 0, 0, 1, 0, 0);
                             cacheCtx.clearRect(0, 0, cacheCanvas.width, cacheCanvas.height);
-                            if (index === 0 && typeof drawPlanarTransformedShapeHybrid === 'function') {
+                            if (index === 0) {
                                 drawPlanarTransformedShapeHybrid(cacheCtx, wPlaneParams, curFunc, 'w');
                             } else {
                                 drawPlanarTransformedShape(cacheCtx, wPlaneParams, curFunc, { index });
@@ -701,7 +682,7 @@ function _renderSingleWPlaneMode(index, curFunc, isSpecialMode) {
                         }
                         wCtx.drawImage(cacheCanvas, 0, 0);
                     } else {
-                        if (index === 0 && typeof drawPlanarTransformedShapeHybrid === 'function') {
+                        if (index === 0) {
                             drawPlanarTransformedShapeHybrid(wCtx, wPlaneParams, curFunc, 'w');
                         } else {
                             drawPlanarTransformedShape(wCtx, wPlaneParams, curFunc, { index });
@@ -709,7 +690,7 @@ function _renderSingleWPlaneMode(index, curFunc, isSpecialMode) {
                     }
                 } else {
                     wPlanarTransformedLayerCache.key = null;
-                    if (index === 0 && typeof drawPlanarTransformedShapeHybrid === 'function') {
+                    if (index === 0) {
                         drawPlanarTransformedShapeHybrid(wCtx, wPlaneParams, curFunc, 'w');
                     } else {
                         drawPlanarTransformedShape(wCtx, wPlaneParams, curFunc, { index });

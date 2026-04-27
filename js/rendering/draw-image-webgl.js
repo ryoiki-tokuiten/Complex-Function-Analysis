@@ -14,8 +14,7 @@ const webglImageSupport = {
 // not viable for image rendering: multi-valued functions converge to wrong branches
 // from an arbitrary initial guess. These fall back to the forward indexed mesh.
 function isInverseImageRenderSupported() {
-    const funcId = (typeof getWebGLDomainColorFunctionIdShared === 'function')
-        ? getWebGLDomainColorFunctionIdShared(state.currentFunction) : 0;
+    const funcId = getWebGLDomainColorFunctionIdShared(state.currentFunction);
     if (funcId === 11) return false; // zeta — no stable inverse
     if (funcId === 9) return (state.polynomialN || 0) <= 2; // poly — analytic only for deg ≤ 2
     return funcId >= 1 && funcId <= 15;
@@ -327,7 +326,7 @@ function setImageUniforms(gl, locs, planeParams, isWP, currentShape) {
     gl.uniform1f(locs.uOpacity, getRasterOpacityForShape(currentShape));
 
     if (isWP) {
-        const funcId = (typeof getWebGLDomainColorFunctionIdShared === 'function') ? getWebGLDomainColorFunctionIdShared(state.currentFunction) : 0;
+        const funcId = getWebGLDomainColorFunctionIdShared(state.currentFunction);
         gl.uniform1f(locs.uFunctionId, funcId);
 
         const a = state.mobiusA || { re: 1, im: 0 }, b = state.mobiusB || { re: 0, im: 0 };
@@ -450,6 +449,7 @@ const _VF_FS = [
     'uniform vec2 u_polyCoeffs[11];',
     'uniform float u_zetaContinuationEnabled;',
     'uniform float u_zetaReflectionBoundary;',
+    'uniform float u_fracPower;',
     'uniform float u_brightness;',
     '',
     GLSL_COMPLEX_MATH_LIBRARY,
@@ -468,11 +468,11 @@ const _VF_FS = [
     '  vec2 cc=vec2(floor(w.x/cellW+0.5)*cellW, floor(w.y/cellH+0.5)*cellH);',
     '',
     '  vec2 fz;',
-    '  bool ok=evaluateMappedValueBase(cc,0.0,u_functionId,u_mobiusA,u_mobiusB,u_mobiusC,u_mobiusD,u_polyDegree,u_polyCoeffs,u_zetaContinuationEnabled,u_zetaReflectionBoundary,fz);',
+    '  bool ok=evaluateMappedValueBase(cc,0.0,u_functionId,u_mobiusA,u_mobiusB,u_mobiusC,u_mobiusD,u_polyDegree,u_polyCoeffs,u_zetaContinuationEnabled,u_zetaReflectionBoundary,u_fracPower,fz);',
     '  if(!ok) discard;',
     '',
     '  if(u_vectorMode>0.5&&u_vectorMode<1.5){float m2=dot(fz,fz);if(m2<1e-12) discard;fz=vec2(fz.x/m2,-fz.y/m2);}',
-    '  if(u_vectorMode>1.5){float h=1e-5;vec2 fr,fl;evaluateMappedValueBase(cc+vec2(h,0),0.0,u_functionId,u_mobiusA,u_mobiusB,u_mobiusC,u_mobiusD,u_polyDegree,u_polyCoeffs,u_zetaContinuationEnabled,u_zetaReflectionBoundary,fr);evaluateMappedValueBase(cc-vec2(h,0),0.0,u_functionId,u_mobiusA,u_mobiusB,u_mobiusC,u_mobiusD,u_polyDegree,u_polyCoeffs,u_zetaContinuationEnabled,u_zetaReflectionBoundary,fl);fz=(fr-fl)/(2.0*h);}',
+    '  if(u_vectorMode>1.5){float h=1e-5;vec2 fr,fl;evaluateMappedValueBase(cc+vec2(h,0),0.0,u_functionId,u_mobiusA,u_mobiusB,u_mobiusC,u_mobiusD,u_polyDegree,u_polyCoeffs,u_zetaContinuationEnabled,u_zetaReflectionBoundary,u_fracPower,fr);evaluateMappedValueBase(cc-vec2(h,0),0.0,u_functionId,u_mobiusA,u_mobiusB,u_mobiusC,u_mobiusD,u_polyDegree,u_polyCoeffs,u_zetaContinuationEnabled,u_zetaReflectionBoundary,u_fracPower,fl);fz=(fr-fl)/(2.0*h);}',
     '',
     '  float mag=length(fz);',
     '  if(mag<1e-9) discard;',
@@ -527,6 +527,7 @@ function drawVectorFieldWithWebGL(ctx, planeParams) {
             uPolyCoeffs: [],
             uZetaCont: gl.getUniformLocation(_vfProgram, 'u_zetaContinuationEnabled'),
             uZetaRefl: gl.getUniformLocation(_vfProgram, 'u_zetaReflectionBoundary'),
+            uFracPower: gl.getUniformLocation(_vfProgram, 'u_fracPower'),
             uBrightness: gl.getUniformLocation(_vfProgram, 'u_brightness'),
         };
         for (let i = 0; i <= 10; i++) _vfLocs.uPolyCoeffs.push(gl.getUniformLocation(_vfProgram, `u_polyCoeffs[${i}]`));
@@ -561,7 +562,7 @@ function drawVectorFieldWithWebGL(ctx, planeParams) {
     const modeMap = { 'f(z)': 0, '1/f(z)': 1, "f'(z)": 2 };
     gl.uniform1f(_vfLocs.uVectorMode, modeMap[state.vectorFieldFunction] || 0);
 
-    const funcId = (typeof getWebGLDomainColorFunctionIdShared === 'function') ? getWebGLDomainColorFunctionIdShared(state.currentFunction) : 0;
+    const funcId = getWebGLDomainColorFunctionIdShared(state.currentFunction);
     gl.uniform1f(_vfLocs.uFunctionId, funcId);
 
     const a = state.mobiusA || {re:1,im:0}, b = state.mobiusB || {re:0,im:0};
@@ -579,6 +580,7 @@ function drawVectorFieldWithWebGL(ctx, planeParams) {
     }
     gl.uniform1f(_vfLocs.uZetaCont, state.zetaContinuationEnabled ? 1 : 0);
     gl.uniform1f(_vfLocs.uZetaRefl, typeof ZETA_REFLECTION_POINT_RE !== 'undefined' ? ZETA_REFLECTION_POINT_RE : 0.5);
+    gl.uniform1f(_vfLocs.uFracPower, state.fractionalPowerN !== undefined ? state.fractionalPowerN : 0.5);
 
     gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
 

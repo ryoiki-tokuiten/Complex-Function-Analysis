@@ -446,91 +446,83 @@ function renderDomainColoringWithWebGL(targetCtx, planeParams, options = null) {
     resizeWebGLDomainColorRenderer(renderer, internalWidth, internalHeight);
     const gl = renderer.gl;
 
-    try {
-        gl.viewport(0, 0, renderer.canvas.width, renderer.canvas.height);
-        gl.useProgram(renderer.program);
+    gl.viewport(0, 0, renderer.canvas.width, renderer.canvas.height);
+    gl.useProgram(renderer.program);
 
-        gl.bindBuffer(gl.ARRAY_BUFFER, renderer.quadBuffer);
-        gl.enableVertexAttribArray(renderer.aPosition);
-        gl.vertexAttribPointer(renderer.aPosition, 2, gl.FLOAT, false, 0, 0);
+    gl.bindBuffer(gl.ARRAY_BUFFER, renderer.quadBuffer);
+    gl.enableVertexAttribArray(renderer.aPosition);
+    gl.vertexAttribPointer(renderer.aPosition, 2, gl.FLOAT, false, 0, 0);
 
-        gl.uniform2f(renderer.uResolution, renderer.canvas.width, renderer.canvas.height);
-        gl.uniform4f(renderer.uViewBounds, xRange[0], xRange[1], yRange[0], yRange[1]);
+    gl.uniform2f(renderer.uResolution, renderer.canvas.width, renderer.canvas.height);
+    gl.uniform4f(renderer.uViewBounds, xRange[0], xRange[1], yRange[0], yRange[1]);
 
-        const brightness = Number.isFinite(state.domainBrightness) ? state.domainBrightness : 1;
-        const contrast = Number.isFinite(state.domainContrast) ? state.domainContrast : 1;
-        const saturation = Number.isFinite(state.domainSaturation) ? state.domainSaturation : 1;
-        const lightnessCycles = Number.isFinite(state.domainLightnessCycles) ? state.domainLightnessCycles : 1;
-        gl.uniform1f(renderer.uDomainBrightness, brightness);
-        gl.uniform1f(renderer.uDomainContrast, contrast);
-        gl.uniform1f(renderer.uDomainSaturation, saturation);
-        gl.uniform1f(renderer.uDomainLightnessCycles, lightnessCycles);
+    const brightness = Number.isFinite(state.domainBrightness) ? state.domainBrightness : 1;
+    const contrast = Number.isFinite(state.domainContrast) ? state.domainContrast : 1;
+    const saturation = Number.isFinite(state.domainSaturation) ? state.domainSaturation : 1;
+    const lightnessCycles = Number.isFinite(state.domainLightnessCycles) ? state.domainLightnessCycles : 1;
+    gl.uniform1f(renderer.uDomainBrightness, brightness);
+    gl.uniform1f(renderer.uDomainContrast, contrast);
+    gl.uniform1f(renderer.uDomainSaturation, saturation);
+    gl.uniform1f(renderer.uDomainLightnessCycles, lightnessCycles);
 
-        const useSphere = !!sphereParams;
-        gl.uniform1f(renderer.uUseSphere, useSphere ? 1 : 0);
-        if (useSphere) {
-            const sphereCenterXBase = Number.isFinite(sphereParams.centerX) ? sphereParams.centerX : (targetWidth * 0.5);
-            const sphereCenterYBase = Number.isFinite(sphereParams.centerY) ? sphereParams.centerY : (targetHeight * 0.5);
-            const sphereRadiusBase = Number.isFinite(sphereParams.radius) ? Math.max(0, sphereParams.radius) : 0;
-            const sphereCenterX = sphereCenterXBase * scaleX;
-            const sphereCenterY = sphereCenterYBase * scaleY;
-            const sphereRadius = sphereRadiusBase * uniformScale;
-            const rotX = Number.isFinite(sphereParams.rotX) ? sphereParams.rotX : 0;
-            const rotY = Number.isFinite(sphereParams.rotY) ? sphereParams.rotY : 0;
-            gl.uniform2f(renderer.uSphereCenter, sphereCenterX, sphereCenterY);
-            gl.uniform1f(renderer.uSphereRadius, sphereRadius);
-            gl.uniform1f(renderer.uRotX, rotX);
-            gl.uniform1f(renderer.uRotY, rotY);
-        } else {
-            gl.uniform2f(renderer.uSphereCenter, internalWidth * 0.5, internalHeight * 0.5);
-            gl.uniform1f(renderer.uSphereRadius, 0);
-            gl.uniform1f(renderer.uRotX, 0);
-            gl.uniform1f(renderer.uRotY, 0);
-        }
-
-        const lightDir = getNormalizedSphereLightDirection();
-        gl.uniform3f(renderer.uLightDir, lightDir.x, lightDir.y, lightDir.z);
-        gl.uniform4f(
-            renderer.uSphereLighting,
-            SPHERE_TEXTURE_AMBIENT_INTENSITY,
-            SPHERE_TEXTURE_DIFFUSE_INTENSITY,
-            SPHERE_TEXTURE_SPECULAR_INTENSITY,
-            SPHERE_TEXTURE_SHININESS_FACTOR
-        );
-
-        gl.uniform1f(renderer.uIsWPlaneColoring, isWPlaneColoring ? 1 : 0);
-        gl.uniform1f(renderer.uFunctionId, isWPlaneColoring ? 0 : getWebGLDomainColorFunctionIdShared(functionName));
-        gl.uniform1f(renderer.uZetaContinuationEnabled, state.zetaContinuationEnabled ? 1 : 0);
-        gl.uniform1f(renderer.uZetaReflectionBoundary, ZETA_REFLECTION_POINT_RE);
-        gl.uniform1f(renderer.uFracPower, state.fractionalPowerN !== undefined ? state.fractionalPowerN : 0.5);
-
-        setWebGLDomainColorMobiusUniforms(renderer);
-        setWebGLDomainColorPolynomialUniforms(renderer);
-
-        gl.disable(gl.DEPTH_TEST);
-        gl.disable(gl.BLEND);
-        gl.clearColor(0, 0, 0, 0);
-        gl.clear(gl.COLOR_BUFFER_BIT);
-        gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
-
-        targetCtx.save();
-        targetCtx.setTransform(1, 0, 0, 1, 0, 0);
-        targetCtx.clearRect(0, 0, targetWidth, targetHeight);
-        targetCtx.drawImage(
-            renderer.canvas,
-            0, 0, renderer.canvas.width, renderer.canvas.height,
-            0, 0, targetWidth, targetHeight
-        );
-        targetCtx.restore();
-
-        return true;
-    } catch (error) {
-        if (!webglDomainColorSupport.warnedRuntimeFallback) {
-            console.warn('GPU domain coloring runtime failure, using CPU fallback:', error);
-            webglDomainColorSupport.warnedRuntimeFallback = true;
-        }
-        return false;
+    const useSphere = !!sphereParams;
+    gl.uniform1f(renderer.uUseSphere, useSphere ? 1 : 0);
+    if (useSphere) {
+        const sphereCenterXBase = Number.isFinite(sphereParams.centerX) ? sphereParams.centerX : (targetWidth * 0.5);
+        const sphereCenterYBase = Number.isFinite(sphereParams.centerY) ? sphereParams.centerY : (targetHeight * 0.5);
+        const sphereRadiusBase = Number.isFinite(sphereParams.radius) ? Math.max(0, sphereParams.radius) : 0;
+        const sphereCenterX = sphereCenterXBase * scaleX;
+        const sphereCenterY = sphereCenterYBase * scaleY;
+        const sphereRadius = sphereRadiusBase * uniformScale;
+        const rotX = Number.isFinite(sphereParams.rotX) ? sphereParams.rotX : 0;
+        const rotY = Number.isFinite(sphereParams.rotY) ? sphereParams.rotY : 0;
+        gl.uniform2f(renderer.uSphereCenter, sphereCenterX, sphereCenterY);
+        gl.uniform1f(renderer.uSphereRadius, sphereRadius);
+        gl.uniform1f(renderer.uRotX, rotX);
+        gl.uniform1f(renderer.uRotY, rotY);
+    } else {
+        gl.uniform2f(renderer.uSphereCenter, internalWidth * 0.5, internalHeight * 0.5);
+        gl.uniform1f(renderer.uSphereRadius, 0);
+        gl.uniform1f(renderer.uRotX, 0);
+        gl.uniform1f(renderer.uRotY, 0);
     }
+
+    const lightDir = getNormalizedSphereLightDirection();
+    gl.uniform3f(renderer.uLightDir, lightDir.x, lightDir.y, lightDir.z);
+    gl.uniform4f(
+        renderer.uSphereLighting,
+        SPHERE_TEXTURE_AMBIENT_INTENSITY,
+        SPHERE_TEXTURE_DIFFUSE_INTENSITY,
+        SPHERE_TEXTURE_SPECULAR_INTENSITY,
+        SPHERE_TEXTURE_SHININESS_FACTOR
+    );
+
+    gl.uniform1f(renderer.uIsWPlaneColoring, isWPlaneColoring ? 1 : 0);
+    gl.uniform1f(renderer.uFunctionId, isWPlaneColoring ? 0 : getWebGLDomainColorFunctionIdShared(functionName));
+    gl.uniform1f(renderer.uZetaContinuationEnabled, state.zetaContinuationEnabled ? 1 : 0);
+    gl.uniform1f(renderer.uZetaReflectionBoundary, ZETA_REFLECTION_POINT_RE);
+    gl.uniform1f(renderer.uFracPower, state.fractionalPowerN !== undefined ? state.fractionalPowerN : 0.5);
+
+    setWebGLDomainColorMobiusUniforms(renderer);
+    setWebGLDomainColorPolynomialUniforms(renderer);
+
+    gl.disable(gl.DEPTH_TEST);
+    gl.disable(gl.BLEND);
+    gl.clearColor(0, 0, 0, 0);
+    gl.clear(gl.COLOR_BUFFER_BIT);
+    gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
+
+    targetCtx.save();
+    targetCtx.setTransform(1, 0, 0, 1, 0, 0);
+    targetCtx.clearRect(0, 0, targetWidth, targetHeight);
+    targetCtx.drawImage(
+        renderer.canvas,
+        0, 0, renderer.canvas.width, renderer.canvas.height,
+        0, 0, targetWidth, targetHeight
+    );
+    targetCtx.restore();
+
+    return true;
 }
 
 function getGPUBackendStatus() {

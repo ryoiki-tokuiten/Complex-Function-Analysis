@@ -1,8 +1,7 @@
 const RASTER_INPUT_SHAPES = new Set(['image', 'video']);
 const RASTER_MEDIA_TIME_EPSILON = 1e-4;
 
-let rasterMediaSampleCanvas = null;
-let rasterMediaSampleCtx = null;
+
 
 function isRasterInputShape(shape = state.currentInputShape) {
     return RASTER_INPUT_SHAPES.has(shape);
@@ -12,9 +11,7 @@ function getRasterSourceForShape(shape = state.currentInputShape) {
     return shape === 'video' ? state.uploadedVideo : state.uploadedImage;
 }
 
-function getRasterPointsForShape(shape = state.currentInputShape) {
-    return shape === 'video' ? state.videoPoints : state.imagePoints;
-}
+
 
 function getRasterResolutionForShape(shape = state.currentInputShape) {
     return shape === 'video' ? state.videoResolution : state.imageResolution;
@@ -79,16 +76,7 @@ function getRasterDisplayDimensions(shape = state.currentInputShape) {
     };
 }
 
-function mapRasterPointToWorld(point, shape = state.currentInputShape) {
-    const { width, height } = getRasterDisplayDimensions(shape);
-    const centerRe = Number.isFinite(state.a0) ? state.a0 : 0;
-    const centerIm = Number.isFinite(state.b0) ? state.b0 : 0;
 
-    return {
-        re: centerRe + point.nx * (width / 2),
-        im: centerIm + point.ny * (height / 2)
-    };
-}
 
 
 
@@ -100,9 +88,6 @@ function processUploadedImageSource(img) {
     state.uploadedImage = img;
     const { aspectRatio } = getRasterSourceDimensions(img);
     state.imageAspectRatio = aspectRatio;
-    
-    // CPU Point sampling completely deleted for strict WebGL architecture.
-    state.imagePoints = [];
     state.imageContentVersion += 1;
     return true;
 }
@@ -121,8 +106,7 @@ function processUploadedVideoFrame(force = false) {
     const { aspectRatio } = getRasterSourceDimensions(video);
     state.videoAspectRatio = aspectRatio;
 
-    // CPU Point sampling completely deleted for strict WebGL architecture.
-    state.videoPoints = [];
+
 
     state.videoFrameVersion += 1;
     state.videoLastProcessedMediaTime = currentTime;
@@ -290,7 +274,6 @@ function cleanupUploadedVideo() {
     state.uploadedVideo = null;
     state.uploadedVideoUrl = '';
     state.videoIsPlaying = false;
-    state.videoPoints = [];
     state.videoAspectRatio = 1.0;
     state.videoFrameVersion += 1;
     state.videoLastProcessedWallTime = 0;
