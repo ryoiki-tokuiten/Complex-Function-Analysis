@@ -102,27 +102,7 @@ function getSpherePointSetColor(pointSet, isWP) {
 
 function drawSphereGridAndShape(ctx, cSP, isWP, tf = null) {
     if (isRasterInputShape(state.currentInputShape)) {
-        const rasterPoints = getRasterPointsForShape(state.currentInputShape);
-        if (rasterPoints && rasterPoints.length > 0) {
-            ctx.save();
-            ctx.globalAlpha = getRasterOpacityForShape(state.currentInputShape) || 1.0;
-            for (let i = 0; i < rasterPoints.length; i++) {
-                const pt = rasterPoints[i];
-                const worldPoint = mapRasterPointToWorld(pt, state.currentInputShape);
-                let w = isWP ? (tf ? tf(worldPoint.re, worldPoint.im) : { re: worldPoint.re, im: worldPoint.im }) : worldPoint;
-                if (!w || isNaN(w.re) || isNaN(w.im) || !isFinite(w.re) || !isFinite(w.im)) continue;
-
-                const spherePoint = complexToSphere(w.re, w.im);
-                const rotatedSpherePoint = rotate3D(spherePoint, cSP.rotX, cSP.rotY);
-                const p2d = projectSphereToCanvas2D(rotatedSpherePoint, cSP.centerX, cSP.centerY, cSP.radius);
-                if (p2d.isVisible) {
-                    ctx.fillStyle = pt.color;
-                    ctx.fillRect(p2d.x - 1, p2d.y - 1, 2, 2);
-                }
-            }
-            ctx.restore();
-        }
-        return;
+        return; // CPU Image mapping removed. Riemann sphere doesn't natively support video textures yet.
     }
 
     const sourcePointSets = isWP

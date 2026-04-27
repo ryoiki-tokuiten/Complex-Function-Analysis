@@ -615,81 +615,7 @@ function ensureRasterCanvasSize(renderer, width, height) {
     return renderer.rasterCtx;
 }
 
-function replayCapturedBatches(ctx, batches) {
-    if (!ctx || !Array.isArray(batches) || batches.length === 0) return false;
 
-    ctx.lineJoin = 'round';
-    ctx.lineCap = 'round';
-
-    for (const batch of batches) {
-        if (!batch || !(batch.points instanceof Float32Array) || batch.points.length < 4) continue;
-
-        const alphaMultiplier = Number.isFinite(batch.alphaMultiplier) ? clampToUnit(batch.alphaMultiplier) : 1;
-        ctx.globalAlpha = alphaMultiplier;
-
-        if (batch.mode === 'fill') {
-            if (batch.points.length < 6) continue;
-            ctx.fillStyle = batch.color || '#ffffff';
-            ctx.beginPath();
-            ctx.moveTo(batch.points[0], batch.points[1]);
-            for (let i = 2; i < batch.points.length; i += 2) {
-                ctx.lineTo(batch.points[i], batch.points[i + 1]);
-            }
-            ctx.closePath();
-            ctx.fill();
-            continue;
-        }
-
-        ctx.strokeStyle = batch.color || '#ffffff';
-        ctx.lineWidth = Number.isFinite(batch.lineWidth) ? batch.lineWidth : 1;
-        ctx.beginPath();
-        ctx.moveTo(batch.points[0], batch.points[1]);
-        for (let i = 2; i < batch.points.length; i += 2) {
-            ctx.lineTo(batch.points[i], batch.points[i + 1]);
-        }
-        ctx.stroke();
-    }
-
-    return true;
-}
-
-function renderCapturedBatchesToCanvas(ctx, batches) {
-    if (!ctx || !Array.isArray(batches)) return false;
-    if (batches.length === 0) return true;
-    ctx.save();
-    const rendered = replayCapturedBatches(ctx, batches);
-    ctx.restore();
-    return rendered;
-}
-
-function renderCapturedBatchesViaWebGLRaster(renderer, targetCtx, width, height, batches) {
-    if (!renderer || !targetCtx || !Array.isArray(batches)) return false;
-
-    ensureWebGLRendererSize(renderer, width, height, 1);
-    const rasterCtx = ensureRasterCanvasSize(renderer, renderer.canvas.width, renderer.canvas.height);
-    if (!rasterCtx) return false;
-
-    rasterCtx.setTransform(1, 0, 0, 1, 0, 0);
-    rasterCtx.clearRect(0, 0, renderer.rasterCanvas.width, renderer.rasterCanvas.height);
-    rasterCtx.globalAlpha = 1;
-    rasterCtx.globalCompositeOperation = 'source-over';
-    rasterCtx.setTransform(renderer.renderScale, 0, 0, renderer.renderScale, 0, 0);
-
-    replayCapturedBatches(rasterCtx, batches);
-
-    if (renderer.renderScale <= 1.001) {
-        compositeRasterToCanvas(targetCtx, renderer.rasterCanvas, width, height);
-        return true;
-    }
-
-    const textured = renderCanvasTextureToWebGL(renderer, renderer.rasterCanvas, width, height);
-    if (textured) {
-        compositeWebGLToCanvas(targetCtx, renderer, width, height);
-    } else {
-        compositeRasterToCanvas(targetCtx, renderer.rasterCanvas, width, height);
-    }
-    return true;
-}
 
 function renderCanvasTextureToWebGL(renderer, sourceCanvas, width, height) {
     if (!renderer || !renderer.gl || !renderer.textureProgram || !sourceCanvas) return false;
@@ -778,33 +704,16 @@ function drawWithWebGLCapture(ctx, planeParams, planeKey, drawCallback) {
     const renderer = getWebGLRendererForPlane(planeKey);
     if (!renderer) return false;
 
-    let batches = null;
-    try {
-        const captureCtx = new PolylineCaptureContext();
-        drawCallback(captureCtx);
-        batches = captureCtx.getBatches();
-        if (!batches || batches.length === 0) return false;
+    const captureCtx = new PolylineCaptureContext();
+    drawCallback(captureCtx);
+    const batches = captureCtx.getBatches();
+    if (!batches || batches.length === 0) return false;
 
-        const rendered = renderWebGLPolylineBatches(renderer, planeParams.width, planeParams.height, batches);
-        if (!rendered) {
-            if (renderCapturedBatchesViaWebGLRaster(renderer, ctx, planeParams.width, planeParams.height, batches)) {
-                return true;
-            }
-            return renderCapturedBatchesToCanvas(ctx, batches);
-        }
+    const rendered = renderWebGLPolylineBatches(renderer, planeParams.width, planeParams.height, batches);
+    if (!rendered) return false;
 
-        compositeWebGLToCanvas(ctx, renderer, planeParams.width, planeParams.height);
-        return true;
-    } catch (error) {
-        console.warn('WebGL capture path failed; falling back to 2D canvas:', error);
-        if (batches && batches.length > 0) {
-            if (renderCapturedBatchesViaWebGLRaster(renderer, ctx, planeParams.width, planeParams.height, batches)) {
-                return true;
-            }
-            return renderCapturedBatchesToCanvas(ctx, batches);
-        }
-        return false;
-    }
+    compositeWebGLToCanvas(ctx, renderer, planeParams.width, planeParams.height);
+    return true;
 }
 
 function drawWithWebGLRaster(ctx, planeParams, planeKey, drawCallback, options = null) {
@@ -814,51 +723,35 @@ function drawWithWebGLRaster(ctx, planeParams, planeKey, drawCallback, options =
     const renderer = getWebGLRendererForPlane(planeKey);
     if (!renderer) return false;
 
-    let rasterCtx = null;
-    let callbackDrawn = false;
-    try {
-        const renderScaleOverride = (options && typeof options === 'object' && Number.isFinite(options.renderScaleOverride))
-            ? options.renderScaleOverride
-            : null;
-        const requestedRenderScale = (typeof renderScaleOverride === 'number' && renderScaleOverride > 0)
-            ? renderScaleOverride
-            : getWebGLSupersampleScale();
-        const directDrawIfNativeScale = !!(options && typeof options === 'object' && options.directDrawIfNativeScale === true);
-        if (directDrawIfNativeScale && requestedRenderScale <= 1.001) {
-            drawCallback(ctx);
-            return true;
-        }
-        ensureWebGLRendererSize(renderer, planeParams.width, planeParams.height, requestedRenderScale);
-
-        rasterCtx = ensureRasterCanvasSize(renderer, renderer.canvas.width, renderer.canvas.height);
-        if (!rasterCtx) return false;
-
-        rasterCtx.setTransform(1, 0, 0, 1, 0, 0);
-        rasterCtx.clearRect(0, 0, renderer.rasterCanvas.width, renderer.rasterCanvas.height);
-        rasterCtx.globalAlpha = 1;
-        rasterCtx.globalCompositeOperation = 'source-over';
-        rasterCtx.setTransform(renderer.renderScale, 0, 0, renderer.renderScale, 0, 0);
-
-        drawCallback(rasterCtx);
-        callbackDrawn = true;
-
-        const rendered = renderCanvasTextureToWebGL(renderer, renderer.rasterCanvas, planeParams.width, planeParams.height);
-        if (!rendered) {
-            compositeRasterToCanvas(ctx, renderer.rasterCanvas, planeParams.width, planeParams.height);
-            return true;
-        }
-
-        compositeWebGLToCanvas(ctx, renderer, planeParams.width, planeParams.height);
+    const renderScaleOverride = (options && typeof options === 'object' && Number.isFinite(options.renderScaleOverride))
+        ? options.renderScaleOverride
+        : null;
+    const requestedRenderScale = (typeof renderScaleOverride === 'number' && renderScaleOverride > 0)
+        ? renderScaleOverride
+        : getWebGLSupersampleScale();
+    const directDrawIfNativeScale = !!(options && typeof options === 'object' && options.directDrawIfNativeScale === true);
+    if (directDrawIfNativeScale && requestedRenderScale <= 1.001) {
+        drawCallback(ctx);
         return true;
-    } catch (error) {
-        console.warn('WebGL raster path failed; falling back to 2D canvas:', error);
-        if (callbackDrawn && rasterCtx && renderer.rasterCanvas) {
-            rasterCtx.setTransform(1, 0, 0, 1, 0, 0);
-            compositeRasterToCanvas(ctx, renderer.rasterCanvas, planeParams.width, planeParams.height);
-            return true;
-        }
-        return false;
     }
+    ensureWebGLRendererSize(renderer, planeParams.width, planeParams.height, requestedRenderScale);
+
+    const rasterCtx = ensureRasterCanvasSize(renderer, renderer.canvas.width, renderer.canvas.height);
+    if (!rasterCtx) return false;
+
+    rasterCtx.setTransform(1, 0, 0, 1, 0, 0);
+    rasterCtx.clearRect(0, 0, renderer.rasterCanvas.width, renderer.rasterCanvas.height);
+    rasterCtx.globalAlpha = 1;
+    rasterCtx.globalCompositeOperation = 'source-over';
+    rasterCtx.setTransform(renderer.renderScale, 0, 0, renderer.renderScale, 0, 0);
+
+    drawCallback(rasterCtx);
+
+    const rendered = renderCanvasTextureToWebGL(renderer, renderer.rasterCanvas, planeParams.width, planeParams.height);
+    if (!rendered) return false;
+
+    compositeWebGLToCanvas(ctx, renderer, planeParams.width, planeParams.height);
+    return true;
 }
 
 function drawPlanarTransformedShapeHybrid(ctx, planeParams, tf, planeKey) {

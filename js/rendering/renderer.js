@@ -410,29 +410,26 @@ function drawZPlaneContent(){
                     if (zPlanarInputLayerCache.key !== cacheKey) {
                         cacheCtx.setTransform(1, 0, 0, 1, 0, 0);
                         cacheCtx.clearRect(0, 0, cacheCanvas.width, cacheCanvas.height);
-                        const renderedInputByWebGL = (typeof drawPlanarInputShapeHybrid === 'function')
-                            ? drawPlanarInputShapeHybrid(cacheCtx, zPlaneParams, 'z')
-                            : false;
-                        if (!renderedInputByWebGL) {
+                        if (typeof drawPlanarInputShapeHybrid === 'function') {
+                            drawPlanarInputShapeHybrid(cacheCtx, zPlaneParams, 'z');
+                        } else {
                             drawPlanarInputShape(cacheCtx, zPlaneParams);
                         }
                         zPlanarInputLayerCache.key = cacheKey;
                     }
                     zCtx.drawImage(cacheCanvas, 0, 0);
                 } else {
-                    const renderedInputByWebGL = (typeof drawPlanarInputShapeHybrid === 'function')
-                        ? drawPlanarInputShapeHybrid(zCtx, zPlaneParams, 'z')
-                        : false;
-                    if (!renderedInputByWebGL) {
+                    if (typeof drawPlanarInputShapeHybrid === 'function') {
+                        drawPlanarInputShapeHybrid(zCtx, zPlaneParams, 'z');
+                    } else {
                         drawPlanarInputShape(zCtx, zPlaneParams);
                     }
                 }
             } else {
                 zPlanarInputLayerCache.key = null;
-                const renderedInputByWebGL = (typeof drawPlanarInputShapeHybrid === 'function')
-                    ? drawPlanarInputShapeHybrid(zCtx, zPlaneParams, 'z')
-                    : false;
-                if (!renderedInputByWebGL) {
+                if (typeof drawPlanarInputShapeHybrid === 'function') {
+                    drawPlanarInputShapeHybrid(zCtx, zPlaneParams, 'z');
+                } else {
                     drawPlanarInputShape(zCtx, zPlaneParams);
                 }
             }
@@ -695,29 +692,26 @@ function _renderSingleWPlaneMode(index, curFunc, isSpecialMode) {
                         if (wPlanarTransformedLayerCache.key !== cacheKey) {
                             cacheCtx.setTransform(1, 0, 0, 1, 0, 0);
                             cacheCtx.clearRect(0, 0, cacheCanvas.width, cacheCanvas.height);
-                            const renderedByWebGL = (index === 0 && typeof drawPlanarTransformedShapeHybrid === 'function')
-                                ? drawPlanarTransformedShapeHybrid(cacheCtx, wPlaneParams, curFunc, 'w')
-                                : false;
-                            if (!renderedByWebGL) {
+                            if (index === 0 && typeof drawPlanarTransformedShapeHybrid === 'function') {
+                                drawPlanarTransformedShapeHybrid(cacheCtx, wPlaneParams, curFunc, 'w');
+                            } else {
                                 drawPlanarTransformedShape(cacheCtx, wPlaneParams, curFunc, { index });
                             }
                             wPlanarTransformedLayerCache.key = cacheKey;
                         }
                         wCtx.drawImage(cacheCanvas, 0, 0);
                     } else {
-                        const renderedByWebGL = (index === 0 && typeof drawPlanarTransformedShapeHybrid === 'function')
-                            ? drawPlanarTransformedShapeHybrid(wCtx, wPlaneParams, curFunc, 'w')
-                            : false;
-                        if (!renderedByWebGL) {
+                        if (index === 0 && typeof drawPlanarTransformedShapeHybrid === 'function') {
+                            drawPlanarTransformedShapeHybrid(wCtx, wPlaneParams, curFunc, 'w');
+                        } else {
                             drawPlanarTransformedShape(wCtx, wPlaneParams, curFunc, { index });
                         }
                     }
                 } else {
                     wPlanarTransformedLayerCache.key = null;
-                    const renderedByWebGL = (index === 0 && typeof drawPlanarTransformedShapeHybrid === 'function')
-                        ? drawPlanarTransformedShapeHybrid(wCtx, wPlaneParams, curFunc, 'w')
-                        : false;
-                    if (!renderedByWebGL) {
+                    if (index === 0 && typeof drawPlanarTransformedShapeHybrid === 'function') {
+                        drawPlanarTransformedShapeHybrid(wCtx, wPlaneParams, curFunc, 'w');
+                    } else {
                         drawPlanarTransformedShape(wCtx, wPlaneParams, curFunc, { index });
                     }
                 }

@@ -90,82 +90,7 @@ function mapRasterPointToWorld(point, shape = state.currentInputShape) {
     };
 }
 
-function ensureRasterMediaSampleContext(width, height) {
-    if (!rasterMediaSampleCanvas) {
-        rasterMediaSampleCanvas = document.createElement('canvas');
-        rasterMediaSampleCtx = rasterMediaSampleCanvas.getContext('2d', { willReadFrequently: true });
-    }
 
-    if (!rasterMediaSampleCanvas || !rasterMediaSampleCtx) {
-        return null;
-    }
-
-    if (rasterMediaSampleCanvas.width !== width || rasterMediaSampleCanvas.height !== height) {
-        rasterMediaSampleCanvas.width = width;
-        rasterMediaSampleCanvas.height = height;
-    }
-
-    rasterMediaSampleCtx.setTransform(1, 0, 0, 1, 0, 0);
-    rasterMediaSampleCtx.clearRect(0, 0, width, height);
-    return rasterMediaSampleCtx;
-}
-
-function getRasterSamplingSize(source, targetResolution) {
-    const { width, height } = getRasterSourceDimensions(source);
-    if (!width || !height) {
-        return { width: 0, height: 0 };
-    }
-
-    const cpuResolution = Math.max(1, targetResolution || 300);
-    if (width >= height) {
-        return {
-            width: cpuResolution,
-            height: Math.max(1, Math.round((height * cpuResolution) / width))
-        };
-    }
-
-    return {
-        width: Math.max(1, Math.round((width * cpuResolution) / height)),
-        height: cpuResolution
-    };
-}
-
-function sampleRasterSourceToPoints(source, targetResolution) {
-    const sampleSize = getRasterSamplingSize(source, targetResolution);
-    if (!sampleSize.width || !sampleSize.height) {
-        return [];
-    }
-
-    const ctx = ensureRasterMediaSampleContext(sampleSize.width, sampleSize.height);
-    if (!ctx) {
-        return [];
-    }
-
-    ctx.drawImage(source, 0, 0, sampleSize.width, sampleSize.height);
-
-    const imgData = ctx.getImageData(0, 0, sampleSize.width, sampleSize.height);
-    const xDivisor = Math.max(1, sampleSize.width - 1);
-    const yDivisor = Math.max(1, sampleSize.height - 1);
-    const points = [];
-
-    for (let y = 0; y < sampleSize.height; y += 1) {
-        for (let x = 0; x < sampleSize.width; x += 1) {
-            const idx = (y * sampleSize.width + x) * 4;
-            const alpha = imgData.data[idx + 3];
-            if (alpha <= 20) {
-                continue;
-            }
-
-            points.push({
-                nx: (x / xDivisor) * 2 - 1,
-                ny: -((y / yDivisor) * 2 - 1),
-                color: `rgba(${imgData.data[idx]},${imgData.data[idx + 1]},${imgData.data[idx + 2]},${alpha / 255})`
-            });
-        }
-    }
-
-    return points;
-}
 
 function processUploadedImageSource(img) {
     if (!img) {
@@ -173,10 +98,11 @@ function processUploadedImageSource(img) {
     }
 
     state.uploadedImage = img;
-
     const { aspectRatio } = getRasterSourceDimensions(img);
     state.imageAspectRatio = aspectRatio;
-    state.imagePoints = sampleRasterSourceToPoints(img, state.imageResolution);
+    
+    // CPU Point sampling completely deleted for strict WebGL architecture.
+    state.imagePoints = [];
     state.imageContentVersion += 1;
     return true;
 }
@@ -195,18 +121,8 @@ function processUploadedVideoFrame(force = false) {
     const { aspectRatio } = getRasterSourceDimensions(video);
     state.videoAspectRatio = aspectRatio;
 
-    // Check if we need CPU points. Skip if WebGL is available and Riemann sphere is disabled.
-    if (typeof initWebGLImageSupportIfNeeded === 'function') {
-        initWebGLImageSupportIfNeeded();
-    }
-    const useWebGL = typeof webglImageSupport !== 'undefined' && webglImageSupport.available;
-    const needsCpuPoints = state.riemannSphereViewEnabled || !useWebGL;
-
-    if (needsCpuPoints) {
-        state.videoPoints = sampleRasterSourceToPoints(video, state.videoResolution);
-    } else if (state.videoPoints.length > 0) {
-        state.videoPoints = []; // Free memory
-    }
+    // CPU Point sampling completely deleted for strict WebGL architecture.
+    state.videoPoints = [];
 
     state.videoFrameVersion += 1;
     state.videoLastProcessedMediaTime = currentTime;

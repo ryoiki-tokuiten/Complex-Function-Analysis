@@ -151,24 +151,8 @@ function drawPlanarInputShape(ctx, planeParams) {
     const inputShape = state.currentInputShape;
 
     if (isRasterInputShape(inputShape)) {
-        if (typeof drawImageWithWebGL === 'function' && drawImageWithWebGL(ctx, planeParams, false)) {
-            return;
-        }
-
-        const rasterPoints = getRasterPointsForShape(inputShape);
-        if (rasterPoints && rasterPoints.length > 0) {
-            ctx.save();
-            ctx.globalAlpha = getRasterOpacityForShape(inputShape) || 1.0;
-
-            for (let i = 0; i < rasterPoints.length; i++) {
-                const point = rasterPoints[i];
-                const worldPoint = mapRasterPointToWorld(point, inputShape);
-                const canvasPoint = mapToCanvasCoords(worldPoint.re, worldPoint.im, planeParams);
-                ctx.fillStyle = point.color;
-                ctx.fillRect(canvasPoint.x - 1, canvasPoint.y - 1, 2, 2);
-            }
-
-            ctx.restore();
+        if (typeof drawImageWithWebGL === 'function') {
+            drawImageWithWebGL(ctx, planeParams, false);
         }
         return;
     }
@@ -456,28 +440,9 @@ function drawPlanarTransformedShape(ctx, planeParams, tf, options = {}) {
 
     if (includeGeometry) {
         if (isRasterInputShape(inputShape)) {
-            if (typeof drawImageWithWebGL === 'function' && drawImageWithWebGL(ctx, planeParams, true, options.index || 0)) {
-                return;
+            if (typeof drawImageWithWebGL === 'function') {
+                drawImageWithWebGL(ctx, planeParams, true, options.index || 0);
             }
-
-            const rasterPoints = getRasterPointsForShape(inputShape);
-            if (rasterPoints && rasterPoints.length > 0) {
-                ctx.save();
-                ctx.globalAlpha = getRasterOpacityForShape(inputShape) || 1.0;
-
-                for (let i = 0; i < rasterPoints.length; i++) {
-                    const point = rasterPoints[i];
-                    const worldPoint = mapRasterPointToWorld(point, inputShape);
-                    const w = tf(worldPoint.re, worldPoint.im);
-                    if (isRenderableComplexPoint(w)) {
-                        const canvasPoint = mapToCanvasCoords(w.re, w.im, planeParams);
-                        ctx.fillStyle = point.color;
-                        ctx.fillRect(canvasPoint.x - 1, canvasPoint.y - 1, 2, 2);
-                    }
-                }
-                ctx.restore();
-            }
-
         } else {
             const pointSets = generateCurrentMappedInputShapePointSets(zPlaneParams, {
                 currentFunction: state.currentFunction,
