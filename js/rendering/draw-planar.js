@@ -467,7 +467,7 @@ function drawPlanarTransformedShape(ctx, planeParams, tf, options = {}) {
 }
 
 function createTaylorApproximationTransform(functionKey, taylorCenter, taylorOrder) {
-    const z0Complex = new Complex(taylorCenter.re, taylorCenter.im);
+    const z0Complex = { re: taylorCenter.re, im: taylorCenter.im };
     const coefficients = computeTaylorSeriesCoefficients(functionKey, z0Complex, taylorOrder);
 
     return (re, im) => {
@@ -475,7 +475,7 @@ function createTaylorApproximationTransform(functionKey, taylorCenter, taylorOrd
             return { re: NaN, im: NaN };
         }
 
-        const zInputComplex = new Complex(re, im);
+        const zInputComplex = { re, im };
         if (!isWithinTaylorConvergenceRegion(zInputComplex, z0Complex)) {
             return { re: NaN, im: NaN };
         }
