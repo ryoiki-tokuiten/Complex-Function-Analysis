@@ -4,8 +4,8 @@ function requestRedrawAll(){
         redrawRequest = requestAnimationFrame(() => {
             try {
                 const zIsPlanar = !state.riemannSphereViewEnabled || state.splitViewEnabled;
-                if(state.showZerosPoles && zIsPlanar && state.currentFunction !== 'poincare') findZerosAndPoles(); else { state.zeros = []; state.poles = [];}
-                if(state.showCriticalPoints && zIsPlanar && state.currentFunction !== 'poincare') findCriticalPoints(); else { state.criticalPoints = []; state.criticalValues = [];}
+                if(state.showZerosPoles && !state.navigationModeEnabled && zIsPlanar && state.currentFunction !== 'poincare') findZerosAndPoles(); else { state.zeros = []; state.poles = [];}
+                if(state.showCriticalPoints && !state.navigationModeEnabled && zIsPlanar && state.currentFunction !== 'poincare') findCriticalPoints(); else { state.criticalPoints = []; state.criticalValues = [];}
 
                 updateTaylorSeriesCenterAndRadius(); 
                 performCauchyAnalysis();

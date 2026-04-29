@@ -380,8 +380,12 @@ function drawImageWithWebGL(targetCtx, planeParams, isWP, chainIndex) {
     gl.activeTexture(gl.TEXTURE0);
     gl.bindTexture(gl.TEXTURE_2D, renderer.texture);
 
-    // Choose rendering path
-    const useInverse = !isWP || (isWP && isInverseImageRenderSupported());
+    // Choose rendering path.
+    // Navigation mode MUST use the forward mesh: the inverse path applies
+    // principal-branch inverses (arccos→[0,π], arcsin→[-π/2,π/2], etc.)
+    // which silently discard pixels when the rocket is outside that range.
+    // The forward path maps z→f(z) directly — no branch-cut issues.
+    const useInverse = !isWP || (isWP && isInverseImageRenderSupported() && !state.navigationModeEnabled);
 
     if (useInverse && renderer.inverseProgram) {
         const locs = renderer.inverseLocs;

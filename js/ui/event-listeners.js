@@ -288,6 +288,10 @@ function activateFunctionMode(key) {
     state.fourierModeEnabled = enteringFourier;
     state.laplaceModeEnabled = enteringLaplace;
 
+    if ((enteringFourier || enteringLaplace) && state.navigationModeEnabled && typeof setNavigationModeEnabled === 'function') {
+        setNavigationModeEnabled(false);
+    }
+
     if (enteringFourier && typeof updateFourierTransform === 'function') {
         updateFourierTransform();
     }
@@ -412,6 +416,9 @@ function initializeScalarBindings() {
 
     initializeMobiusState();
     initializeCustomTaylorCenter();
+    if (typeof initializeNavigationStateFromControls === 'function') {
+        initializeNavigationStateFromControls();
+    }
 }
 
 window.initializeStateFromControls = function () {
@@ -620,6 +627,59 @@ function bindViewControls() {
             sphereViewParams.w.rotY = rotation.rotY;
             requestDomainRedraw(true);
         });
+    });
+}
+
+function bindNavigationControls() {
+    bindControlListener('enableNavigationModeCb', 'change', (_event, checkbox) => {
+        if (typeof setNavigationModeEnabled === 'function') {
+            setNavigationModeEnabled(checkbox.checked);
+        } else {
+            state.navigationModeEnabled = checkbox.checked;
+        }
+        requestDomainRedraw(true);
+    });
+
+    bindSlider('navigationSizeSlider', 'navigationSize', parseFloat, () => {
+        const viewportShifted = typeof followNavigationViewports === 'function' ? followNavigationViewports() : false;
+        requestDomainRedraw(Boolean(viewportShifted && state.domainColoringEnabled));
+    });
+    bindSlider('navigationOpacitySlider', 'navigationOpacity', parseFloat, () => {
+        requestDomainRedraw(false);
+    });
+    bindSlider('navigationSpeedSlider', 'navigationSpeed', parseFloat, () => {
+        requestDomainRedraw(false);
+    });
+    bindSlider('navigationTrailLengthSlider', 'navigationTrailLength', parseInteger, () => {
+        if (state.navigationTrail.length > state.navigationTrailLength) {
+            state.navigationTrail.splice(0, state.navigationTrail.length - state.navigationTrailLength);
+        }
+        requestDomainRedraw(false);
+    });
+
+    bindControlListener('navigationResetBtn', 'click', () => {
+        if (typeof resetNavigationVehicle === 'function') {
+            resetNavigationVehicle();
+        }
+    });
+
+    bindElementListener(document, 'keydown', event => {
+        if (typeof setNavigationKey === 'function') {
+            setNavigationKey(event, true);
+        }
+    });
+
+    bindElementListener(document, 'keyup', event => {
+        if (typeof setNavigationKey === 'function') {
+            setNavigationKey(event, false);
+        }
+    });
+
+    bindElementListener(window, 'blur', () => {
+        state.navigationKeys = {};
+        if (typeof stopNavigationLoop === 'function') {
+            stopNavigationLoop();
+        }
     });
 }
 
@@ -955,6 +1015,11 @@ function bindCanvasInteractions() {
                 return;
             }
 
+            if (isZCanvas && state.navigationModeEnabled) {
+                state.probeActive = false;
+                return;
+            }
+
             if (isZCanvas && !state.panStateZ.isPanning && !state.panStateW.isPanning) {
                 const worldCoords = mapCanvasToWorldCoords(x, y, planeParams);
                 state.probeZ = { re: worldCoords.x, im: worldCoords.y };
@@ -1029,6 +1094,12 @@ function bindCanvasInteractions() {
             canvas.style.cursor = 'crosshair';
 
             if (!isZCanvas) {
+                return;
+            }
+
+            if (state.navigationModeEnabled) {
+                state.probeActive = false;
+                requestRedrawAll();
                 return;
             }
 
@@ -1297,6 +1368,7 @@ window.setupEventListeners = function () {
     bindPolynomialControls();
     bindDomainColoringControls();
     bindViewControls();
+    bindNavigationControls();
     bindVectorFieldControls();
     bindTaylorControls();
     bindRadialAndZetaControls();

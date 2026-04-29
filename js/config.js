@@ -163,6 +163,17 @@ let state = {
     chainingEnabled: false,
     chainingMode: 'recursion',
     chainCount: 1,
+
+    navigationModeEnabled: false,
+    navigationPosition: { re: 0, im: 0 },
+    navigationHeading: 0,
+    navigationSize: 0.55,
+    navigationOpacity: 0.9,
+    navigationSpeed: 1.1,
+    navigationTrailLength: 0,
+    navigationKeys: {},
+    navigationTrail: [],
+    navigationLastTime: 0,
 };
 
 

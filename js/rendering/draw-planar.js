@@ -269,11 +269,24 @@ function drawPlanarProbe(ctx, planeParams) {
     ctx.beginPath(); const r_l = state.probeNeighborhoodSize; for (let i = 0; i <= 60; ++i) { const a = (i / 60) * 2 * Math.PI; const z_b = { re: state.probeZ.re + r_l * Math.cos(a), im: state.probeZ.im + r_l * Math.sin(a) }; const p_c = mapToCanvasCoords(z_b.re, z_b.im, planeParams); if (i === 0) ctx.moveTo(p_c.x, p_c.y); else ctx.lineTo(p_c.x, p_c.y); } ctx.closePath(); ctx.stroke(); drawConformalityProbeSegments(ctx, planeParams, state.probeZ, null, false);
 }
 
+function getPlanarTransformRenderLimit(planeParams) {
+    const xRange = planeParams.currentVisXRange || planeParams.xRange || [-1, 1];
+    const yRange = planeParams.currentVisYRange || planeParams.yRange || [-1, 1];
+    return Math.max(
+        1,
+        Math.abs(xRange[0]),
+        Math.abs(xRange[1]),
+        Math.abs(yRange[0]),
+        Math.abs(yRange[1])
+    ) * 10;
+}
+
 function drawPlanarTransformedLine(ctx, planeParams, tf, z_pts, col) {
+    const renderLimit = getPlanarTransformRenderLimit(planeParams);
     ctx.strokeStyle = col;
     ctx.lineJoin = 'round';
     ctx.lineCap = 'round';
-    ctx.beginPath(); let fV = true; let lastValidCanvasPoint = null; for (const z_pt of z_pts) { if (!z_pt || z_pt.re === undefined || z_pt.im === undefined) { if (!fV && lastValidCanvasPoint) ctx.stroke(); ctx.beginPath(); fV = true; lastValidCanvasPoint = null; continue; } let w; if (state.currentFunction === 'zeta' && !state.zetaContinuationEnabled && z_pt.re <= ZETA_REFLECTION_POINT_RE) { w = { re: NaN, im: NaN }; } else { w = tf(z_pt.re, z_pt.im); } if (isNaN(w.re) || isNaN(w.im) || !isFinite(w.re) || !isFinite(w.im) || Math.abs(w.re) > planeParams.xRange[1] * 10 || Math.abs(w.im) > planeParams.yRange[1] * 10) { if (!fV && lastValidCanvasPoint) { const edgePoint = findIntersectionWithViewport(lastValidCanvasPoint, { x: planeParams.origin.x + w.re * planeParams.scale.x, y: planeParams.origin.y - w.im * planeParams.scale.y }, planeParams); if (edgePoint) ctx.lineTo(edgePoint.x, edgePoint.y); ctx.stroke(); } ctx.beginPath(); fV = true; lastValidCanvasPoint = null; continue; } const p_c = mapToCanvasCoords(w.re, w.im, planeParams); if (fV) { ctx.moveTo(p_c.x, p_c.y); fV = false; } else { ctx.lineTo(p_c.x, p_c.y); } lastValidCanvasPoint = p_c; } if (!fV && lastValidCanvasPoint) { ctx.stroke(); }
+    ctx.beginPath(); let fV = true; let lastValidCanvasPoint = null; for (const z_pt of z_pts) { if (!z_pt || z_pt.re === undefined || z_pt.im === undefined) { if (!fV && lastValidCanvasPoint) ctx.stroke(); ctx.beginPath(); fV = true; lastValidCanvasPoint = null; continue; } let w; if (state.currentFunction === 'zeta' && !state.zetaContinuationEnabled && z_pt.re <= ZETA_REFLECTION_POINT_RE) { w = { re: NaN, im: NaN }; } else { w = tf(z_pt.re, z_pt.im); } if (isNaN(w.re) || isNaN(w.im) || !isFinite(w.re) || !isFinite(w.im) || Math.abs(w.re) > renderLimit || Math.abs(w.im) > renderLimit) { if (!fV && lastValidCanvasPoint) { const edgePoint = findIntersectionWithViewport(lastValidCanvasPoint, { x: planeParams.origin.x + w.re * planeParams.scale.x, y: planeParams.origin.y - w.im * planeParams.scale.y }, planeParams); if (edgePoint) ctx.lineTo(edgePoint.x, edgePoint.y); ctx.stroke(); } ctx.beginPath(); fV = true; lastValidCanvasPoint = null; continue; } const p_c = mapToCanvasCoords(w.re, w.im, planeParams); if (fV) { ctx.moveTo(p_c.x, p_c.y); fV = false; } else { ctx.lineTo(p_c.x, p_c.y); } lastValidCanvasPoint = p_c; } if (!fV && lastValidCanvasPoint) { ctx.stroke(); }
 }
 function findIntersectionWithViewport(p1, p2, planeParams) { const xmin = 0, xmax = planeParams.width; const ymin = 0, ymax = planeParams.height; let t = Infinity; if (p2.y < ymin && p1.y >= ymin) { t = Math.min(t, (ymin - p1.y) / (p2.y - p1.y)); } if (p2.y > ymax && p1.y <= ymax) { t = Math.min(t, (ymax - p1.y) / (p2.y - p1.y)); } if (p2.x < xmin && p1.x >= xmin) { t = Math.min(t, (xmin - p1.x) / (p2.x - p1.x)); } if (p2.x > xmax && p1.x <= xmax) { t = Math.min(t, (xmax - p1.x) / (p2.x - p1.x)); } if (isFinite(t) && t >= 0 && t <= 1) { return { x: p1.x + t * (p2.x - p1.x), y: p1.y + t * (p2.y - p1.y) }; } return null; }
 function calculateDynamicPointsForSegment(p1_world, p2_world, tf) {
@@ -522,6 +535,7 @@ function drawPlanarTaylorApproximation(ctx, wPlaneParamsOriginal, originalFuncKe
 
 function drawPlanarTransformedProbe(ctx, planeParams, tf, index) {
     let effectiveTransformFunc = tf;
+    const renderLimit = getPlanarTransformRenderLimit(planeParams);
     if (state.taylorSeriesEnabled && (!state.riemannSphereViewEnabled || state.splitViewEnabled)) {
         effectiveTransformFunc = createTaylorApproximationTransform(
             state.currentFunction,
@@ -563,7 +577,7 @@ function drawPlanarTransformedProbe(ctx, planeParams, tf, index) {
                 }
 
                 if (!w_k || isNaN(w_k.re) || isNaN(w_k.im) || !isFinite(w_k.re) || !isFinite(w_k.im)) break;
-                if (Math.abs(w_k.re) > planeParams.xRange[1] * 30 || Math.abs(w_k.im) > planeParams.yRange[1] * 30) break;
+                if (Math.abs(w_k.re) > renderLimit * 3 || Math.abs(w_k.im) > renderLimit * 3) break;
 
                 const curr_canvas_pt = mapToCanvasCoords(w_k.re, w_k.im, planeParams);
 
@@ -607,7 +621,7 @@ function drawPlanarTransformedProbe(ctx, planeParams, tf, index) {
         const a = (i / 60) * 2 * Math.PI;
         const z_b = { re: state.probeZ.re + r_l * Math.cos(a), im: state.probeZ.im + r_l * Math.sin(a) };
         const w_b = effectiveTransformFunc(z_b.re, z_b.im);
-        if (isNaN(w_b.re) || isNaN(w_b.im) || !isFinite(w_b.re) || !isFinite(w_b.im) || Math.abs(w_b.re) > planeParams.xRange[1] * 10 || Math.abs(w_b.im) > planeParams.yRange[1] * 10) {
+        if (isNaN(w_b.re) || isNaN(w_b.im) || !isFinite(w_b.re) || !isFinite(w_b.im) || Math.abs(w_b.re) > renderLimit || Math.abs(w_b.im) > renderLimit) {
             if (!fPt) ctx.stroke();
             ctx.beginPath();
             fPt = true;

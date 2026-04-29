@@ -454,6 +454,70 @@
                         </div>
                     </div>
 
+                    <!-- Complex Plane Navigation Panel -->
+                    <div id="navigation_params" class="control-group"
+                        style="padding-bottom: 0.5rem; border-bottom: 1px solid var(--border-color); margin-bottom: 0.5rem;">
+                        <label for="enable_navigation_mode_cb" class="control-label tooltip-label slider-label"
+                            data-tooltip="Drive a vehicle through the z-plane and watch it map through the selected function">
+                            <input type="checkbox" id="enable_navigation_mode_cb" class="control-checkbox">
+                            <span class="custom-checkbox-visual"></span>
+                            Navigate through complex plane
+                        </label>
+
+                        <div id="navigation_controls_container" class="navigation-controls-container hidden">
+                            <div class="navigation-settings-grid">
+                                <div class="control-group">
+                                    <label for="navigation_size_slider">
+                                        Size:
+                                        <output id="navigation_size_value_display">0.55</output>
+                                    </label>
+                                    <div class="slider-container">
+                                        <input type="range" id="navigation_size_slider" min="0.15" max="1.60"
+                                            step="0.05" value="0.55" data-tooltip="Vehicle size in the complex plane">
+                                    </div>
+                                </div>
+
+                                <div class="control-group">
+                                    <label for="navigation_opacity_slider">
+                                        Opacity:
+                                        <output id="navigation_opacity_value_display">0.90</output>
+                                    </label>
+                                    <div class="slider-container">
+                                        <input type="range" id="navigation_opacity_slider" min="0.20" max="1.00"
+                                            step="0.05" value="0.90" data-tooltip="Vehicle opacity">
+                                    </div>
+                                </div>
+
+                                <div class="control-group">
+                                    <label for="navigation_speed_slider">
+                                        Speed:
+                                        <output id="navigation_speed_value_display">1.10</output>
+                                    </label>
+                                    <div class="slider-container">
+                                        <input type="range" id="navigation_speed_slider" min="0.20" max="3.00"
+                                            step="0.05" value="1.10" data-tooltip="Arrow-key movement speed">
+                                    </div>
+                                </div>
+
+                                <div class="control-group">
+                                    <label for="navigation_trail_length_slider">
+                                        Trail:
+                                        <output id="navigation_trail_length_value_display">0</output>
+                                    </label>
+                                    <div class="slider-container">
+                                        <input type="range" id="navigation_trail_length_slider" min="0" max="240"
+                                            step="10" value="0" data-tooltip="Number of movement samples to keep">
+                                    </div>
+                                </div>
+                            </div>
+
+                            <button id="navigation_reset_btn" class="sidebar-button navigation-reset-button"
+                                type="button" data-tooltip="Return the vehicle to the origin">
+                                Reset vehicle
+                            </button>
+                        </div>
+                    </div>
+
                     <div id="common_params_sliders">
                         <div class="control-group">
                             <label for="a0_slider">
@@ -1037,8 +1101,8 @@
                                 <output id="z_plane_zoom_value_display">1.00</output>x
                             </label>
                             <div class="slider-container">
-                                <input type="range" id="z_plane_zoom_slider" name="z_plane_zoom_slider" min="0.2"
-                                    max="5" step="0.05" value="1.0" data-tooltip="Zoom level for the z-plane view">
+                                <input type="range" id="z_plane_zoom_slider" name="z_plane_zoom_slider" min="0.01"
+                                    max="100" step="0.01" value="1.0" data-tooltip="Zoom level for the z-plane view">
                             </div>
                         </div>
                         <div class="control-group"> <!-- W-Plane Zoom -->
@@ -1047,8 +1111,8 @@
                                 <output id="w_plane_zoom_value_display">1.00</output>x
                             </label>
                             <div class="slider-container">
-                                <input type="range" id="w_plane_zoom_slider" name="w_plane_zoom_slider" min="0.2"
-                                    max="5" step="0.05" value="1.0" data-tooltip="Zoom level for the w-plane view">
+                                <input type="range" id="w_plane_zoom_slider" name="w_plane_zoom_slider" min="0.01"
+                                    max="100" step="0.01" value="1.0" data-tooltip="Zoom level for the w-plane view">
                             </div>
                         </div>
                     </div>
@@ -1593,7 +1657,7 @@
                             </button>
                         </div>
                     </div>
-                    <div>
+                    <div style="position:relative;">
                         <canvas id="z_plane_canvas"></canvas>
                         <div id="z_plane_probe_info" class="probe-info-overlay hidden"></div>
                         <div id="domain_coloring_key" class="domain-coloring-key hidden">
@@ -1605,6 +1669,25 @@
                             &nbsp;&nbsp;&nbsp;<span style="color:lime;">Green</span>: Arg = -90° (Negative
                             Imaginary)<br>
                             - Lightness maps to Magnitude (Log-scaled, cyclic bands).
+                        </div>
+                        <div id="navigation_keyhint_overlay" class="navigation-keyhint-overlay hidden">
+                            <div class="navigation-keyhint-grid">
+                                <div class="keyhint-spacer"></div>
+                                <div class="keyhint-key" data-tooltip="Move up (+Im)">
+                                    <i data-lucide="arrow-up" aria-hidden="true"></i>
+                                </div>
+                                <div class="keyhint-spacer"></div>
+                                <div class="keyhint-key" data-tooltip="Move left (-Re)">
+                                    <i data-lucide="arrow-left" aria-hidden="true"></i>
+                                </div>
+                                <div class="keyhint-key" data-tooltip="Move down (-Im)">
+                                    <i data-lucide="arrow-down" aria-hidden="true"></i>
+                                </div>
+                                <div class="keyhint-key" data-tooltip="Move right (+Re)">
+                                    <i data-lucide="arrow-right" aria-hidden="true"></i>
+                                </div>
+                            </div>
+                            <span class="navigation-keyhint-caption">Arrow keys to navigate</span>
                         </div>
                     </div>
                 </div>
@@ -1704,6 +1787,8 @@
     <script src="js/rendering/webgl-shared.js"></script>
     <script src="js/rendering/draw-planar.js"></script>
     <script src="js/rendering/webgl-planar.js"></script>
+    <script src="js/rocket-assets.js"></script>
+    <script src="js/navigation-plane.js"></script>
     <script src="js/rendering/draw-sphere.js"></script>
     <script src="js/rendering/draw-plotly-sphere.js"></script> <!-- Added this line -->
     <script src="js/rendering/draw-image-webgl.js"></script>

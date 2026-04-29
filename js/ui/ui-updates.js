@@ -271,6 +271,9 @@ function updateSliderLabelsAndDisplay() {
     if (typeof syncVideoPlaybackUI === 'function') {
         syncVideoPlaybackUI();
     }
+    if (typeof syncNavigationControls === 'function') {
+        syncNavigationControls();
+    }
 
     
     } catch (error) {
@@ -329,6 +332,11 @@ function syncTaylorSeriesPresetSelection() {
 function updateProbeInfo(){
     try {
         const zIsPlanar = !state.riemannSphereViewEnabled || state.splitViewEnabled;
+        if (state.navigationModeEnabled) {
+            controls.zPlaneProbeInfo.classList.add('hidden');
+            controls.wPlaneProbeInfo.classList.add('hidden');
+            return;
+        }
         
     if(state.probeActive && zIsPlanar && !state.panStateZ.isPanning && !state.panStateW.isPanning){
         // Skip probe info in Fourier or Laplace mode
@@ -473,7 +481,9 @@ function updateTitlesAndGlobalUI() {
     else if (state.currentInputShape === 'video') zPlaneTitleText += ": Video)";
     else if (state.currentInputShape === 'empty_grid') zPlaneTitleText += ": Empty)";
     else zPlaneTitleText += ")"; 
-    if ((state.vectorFieldEnabled || state.streamlineFlowEnabled) && (!state.riemannSphereViewEnabled || state.splitViewEnabled)) {
+    if (state.navigationModeEnabled && (!state.riemannSphereViewEnabled || state.splitViewEnabled)) {
+        zPlaneTitleText = 'z-plane (Navigation)';
+    } else if ((state.vectorFieldEnabled || state.streamlineFlowEnabled) && (!state.riemannSphereViewEnabled || state.splitViewEnabled)) {
         zPlaneTitleText = state.streamlineFlowEnabled
             ? `z-plane (Streamlines: ${state.vectorFieldFunction})`
             : `z-plane (Vector Field: ${state.vectorFieldFunction})`;
@@ -490,7 +500,9 @@ function updateTitlesAndGlobalUI() {
         if(controls.cauchy_integral_results_info) controls.cauchy_integral_results_info.classList.add('hidden');
     } else {
         controls.zPlaneTitle.innerHTML = zPlaneTitleText;
-        controls.wPlaneTitle.innerHTML = `w-plane (Output: <code id="w-plane-title-func">w = ${fND}</code>)`;
+        controls.wPlaneTitle.innerHTML = state.navigationModeEnabled
+            ? `w-plane (Mapped Navigation: <code id="w-plane-title-func">w = ${fND}</code>)`
+            : `w-plane (Output: <code id="w-plane-title-func">w = ${fND}</code>)`;
         
     }
 
