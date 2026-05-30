@@ -504,6 +504,9 @@ const _VF_FS = [
 ].join('\n');
 
 function drawVectorFieldWithWebGL(ctx, planeParams) {
+    const funcId = getWebGLDomainColorFunctionIdShared(state.currentFunction);
+    if (funcId === 0) return false;
+
     initWebGLImageSupportIfNeeded();
     if (!webglImageSupport.available) return false;
     const renderer = webglImageSupport.renderer;

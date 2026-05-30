@@ -47,6 +47,7 @@ function drawPointSetCollectionOnPlane(ctx, planeParams, pointSets, options = {}
     const lineWidthResolver = options.lineWidthResolver || (pointSet => pointSet.lineWidth || LINE_WIDTH_NORMAL);
     const preparePointSet = options.preparePointSet || (pointSet => pointSet);
     const transformFunc = options.transformFunc || null;
+    const mappedTransform = options.transformProfile || (transformFunc ? getMappedTransformProfile(state.currentFunction, transformFunc) : null);
 
     ctx.save();
     ctx.lineJoin = 'round';
@@ -59,6 +60,14 @@ function drawPointSetCollectionOnPlane(ctx, planeParams, pointSets, options = {}
         ctx.globalAlpha = options.globalAlpha;
     }
 
+    if (mappedTransform && mappedTransform.isConstant) {
+        const firstPointSet = pointSets.find(pointSet => pointSet && colorResolver(pointSet));
+        const color = firstPointSet ? colorResolver(firstPointSet) : COLOR_Z_GRID_HORZ;
+        drawConstantMappedPoint(ctx, planeParams, mappedTransform.constantValue, color);
+        ctx.restore();
+        return;
+    }
+
     pointSets.forEach(pointSet => {
         const preparedPointSet = preparePointSet(pointSet, transformFunc);
         const color = colorResolver(preparedPointSet);
@@ -68,8 +77,8 @@ function drawPointSetCollectionOnPlane(ctx, planeParams, pointSets, options = {}
         }
 
         ctx.lineWidth = lineWidth;
-        if (transformFunc) {
-            drawPlanarTransformedLine(ctx, planeParams, transformFunc, preparedPointSet.points, color);
+        if (mappedTransform) {
+            drawPlanarTransformedLine(ctx, planeParams, mappedTransform, preparedPointSet.points, color);
         } else {
             ctx.strokeStyle = color;
             drawComplexLineSetOnPlane(ctx, planeParams, preparedPointSet.points);
@@ -281,130 +290,6 @@ function getPlanarTransformRenderLimit(planeParams) {
     ) * 10;
 }
 
-const CONSTANT_MAP_ABS_EPSILON = 1e-5;
-const CONSTANT_MAP_REL_EPSILON = 1e-7;
-const CONSTANT_MAP_MIN_AGREEMENT_RATIO = 0.9;
-const CONSTANT_MAP_MIN_GLOBAL_SAMPLES = 9;
-const CONSTANT_MAP_MIN_LINE_SAMPLES = 5;
-const CONSTANT_MAP_MAX_LINE_SAMPLES = 96;
-const CONSTANT_MAP_RELIABLE_RADIUS = 4;
-// Transform-level probe points are deliberately independent of the visible camera window.
-const CONSTANT_MAP_DIAGNOSTIC_STENCIL = Object.freeze([
-    Object.freeze({ re: 0, im: 0 }),
-    Object.freeze({ re: 1, im: 0 }),
-    Object.freeze({ re: -1, im: 0.75 }),
-    Object.freeze({ re: 0.5, im: -1 }),
-    Object.freeze({ re: 2.25, im: 0.25 }),
-    Object.freeze({ re: -2, im: -0.5 }),
-    Object.freeze({ re: 1.75, im: 1.25 }),
-    Object.freeze({ re: -1.5, im: -1.25 }),
-    Object.freeze({ re: 0.25, im: 2 }),
-    Object.freeze({ re: -0.75, im: -2 }),
-    Object.freeze({ re: 2, im: -1.75 }),
-    Object.freeze({ re: -2.25, im: 1.5 }),
-    Object.freeze({ re: 0.33, im: -2.5 }),
-    Object.freeze({ re: 2.75, im: 2.25 }),
-    Object.freeze({ re: -2.5, im: -2.25 })
-]);
-
-function getConstantMapTolerance(w) {
-    return CONSTANT_MAP_ABS_EPSILON + CONSTANT_MAP_REL_EPSILON * Math.max(1, Math.hypot(w.re, w.im));
-}
-
-function isFiniteMappedComplex(w) {
-    return !!(
-        w &&
-        typeof w.re === 'number' &&
-        typeof w.im === 'number' &&
-        Number.isFinite(w.re) &&
-        Number.isFinite(w.im) &&
-        isNumericallyStable(w)
-    );
-}
-
-function evaluateRenderedTransform(tf, z_pt) {
-    if (!z_pt || z_pt.re === undefined || z_pt.im === undefined) {
-        return null;
-    }
-    if (state.currentFunction === 'zeta' && !state.zetaContinuationEnabled && z_pt.re <= ZETA_REFLECTION_POINT_RE) {
-        return null;
-    }
-    const w = tf(z_pt.re, z_pt.im);
-    return isFiniteMappedComplex(w) ? w : null;
-}
-
-function getConstantCluster(samples, minValidSamples = CONSTANT_MAP_MIN_LINE_SAMPLES) {
-    if (!samples || samples.length < minValidSamples) {
-        return null;
-    }
-
-    let bestCluster = null;
-    let bestCount = 0;
-
-    for (const candidate of samples) {
-        const eps = getConstantMapTolerance(candidate);
-        const epsSq = eps * eps;
-        let count = 0;
-        let sumRe = 0;
-        let sumIm = 0;
-
-        for (const sample of samples) {
-            const dRe = sample.re - candidate.re;
-            const dIm = sample.im - candidate.im;
-            if (dRe * dRe + dIm * dIm <= epsSq) {
-                count++;
-                sumRe += sample.re;
-                sumIm += sample.im;
-            }
-        }
-
-        if (count > bestCount) {
-            bestCount = count;
-            bestCluster = { re: sumRe / count, im: sumIm / count };
-        }
-    }
-
-    if (!bestCluster || bestCount / samples.length < CONSTANT_MAP_MIN_AGREEMENT_RATIO) {
-        return null;
-    }
-
-    return {
-        value: bestCluster,
-        agreement: bestCount / samples.length,
-        validCount: samples.length
-    };
-}
-
-function detectConstantTransformByStableStencil(tf) {
-    const mappedSamples = [];
-    for (const z_pt of CONSTANT_MAP_DIAGNOSTIC_STENCIL) {
-        const w = evaluateRenderedTransform(tf, z_pt);
-        if (w) {
-            mappedSamples.push(w);
-        }
-    }
-
-    return getConstantCluster(mappedSamples, CONSTANT_MAP_MIN_GLOBAL_SAMPLES);
-}
-
-function detectConstantTransformedLine(tf, z_pts) {
-    const mappedSamples = [];
-
-    for (let idx = 0; idx < z_pts.length; idx++) {
-        const z_pt = z_pts[idx];
-        if (!z_pt || z_pt.re === undefined || z_pt.im === undefined) continue;
-        if (Math.hypot(z_pt.re, z_pt.im) > CONSTANT_MAP_RELIABLE_RADIUS) continue;
-
-        const w = evaluateRenderedTransform(tf, z_pt);
-        if (w) {
-            mappedSamples.push(w);
-        }
-        if (mappedSamples.length >= CONSTANT_MAP_MAX_LINE_SAMPLES) break;
-    }
-
-    return getConstantCluster(mappedSamples, CONSTANT_MAP_MIN_LINE_SAMPLES);
-}
-
 function drawConstantMappedPoint(ctx, planeParams, w, col) {
     const p_c = mapToCanvasCoords(w.re, w.im, planeParams);
     ctx.save();
@@ -418,14 +303,8 @@ function drawConstantMappedPoint(ctx, planeParams, w, col) {
     ctx.restore();
 }
 
-function drawPlanarTransformedLine(ctx, planeParams, tf, z_pts, col) {
+function drawPlanarTransformedLine(ctx, planeParams, mappedTransform, z_pts, col) {
     if (!z_pts || z_pts.length === 0) return;
-
-    const constantLine = detectConstantTransformedLine(tf, z_pts);
-    if (constantLine) {
-        drawConstantMappedPoint(ctx, planeParams, constantLine.value, col);
-        return;
-    }
 
     const renderLimit = getPlanarTransformRenderLimit(planeParams);
     // Jump threshold based on the actual w-plane viewport span, not renderLimit.
@@ -453,8 +332,7 @@ function drawPlanarTransformedLine(ctx, planeParams, tf, z_pts, col) {
             lastW = null;
             continue;
         }
-        let w;
-        w = evaluateRenderedTransform(tf, z_pt);
+        const w = evaluateMappedTransform(mappedTransform, z_pt.re, z_pt.im);
         
         if (!w) {
             if (!fV && lastValidCanvasPoint) ctx.stroke();
@@ -668,26 +546,22 @@ function drawPlanarTransformedShape(ctx, planeParams, tf, options = {}) {
                 currentFunction: state.currentFunction,
                 zetaContinuationEnabled: state.zetaContinuationEnabled
             });
-            const constantTransform = detectConstantTransformByStableStencil(tf);
-            if (constantTransform) {
-                const constantColor = (pointSets.find(pointSet => pointSet && pointSet.color) || {}).color || COLOR_Z_GRID_HORZ;
-                drawConstantMappedPoint(ctx, planeParams, constantTransform.value, constantColor);
-            } else {
-                drawPointSetCollectionOnPlane(ctx, planeParams, pointSets, {
-                    transformFunc: tf,
-                    colorResolver: pointSet => highlightContour && pointSet.role === 'shape-curve'
-                        ? COLOR_CAUCHY_CONTOUR_W
-                        : pointSet.color,
-                    lineWidthResolver: pointSet => highlightContour && pointSet.role === 'shape-curve'
-                        ? 3.5
-                        : (pointSet.lineWidth || LINE_WIDTH_NORMAL),
-                    preparePointSet: pointSet => preparePointSetForMappedPlane(pointSet, tf, {
-                        sampleCountResolver: (currentPointSet, endpoints, transformFunc) => state.currentFunction === 'zeta'
-                            ? calculateDynamicPointsForSegment(endpoints.start, endpoints.end, transformFunc)
-                            : DEFAULT_POINTS_PER_LINE
-                    })
-                });
-            }
+            const transformProfile = getMappedTransformProfile(state.currentFunction, tf);
+            drawPointSetCollectionOnPlane(ctx, planeParams, pointSets, {
+                transformFunc: tf,
+                transformProfile,
+                colorResolver: pointSet => highlightContour && pointSet.role === 'shape-curve'
+                    ? COLOR_CAUCHY_CONTOUR_W
+                    : pointSet.color,
+                lineWidthResolver: pointSet => highlightContour && pointSet.role === 'shape-curve'
+                    ? 3.5
+                    : (pointSet.lineWidth || LINE_WIDTH_NORMAL),
+                preparePointSet: pointSet => preparePointSetForMappedPlane(pointSet, tf, {
+                    sampleCountResolver: (currentPointSet, endpoints, transformFunc) => state.currentFunction === 'zeta'
+                        ? calculateDynamicPointsForSegment(endpoints.start, endpoints.end, transformFunc)
+                        : DEFAULT_POINTS_PER_LINE
+                })
+            });
         }
     }
 
@@ -761,7 +635,9 @@ function drawPlanarTransformedProbe(ctx, planeParams, tf, index) {
         );
     }
 
-    const pW = effectiveTransformFunc(state.probeZ.re, state.probeZ.im);
+    const effectiveTransformProfile = getMappedTransformProfile(state.currentFunction, effectiveTransformFunc);
+    const profileTransformFunc = (re, im) => evaluateMappedTransform(effectiveTransformProfile, re, im) || { re: NaN, im: NaN };
+    const pW = profileTransformFunc(state.probeZ.re, state.probeZ.im);
     if (!isNaN(pW.re) && !isNaN(pW.im) && isFinite(pW.re) && isFinite(pW.im) && isNumericallyStable(pW)) {
         const p_p_c = mapToCanvasCoords(pW.re, pW.im, planeParams);
         ctx.fillStyle = COLOR_PROBE_MARKER;
@@ -837,7 +713,7 @@ function drawPlanarTransformedProbe(ctx, planeParams, tf, index) {
     for (let i = 0; i <= 60; ++i) {
         const a = (i / 60) * 2 * Math.PI;
         const z_b = { re: state.probeZ.re + r_l * Math.cos(a), im: state.probeZ.im + r_l * Math.sin(a) };
-        const w_b = effectiveTransformFunc(z_b.re, z_b.im);
+        const w_b = profileTransformFunc(z_b.re, z_b.im);
         if (isNaN(w_b.re) || isNaN(w_b.im) || !isFinite(w_b.re) || !isFinite(w_b.im) || Math.abs(w_b.re) > renderLimit || Math.abs(w_b.im) > renderLimit) {
             if (!fPt) ctx.stroke();
             ctx.beginPath();
@@ -849,9 +725,108 @@ function drawPlanarTransformedProbe(ctx, planeParams, tf, index) {
         else { ctx.lineTo(p_c.x, p_c.y); }
     }
     if (!fPt) { ctx.closePath(); ctx.stroke(); }
-    drawConformalityProbeSegments(ctx, planeParams, state.probeZ, effectiveTransformFunc, true);
+    drawConformalityProbeSegments(ctx, planeParams, state.probeZ, profileTransformFunc, true);
 }
 
 function drawZPlaneVectorField(ctx, planeParams, currentFunctionStr, vectorFuncType) {
-    drawVectorFieldWithWebGL(ctx, planeParams);
+    const rendered = drawVectorFieldWithWebGL(ctx, planeParams);
+    if (!rendered) {
+        drawVectorFieldCPU(ctx, planeParams, currentFunctionStr, vectorFuncType);
+    }
+}
+
+function drawVectorFieldCPU(ctx, planeParams, currentFunctionStr, vectorFuncType) {
+    const xMin = planeParams.currentVisXRange[0];
+    const xMax = planeParams.currentVisXRange[1];
+    const yMin = planeParams.currentVisYRange[0];
+    const yMax = planeParams.currentVisYRange[1];
+    
+    // Density (number of grid cells)
+    const density = Math.max(5, Math.min(25, Math.floor(state.gridDensity * 0.75)));
+    
+    const dx = (xMax - xMin) / density;
+    const dy = (yMax - yMin) / density;
+    
+    // Determine scale factors and sizes
+    const arrowScale = state.vectorFieldScale || 1;
+    const thickness = state.vectorArrowThickness || 1.5;
+    const headSize = state.vectorArrowHeadSize || 8;
+    const brightness = state.domainBrightness || 1;
+    const transformProfile = getMappedTransformProfile(currentFunctionStr);
+    
+    ctx.save();
+    
+    for (let i = 0; i <= density; i++) {
+        const x = xMin + i * dx;
+        for (let j = 0; j <= density; j++) {
+            const y = yMin + j * dy;
+            
+            // Get vector value at point
+            const vec = getVectorFieldValueAtPoint(x, y, currentFunctionStr, vectorFuncType, state, transformProfile);
+            if (!vec) continue;
+            
+            const mag = Math.hypot(vec.re, vec.im);
+            if (mag < 1e-9 || !isFinite(mag)) continue;
+            
+            // Calculate arrow direction and magnitude
+            const dirX = vec.re / mag;
+            const dirY = vec.im / mag;
+            
+            // Map coordinates to canvas coords
+            const p_c = mapToCanvasCoords(x, y, planeParams);
+            
+            // Determine arrow length on canvas
+            const cellWPixels = planeParams.width / density;
+            const cellHPixels = planeParams.height / density;
+            const cellPixels = Math.min(cellWPixels, cellHPixels);
+            
+            const arrowLen = cellPixels * 0.38 * arrowScale;
+            const arrowHeadSz = cellPixels * headSize * 0.04;
+            
+            // Start of shaft is center (p_c.x, p_c.y)
+            const tipX = p_c.x + dirX * arrowLen;
+            const tipY = p_c.y - dirY * arrowLen;
+            
+            // Color mapping based on phase and magnitude
+            const phase = Math.atan2(vec.im, vec.re);
+            let h = ((phase + Math.PI) / (2.0 * Math.PI)) % 1.0;
+            if (h < 0) h += 1.0;
+            const lm = Math.log(1.0 + mag);
+            const lit = Math.max(0.2, Math.min(0.85, 0.35 + lm * 0.08 * brightness));
+            const rgb = hslToRgb(h, 0.85, lit);
+            const colorStr = `rgb(${rgb[0]}, ${rgb[1]}, ${rgb[2]})`;
+            
+            ctx.strokeStyle = colorStr;
+            ctx.fillStyle = colorStr;
+            ctx.lineWidth = thickness;
+            ctx.lineCap = 'round';
+            ctx.lineJoin = 'round';
+            
+            // Draw shaft
+            ctx.beginPath();
+            ctx.moveTo(p_c.x, p_c.y);
+            ctx.lineTo(tipX, tipY);
+            ctx.stroke();
+            
+            // Draw arrowhead triangle
+            const baseCenterX = tipX - dirX * arrowHeadSz * 2.5;
+            const baseCenterY = tipY + dirY * arrowHeadSz * 2.5;
+            const perpX = -dirY;
+            const perpY = -dirX;
+            
+            const leftX = baseCenterX + perpX * arrowHeadSz;
+            const leftY = baseCenterY - perpY * arrowHeadSz;
+            const rightX = baseCenterX - perpX * arrowHeadSz;
+            const rightY = baseCenterY + perpY * arrowHeadSz;
+            
+            ctx.beginPath();
+            ctx.moveTo(tipX, tipY);
+            ctx.lineTo(leftX, leftY);
+            ctx.lineTo(rightX, rightY);
+            ctx.closePath();
+            ctx.fill();
+        }
+    }
+    
+    ctx.restore();
 }

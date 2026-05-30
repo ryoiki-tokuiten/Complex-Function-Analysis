@@ -380,6 +380,7 @@ function drawZPlaneContent(){
         
         if(state.domainColoringEnabled && domainColoringDirty){renderPlanarDomainColoring(zDomainColorCtx,zPlaneParams,false,curFunc);} 
         const drawReferenceGrid =
+            !state.domainColoringEnabled &&
             !state.navigationModeEnabled &&
             !state.vectorFieldEnabled &&
             !state.streamlineFlowEnabled &&

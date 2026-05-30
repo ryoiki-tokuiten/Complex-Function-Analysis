@@ -705,6 +705,193 @@ const transformFunctions = {
     algebraic_chaining: evaluateAlgebraicChaining
 };
 
+const MAPPED_TRANSFORM_ABS_EPSILON = 1e-5;
+const MAPPED_TRANSFORM_REL_EPSILON = 1e-7;
+const MAPPED_TRANSFORM_MIN_AGREEMENT_RATIO = 0.9;
+const MAPPED_TRANSFORM_MIN_CONSTANT_SAMPLES = 9;
+const MAPPED_TRANSFORM_DIAGNOSTIC_STENCIL = Object.freeze([
+    Object.freeze({ re: 0, im: 0 }),
+    Object.freeze({ re: 1, im: 0 }),
+    Object.freeze({ re: -1, im: 0.75 }),
+    Object.freeze({ re: 0.5, im: -1 }),
+    Object.freeze({ re: 2.25, im: 0.25 }),
+    Object.freeze({ re: -2, im: -0.5 }),
+    Object.freeze({ re: 1.75, im: 1.25 }),
+    Object.freeze({ re: -1.5, im: -1.25 }),
+    Object.freeze({ re: 0.25, im: 2 }),
+    Object.freeze({ re: -0.75, im: -2 }),
+    Object.freeze({ re: 2, im: -1.75 }),
+    Object.freeze({ re: -2.25, im: 1.5 }),
+    Object.freeze({ re: 0.33, im: -2.5 }),
+    Object.freeze({ re: 2.75, im: 2.25 }),
+    Object.freeze({ re: -2.5, im: -2.25 })
+]);
+
+let mappedTransformProfileCacheKey = null;
+let mappedTransformProfileCacheValue = null;
+
+function mappedTransformNumberKey(value) {
+    return Number.isFinite(value) ? value.toFixed(12) : `${value}`;
+}
+
+function mappedTransformComplexKey(value) {
+    if (!value) return 'none';
+    return `${mappedTransformNumberKey(value.re ?? 0)},${mappedTransformNumberKey(value.im ?? 0)}`;
+}
+
+function buildMappedTransformProfileKey(functionKey) {
+    const parts = [
+        `f:${functionKey}`,
+        `zetaC:${state.zetaContinuationEnabled ? 1 : 0}`,
+        `frac:${mappedTransformNumberKey(state.fractionalPowerN !== undefined ? state.fractionalPowerN : 0.5)}`
+    ];
+
+    if (functionKey === 'mobius') {
+        parts.push(
+            `a:${mappedTransformComplexKey(state.mobiusA)}`,
+            `b:${mappedTransformComplexKey(state.mobiusB)}`,
+            `c:${mappedTransformComplexKey(state.mobiusC)}`,
+            `d:${mappedTransformComplexKey(state.mobiusD)}`
+        );
+    } else if (functionKey === 'polynomial') {
+        const degree = Math.max(0, Math.min(MAX_POLY_DEGREE, Number.isFinite(state.polynomialN) ? state.polynomialN : 0));
+        parts.push(`n:${degree}`);
+        for (let i = 0; i <= degree; i++) {
+            parts.push(`p${i}:${mappedTransformComplexKey(state.polynomialCoeffs && state.polynomialCoeffs[i])}`);
+        }
+    } else if (functionKey === 'algebraic_chaining') {
+        parts.push(`alg:${JSON.stringify(state.algebraicChainingTerms || [])}`);
+    }
+
+    return parts.join('|');
+}
+
+function cloneMappedComplex(value) {
+    return value ? { re: value.re, im: value.im } : null;
+}
+
+function isValidMappedTransformValue(value) {
+    return !!(
+        value &&
+        typeof value.re === 'number' &&
+        typeof value.im === 'number' &&
+        Number.isFinite(value.re) &&
+        Number.isFinite(value.im) &&
+        isNumericallyStable(value)
+    );
+}
+
+function shouldSkipMappedTransformPoint(functionKey, zPoint) {
+    return functionKey === 'zeta' &&
+        !state.zetaContinuationEnabled &&
+        zPoint &&
+        zPoint.re <= ZETA_REFLECTION_POINT_RE;
+}
+
+function evaluateRawMappedTransform(transformFunc, zPoint, functionKey = state.currentFunction) {
+    if (!transformFunc || !zPoint || zPoint.re === undefined || zPoint.im === undefined) {
+        return null;
+    }
+    if (shouldSkipMappedTransformPoint(functionKey, zPoint)) {
+        return null;
+    }
+    const mapped = transformFunc(zPoint.re, zPoint.im);
+    return isValidMappedTransformValue(mapped) ? mapped : null;
+}
+
+function getMappedTransformTolerance(value) {
+    return MAPPED_TRANSFORM_ABS_EPSILON +
+        MAPPED_TRANSFORM_REL_EPSILON * Math.max(1, Math.hypot(value.re, value.im));
+}
+
+function getMappedConstantCluster(samples, minSamples = MAPPED_TRANSFORM_MIN_CONSTANT_SAMPLES) {
+    if (!samples || samples.length < minSamples) return null;
+
+    let bestValue = null;
+    let bestCount = 0;
+
+    for (const candidate of samples) {
+        const eps = getMappedTransformTolerance(candidate);
+        const epsSq = eps * eps;
+        let count = 0;
+        let sumRe = 0;
+        let sumIm = 0;
+
+        for (const sample of samples) {
+            const dRe = sample.re - candidate.re;
+            const dIm = sample.im - candidate.im;
+            if (dRe * dRe + dIm * dIm <= epsSq) {
+                count++;
+                sumRe += sample.re;
+                sumIm += sample.im;
+            }
+        }
+
+        if (count > bestCount) {
+            bestCount = count;
+            bestValue = { re: sumRe / count, im: sumIm / count };
+        }
+    }
+
+    return bestValue && bestCount / samples.length >= MAPPED_TRANSFORM_MIN_AGREEMENT_RATIO
+        ? { value: bestValue, agreement: bestCount / samples.length, validCount: samples.length }
+        : null;
+}
+
+function detectMappedConstantTransform(transformFunc, functionKey = state.currentFunction) {
+    const samples = [];
+    for (const point of MAPPED_TRANSFORM_DIAGNOSTIC_STENCIL) {
+        const mapped = evaluateRawMappedTransform(transformFunc, point, functionKey);
+        if (mapped) samples.push(mapped);
+    }
+    return getMappedConstantCluster(samples);
+}
+
+function getMappedTransformProfile(functionKey = state.currentFunction, transformFunc = null) {
+    const resolvedTransform = transformFunc || transformFunctions[functionKey];
+    if (typeof resolvedTransform !== 'function') {
+        return { functionKey, transformFunc: null, isConstant: false, constantValue: null };
+    }
+
+    const cacheable = resolvedTransform === transformFunctions[functionKey];
+    const cacheKey = cacheable ? buildMappedTransformProfileKey(functionKey) : null;
+    if (cacheable && cacheKey === mappedTransformProfileCacheKey && mappedTransformProfileCacheValue) {
+        return mappedTransformProfileCacheValue;
+    }
+
+    const constant = detectMappedConstantTransform(resolvedTransform, functionKey);
+    const profile = {
+        functionKey,
+        transformFunc: resolvedTransform,
+        isConstant: !!constant,
+        constantValue: constant ? constant.value : null,
+        constantAgreement: constant ? constant.agreement : 0,
+        constantSampleCount: constant ? constant.validCount : 0
+    };
+
+    if (cacheable) {
+        mappedTransformProfileCacheKey = cacheKey;
+        mappedTransformProfileCacheValue = profile;
+    }
+
+    return profile;
+}
+
+function evaluateMappedTransform(profileOrTransform, re, im, functionKey = state.currentFunction) {
+    if (!profileOrTransform) return null;
+    if (typeof profileOrTransform === 'function') {
+        return evaluateRawMappedTransform(profileOrTransform, { re, im }, functionKey);
+    }
+    if (profileOrTransform.isConstant && profileOrTransform.constantValue) {
+        return cloneMappedComplex(profileOrTransform.constantValue);
+    }
+    return evaluateRawMappedTransform(
+        profileOrTransform.transformFunc,
+        { re, im },
+        profileOrTransform.functionKey || functionKey
+    );
+}
+
 
 function getContourPoints(shapeType, params, numSteps) {
     const points = [];
@@ -917,6 +1104,37 @@ function buildTaylorSeriesCoefficientCacheKey(functionKey, z0Complex, order) {
         for (let i = 0; i <= degree; i++) {
             appendTaylorCacheComplexParts(keyParts, `p${i}`, state.polynomialCoeffs && state.polynomialCoeffs[i]);
         }
+    } else if (functionKey === 'algebraic_chaining') {
+        keyParts.push(`algTerms:${state.algebraicChainingTerms.length}`);
+        state.algebraicChainingTerms.forEach((term, idx) => {
+            keyParts.push(`t${idx}:${term.factors.map(f => f.func).join(',')}`);
+            appendTaylorCacheComplexParts(keyParts, `t${idx}c`, term.coeff);
+            term.factors.forEach((factor, fIdx) => {
+                if (factor.func === 'none') return;
+                keyParts.push(`t${idx}f${fIdx}chain:${factor.chainedFunc}`);
+                keyParts.push(`t${idx}f${fIdx}pow:${toTaylorCacheNumber(factor.power)}`);
+                keyParts.push(`t${idx}f${fIdx}recip:${factor.reciprocal ? 1 : 0}`);
+                keyParts.push(`t${idx}f${fIdx}log:${factor.log ? 1 : 0}`);
+                keyParts.push(`t${idx}f${fIdx}exp:${factor.exp ? 1 : 0}`);
+                
+                if (factor.func === 'mobius' || factor.chainedFunc === 'mobius') {
+                    appendTaylorCacheComplexParts(keyParts, `t${idx}f${fIdx}mA`, state.mobiusA);
+                    appendTaylorCacheComplexParts(keyParts, `t${idx}f${fIdx}mB`, state.mobiusB);
+                    appendTaylorCacheComplexParts(keyParts, `t${idx}f${fIdx}mC`, state.mobiusC);
+                    appendTaylorCacheComplexParts(keyParts, `t${idx}f${fIdx}mD`, state.mobiusD);
+                }
+                if (factor.func === 'polynomial' || factor.chainedFunc === 'polynomial') {
+                    const polyDegree = Math.max(0, Math.min(MAX_POLY_DEGREE, Number.isFinite(state.polynomialN) ? state.polynomialN : 0));
+                    keyParts.push(`t${idx}f${fIdx}polyN:${polyDegree}`);
+                    for (let i = 0; i <= polyDegree; i++) {
+                        appendTaylorCacheComplexParts(keyParts, `t${idx}f${fIdx}p${i}`, (state.polynomialCoeffs && state.polynomialCoeffs[i]) ? state.polynomialCoeffs[i] : null);
+                    }
+                }
+                if (factor.func === 'power' || factor.chainedFunc === 'power') {
+                    keyParts.push(`t${idx}f${fIdx}fracN:${toTaylorCacheNumber(state.fractionalPowerN !== undefined ? state.fractionalPowerN : 0.5)}`);
+                }
+            });
+        });
     }
 
     return keyParts.join('|');

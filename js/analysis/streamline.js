@@ -1,14 +1,12 @@
 
 
-function getVectorFieldValueAtPoint(x, y, currentFunctionStr, vectorFieldTypeStr, runtimeState = state) {
-    const z = { re: x, im: y };
-    const baseFunc = transformFunctions[currentFunctionStr];
-    if (!baseFunc) {
+function getVectorFieldValueAtPoint(x, y, currentFunctionStr, vectorFieldTypeStr, runtimeState = state, transformProfile = null) {
+    const profile = transformProfile || getMappedTransformProfile(currentFunctionStr);
+    if (!profile || !profile.transformFunc) {
         return { re: 0, im: 0 };
     }
 
-    const f_z = baseFunc(z.re, z.im, runtimeState);
-
+    const f_z = evaluateMappedTransform(profile, x, y, currentFunctionStr);
     if (!f_z || !isFinite(f_z.re) || !isFinite(f_z.im)) {
         return { re: 0, im: 0 };
     }
@@ -27,6 +25,10 @@ function getVectorFieldValueAtPoint(x, y, currentFunctionStr, vectorFieldTypeStr
             };
         }
         case "f'(z)": {
+            if (profile.isConstant) {
+                return { re: 0, im: 0 };
+            }
+            const z = { re: x, im: y };
             const derivative = numericDerivative(currentFunctionStr, z);
             if (
                 derivative === undefined ||

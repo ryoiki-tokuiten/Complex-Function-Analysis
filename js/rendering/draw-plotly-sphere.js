@@ -80,6 +80,22 @@ function appendMappedSphereLineTraces(traces, sourcePoints, transformPoint, opti
     flush();
 }
 
+function pushPlotlyMappedPointTrace(traces, mappedPoint, options = {}) {
+    if (!mappedPoint || !Number.isFinite(mappedPoint.re) || !Number.isFinite(mappedPoint.im)) return;
+    const spherePoint = complexToSphere(mappedPoint.re, mappedPoint.im);
+    traces.push({
+        type: 'scatter3d',
+        mode: 'markers',
+        x: [spherePoint.x],
+        y: [spherePoint.y],
+        z: [spherePoint.z],
+        marker: { color: options.color || COLOR_SPHERE_GRID, size: options.size || 8 },
+        name: options.name || 'Constant mapped value',
+        hoverinfo: options.hoverinfo || 'text',
+        text: options.text || `w = ${mappedPoint.re.toFixed(3)} + ${mappedPoint.im.toFixed(3)}i`
+    });
+}
+
 
 
 function getPlotlyMappedData(transformFunc) {
@@ -87,6 +103,9 @@ function getPlotlyMappedData(transformFunc) {
     if (isRasterInputShape(state.currentInputShape)) {
         return traces; // CPU Image mapping removed. Plotly 3D Riemann sphere doesn't natively support video textures yet.
     }
+    const transformProfile = typeof transformFunc === 'function'
+        ? getMappedTransformProfile(state.currentFunction, transformFunc)
+        : null;
     
     const sourcePointSets = generateCurrentMappedInputShapePointSets(zPlaneParams, {
             currentFunction: state.currentFunction,
@@ -94,16 +113,22 @@ function getPlotlyMappedData(transformFunc) {
             curvePoints: NUM_POINTS_CURVE
         });
 
+    if (transformProfile && transformProfile.isConstant) {
+        const firstColor = (sourcePointSets.find(set => set && set.color) || {}).color || COLOR_SPHERE_GRID;
+        pushPlotlyMappedPointTrace(traces, transformProfile.constantValue, {
+            color: firstColor,
+            name: 'Constant mapped grid'
+        });
+        return traces;
+    }
+
         sourcePointSets.forEach(set => {
             appendMappedSphereLineTraces(
                 traces,
                 set.points,
-                sourcePoint => {
-                    if (state.currentFunction === 'zeta' && !state.zetaContinuationEnabled && sourcePoint.re <= ZETA_REFLECTION_POINT_RE) {
-                        return null;
-                    }
-                    return transformFunc ? transformFunc(sourcePoint.re, sourcePoint.im) : sourcePoint;
-                },
+                sourcePoint => transformProfile
+                    ? evaluateMappedTransform(transformProfile, sourcePoint.re, sourcePoint.im)
+                    : sourcePoint,
                 {
                     color: getSpherePointSetColor(set, true),
                     includeText: true,
@@ -119,8 +144,10 @@ function getPlotlyMappedData(transformFunc) {
         const neighborhoodSize = state.probeNeighborhoodSize;
 
         
-        const wProbeCenter = transformFunc(sourceProbeZ.re, sourceProbeZ.im);
-        if (!isNaN(wProbeCenter.re) && !isNaN(wProbeCenter.im) && isFinite(wProbeCenter.re) && isFinite(wProbeCenter.im) && isNumericallyStable(wProbeCenter)) {
+        const wProbeCenter = transformProfile
+            ? evaluateMappedTransform(transformProfile, sourceProbeZ.re, sourceProbeZ.im)
+            : transformFunc(sourceProbeZ.re, sourceProbeZ.im);
+        if (wProbeCenter && !isNaN(wProbeCenter.re) && !isNaN(wProbeCenter.im) && isFinite(wProbeCenter.re) && isFinite(wProbeCenter.im) && isNumericallyStable(wProbeCenter)) {
             const sphereProbeCenter = complexToSphere(wProbeCenter.re, wProbeCenter.im);
             traces.push({
                 type: 'scatter3d', mode: 'markers',
@@ -140,7 +167,7 @@ function getPlotlyMappedData(transformFunc) {
                 im: sourceProbeZ.im + neighborhoodSize * Math.sin(angle)
             });
         }
-        appendMappedSphereLineTraces(traces, circlePoints, point => transformFunc(point.re, point.im), {
+        appendMappedSphereLineTraces(traces, circlePoints, point => evaluateMappedTransform(transformProfile, point.re, point.im), {
             color: COLOR_PROBE_NEIGHBORHOOD,
             name: 'Probe Neighborhood',
             hoverinfo: 'name'
@@ -153,12 +180,12 @@ function getPlotlyMappedData(transformFunc) {
             horizontalProbePoints.push({ re: sourceProbeZ.re + i * h_segment, im: sourceProbeZ.im });
             verticalProbePoints.push({ re: sourceProbeZ.re, im: sourceProbeZ.im + i * h_segment });
         }
-        appendMappedSphereLineTraces(traces, horizontalProbePoints, point => transformFunc(point.re, point.im), {
+        appendMappedSphereLineTraces(traces, horizontalProbePoints, point => evaluateMappedTransform(transformProfile, point.re, point.im), {
             color: COLOR_PROBE_CONFORMAL_LINE_W_H,
             name: 'Probe Crosshair (Horizontal)',
             hoverinfo: 'name'
         });
-        appendMappedSphereLineTraces(traces, verticalProbePoints, point => transformFunc(point.re, point.im), {
+        appendMappedSphereLineTraces(traces, verticalProbePoints, point => evaluateMappedTransform(transformProfile, point.re, point.im), {
             color: COLOR_PROBE_CONFORMAL_LINE_W_V,
             name: 'Probe Crosshair (Vertical)',
             hoverinfo: 'name'

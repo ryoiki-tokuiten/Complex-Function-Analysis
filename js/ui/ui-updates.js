@@ -632,21 +632,40 @@ function updateTitlesAndGlobalUI() {
     else if (state.currentInputShape === 'video') zPlaneTitleText += ": Video)";
     else if (state.currentInputShape === 'empty_grid') zPlaneTitleText += ": Empty)";
     else zPlaneTitleText += ")"; 
-    if (state.navigationModeEnabled && (!state.riemannSphereViewEnabled || state.splitViewEnabled)) {
+    const showRadialSteps = state.radialDiscreteStepsEnabled && state.currentFunction !== 'poincare';
+
+    if (state.domainColoringEnabled) {
+        const isSphere = state.riemannSphereViewEnabled && !state.splitViewEnabled;
+        const prefix = isSphere ? 'z-sphere' : 'z-plane';
+        zPlaneTitleText = `${prefix} (Output: Domain Coloring of <code id="z-plane-title-func">w = ${fND}</code>)`;
+    } else if (state.vectorFieldEnabled || state.streamlineFlowEnabled) {
+        const typeStr = state.streamlineFlowEnabled ? 'Streamlines' : 'Vector Field';
+        zPlaneTitleText = `z-plane (Output: ${typeStr} [${state.vectorFieldFunction}] of <code id="z-plane-title-func">w = ${fND}</code>)`;
+    } else if (showRadialSteps) {
+        zPlaneTitleText = `z-plane (Output: Radial Discrete Steps of <code id="z-plane-title-func">w = ${fND}</code>)`;
+    } else if (state.navigationModeEnabled && (!state.riemannSphereViewEnabled || state.splitViewEnabled)) {
         zPlaneTitleText = 'z-plane (Navigation)';
-    } else if ((state.vectorFieldEnabled || state.streamlineFlowEnabled) && (!state.riemannSphereViewEnabled || state.splitViewEnabled)) {
-        zPlaneTitleText = state.streamlineFlowEnabled
-            ? `z-plane (Streamlines: ${state.vectorFieldFunction})`
-            : `z-plane (Vector Field: ${state.vectorFieldFunction})`;
     }
 
-
     if (state.splitViewEnabled) {
-        controls.zPlaneTitle.innerHTML = `z-plane (Input Grid: ${state.currentInputShape.replace(/_/g, ' ')})`;
+        if (state.domainColoringEnabled) {
+            controls.zPlaneTitle.innerHTML = `z-plane (Output: Domain Coloring of <code id="z-plane-title-func">w = ${fND}</code>)`;
+        } else if (state.vectorFieldEnabled || state.streamlineFlowEnabled) {
+            const typeStr = state.streamlineFlowEnabled ? 'Streamlines' : 'Vector Field';
+            controls.zPlaneTitle.innerHTML = `z-plane (Output: ${typeStr} [${state.vectorFieldFunction}] of <code id="z-plane-title-func">w = ${fND}</code>)`;
+        } else if (showRadialSteps) {
+            controls.zPlaneTitle.innerHTML = `z-plane (Output: Radial Discrete Steps of <code id="z-plane-title-func">w = ${fND}</code>)`;
+        } else {
+            controls.zPlaneTitle.innerHTML = `z-plane (Input Grid: ${state.currentInputShape.replace(/_/g, ' ')})`;
+        }
         controls.wPlaneTitle.innerHTML = `w-sphere (Output: <code id="w-plane-title-func">w = ${fND}</code>)`;
         if(controls.cauchy_integral_results_info) controls.cauchy_integral_results_info.classList.add('hidden');
     } else if (state.riemannSphereViewEnabled) {
-        controls.zPlaneTitle.innerHTML = 'z-sphere (Input)';
+        if (state.domainColoringEnabled) {
+            controls.zPlaneTitle.innerHTML = `z-sphere (Output: Domain Coloring of <code id="z-plane-title-func">w = ${fND}</code>)`;
+        } else {
+            controls.zPlaneTitle.innerHTML = 'z-sphere (Input)';
+        }
         controls.wPlaneTitle.innerHTML = `w-sphere (Output: <code id="w-plane-title-func">w = ${fND}</code>)`;
         if(controls.cauchy_integral_results_info) controls.cauchy_integral_results_info.classList.add('hidden');
     } else {
@@ -654,7 +673,6 @@ function updateTitlesAndGlobalUI() {
         controls.wPlaneTitle.innerHTML = state.navigationModeEnabled
             ? `w-plane (Mapped Navigation: <code id="w-plane-title-func">w = ${fND}</code>)`
             : `w-plane (Output: <code id="w-plane-title-func">w = ${fND}</code>)`;
-        
     }
 
     controls.inputShapeSelector.disabled = false;

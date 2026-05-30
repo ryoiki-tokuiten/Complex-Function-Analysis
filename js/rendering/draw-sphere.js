@@ -1,6 +1,23 @@
 function drawRiemannSphereBase(ctx,cSP){const{centerX:cX,centerY:cY,radius:r}=cSP;ctx.save();ctx.strokeStyle=COLOR_SPHERE_OUTLINE;ctx.lineWidth=1.5;ctx.beginPath();ctx.arc(cX,cY,r,0,2*Math.PI);ctx.stroke();ctx.restore();}
 
-function drawMappedLineSetOnSphere(ctx, cSP, z_pts_src_arr, col, isWP, tf) {
+function drawSphereMappedPoint(ctx, cSP, value, col, radius = 6) {
+    const spherePoint = complexToSphere(value.re, value.im);
+    const rotatedSpherePoint = rotate3D(spherePoint, cSP.rotX, cSP.rotY);
+    const canvasPoint = projectSphereToCanvas2D(rotatedSpherePoint, cSP.centerX, cSP.centerY, cSP.radius);
+    if (!canvasPoint.isVisible) return;
+
+    ctx.save();
+    ctx.beginPath();
+    ctx.arc(canvasPoint.x, canvasPoint.y, radius, 0, 2 * Math.PI);
+    ctx.fillStyle = col;
+    ctx.fill();
+    ctx.lineWidth = 1.5;
+    ctx.strokeStyle = 'rgba(255, 255, 255, 0.8)';
+    ctx.stroke();
+    ctx.restore();
+}
+
+function drawMappedLineSetOnSphere(ctx, cSP, z_pts_src_arr, col, isWP, mappedTransform) {
     const { centerX: cX, centerY: cY, radius: r, rotX, rotY } = cSP;
     ctx.strokeStyle = col; 
     
@@ -15,59 +32,6 @@ function drawMappedLineSetOnSphere(ctx, cSP, z_pts_src_arr, col, isWP, tf) {
 
     z_pts_src_arr.forEach(z_pts_src => {
         if (!z_pts_src || z_pts_src.length === 0) return;
-
-        // Detect if the entire transformed line is constant on the sphere
-        // Only sample the center window of points for reliable detection
-        let firstW = null;
-        let isConstant = true;
-        let validCount = 0;
-        const cStart = Math.floor(z_pts_src.length * 0.35);
-        const cEnd = Math.ceil(z_pts_src.length * 0.65);
-        for (let idx = cStart; idx < cEnd; idx++) {
-            const z_orig = z_pts_src[idx];
-            if (!z_orig || z_orig.re === undefined || z_orig.im === undefined) continue;
-            let transformedPoint;
-            let skipDrawing = false;
-            if (isWP) {
-                if (state.currentFunction === 'zeta' && !state.zetaContinuationEnabled && z_orig.re <= ZETA_REFLECTION_POINT_RE) {
-                    skipDrawing = true;
-                }
-                transformedPoint = skipDrawing ? { re: NaN, im: NaN } : (tf ? tf(z_orig.re, z_orig.im) : z_orig);
-            } else {
-                transformedPoint = z_orig;
-            }
-            if (isNaN(transformedPoint.re) || isNaN(transformedPoint.im) || !isFinite(transformedPoint.re) || !isFinite(transformedPoint.im)) {
-                continue;
-            }
-            if (firstW === null) {
-                firstW = transformedPoint;
-                validCount++;
-            } else {
-                if (Math.abs(transformedPoint.re - firstW.re) > 1e-5 || Math.abs(transformedPoint.im - firstW.im) > 1e-5) {
-                    isConstant = false;
-                    break;
-                }
-                validCount++;
-            }
-        }
-
-        if (firstW !== null && isConstant && validCount >= 3) {
-            const spherePoint = complexToSphere(firstW.re, firstW.im);
-            const rotatedSpherePoint = rotate3D(spherePoint, rotX, rotY);
-            const canvasPoint = projectSphereToCanvas2D(rotatedSpherePoint, cX, cY, r);
-            if (canvasPoint.isVisible) {
-                ctx.save();
-                ctx.beginPath();
-                ctx.arc(canvasPoint.x, canvasPoint.y, 6, 0, 2 * Math.PI);
-                ctx.fillStyle = col;
-                ctx.fill();
-                ctx.lineWidth = 1.5;
-                ctx.strokeStyle = 'rgba(255, 255, 255, 0.8)';
-                ctx.stroke();
-                ctx.restore();
-            }
-            return;
-        }
 
         ctx.beginPath();
         let firstVisiblePointInCurrentPath = true;
@@ -87,22 +51,11 @@ function drawMappedLineSetOnSphere(ctx, cSP, z_pts_src_arr, col, isWP, tf) {
                 continue;
             }
 
-            let pointToTransform = z_orig;
-            let transformedPoint;
-            let skipDrawing = false;
+            const transformedPoint = isWP
+                ? evaluateMappedTransform(mappedTransform, z_orig.re, z_orig.im)
+                : z_orig;
 
-            if (isWP) { 
-                if (state.currentFunction === 'zeta' && !state.zetaContinuationEnabled && pointToTransform.re <= ZETA_REFLECTION_POINT_RE) {
-                    skipDrawing = true; 
-                }
-                 
-                 
-                transformedPoint = skipDrawing ? { re: NaN, im: NaN } : (tf ? tf(pointToTransform.re, pointToTransform.im) : pointToTransform);
-            } else { 
-                transformedPoint = pointToTransform; 
-            }
-
-            if (isNaN(transformedPoint.re) || isNaN(transformedPoint.im) || !isFinite(transformedPoint.re) || !isFinite(transformedPoint.im)) {
+            if (!transformedPoint || isNaN(transformedPoint.re) || isNaN(transformedPoint.im) || !isFinite(transformedPoint.re) || !isFinite(transformedPoint.im)) {
                 if (lastProjectedPoint && lastProjectedPoint.isVisible && !firstVisiblePointInCurrentPath) {
                     ctx.stroke();
                 }
@@ -177,6 +130,10 @@ function drawSphereGridAndShape(ctx, cSP, isWP, tf = null) {
         return; // CPU Image mapping removed. Riemann sphere doesn't natively support video textures yet.
     }
 
+    const transformProfile = isWP && typeof tf === 'function'
+        ? getMappedTransformProfile(state.currentFunction, tf)
+        : null;
+
     const sourcePointSets = isWP
         ? generateCurrentMappedInputShapePointSets(zPlaneParams, {
             currentFunction: state.currentFunction,
@@ -189,6 +146,12 @@ function drawSphereGridAndShape(ctx, cSP, isWP, tf = null) {
             curvePoints: NUM_POINTS_CURVE
         });
 
+    if (transformProfile && transformProfile.isConstant) {
+        const firstColor = (sourcePointSets.find(set => set && set.color) || {}).color || COLOR_SPHERE_GRID;
+        drawSphereMappedPoint(ctx, cSP, transformProfile.constantValue, firstColor);
+        return;
+    }
+
     sourcePointSets.forEach(set => {
         drawMappedLineSetOnSphere(
             ctx,
@@ -196,16 +159,19 @@ function drawSphereGridAndShape(ctx, cSP, isWP, tf = null) {
             [set.points],
             getSpherePointSetColor(set, isWP),
             isWP,
-            isWP ? tf : null
+            transformProfile
         );
     });
 }
 
 function drawSphereProbeAndNeighborhood(ctx, cSP, sourceProbeZ, neighborhoodSize, transformFuncIfWSphere) {
     const isWSphere = typeof transformFuncIfWSphere === 'function';
-    const centerToDisplayOnSphere = isWSphere ? transformFuncIfWSphere(sourceProbeZ.re, sourceProbeZ.im) : sourceProbeZ;
+    const transformProfile = isWSphere ? getMappedTransformProfile(state.currentFunction, transformFuncIfWSphere) : null;
+    const centerToDisplayOnSphere = isWSphere
+        ? evaluateMappedTransform(transformProfile, sourceProbeZ.re, sourceProbeZ.im)
+        : sourceProbeZ;
 
-    if (isNaN(centerToDisplayOnSphere.re) || isNaN(centerToDisplayOnSphere.im) || !isFinite(centerToDisplayOnSphere.re) || !isFinite(centerToDisplayOnSphere.im) || !isNumericallyStable(centerToDisplayOnSphere)) {
+    if (!centerToDisplayOnSphere || isNaN(centerToDisplayOnSphere.re) || isNaN(centerToDisplayOnSphere.im) || !isFinite(centerToDisplayOnSphere.re) || !isFinite(centerToDisplayOnSphere.im) || !isNumericallyStable(centerToDisplayOnSphere)) {
         return; 
     }
 
@@ -246,7 +212,7 @@ function drawSphereProbeAndNeighborhood(ctx, cSP, sourceProbeZ, neighborhoodSize
 
     
     
-    const tfForMapping = isWSphere ? transformFuncIfWSphere : null;
+    const tfForMapping = isWSphere ? transformProfile : null;
     
     drawMappedLineSetOnSphere(ctx, cSP, [src_circle_pts], COLOR_PROBE_NEIGHBORHOOD, isWSphere, tfForMapping);
     drawMappedLineSetOnSphere(ctx, cSP, [src_horz_line_pts], isWSphere ? COLOR_PROBE_CONFORMAL_LINE_W_H : COLOR_PROBE_CONFORMAL_LINE_Z_H, isWSphere, tfForMapping);
