@@ -49,7 +49,8 @@
                             <button id="select_sinh_btn" data-tooltip="Select w = sinh(z) function">w = sinh(z)</button>
                             <button id="select_cosh_btn" data-tooltip="Select w = cosh(z) function">w = cosh(z)</button>
                             <button id="select_tanh_btn" data-tooltip="Select w = tanh(z) function">w = tanh(z)</button>
-                            <button id="select_power_btn" data-tooltip="Select fractional power w = z^n">w = z<sup>n</sup></button>
+                            <button id="select_power_btn" data-tooltip="Select fractional power w = z^n">w =
+                                z<sup>n</sup></button>
                             <button id="select_reciprocal_btn" data-tooltip="Select w = 1/z function">w = 1/z</button>
                             <button id="select_mobius_btn"
                                 data-tooltip="Select w = (az+b)/(cz+d) Möbius transformation">Möbius</button>
@@ -1038,12 +1039,13 @@
                                 <output id="fractionalPowerN_value_display">0.5</output>
                             </label>
                             <div class="slider-container">
-                                <input type="range" id="fractionalPowerN_slider" name="fractionalPowerN_slider" min="-5" max="5"
-                                    step="0.05" value="0.5" data-tooltip="Fractional power (n)">
+                                <input type="range" id="fractionalPowerN_slider" name="fractionalPowerN_slider" min="-5"
+                                    max="5" step="0.05" value="0.5" data-tooltip="Fractional power (n)">
                             </div>
                             <div class="slider-controls">
                                 <button id="play_fractionalPowerN_btn" data-tooltip="Animate n">Play</button>
-                                <select id="speed_fractionalPowerN_selector" class="animation-speed-selector" data-tooltip="Animation speed">
+                                <select id="speed_fractionalPowerN_selector" class="animation-speed-selector"
+                                    data-tooltip="Animation speed">
                                     <option value="0.01">0.01x</option>
                                     <option value="0.1">0.1x</option>
                                     <option value="0.5">0.5x</option>
@@ -1077,7 +1079,7 @@
                                 <output id="grid_density_value_display">15</output>
                             </label>
                             <div class="slider-container">
-                                <input type="range" id="grid_density_slider" name="grid_density_slider" min="5" max="30"
+                                <input type="range" id="grid_density_slider" name="grid_density_slider" min="5" max="60"
                                     step="1" value="15" data-tooltip="Number of lines in the z-plane input grid">
                             </div>
                         </div>

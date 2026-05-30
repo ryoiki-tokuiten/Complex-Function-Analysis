@@ -42,7 +42,7 @@ function hslToRgb(h, s, l) {
     if (s === 0) {
         r = g = b = l;
     } else {
-        const hue2rgb = function(p, q, t) {
+        const hue2rgb = function (p, q, t) {
             if (t < 0) t += 1;
             if (t > 1) t -= 1;
             if (t < 1 / 6) return p + (q - p) * 6 * t;
@@ -96,27 +96,48 @@ function drawGridLines(ctx, params, stepX = 1, stepY = 1, color = COLOR_GRID_LIN
     ctx.restore();
 }
 
+function calculateGridStep(span, targetCount = 10) {
+    const rawStep = span / targetCount;
+    if (rawStep <= 0) return 1;
+    const log = Math.log10(rawStep);
+    const power = Math.floor(log);
+    const base = Math.pow(10, power);
+    const ratio = rawStep / base;
+
+    let step;
+    if (ratio < 1.5) step = 1;
+    else if (ratio < 3) step = 2;
+    else if (ratio < 7) step = 5;
+    else step = 10;
+
+    return step * base;
+}
+
 function drawGrid(ctx, params, options = {}) {
-    const { style = 'enhanced', maxLines = 30 } = options;
     const { xRange, yRange } = getCanvasPlaneRanges(params);
     if (!xRange || !yRange) return;
 
-    if (style === 'simple') {
-        drawGridLines(ctx, params, 1, 1, 'rgba(40, 60, 80, 0.25)');
-        return;
-    }
-
     const spanX = xRange[1] - xRange[0];
     const spanY = yRange[1] - yRange[0];
-    const useSimple = spanX > maxLines || spanY > maxLines;
 
-    if (useSimple) {
-        drawGridLines(ctx, params, 1, 1, 'rgba(40, 60, 80, 0.25)');
-        return;
+    const stepX = calculateGridStep(spanX, 10);
+    const stepY = calculateGridStep(spanY, 10);
+
+    let minorStepX = stepX / 5;
+    let minorStepY = stepY / 5;
+
+    // Check if major step base ratio is 2, in which case 4 subdivisions are cleaner than 5
+    const ratioX = stepX / Math.pow(10, Math.floor(Math.log10(stepX)));
+    if (Math.abs(ratioX - 2) < 1e-6) {
+        minorStepX = stepX / 4;
+    }
+    const ratioY = stepY / Math.pow(10, Math.floor(Math.log10(stepY)));
+    if (Math.abs(ratioY - 2) < 1e-6) {
+        minorStepY = stepY / 4;
     }
 
-    drawGridLines(ctx, params, 0.5, 0.5, 'rgba(40, 60, 80, 0.15)');
-    drawGridLines(ctx, params, 1, 1, 'rgba(60, 80, 100, 0.3)');
+    drawGridLines(ctx, params, minorStepX, minorStepY, 'rgba(40, 60, 80, 0.15)');
+    drawGridLines(ctx, params, stepX, stepY, 'rgba(60, 80, 100, 0.3)');
 }
 
 function normalizeAxesOptions(labelOrOptions, maybeYLabel) {
@@ -192,13 +213,29 @@ function drawAxes(ctx, params, labelOrOptions, maybeYLabel) {
     if (options.showTicks) {
         ctx.font = "10px 'SF Pro Text', sans-serif";
 
+        const getPrecision = (step) => {
+            if (step >= 1) return 0;
+            return Math.ceil(-Math.log10(step));
+        };
+
+        const formatLabel = (val, prec, step) => {
+            if (Math.abs(val) < 1e-3 * step) return '0';
+            const s = val.toFixed(prec);
+            return parseFloat(s) === 0 ? '0' : s;
+        };
+
         ctx.textAlign = 'center';
         ctx.textBaseline = 'top';
-        const xStart = Math.ceil(xRange[0]);
-        const xEnd = Math.floor(xRange[1]);
-        for (let x = xStart; x <= xEnd + 1e-6; x++) {
+
+        const spanX = xRange[1] - xRange[0];
+        const stepX = calculateGridStep(spanX, 10);
+        const xStart = Math.ceil(xRange[0] / stepX) * stepX;
+        const xEnd = Math.floor(xRange[1] / stepX) * stepX;
+        const precisionX = getPrecision(stepX);
+
+        for (let x = xStart; x <= xEnd + 1e-6; x += stepX) {
             const tick = mapToCanvasCoords(x, 0, params);
-            const label = Math.abs(x) < 1e-3 ? '0' : x.toFixed(0);
+            const label = formatLabel(x, precisionX, stepX);
             if (options.showTickLabels) {
                 ctx.fillText(label, tick.x, tick.y + 5);
             }
@@ -210,11 +247,16 @@ function drawAxes(ctx, params, labelOrOptions, maybeYLabel) {
 
         ctx.textAlign = 'right';
         ctx.textBaseline = 'middle';
-        const yStart = Math.ceil(yRange[0]);
-        const yEnd = Math.floor(yRange[1]);
-        for (let y = yStart; y <= yEnd + 1e-6; y++) {
+
+        const spanY = yRange[1] - yRange[0];
+        const stepY = calculateGridStep(spanY, 10);
+        const yStart = Math.ceil(yRange[0] / stepY) * stepY;
+        const yEnd = Math.floor(yRange[1] / stepY) * stepY;
+        const precisionY = getPrecision(stepY);
+
+        for (let y = yStart; y <= yEnd + 1e-6; y += stepY) {
             const tick = mapToCanvasCoords(0, y, params);
-            let label = Math.abs(y) < 1e-3 ? '0' : y.toFixed(0);
+            let label = formatLabel(y, precisionY, stepY);
             if (Math.abs(y) < 1e-3 && Math.abs(origin.x - tick.x) < params.width - 10 && label !== '0') {
                 label = '';
             }
