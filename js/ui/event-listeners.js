@@ -82,6 +82,7 @@ const BASIC_CHECKBOX_BINDINGS = [
     { controlKey: 'togglePlotlySphereGridCb', stateKey: 'showPlotlySphereGrid' },
     { controlKey: 'enableTaylorSeriesCb', stateKey: 'taylorSeriesEnabled' },
     { controlKey: 'enableTaylorSeriesCustomCenterCb', stateKey: 'taylorSeriesCustomCenterEnabled' },
+    { controlKey: 'enableGeneralPointsCb', stateKey: 'generalPointsEnabled' },
     { controlKey: 'laplaceShowROCCb', stateKey: 'laplaceShowROC' },
     { controlKey: 'laplaceShowPolesZerosCb', stateKey: 'laplaceShowPolesZeros' },
     { controlKey: 'laplaceShowFourierLineCb', stateKey: 'laplaceShowFourierLine' },
@@ -109,6 +110,8 @@ const SPHERE_VIEW_BUTTONS = {
 };
 
 let uiEventListenersBound = false;
+let taylorCenterUI = null;
+let generalPointsUI = null;
 
 function parseInteger(value) {
     return parseInt(value, 10);
@@ -159,10 +162,29 @@ function shouldMarkDomainDirty(controlKey, stateKey) {
         controlKey.startsWith('domain');
 }
 
+let cpuHighQualityTimeout = null;
+
 function requestDomainRedraw(markDomainDirty = false) {
     if (markDomainDirty) {
         domainColoringDirty = true;
     }
+
+    if (cpuHighQualityTimeout) {
+        clearTimeout(cpuHighQualityTimeout);
+        cpuHighQualityTimeout = null;
+    }
+
+    if (state.domainColoringEnabled && !state.isHighQualityCpuRender) {
+        cpuHighQualityTimeout = setTimeout(() => {
+            state.isHighQualityCpuRender = true;
+            domainColoringDirty = true;
+            requestRedrawAll();
+            requestAnimationFrame(() => {
+                state.isHighQualityCpuRender = false;
+            });
+        }, 120);
+    }
+
     requestRedrawAll();
 }
 
@@ -371,22 +393,14 @@ function initializeMobiusState() {
 }
 
 function initializeCustomTaylorCenter() {
-    if (controls.taylorSeriesCustomCenterReInput) {
-        const parsed = parseFloat(controls.taylorSeriesCustomCenterReInput.value);
-        state.taylorSeriesCustomCenter.re = Number.isNaN(parsed) ? state.taylorSeriesCustomCenter.re : parsed;
-    }
-    if (controls.taylorSeriesCustomCenterImInput) {
-        const parsed = parseFloat(controls.taylorSeriesCustomCenterImInput.value);
-        state.taylorSeriesCustomCenter.im = Number.isNaN(parsed) ? state.taylorSeriesCustomCenter.im : parsed;
+    if (taylorCenterUI) {
+        taylorCenterUI.setPoints([state.taylorSeriesCustomCenter], false);
     }
 }
 
 function syncTaylorCustomCenterInputs() {
-    if (controls.taylorSeriesCustomCenterReInput && document.activeElement !== controls.taylorSeriesCustomCenterReInput) {
-        controls.taylorSeriesCustomCenterReInput.value = formatTaylorNumericValue(state.taylorSeriesCustomCenter.re);
-    }
-    if (controls.taylorSeriesCustomCenterImInput && document.activeElement !== controls.taylorSeriesCustomCenterImInput) {
-        controls.taylorSeriesCustomCenterImInput.value = formatTaylorNumericValue(state.taylorSeriesCustomCenter.im);
+    if (taylorCenterUI) {
+        taylorCenterUI.setPoints([state.taylorSeriesCustomCenter], false);
     }
 }
 
@@ -397,9 +411,6 @@ function setTaylorCustomCenter(re, im, shouldRedraw = true) {
 
     if (typeof syncTaylorSeriesCenterStatus === 'function') {
         syncTaylorSeriesCenterStatus();
-    }
-    if (typeof syncTaylorSeriesPresetSelection === 'function') {
-        syncTaylorSeriesPresetSelection();
     }
 
     if (shouldRedraw) {
@@ -587,6 +598,16 @@ function bindDomainColoringControls() {
         requestDomainRedraw(true);
     });
 
+    if (controls.domainPaletteSelect) {
+        controls.domainPaletteSelect.addEventListener('change', (e) => {
+            state.domainPalette = e.target.value;
+            if (typeof updateDomainColoringKey === 'function') {
+                updateDomainColoringKey();
+            }
+            requestDomainRedraw(true);
+        });
+    }
+
     ['domainBrightness', 'domainContrast', 'domainSaturation', 'domainLightnessCycles'].forEach(stateKey => {
         bindSlider(`${stateKey}Slider`, stateKey, parseFloat, () => {
             requestDomainRedraw(true);
@@ -751,44 +772,38 @@ function bindTaylorControls() {
         requestRedrawAll();
     });
 
-    bindElementListener(controls.taylorSeriesPresetGroups, 'click', event => {
-        const presetButton = event.target.closest('[data-taylor-preset-re][data-taylor-preset-im]');
-        if (!presetButton) {
-            return;
-        }
+    if (controls.taylorComplexPointsUiContainer) {
+        taylorCenterUI = new ComplexPointsUI(controls.taylorComplexPointsUiContainer, {
+            multiple: false,
+            presets: TAYLOR_CENTER_PRESET_GROUPS,
+            initialPoints: [state.taylorSeriesCustomCenter],
+            onChange: (points) => {
+                const pt = points[0] || { re: 0, im: 0 };
+                setTaylorCustomCenter(pt.re, pt.im, true);
+            }
+        });
+    }
+}
 
-        const presetRe = parseFloat(presetButton.dataset.taylorPresetRe);
-        const presetIm = parseFloat(presetButton.dataset.taylorPresetIm);
-        if (Number.isNaN(presetRe) || Number.isNaN(presetIm)) {
-            return;
+function bindGeneralPointsControls() {
+    bindCheckbox('enableGeneralPointsCb', 'generalPointsEnabled', () => {
+        if (controls.generalPointsControlsContainer) {
+            controls.generalPointsControlsContainer.classList.toggle('hidden', !state.generalPointsEnabled);
         }
-
-        setTaylorCustomCenter(presetRe, presetIm);
-    });
-
-    bindControlListener('taylorSeriesCustomCenterReInput', 'input', (_event, input) => {
-        const parsed = parseFloat(input.value);
-        state.taylorSeriesCustomCenter.re = Number.isNaN(parsed) ? 0 : parsed;
-        if (typeof syncTaylorSeriesPresetSelection === 'function') {
-            syncTaylorSeriesPresetSelection();
-        }
-    });
-    bindControlListener('taylorSeriesCustomCenterReInput', 'change', (_event, input) => {
-        const parsed = parseFloat(input.value);
-        setTaylorCustomCenter(Number.isNaN(parsed) ? 0 : parsed, state.taylorSeriesCustomCenter.im);
+        requestRedrawAll();
     });
 
-    bindControlListener('taylorSeriesCustomCenterImInput', 'input', (_event, input) => {
-        const parsed = parseFloat(input.value);
-        state.taylorSeriesCustomCenter.im = Number.isNaN(parsed) ? 0 : parsed;
-        if (typeof syncTaylorSeriesPresetSelection === 'function') {
-            syncTaylorSeriesPresetSelection();
-        }
-    });
-    bindControlListener('taylorSeriesCustomCenterImInput', 'change', (_event, input) => {
-        const parsed = parseFloat(input.value);
-        setTaylorCustomCenter(state.taylorSeriesCustomCenter.re, Number.isNaN(parsed) ? 0 : parsed);
-    });
+    if (controls.generalPointsRoot) {
+        generalPointsUI = new ComplexPointsUI(controls.generalPointsRoot, {
+            multiple: true,
+            presets: TAYLOR_CENTER_PRESET_GROUPS,
+            initialPoints: state.generalPointsList,
+            onChange: (points) => {
+                state.generalPointsList = points;
+                requestRedrawAll();
+            }
+        });
+    }
 }
 
 function bindPolynomialControls() {
@@ -1382,6 +1397,7 @@ window.setupEventListeners = function () {
     bindNavigationControls();
     bindVectorFieldControls();
     bindTaylorControls();
+    bindGeneralPointsControls();
     bindRadialAndZetaControls();
     bindParticleControls();
     bindFourierControls();
@@ -1407,9 +1423,7 @@ window.setupEventListeners = function () {
     if (controls.enableChainingCb) {
         controls.enableChainingCb.addEventListener('change', (e) => {
             state.chainingEnabled = e.target.checked;
-            if (controls.enableAlgebraicChainingCb) {
-                controls.enableAlgebraicChainingCb.disabled = state.chainingEnabled;
-            }
+            // Output and algebraic chaining can be active simultaneously
             if (controls.chainingControlsContainer) {
                 controls.chainingControlsContainer.style.display = state.chainingEnabled ? 'block' : 'none';
             }
@@ -1733,9 +1747,7 @@ function bindAlgebraicChainingControls() {
         controls.enableAlgebraicChainingCb.addEventListener('change', (e) => {
             state.algebraicChainingEnabled = e.target.checked;
             
-            if (controls.enableChainingCb) {
-                controls.enableChainingCb.disabled = state.algebraicChainingEnabled;
-            }
+            // Output and algebraic chaining can be active simultaneously
             
             if (controls.algebraicChainingControlsContainer) {
                 controls.algebraicChainingControlsContainer.style.display = state.algebraicChainingEnabled ? 'block' : 'none';

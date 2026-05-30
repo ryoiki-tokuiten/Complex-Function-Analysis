@@ -540,6 +540,21 @@
                         </div>
                     </div>
 
+                    <!-- General Points on the Complex Plane Panel -->
+                    <div id="general_points_params" class="control-group"
+                        style="padding-bottom: 0.5rem; border-bottom: 1px solid var(--border-color); margin-bottom: 0.5rem;">
+                        <label for="enable_general_points_cb" class="control-label tooltip-label slider-label"
+                            data-tooltip="Place and visualize custom points on the complex plane">
+                            <input type="checkbox" id="enable_general_points_cb" class="control-checkbox">
+                            <span class="custom-checkbox-visual"></span>
+                            General points on the complex plane
+                        </label>
+
+                        <div id="general_points_controls_container" class="dependent-settings-block hidden taylor-series-panel viz-detail-block" style="margin-top: 0.5rem;">
+                            <div id="general_points_root"></div>
+                        </div>
+                    </div>
+
                     <div id="common_params_sliders">
                         <div class="control-group">
                             <label for="a0_slider">
@@ -1247,26 +1262,9 @@
                                     Im(z0) directly.</p>
                             </div>
                             <div id="taylor_series_custom_center_inputs_div"
-                                class="control-group dependent-settings-block hidden taylor-series-card taylor-series-custom-block">
-                                <div class="taylor-series-section-head">
-                                    <span class="taylor-series-section-label">Quick Centers</span>
-                                    <span class="taylor-series-inline-copy">Pick a common expansion point, then
-                                        fine-tune it below if needed.</span>
-                                </div>
-                                <div id="taylor_series_preset_groups" class="taylor-series-preset-groups"></div>
-                                <div class="taylor-series-input-row">
-                                    <label for="taylor_series_custom_center_re_input" class="taylor-series-input-field">
-                                        <span class="taylor-series-input-caption">Center Re(z0)</span>
-                                        <input type="text" id="taylor_series_custom_center_re_input" value="0"
-                                            class="small-number-input taylor-series-text-input">
-                                    </label>
-                                    <label for="taylor_series_custom_center_im_input" class="taylor-series-input-field">
-                                        <span class="taylor-series-input-caption">Center Im(z0)</span>
-                                        <input type="text" id="taylor_series_custom_center_im_input" value="0"
-                                            class="small-number-input taylor-series-text-input">
-                                    </label>
-                                </div>
-                            </div>
+                                 class="control-group dependent-settings-block hidden taylor-series-card taylor-series-custom-block">
+                                 <div id="taylor_complex_points_ui_container"></div>
+                             </div>
                         </div>
                     </div>
 
@@ -1297,6 +1295,17 @@
                         </div>
                         <div id="domain_coloring_options_div" class="dependent-settings-block hidden viz-detail-block">
                             <div class="viz-settings-grid">
+                                <div class="control-group" style="grid-column: span 2; margin-bottom: 4px;">
+                                    <label for="domain_palette_select" style="font-size:0.8rem; margin-bottom: 4px; display: block;">
+                                        Color Palette:
+                                    </label>
+                                    <select id="domain_palette_select" class="control-select" data-tooltip="Select domain coloring color scheme">
+                                        <option value="calming" selected>Calming (Default)</option>
+                                        <option value="classic">Classic (Rainbow)</option>
+                                        <option value="purple">Purple / Violet</option>
+                                        <option value="green">Green / Jade / Lime</option>
+                                    </select>
+                                </div>
                                 <div class="control-group">
                                     <label for="domain_brightness_slider" style="font-size:0.8rem;">
                                         Brightness:
@@ -1683,16 +1692,7 @@
                     <div style="position:relative;">
                         <canvas id="z_plane_canvas"></canvas>
                         <div id="z_plane_probe_info" class="probe-info-overlay hidden"></div>
-                        <div id="domain_coloring_key" class="domain-coloring-key hidden">
-                            <strong>Domain Coloring Key:</strong><br>
-                            - Hue (Color) maps to Argument (Angle):<br>
-                            &nbsp;&nbsp;&nbsp;<span style="color:cyan;">Cyan</span>: Arg = 0° (Positive Real)<br>
-                            &nbsp;&nbsp;&nbsp;<span style="color:blue;">Blue</span>: Arg = 90° (Positive Imaginary)<br>
-                            &nbsp;&nbsp;&nbsp;<span style="color:red;">Red</span>: Arg = 180° (Negative Real)<br>
-                            &nbsp;&nbsp;&nbsp;<span style="color:lime;">Green</span>: Arg = -90° (Negative
-                            Imaginary)<br>
-                            - Lightness maps to Magnitude (Log-scaled, cyclic bands).
-                        </div>
+                        <div id="domain_coloring_key" class="domain-coloring-key hidden"></div>
                         <div id="navigation_keyhint_overlay" class="navigation-keyhint-overlay hidden">
                             <div class="navigation-keyhint-grid">
                                 <div class="keyhint-spacer"></div>
@@ -1818,6 +1818,7 @@
     <script src="js/rendering/renderer.js"></script>
 
     <!-- UI Modules -->
+    <script src="js/ui/complex-points-ui.js"></script>
     <script src="js/ui/polynomial-ui.js"></script>
     <script src="js/ui/ui-updates.js"></script>
     <script src="js/ui/animation.js"></script>

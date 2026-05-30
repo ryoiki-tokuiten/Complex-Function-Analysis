@@ -472,6 +472,12 @@ function drawZPlaneContent(){
             }, 'capture');
         }
 
+        if (state.generalPointsEnabled && !state.navigationModeEnabled) {
+            drawPlaneLayer(zCtx, zPlaneParams, 'z', (layerCtx) => {
+                drawGeneralPointsMarkers(layerCtx, zPlaneParams);
+            }, 'raster');
+        }
+
         if (state.taylorSeriesEnabled && !drawZAsSphere && !state.navigationModeEnabled) {
             drawPlaneLayer(zCtx, zPlaneParams, 'z', (layerCtx) => {
                 drawTaylorConvergenceOverlay(layerCtx, zPlaneParams);

@@ -88,6 +88,7 @@ let state = {
     domainContrast: 1.0,
     domainSaturation: 1.0,
     domainLightnessCycles: 1.0,
+    domainPalette: 'calming',
     radialDiscreteStepsEnabled: false,
     radialDiscreteStepsCount: 200, 
 
@@ -163,6 +164,7 @@ let state = {
     chainingEnabled: false,
     chainingMode: 'recursion',
     chainCount: 1,
+    isHighQualityCpuRender: false,
 
     algebraicChainingEnabled: false,
     algebraicChainingTerms: [
@@ -173,6 +175,9 @@ let state = {
             ]
         }
     ],
+
+    generalPointsEnabled: false,
+    generalPointsList: [],
 
     navigationModeEnabled: false,
     navigationPosition: { re: 0, im: 0 },

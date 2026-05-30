@@ -2,20 +2,11 @@ function getWebGLDomainColorRenderScale() {
     const baseScale = Number.isFinite(WEBGL_DOMAIN_COLOR_SUPERSAMPLE)
         ? WEBGL_DOMAIN_COLOR_SUPERSAMPLE
         : 1.75;
-    const interactionScale = Number.isFinite(WEBGL_DOMAIN_COLOR_INTERACTION_SCALE)
-        ? WEBGL_DOMAIN_COLOR_INTERACTION_SCALE
-        : 1.2;
     const stressScale = Number.isFinite(WEBGL_DOMAIN_COLOR_STRESS_SCALE)
         ? WEBGL_DOMAIN_COLOR_STRESS_SCALE
         : 2.5;
 
-    const isInteracting = !!(state && (
-        (state.panStateZ && state.panStateZ.isPanning) ||
-        (state.panStateW && state.panStateW.isPanning) ||
-        state.particleAnimationEnabled
-    ));
-
-    let scale = isInteracting ? interactionScale : baseScale;
+    let scale = baseScale;
     if (state && state.webglGpuStressMode) {
         scale = Math.max(scale, stressScale);
     }
@@ -54,9 +45,9 @@ function createWebGLDomainColorRenderer() {
         'uniform vec2 u_resolution;',
         'uniform vec4 u_viewBounds;',
         'uniform float u_domainBrightness;',
-        'uniform float u_domainContrast;',
         'uniform float u_domainSaturation;',
         'uniform float u_domainLightnessCycles;',
+        'uniform int u_domainPalette;',
         '',
         'uniform float u_useSphere;',
         'uniform vec2 u_sphereCenter;',
@@ -77,8 +68,18 @@ function createWebGLDomainColorRenderer() {
         'uniform float u_zetaContinuationEnabled;',
         'uniform float u_zetaReflectionBoundary;',
         'uniform float u_fracPower;',
+        'uniform int u_chainCount;',
+        'uniform int u_chainMode;',
         '',
         GLSL_COMPLEX_MATH_LIBRARY,
+        '',
+        'vec2 complexSqrt(vec2 z) {',
+        '  float r = length(z);',
+        '  if (r < 1.0e-20) return vec2(0.0);',
+        '  float angle = atan(z.y, z.x) * 0.5;',
+        '  float sr = sqrt(r);',
+        '  return vec2(sr * cos(angle), sr * sin(angle));',
+        '}',
         '',
         'vec3 inverseRotate3DCompat(vec3 p, float rotX, float rotY) {',
         '  float cY = cos(-rotY);',
@@ -112,6 +113,60 @@ function createWebGLDomainColorRenderer() {
         '  return rgb1 + vec3(m);',
         '}',
         '',
+        'vec3 getPaletteColor(int paletteId, float h) {',
+        '  if (paletteId == 1) {',
+        '    return hslToRgb(vec3(h, 1.0, 0.5));',
+        '  }',
+        '',
+        '  vec3 c0;',
+        '  vec3 c1;',
+        '  vec3 c2;',
+        '  vec3 c3;',
+        '',
+        '  if (paletteId == 2) {',
+        '    c0 = vec3(0.039, 0.020, 0.078);',
+        '    c1 = vec3(0.431, 0.275, 0.745);',
+        '    c2 = vec3(0.863, 0.784, 1.0);',
+        '    c3 = vec3(0.157, 0.078, 0.353);',
+        '  } else if (paletteId == 3) {',
+        '    c0 = vec3(0.020, 0.059, 0.039);',
+        '    c1 = vec3(0.059, 0.471, 0.373);',
+        '    c2 = vec3(0.784, 0.961, 0.863);',
+        '    c3 = vec3(0.686, 0.941, 0.039);',
+        '  } else {',
+        '    c0 = vec3(0.137, 0.071, 0.071);',
+        '    c1 = vec3(0.725, 0.431, 0.373);',
+        '    c2 = vec3(0.922, 0.863, 0.824);',
+        '    c3 = vec3(0.451, 0.235, 0.204);',
+        '  }',
+        '',
+        '  if (h < 0.25) {',
+        '    float t = h / 0.25;',
+        '    return mix(c0, c1, t);',
+        '  } else if (h < 0.5) {',
+        '    float t = (h - 0.25) / 0.25;',
+        '    return mix(c1, c2, t);',
+        '  } else if (h < 0.75) {',
+        '    float t = (h - 0.5) / 0.25;',
+        '    return mix(c2, c3, t);',
+        '  } else {',
+        '    float t = (h - 0.75) / 0.25;',
+        '    return mix(c3, c0, t);',
+        '  }',
+        '}',
+        '',
+        'vec3 applyLightnessAndSaturation(vec3 rgb, float L, float S) {',
+        '  vec3 col = rgb;',
+        '  if (L < 0.5) {',
+        '    col *= (L / 0.5);',
+        '  } else {',
+        '    col = mix(col, vec3(1.0), (L - 0.5) / 0.5);',
+        '  }',
+        '',
+        '  float gray = 0.299 * col.r + 0.587 * col.g + 0.114 * col.b;',
+        '  return mix(vec3(gray), col, S);',
+        '}',
+        '',
         'vec4 domainColorForValue(vec2 value, float brightnessFactor) {',
         '  float phase = atan(value.y, value.x);',
         '  float modValue = length(value);',
@@ -127,7 +182,8 @@ function createWebGLDomainColorRenderer() {
         '  float sFinal = clamp(u_domainSaturation, 0.0, 1.0);',
         '  float h = fract((phase + PI) / TWO_PI);',
         '',
-        '  vec3 rgb = hslToRgb(vec3(h, sFinal, lFinal));',
+        '  vec3 baseColor = getPaletteColor(u_domainPalette, h);',
+        '  vec3 rgb = applyLightnessAndSaturation(baseColor, lFinal, sFinal);',
         '  return vec4(rgb, 1.0);',
         '}',
         '',
@@ -194,6 +250,37 @@ function createWebGLDomainColorRenderer() {
         '    return;',
         '  }',
         '',
+        '  if (u_isWPlaneColoring < 0.5 && u_chainCount > 1) {',
+        '    vec2 baseVal = mappedValue;',
+        '    for (int i = 1; i < 30; i++) {',
+        '      if (i >= u_chainCount) break;',
+        '      if (u_chainMode == 1) {',
+        '        vec2 tempMapped = vec2(0.0);',
+        '        ok = evaluateMappedValueBase(mappedValue, u_isWPlaneColoring, u_functionId, u_mobiusA, u_mobiusB, u_mobiusC, u_mobiusD, u_polyDegree, u_polyCoeffs, u_zetaContinuationEnabled, u_zetaReflectionBoundary, u_fracPower, tempMapped);',
+        '        mappedValue = tempMapped;',
+        '      } else if (u_chainMode == 2) {',
+        '        mappedValue = complexMul(mappedValue, baseVal);',
+        '      } else if (u_chainMode == 3) {',
+        '        mappedValue = complexSqrt(mappedValue);',
+        '      } else if (u_chainMode == 4) {',
+        '        mappedValue = complexLn(mappedValue);',
+        '      } else if (u_chainMode == 5) {',
+        '        mappedValue = complexExp(mappedValue);',
+        '      } else if (u_chainMode == 6) {',
+        '        if (dot(mappedValue, mappedValue) < 1.0e-20) {',
+        '          mappedValue = vec2(0.0);',
+        '        } else {',
+        '          mappedValue = complexDiv(vec2(1.0, 0.0), mappedValue);',
+        '        }',
+        '      }',
+        '      if (!ok || !isFiniteVec2Compat(mappedValue)) {',
+        '        float invalidAlpha = (u_useSphere > 0.5) ? 0.0 : 1.0;',
+        '        gl_FragColor = vec4(0.0, 0.0, 0.0, invalidAlpha);',
+        '        return;',
+        '      }',
+        '    }',
+        '  }',
+        '',
         '  gl_FragColor = domainColorForValue(mappedValue, brightnessFactor);',
         '}'
     ].join('\n');
@@ -222,6 +309,7 @@ function createWebGLDomainColorRenderer() {
     const uDomainContrast = gl.getUniformLocation(program, 'u_domainContrast');
     const uDomainSaturation = gl.getUniformLocation(program, 'u_domainSaturation');
     const uDomainLightnessCycles = gl.getUniformLocation(program, 'u_domainLightnessCycles');
+    const uDomainPalette = gl.getUniformLocation(program, 'u_domainPalette');
     const uUseSphere = gl.getUniformLocation(program, 'u_useSphere');
     const uSphereCenter = gl.getUniformLocation(program, 'u_sphereCenter');
     const uSphereRadius = gl.getUniformLocation(program, 'u_sphereRadius');
@@ -239,11 +327,13 @@ function createWebGLDomainColorRenderer() {
     const uZetaContinuationEnabled = gl.getUniformLocation(program, 'u_zetaContinuationEnabled');
     const uZetaReflectionBoundary = gl.getUniformLocation(program, 'u_zetaReflectionBoundary');
     const uFracPower = gl.getUniformLocation(program, 'u_fracPower');
+    const uChainCount = gl.getUniformLocation(program, 'u_chainCount');
+    const uChainMode = gl.getUniformLocation(program, 'u_chainMode');
 
     if (
         aPosition < 0 ||
         !uResolution || !uViewBounds ||
-        !uDomainBrightness || !uDomainContrast || !uDomainSaturation || !uDomainLightnessCycles ||
+        !uDomainBrightness || !uDomainContrast || !uDomainSaturation || !uDomainLightnessCycles || !uDomainPalette ||
         !uUseSphere || !uSphereCenter || !uSphereRadius || !uRotX || !uRotY ||
         !uLightDir || !uSphereLighting || !uIsWPlaneColoring || !uFunctionId ||
         !uMobiusA || !uMobiusB || !uMobiusC || !uMobiusD || !uPolyDegree ||
@@ -271,6 +361,7 @@ function createWebGLDomainColorRenderer() {
         uDomainContrast,
         uDomainSaturation,
         uDomainLightnessCycles,
+        uDomainPalette,
         uUseSphere,
         uSphereCenter,
         uSphereRadius,
@@ -288,7 +379,9 @@ function createWebGLDomainColorRenderer() {
         uPolyCoeffs,
         uZetaContinuationEnabled,
         uZetaReflectionBoundary,
-        uFracPower
+        uFracPower,
+        uChainCount,
+        uChainMode
     };
 }
 
@@ -395,9 +488,6 @@ function renderDomainColoringWithWebGL(targetCtx, planeParams, options = null) {
     if (!renderer || !renderer.gl) return false;
 
     const isWPlaneColoring = !!opts.isWPlaneColoring;
-    if (!isWPlaneColoring && state.chainingEnabled && state.chainCount > 1) {
-        return false;
-    }
     const functionName = state.currentFunction;
     if (!isWebGLDomainColoringFunctionSupported(functionName, isWPlaneColoring)) {
         warnWebGLDomainFunctionFallback(functionName);
@@ -444,6 +534,12 @@ function renderDomainColoringWithWebGL(targetCtx, planeParams, options = null) {
     gl.uniform1f(renderer.uDomainSaturation, saturation);
     gl.uniform1f(renderer.uDomainLightnessCycles, lightnessCycles);
 
+    let paletteInt = 0; // calming
+    if (state.domainPalette === 'classic') paletteInt = 1;
+    else if (state.domainPalette === 'purple') paletteInt = 2;
+    else if (state.domainPalette === 'green') paletteInt = 3;
+    gl.uniform1i(renderer.uDomainPalette, paletteInt);
+
     const useSphere = !!sphereParams;
     gl.uniform1f(renderer.uUseSphere, useSphere ? 1 : 0);
     if (useSphere) {
@@ -478,6 +574,12 @@ function renderDomainColoringWithWebGL(targetCtx, planeParams, options = null) {
 
     gl.uniform1f(renderer.uIsWPlaneColoring, isWPlaneColoring ? 1 : 0);
     setComplexFunctionUniformsShared(gl, renderer, state);
+
+    const chainCount = state.chainingEnabled ? state.chainCount : 1;
+    const chainModeMap = {recursion:1,power:2,sqrt:3,ln:4,exp:5,reciprocal:6};
+    const chainMode = state.chainingEnabled ? (chainModeMap[state.chainingMode] || 1) : 0;
+    gl.uniform1i(renderer.uChainCount, chainCount);
+    gl.uniform1i(renderer.uChainMode, chainMode);
 
     gl.disable(gl.DEPTH_TEST);
     gl.disable(gl.BLEND);

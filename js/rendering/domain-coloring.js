@@ -57,6 +57,86 @@ function inverseRotate3D(x, y, z, rotX, rotY) {
     return { x: rx, y: ry, z: rz };
 }
 
+function getPaletteColor(paletteId, h) {
+    if (paletteId === 'classic') {
+        const rgb = hslToRgb(h, 1.0, 0.5);
+        return [rgb[0] / 255, rgb[1] / 255, rgb[2] / 255];
+    }
+
+    let c0, c1, c2, c3;
+    if (paletteId === 'purple') {
+        c0 = [0.039, 0.020, 0.078];
+        c1 = [0.431, 0.275, 0.745];
+        c2 = [0.863, 0.784, 1.0];
+        c3 = [0.157, 0.078, 0.353];
+    } else if (paletteId === 'green') {
+        c0 = [0.020, 0.059, 0.039];
+        c1 = [0.059, 0.471, 0.373];
+        c2 = [0.784, 0.961, 0.863];
+        c3 = [0.686, 0.941, 0.039];
+    } else { // 'calming'
+        c0 = [0.137, 0.071, 0.071];
+        c1 = [0.725, 0.431, 0.373];
+        c2 = [0.922, 0.863, 0.824];
+        c3 = [0.451, 0.235, 0.204];
+    }
+
+    let r, g, b;
+    if (h < 0.25) {
+        const t = h / 0.25;
+        r = c0[0] * (1 - t) + c1[0] * t;
+        g = c0[1] * (1 - t) + c1[1] * t;
+        b = c0[2] * (1 - t) + c1[2] * t;
+    } else if (h < 0.5) {
+        const t = (h - 0.25) / 0.25;
+        r = c1[0] * (1 - t) + c2[0] * t;
+        g = c1[1] * (1 - t) + c2[1] * t;
+        b = c1[2] * (1 - t) + c2[2] * t;
+    } else if (h < 0.75) {
+        const t = (h - 0.5) / 0.25;
+        r = c2[0] * (1 - t) + c3[0] * t;
+        g = c2[1] * (1 - t) + c3[1] * t;
+        b = c2[2] * (1 - t) + c3[2] * t;
+    } else {
+        const t = (h - 0.75) / 0.25;
+        r = c3[0] * (1 - t) + c0[0] * t;
+        g = c3[1] * (1 - t) + c0[1] * t;
+        b = c3[2] * (1 - t) + c0[2] * t;
+    }
+    return [r, g, b];
+}
+
+function applyLightnessAndSaturation(rgb, L, S) {
+    let r = rgb[0];
+    let g = rgb[1];
+    let b = rgb[2];
+
+    // Apply lightness L
+    if (L < 0.5) {
+        const t = L / 0.5;
+        r *= t;
+        g *= t;
+        b *= t;
+    } else {
+        const t = (L - 0.5) / 0.5;
+        r = r * (1 - t) + t;
+        g = g * (1 - t) + t;
+        b = b * (1 - t) + t;
+    }
+
+    // Apply saturation S
+    const gray = 0.299 * r + 0.587 * g + 0.114 * b;
+    r = gray * (1 - S) + r * S;
+    g = gray * (1 - S) + g * S;
+    b = gray * (1 - S) + b * S;
+
+    return [
+        Math.min(255, Math.max(0, Math.round(r * 255))),
+        Math.min(255, Math.max(0, Math.round(g * 255))),
+        Math.min(255, Math.max(0, Math.round(b * 255)))
+    ];
+}
+
 function domainColorForValue(re, im, runtimeState) {
     const phase = Math.atan2(im, re);
     const modValue = Math.sqrt(re * re + im * im);
@@ -79,7 +159,9 @@ function domainColorForValue(re, im, runtimeState) {
     let h = ((phase + Math.PI) / (2.0 * Math.PI)) % 1.0;
     if (h < 0) h += 1.0;
 
-    return hslToRgb(h, sFinal, lFinal);
+    const paletteId = (runtimeState && runtimeState.domainPalette) ? runtimeState.domainPalette : 'calming';
+    const baseColor = getPaletteColor(paletteId, h);
+    return applyLightnessAndSaturation(baseColor, lFinal, sFinal);
 }
 
 function renderConstantPlanarDomainColoring(tCtx, pP, value) {
@@ -94,7 +176,12 @@ function renderConstantPlanarDomainColoring(tCtx, pP, value) {
 function renderPlanarDomainColoringCPU(tCtx, pP, isWPC, sTF, sourceProfile = null) {
     const targetW = pP.width;
     const targetH = pP.height;
-    const ds = 4;
+    const isHighQuality = !!(state && state.isHighQualityCpuRender);
+    const isInteracting = !!(state && (
+        (state.panStateZ && state.panStateZ.isPanning) ||
+        (state.panStateW && state.panStateW.isPanning)
+    ));
+    const ds = isHighQuality ? 1 : (isInteracting ? 3 : 2);
     const w = Math.max(1, Math.floor(targetW / ds));
     const h = Math.max(1, Math.floor(targetH / ds));
 
@@ -155,7 +242,12 @@ function renderPlanarDomainColoringCPU(tCtx, pP, isWPC, sTF, sourceProfile = nul
 function renderSphereDomainColoringCPU(tCtx, cSP, cDOMP, isWPC, sTF, sourceProfile = null) {
     const targetW = cDOMP.width;
     const targetH = cDOMP.height;
-    const ds = 4;
+    const isHighQuality = !!(state && state.isHighQualityCpuRender);
+    const isInteracting = !!(state && (
+        (state.panStateZ && state.panStateZ.isPanning) ||
+        (state.panStateW && state.panStateW.isPanning)
+    ));
+    const ds = isHighQuality ? 1 : (isInteracting ? 3 : 2);
     const w = Math.max(1, Math.floor(targetW / ds));
     const h = Math.max(1, Math.floor(targetH / ds));
 

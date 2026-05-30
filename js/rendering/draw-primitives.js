@@ -125,3 +125,39 @@ function drawCriticalPointMarker(ctx, canvasPoint, color) {
     ctx.stroke();
     ctx.restore();
 }
+
+function drawGeneralPointsMarkers(ctx, planeParams) {
+    if (!state.generalPointsEnabled || !state.generalPointsList || state.generalPointsList.length === 0) {
+        return;
+    }
+
+    ctx.save();
+    state.generalPointsList.forEach(point => {
+        const p = mapToCanvasCoords(point.re, point.im, planeParams);
+        
+        // Draw shadow/glow underneath
+        ctx.shadowColor = 'rgba(167, 139, 250, 0.6)';
+        ctx.shadowBlur = 8;
+
+        // Draw solid theme purple circle
+        ctx.fillStyle = '#a78bfa';
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, 6.5, 0, TWO_PI);
+        ctx.fill();
+
+        // Draw clean white border
+        ctx.shadowBlur = 0; // Turn off shadow for crisp border
+        ctx.strokeStyle = '#ffffff';
+        ctx.lineWidth = 2.0;
+        ctx.stroke();
+
+        // Draw outer black ring for high contrast boundary
+        ctx.strokeStyle = '#000000';
+        ctx.lineWidth = 0.8;
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, 7.5, 0, TWO_PI);
+        ctx.stroke();
+    });
+    ctx.restore();
+}
+

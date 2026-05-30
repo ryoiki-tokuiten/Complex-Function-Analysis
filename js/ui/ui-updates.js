@@ -171,12 +171,16 @@ function updateSliderLabelsAndDisplay() {
         controls.enableTaylorSeriesCustomCenterCb.checked = state.taylorSeriesCustomCenterEnabled;
     }
     syncTaylorSeriesCenterStatus();
-    syncTaylorSeriesPresetSelection();
-    if (controls.taylorSeriesCustomCenterReInput && document.activeElement !== controls.taylorSeriesCustomCenterReInput) {
-        controls.taylorSeriesCustomCenterReInput.value = formatTaylorNumericValue(state.taylorSeriesCustomCenter.re);
+    if (typeof taylorCenterUI !== 'undefined' && taylorCenterUI) {
+        taylorCenterUI.setPoints([state.taylorSeriesCustomCenter], false);
     }
-    if (controls.taylorSeriesCustomCenterImInput && document.activeElement !== controls.taylorSeriesCustomCenterImInput) {
-        controls.taylorSeriesCustomCenterImInput.value = formatTaylorNumericValue(state.taylorSeriesCustomCenter.im);
+
+    if (controls.generalPointsControlsContainer && controls.enableGeneralPointsCb) {
+        controls.generalPointsControlsContainer.classList.toggle('hidden', !state.generalPointsEnabled);
+        controls.enableGeneralPointsCb.checked = state.generalPointsEnabled;
+    }
+    if (typeof generalPointsUI !== 'undefined' && generalPointsUI) {
+        generalPointsUI.setPoints(state.generalPointsList, false);
     }
 
     syncParameterControlsPanelVisibility();
@@ -323,25 +327,9 @@ function syncTaylorSeriesCenterStatus() {
 }
 
 function syncTaylorSeriesPresetSelection() {
-    if (!controls.taylorSeriesPresetGroups) {
-        return;
+    if (typeof taylorCenterUI !== 'undefined' && taylorCenterUI) {
+        taylorCenterUI.setPoints([state.taylorSeriesCustomCenter], false);
     }
-
-    const activePreset = findTaylorCenterPreset(
-        state.taylorSeriesCustomCenter.re,
-        state.taylorSeriesCustomCenter.im
-    );
-
-    controls.taylorSeriesPresetGroups
-        .querySelectorAll('.taylor-series-preset-btn')
-        .forEach(button => {
-            const buttonRe = parseFloat(button.dataset.taylorPresetRe);
-            const buttonIm = parseFloat(button.dataset.taylorPresetIm);
-            const isActive = activePreset &&
-                Math.abs(buttonRe - activePreset.re) < 1e-9 &&
-                Math.abs(buttonIm - activePreset.im) < 1e-9;
-            button.classList.toggle('toggle-active', Boolean(isActive));
-        });
 }
 
 function formatProbeValue(v) {
@@ -606,28 +594,38 @@ function updateTitlesAndGlobalUI() {
                 break;
             case 'recursion':
             default:
-                let symbol = state.currentFunction;
-                if (symbol === 'exp') symbol = 'e<sup>(·)</sup>';
-                else if (symbol === 'ln') symbol = 'ln(·)';
-                else if (symbol === 'reciprocal') symbol = '1/(·)';
-                else if (symbol === 'zeta') symbol = 'ζ(·)';
-                else if (symbol === 'polynomial') symbol = `P<sub>deg ${state.polynomialN}</sub>(·)`;
-                else if (symbol === 'mobius') symbol = 'Möbius(·)';
-                else if (symbol === 'power') symbol = `(·)<sup>${Number((state.fractionalPowerN || 0.5).toFixed(2))}</sup>`;
-                else if (symbol === 'poincare') symbol = 'Poincare(·)';
-                else if (symbol === 'sinh') symbol = 'sinh(·)';
-                else if (symbol === 'cosh') symbol = 'cosh(·)';
-                else if (symbol === 'tanh') symbol = 'tanh(·)';
-                else if (symbol === 'algebraic_chaining') {
-                    symbol = 'f<sub>alg</sub>(·)';
-                } else {
-                    symbol = `${symbol}(·)`;
-                }
-                for (let i = 1; i < chainCount; i++) {
-                    if (symbol.includes('(·)')) {
-                        formula = symbol.replace('(·)', formula);
+                if (chainCount > 3 || state.currentFunction === 'algebraic_chaining') {
+                    if (state.currentFunction === 'algebraic_chaining') {
+                        formula = `f<sup>${chainCount}</sup>(z) <span style="font-size:0.85em; opacity:0.8;">[where f(z) = ${baseFormulaStr}]</span>`;
                     } else {
-                        formula = `${symbol}(${formula})`;
+                        let symbol = state.currentFunction;
+                        if (symbol === 'polynomial') symbol = `P<sub>deg ${state.polynomialN}</sub>`;
+                        else if (symbol === 'mobius') symbol = 'Möbius';
+                        else if (symbol === 'zeta') symbol = 'ζ';
+                        else if (symbol === 'power') symbol = `z<sup>${Number((state.fractionalPowerN || 0.5).toFixed(2))}</sup>`;
+                        formula = `${symbol}<sup>${chainCount}</sup>(z)`;
+                    }
+                } else {
+                    let symbol = state.currentFunction;
+                    if (symbol === 'exp') symbol = 'e<sup>(·)</sup>';
+                    else if (symbol === 'ln') symbol = 'ln(·)';
+                    else if (symbol === 'reciprocal') symbol = '1/(·)';
+                    else if (symbol === 'zeta') symbol = 'ζ(·)';
+                    else if (symbol === 'polynomial') symbol = `P<sub>deg ${state.polynomialN}</sub>(·)`;
+                    else if (symbol === 'mobius') symbol = 'Möbius(·)';
+                    else if (symbol === 'power') symbol = `(·)<sup>${Number((state.fractionalPowerN || 0.5).toFixed(2))}</sup>`;
+                    else if (symbol === 'poincare') symbol = 'Poincare(·)';
+                    else if (symbol === 'sinh') symbol = 'sinh(·)';
+                    else if (symbol === 'cosh') symbol = 'cosh(·)';
+                    else if (symbol === 'tanh') symbol = 'tanh(·)';
+                    else symbol = `${symbol}(·)`;
+
+                    for (let i = 1; i < chainCount; i++) {
+                        if (symbol.includes('(·)')) {
+                            formula = symbol.replace('(·)', formula);
+                        } else {
+                            formula = `${symbol}(${formula})`;
+                        }
                     }
                 }
                 break;
@@ -763,8 +761,12 @@ function updateTitlesAndGlobalUI() {
     if (controls.domainColoringOptionsDiv) {
         controls.domainColoringOptionsDiv.classList.toggle('hidden', !state.domainColoringEnabled);
     }
+    if (controls.domainPaletteSelect) {
+        controls.domainPaletteSelect.value = state.domainPalette || 'calming';
+    }
     if (controls.domainColoringKeyDiv) {
         controls.domainColoringKeyDiv.classList.toggle('hidden', !state.domainColoringEnabled);
+        updateDomainColoringKey();
     }
 
     if (controls.radialDiscreteStepsOptionsDiv) {
@@ -814,4 +816,48 @@ function updateTitlesAndGlobalUI() {
     } catch (error) {
         console.error("Error in updateTitlesAndGlobalUI:", error);
     }
+}
+
+function updateDomainColoringKey() {
+    if (!controls.domainColoringKeyDiv) return;
+
+    const palette = state.domainPalette || 'calming';
+    let keyHtml = `<strong>Domain Coloring Key:</strong><br>`;
+
+    if (palette === 'classic') {
+        keyHtml += `
+            <span style="display:inline-block; margin-bottom: 4px;">- Hue (Color) maps to Argument (Angle):</span><br>
+            &nbsp;&nbsp;&nbsp;<span style="color:#00ffff; font-weight:bold;">Cyan</span>: Arg = 0° (Positive Real)<br>
+            &nbsp;&nbsp;&nbsp;<span style="color:#3b82f6; font-weight:bold;">Blue</span>: Arg = 90° (Positive Imaginary)<br>
+            &nbsp;&nbsp;&nbsp;<span style="color:#ef4444; font-weight:bold;">Red</span>: Arg = 180° (Negative Real)<br>
+            &nbsp;&nbsp;&nbsp;<span style="color:#22c55e; font-weight:bold;">Green</span>: Arg = -90° (Negative Imaginary)<br>
+        `;
+    } else if (palette === 'calming') {
+        keyHtml += `
+            <span style="display:inline-block; margin-bottom: 4px;">- Color maps to Argument (Angle):</span><br>
+            &nbsp;&nbsp;&nbsp;<span style="color:#ebdcd2; font-weight:bold; text-shadow: 0 0 2px rgba(0,0,0,0.5);">Cream</span>: Arg = 0° (Positive Real)<br>
+            &nbsp;&nbsp;&nbsp;<span style="color:#733c34; font-weight:bold;">Caramel</span>: Arg = 90° (Positive Imaginary)<br>
+            &nbsp;&nbsp;&nbsp;<span style="color:#d9c5c1; font-weight:bold; text-shadow: 0 0 2px rgba(0,0,0,0.5);">Mahogany</span>: Arg = 180° (Negative Real)<br>
+            &nbsp;&nbsp;&nbsp;<span style="color:#b96e5f; font-weight:bold;">Copper</span>: Arg = -90° (Negative Imaginary)<br>
+        `;
+    } else if (palette === 'purple') {
+        keyHtml += `
+            <span style="display:inline-block; margin-bottom: 4px;">- Color maps to Argument (Angle):</span><br>
+            &nbsp;&nbsp;&nbsp;<span style="color:#dcc8ff; font-weight:bold; text-shadow: 0 0 2px rgba(0,0,0,0.5);">Lavender</span>: Arg = 0° (Positive Real)<br>
+            &nbsp;&nbsp;&nbsp;<span style="color:#9e82ff; font-weight:bold;">Indigo</span>: Arg = 90° (Positive Imaginary)<br>
+            &nbsp;&nbsp;&nbsp;<span style="color:#c3b5db; font-weight:bold; text-shadow: 0 0 2px rgba(0,0,0,0.5);">Charcoal</span>: Arg = 180° (Negative Real)<br>
+            &nbsp;&nbsp;&nbsp;<span style="color:#6e46be; font-weight:bold;">Violet</span>: Arg = -90° (Negative Imaginary)<br>
+        `;
+    } else if (palette === 'green') {
+        keyHtml += `
+            <span style="display:inline-block; margin-bottom: 4px;">- Color maps to Argument (Angle):</span><br>
+            &nbsp;&nbsp;&nbsp;<span style="color:#c8f5dc; font-weight:bold; text-shadow: 0 0 2px rgba(0,0,0,0.5);">Mint</span>: Arg = 0° (Positive Real)<br>
+            &nbsp;&nbsp;&nbsp;<span style="color:#aff00a; font-weight:bold;">Lime</span>: Arg = 90° (Positive Imaginary)<br>
+            &nbsp;&nbsp;&nbsp;<span style="color:#9bbda7; font-weight:bold; text-shadow: 0 0 2px rgba(0,0,0,0.5);">Forest</span>: Arg = 180° (Negative Real)<br>
+            &nbsp;&nbsp;&nbsp;<span style="color:#0f785f; font-weight:bold;">Jade</span>: Arg = -90° (Negative Imaginary)<br>
+        `;
+    }
+
+    keyHtml += `<span style="display:inline-block; margin-top: 4px;">- Lightness maps to Magnitude (Log-scaled, cyclic bands).</span>`;
+    controls.domainColoringKeyDiv.innerHTML = keyHtml;
 }

@@ -102,12 +102,14 @@ function createWebGLImageRenderer() {
     // ── Path 2: Forward indexed mesh ──────────────────────────────────────
     const forwardVS = [
         'attribute vec2 a_texCoord;',
+        'attribute vec2 a_mappedPos;',
         'varying vec2 v_uv;',
         'varying float v_valid;',
         '',
         'uniform vec2 u_imageSize;',
         'uniform vec2 u_center;',
         'uniform vec4 u_viewBounds;',
+        'uniform float u_useCpuEval;',
         '',
         'uniform float u_isWPlane;',
         'uniform float u_functionId;',
@@ -125,6 +127,11 @@ function createWebGLImageRenderer() {
         '',
         'void main() {',
         '  v_uv = a_texCoord;',
+        '  if (u_useCpuEval > 0.5) {',
+        '    v_valid = 1.0;',
+        '    gl_Position = vec4(a_mappedPos, 0.0, 1.0);',
+        '    return;',
+        '  }',
         '  float nx = a_texCoord.x * 2.0 - 1.0;',
         '  float ny = -(a_texCoord.y * 2.0 - 1.0);',
         '  vec2 zInput = vec2(u_center.x + nx * (u_imageSize.x / 2.0), u_center.y + ny * (u_imageSize.y / 2.0));',
@@ -175,6 +182,7 @@ function createWebGLImageRenderer() {
     // Forward path buffers (indexed)
     const forwardVertexBuffer = gl.createBuffer();
     const forwardIndexBuffer = gl.createBuffer();
+    const forwardMappedBuffer = gl.createBuffer();
 
     // Cache uniform locations for both programs
     function getLocs(prog, extras) {
@@ -209,6 +217,8 @@ function createWebGLImageRenderer() {
 
     const forwardLocs = getLocs(forwardProgram, {
         aTexCoord: forwardProgram ? gl.getAttribLocation(forwardProgram, 'a_texCoord') : -1,
+        aMappedPos: forwardProgram ? gl.getAttribLocation(forwardProgram, 'a_mappedPos') : -1,
+        uUseCpuEval: forwardProgram ? gl.getUniformLocation(forwardProgram, 'u_useCpuEval') : null,
         uZetaContinuationEnabled: forwardProgram ? gl.getUniformLocation(forwardProgram, 'u_zetaContinuationEnabled') : null,
         uZetaReflectionBoundary: forwardProgram ? gl.getUniformLocation(forwardProgram, 'u_zetaReflectionBoundary') : null,
         uFracPower: forwardProgram ? gl.getUniformLocation(forwardProgram, 'u_fracPower') : null,
@@ -218,7 +228,7 @@ function createWebGLImageRenderer() {
         canvas, gl, texture, quadBuffer,
         inverseProgram, inverseLocs,
         forwardProgram, forwardLocs,
-        forwardVertexBuffer, forwardIndexBuffer,
+        forwardVertexBuffer, forwardIndexBuffer, forwardMappedBuffer,
         uploadedSource: null,
         uploadedSourceToken: -1,
         forwardIndexCount: 0,
@@ -414,6 +424,66 @@ function drawImageWithWebGL(targetCtx, planeParams, isWP, chainIndex) {
         gl.enableVertexAttribArray(locs.aTexCoord);
         gl.vertexAttribPointer(locs.aTexCoord, 2, gl.FLOAT, false, 0, 0);
         gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, renderer.forwardIndexBuffer);
+
+        const useCpuEval = state.currentFunction === 'algebraic_chaining' || (state.chainingEnabled && state.chainCount > 1);
+        if (locs.uUseCpuEval) {
+            gl.uniform1f(locs.uUseCpuEval, useCpuEval ? 1.0 : 0.0);
+        }
+
+        if (useCpuEval) {
+            const aspect = getRasterAspectRatioForShape(currentShape) || 1.0;
+            const resX = Math.max(2, aspect >= 1 ? currentRes : Math.round(currentRes * aspect));
+            const resY = Math.max(2, aspect >= 1 ? Math.round(currentRes / aspect) : currentRes);
+            const { width: mediaWidth, height: mediaHeight } = getRasterDisplayDimensions(currentShape);
+            const cx = state.a0 || 0;
+            const cy = state.b0 || 0;
+            const xRange = planeParams.currentVisXRange || planeParams.xRange;
+            const yRange = planeParams.currentVisYRange || planeParams.yRange;
+            const xSpan = xRange[1] - xRange[0];
+            const ySpan = yRange[1] - yRange[0];
+
+            let tf;
+            if (!isWP) {
+                tf = (re, im) => ({ re, im });
+            } else {
+                tf = getChainedTransformFunction();
+            }
+
+            const mappedPos = new Float32Array(resX * resY * 2);
+            let mIdx = 0;
+            for (let y = 0; y < resY; y++) {
+                const ty = y / (resY - 1);
+                const ny = -(ty * 2.0 - 1.0);
+                const im = cy + ny * (mediaHeight / 2.0);
+
+                for (let x = 0; x < resX; x++) {
+                    const tx = x / (resX - 1);
+                    const nx = tx * 2.0 - 1.0;
+                    const re = cx + nx * (mediaWidth / 2.0);
+
+                    const w = tf(re, im);
+                    if (Number.isFinite(w.re) && Number.isFinite(w.im)) {
+                        const clipX = ((w.re - xRange[0]) / xSpan) * 2.0 - 1.0;
+                        const clipY = ((w.im - yRange[0]) / ySpan) * 2.0 - 1.0;
+                        mappedPos[mIdx++] = clipX;
+                        mappedPos[mIdx++] = clipY;
+                    } else {
+                        mappedPos[mIdx++] = 10.0;
+                        mappedPos[mIdx++] = 10.0;
+                    }
+                }
+            }
+
+            gl.bindBuffer(gl.ARRAY_BUFFER, renderer.forwardMappedBuffer);
+            gl.bufferData(gl.ARRAY_BUFFER, mappedPos, gl.DYNAMIC_DRAW);
+            gl.enableVertexAttribArray(locs.aMappedPos);
+            gl.vertexAttribPointer(locs.aMappedPos, 2, gl.FLOAT, false, 0, 0);
+        } else {
+            if (locs.aMappedPos !== -1) {
+                gl.disableVertexAttribArray(locs.aMappedPos);
+            }
+        }
+
         setImageUniforms(gl, locs, planeParams, isWP, currentShape);
         gl.uniform1i(locs.uTexture, 0);
 
