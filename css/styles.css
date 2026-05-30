@@ -1763,6 +1763,18 @@ select:focus {
     /* box-shadow: 0 0 0 2px rgba(var(--glow-color), 0.3); /* Optional subtle glow on hover */
 }
 
+/* Disabled style for checkboxes and labels */
+.control-group label:has(input[type="checkbox"]:disabled) {
+    opacity: 0.38;
+    cursor: not-allowed !important;
+}
+
+.control-group label:has(input[type="checkbox"]:disabled) .custom-checkbox-visual {
+    background: rgba(20, 25, 45, 0.4) !important;
+    border-color: rgba(255, 255, 255, 0.08) !important;
+    cursor: not-allowed !important;
+}
+
 #polynomial_coeffs_container {
     display: flex;
     flex-direction: column;
@@ -2091,4 +2103,314 @@ select:focus {
     .taylor-series-input-row {
         grid-template-columns: 1fr;
     }
+}
+
+/* ==========================================================================
+   Algebraic Chaining UI Redesign
+   ========================================================================== */
+
+#algebraic_chaining_controls_container {
+    margin-top: 12px;
+    padding-left: 12px;
+}
+
+#algebraic_terms_list {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    margin-bottom: 12px;
+}
+
+.algebraic-term-card {
+    background: linear-gradient(135deg, rgba(167, 139, 250, 0.05) 0%, rgba(9, 13, 33, 0.45) 100%);
+    border: 1px solid rgba(167, 139, 250, 0.18) !important;
+    border-radius: 12px !important;
+    padding: 12px !important;
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.25);
+    margin-bottom: 12px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    transition: transform 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.algebraic-term-card:hover {
+    border-color: rgba(167, 139, 250, 0.35) !important;
+    box-shadow: 0 6px 20px rgba(167, 139, 250, 0.12);
+}
+
+.algebraic-term-header {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 8px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+    padding-bottom: 6px;
+}
+
+.algebraic-term-title-wrapper {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 0;
+    flex: 1;
+}
+
+.algebraic-term-title {
+    font-weight: 700;
+    font-size: 0.8rem;
+    color: var(--accent-purple);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+}
+
+.algebraic-term-formula {
+    font-family: 'Courier New', Courier, monospace;
+    font-size: 0.74rem;
+    color: color-mix(in srgb, var(--accent-purple) 60%, var(--text-secondary-color));
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    margin-top: 1px;
+}
+
+.algebraic-term-remove-btn {
+    background: rgba(255, 85, 85, 0.08);
+    border: 1px solid rgba(255, 85, 85, 0.2);
+    color: #ff5555;
+    cursor: pointer;
+    font-size: 0.72rem;
+    padding: 2px 6px;
+    border-radius: 4px;
+    transition: all 0.2s ease;
+    flex-shrink: 0;
+    line-height: 1;
+}
+
+.algebraic-term-remove-btn:hover {
+    background: rgba(255, 85, 85, 0.22);
+    border-color: rgba(255, 85, 85, 0.45);
+    transform: scale(1.05);
+}
+
+.algebraic-coeff-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+    background: rgba(0, 0, 0, 0.15);
+    padding: 8px 10px;
+    border-radius: 8px;
+    border: 1px solid rgba(255, 255, 255, 0.02);
+}
+
+.algebraic-slider-row {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.algebraic-slider-label {
+    font-size: 0.7rem;
+    color: var(--text-secondary-color);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.algebraic-slider-value {
+    color: var(--text-color);
+    font-weight: 600;
+    font-family: monospace;
+    background: rgba(255, 255, 255, 0.05);
+    padding: 0 4px;
+    border-radius: 3px;
+}
+
+.algebraic-slider-container {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    background: rgba(7, 10, 24, 0.35);
+    border: 1px solid rgba(128, 137, 255, 0.1);
+    border-radius: 6px;
+    padding: 4px 6px;
+}
+
+.algebraic-slider-container input[type="range"] {
+    cursor: pointer;
+    height: 4px;
+    flex: 1;
+}
+
+.algebraic-factors-container {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    border-top: 1px solid rgba(255, 255, 255, 0.06);
+    padding-top: 8px;
+}
+
+.algebraic-factors-title {
+    font-size: 0.7rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--text-secondary-color);
+    margin-bottom: 2px;
+}
+
+.algebraic-factor-card {
+    background: rgba(14, 18, 42, 0.35);
+    padding: 8px 10px;
+    border-radius: 8px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    border: 1px solid rgba(255, 255, 255, 0.03);
+    transition: border-color 0.2s ease, background-color 0.2s ease;
+}
+
+.algebraic-factor-card:hover {
+    border-color: rgba(167, 139, 250, 0.15);
+    background: rgba(14, 18, 42, 0.55);
+}
+
+.algebraic-factor-main-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+}
+
+.algebraic-factor-label {
+    font-size: 0.7rem;
+    font-weight: 600;
+    color: var(--text-secondary-color);
+}
+
+.algebraic-factor-card select {
+    background-color: rgba(20, 25, 45, 0.8);
+    border: 1px solid rgba(167, 139, 250, 0.2);
+    color: var(--text-color);
+    padding: 3px 1.5rem 3px 8px !important;
+    font-size: 0.72rem;
+    border-radius: 6px;
+    width: 120px;
+    height: 26px;
+    cursor: pointer;
+    background-image: url('data:image/svg+xml;charset=US-ASCII,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%22292.4%22%20height%3D%22292.4%22%3E%3Cpath%20fill%3D%22%23B0B8E0%22%20d%3D%22M287%2069.4a17.6%2017.6%200%200%200-13-5.4H18.4c-5%200-9.3%201.8-12.9%205.4A17.6%2017.6%200%200%200%200%2082.2c0%205%201.8%209.3%205.4%2012.9l128%20127.9c3.6%203.6%207.8%205.4%2012.8%205.4s9.2-1.8%2012.8-5.4L287%2095c3.5-3.5%205.4-7.8%205.4-12.8%200-5-1.9-9.4-5.4-12.8z%22%2F%3E%3C%2Fsvg%3E');
+    background-repeat: no-repeat;
+    background-position: right 0.45rem center;
+    background-size: 0.55em auto;
+}
+
+.algebraic-factor-card select:hover {
+    border-color: var(--accent-purple);
+}
+
+.algebraic-factor-details {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    border-top: 1px dashed rgba(255, 255, 255, 0.05);
+    padding-top: 6px;
+    margin-top: 2px;
+}
+
+.algebraic-factor-detail-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+}
+
+.algebraic-checkbox-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    margin-top: 2px;
+}
+
+.algebraic-checkbox-label {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    font-size: 0.65rem;
+    color: var(--text-secondary-color);
+    cursor: pointer;
+    user-select: none;
+}
+
+.algebraic-checkbox-label input[type="checkbox"] {
+    position: absolute;
+    width: 0;
+    height: 0;
+    opacity: 0;
+}
+
+.algebraic-checkbox-label .custom-checkbox-visual {
+    width: 14px;
+    height: 14px;
+    border: 1px solid rgba(167, 139, 250, 0.3);
+    border-radius: 3px;
+    background: rgba(20, 25, 45, 0.85);
+    position: relative;
+    display: inline-block;
+    flex-shrink: 0;
+    transition: all 0.2s ease;
+}
+
+.algebraic-checkbox-label input[type="checkbox"]:checked + .custom-checkbox-visual {
+    background-color: var(--accent-purple);
+    border-color: var(--accent-purple);
+}
+
+.algebraic-checkbox-label .custom-checkbox-visual::after {
+    content: '';
+    position: absolute;
+    left: 4px;
+    top: 1px;
+    width: 3px;
+    height: 7px;
+    border: solid #fff;
+    border-width: 0 1.5px 1.5px 0;
+    transform: rotate(45deg) scale(0.5);
+    opacity: 0;
+    transition: all 0.15s ease;
+}
+
+.algebraic-checkbox-label input[type="checkbox"]:checked + .custom-checkbox-visual::after {
+    transform: rotate(45deg) scale(1);
+    opacity: 1;
+}
+
+.algebraic-checkbox-label:hover .custom-checkbox-visual {
+    border-color: var(--accent-purple);
+    box-shadow: 0 0 4px rgba(167, 139, 250, 0.25);
+}
+
+#add_algebraic_term_btn {
+    margin-top: 10px;
+    width: 100%;
+    border: 1px dashed rgba(167, 139, 250, 0.35);
+    color: var(--accent-purple);
+    background: rgba(167, 139, 250, 0.03);
+    padding: 8px 12px;
+    font-size: 0.8rem;
+    font-weight: 600;
+    border-radius: 8px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+}
+
+#add_algebraic_term_btn:hover {
+    border-style: solid;
+    border-color: var(--accent-purple);
+    background: rgba(167, 139, 250, 0.08);
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px rgba(167, 139, 250, 0.12);
 }

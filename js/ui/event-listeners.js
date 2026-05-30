@@ -1407,12 +1407,17 @@ window.setupEventListeners = function () {
     if (controls.enableChainingCb) {
         controls.enableChainingCb.addEventListener('change', (e) => {
             state.chainingEnabled = e.target.checked;
+            if (controls.enableAlgebraicChainingCb) {
+                controls.enableAlgebraicChainingCb.disabled = state.chainingEnabled;
+            }
             if (controls.chainingControlsContainer) {
                 controls.chainingControlsContainer.style.display = state.chainingEnabled ? 'block' : 'none';
             }
             if (typeof updateChainingColumns === 'function') {
                 updateChainingColumns(state.chainingEnabled ? state.chainCount : 1);
             }
+            updateTitlesAndGlobalUI();
+            syncParameterControlsPanelVisibility();
             requestRedrawAll();
         });
     }
@@ -1727,6 +1732,11 @@ function bindAlgebraicChainingControls() {
     if (controls.enableAlgebraicChainingCb) {
         controls.enableAlgebraicChainingCb.addEventListener('change', (e) => {
             state.algebraicChainingEnabled = e.target.checked;
+            
+            if (controls.enableChainingCb) {
+                controls.enableChainingCb.disabled = state.algebraicChainingEnabled;
+            }
+            
             if (controls.algebraicChainingControlsContainer) {
                 controls.algebraicChainingControlsContainer.style.display = state.algebraicChainingEnabled ? 'block' : 'none';
             }
@@ -1769,34 +1779,99 @@ function renderAlgebraicChainingTerms() {
     
     controls.algebraicTermsList.innerHTML = '';
     
+    function getTermPreview(term) {
+        const re = term.coeff.re;
+        const im = term.coeff.im;
+        
+        if (Math.abs(re) < 1e-9 && Math.abs(im) < 1e-9) {
+            return '0';
+        }
+        
+        let coeffStr = '';
+        if (Math.abs(im) < 1e-9) {
+            if (Math.abs(re - 1) < 1e-9 && (term.factors && term.factors.length > 0 && term.factors[0].func !== 'none')) {
+                coeffStr = '';
+            } else if (Math.abs(re + 1) < 1e-9 && (term.factors && term.factors.length > 0 && term.factors[0].func !== 'none')) {
+                coeffStr = '-';
+            } else {
+                coeffStr = re.toFixed(1);
+            }
+        } else {
+            const reStr = Math.abs(re) < 1e-9 ? '' : re.toFixed(1);
+            const sign = im >= 0 ? '+' : '-';
+            const imStr = Math.abs(Math.abs(im) - 1) < 1e-9 ? 'i' : `${Math.abs(im).toFixed(1)}i`;
+            if (reStr === '') {
+                coeffStr = im >= 0 ? imStr : `-${imStr}`;
+            } else {
+                coeffStr = `(${reStr}${sign}${imStr})`;
+            }
+        }
+
+        const activeFactors = (term.factors || []).filter(f => f.func && f.func !== 'none');
+        if (activeFactors.length === 0) {
+            return coeffStr === '' ? '1' : coeffStr;
+        }
+
+        const factorsStr = activeFactors.map(f => {
+            let base = f.func;
+            if (base === 'power') base = 'z^n';
+            if (base === 'zeta') base = 'ζ';
+            if (base === 'polynomial') base = 'P';
+            if (base === 'mobius') base = 'Möbius';
+            if (base === 'poincare') base = 'Poincare';
+            
+            if (f.chainedFunc && f.chainedFunc !== 'none') {
+                let inner = f.chainedFunc;
+                if (inner === 'power') inner = 'z^n';
+                if (inner === 'zeta') inner = 'ζ';
+                if (inner === 'polynomial') inner = 'P';
+                if (inner === 'mobius') inner = 'Möbius';
+                if (inner === 'poincare') inner = 'Poincare';
+                base = `${base}(${inner}(z))`;
+            } else {
+                base = `${base}(z)`;
+            }
+            if (f.power !== undefined && f.power !== 1) {
+                base = `(${base})^${f.power.toFixed(1)}`;
+            }
+            if (f.reciprocal) base = `1/(${base})`;
+            if (f.log) base = `ln(${base})`;
+            if (f.exp) base = `e^(${base})`;
+            return base;
+        }).join('·');
+
+        if (coeffStr === '') return factorsStr;
+        if (coeffStr === '-') return `-${factorsStr}`;
+        return `${coeffStr}·${factorsStr}`;
+    }
+
     state.algebraicChainingTerms.forEach((term, tIdx) => {
         const termCard = document.createElement('div');
         termCard.className = 'algebraic-term-card';
-        termCard.style.cssText = `
-            background: rgba(255, 255, 255, 0.04);
-            padding: 10px;
-            border-radius: 6px;
-            border: 1px solid var(--border-color);
-            display: flex;
-            flex-direction: column;
-            gap: 8px;
-            position: relative;
-            margin-bottom: 5px;
-        `;
         
         const header = document.createElement('div');
-        header.style.cssText = 'display: flex; align-items: center; justify-content: space-between; gap: 8px;';
+        header.className = 'algebraic-term-header';
+        
+        const titleWrapper = document.createElement('div');
+        titleWrapper.className = 'algebraic-term-title-wrapper';
         
         const title = document.createElement('span');
-        title.style.cssText = 'font-weight: 600; font-size: 0.8rem; color: var(--accent-purple);';
+        title.className = 'algebraic-term-title';
         title.textContent = `Term ${tIdx + 1}`;
-        header.appendChild(title);
+        titleWrapper.appendChild(title);
+        
+        const formulaPreview = document.createElement('div');
+        formulaPreview.className = 'algebraic-term-formula';
+        formulaPreview.textContent = getTermPreview(term);
+        titleWrapper.appendChild(formulaPreview);
+        
+        header.appendChild(titleWrapper);
         
         if (state.algebraicChainingTerms.length > 1) {
             const removeBtn = document.createElement('button');
             removeBtn.type = 'button';
-            removeBtn.style.cssText = 'background: transparent; border: none; color: #ff5555; cursor: pointer; font-size: 0.8rem; padding: 0 4px;';
-            removeBtn.textContent = '✕';
+            removeBtn.className = 'algebraic-term-remove-btn';
+            removeBtn.textContent = '✕ Remove';
             removeBtn.addEventListener('click', () => {
                 state.algebraicChainingTerms.splice(tIdx, 1);
                 renderAlgebraicChainingTerms();
@@ -1809,12 +1884,17 @@ function renderAlgebraicChainingTerms() {
         termCard.appendChild(header);
         
         const coeffGrid = document.createElement('div');
-        coeffGrid.style.cssText = 'display: grid; grid-template-columns: 1fr 1fr; gap: 8px;';
+        coeffGrid.className = 'algebraic-coeff-grid';
         
+        // Real Coefficient Slider
         const reDiv = document.createElement('div');
+        reDiv.className = 'algebraic-slider-row';
         const reLabel = document.createElement('label');
-        reLabel.style.cssText = 'font-size: 0.7rem; color: var(--text-secondary); display: block; margin-bottom: 2px;';
-        reLabel.innerHTML = `Re(coeff): <span style="color: var(--text-primary); font-weight: 500;">${term.coeff.re.toFixed(1)}</span>`;
+        reLabel.className = 'algebraic-slider-label';
+        reLabel.innerHTML = `Re coeff <span class="algebraic-slider-value">${term.coeff.re.toFixed(1)}</span>`;
+        
+        const reSliderContainer = document.createElement('div');
+        reSliderContainer.className = 'algebraic-slider-container';
         
         const reSlider = document.createElement('input');
         reSlider.type = 'range';
@@ -1822,21 +1902,29 @@ function renderAlgebraicChainingTerms() {
         reSlider.max = '5';
         reSlider.step = '0.1';
         reSlider.value = term.coeff.re;
-        reSlider.style.width = '100%';
+        
         reSlider.addEventListener('input', (e) => {
             term.coeff.re = parseFloat(e.target.value);
-            reLabel.querySelector('span').textContent = term.coeff.re.toFixed(1);
+            reLabel.querySelector('.algebraic-slider-value').textContent = term.coeff.re.toFixed(1);
+            formulaPreview.textContent = getTermPreview(term);
             updateTitlesAndGlobalUI();
             requestDomainRedraw(true);
         });
+        
+        reSliderContainer.appendChild(reSlider);
         reDiv.appendChild(reLabel);
-        reDiv.appendChild(reSlider);
+        reDiv.appendChild(reSliderContainer);
         coeffGrid.appendChild(reDiv);
         
+        // Imaginary Coefficient Slider
         const imDiv = document.createElement('div');
+        imDiv.className = 'algebraic-slider-row';
         const imLabel = document.createElement('label');
-        imLabel.style.cssText = 'font-size: 0.7rem; color: var(--text-secondary); display: block; margin-bottom: 2px;';
-        imLabel.innerHTML = `Im(coeff): <span style="color: var(--text-primary); font-weight: 500;">${term.coeff.im.toFixed(1)}</span>`;
+        imLabel.className = 'algebraic-slider-label';
+        imLabel.innerHTML = `Im coeff <span class="algebraic-slider-value">${term.coeff.im.toFixed(1)}</span>`;
+        
+        const imSliderContainer = document.createElement('div');
+        imSliderContainer.className = 'algebraic-slider-container';
         
         const imSlider = document.createElement('input');
         imSlider.type = 'range';
@@ -1844,25 +1932,28 @@ function renderAlgebraicChainingTerms() {
         imSlider.max = '5';
         imSlider.step = '0.1';
         imSlider.value = term.coeff.im;
-        imSlider.style.width = '100%';
+        
         imSlider.addEventListener('input', (e) => {
             term.coeff.im = parseFloat(e.target.value);
-            imLabel.querySelector('span').textContent = term.coeff.im.toFixed(1);
+            imLabel.querySelector('.algebraic-slider-value').textContent = term.coeff.im.toFixed(1);
+            formulaPreview.textContent = getTermPreview(term);
             updateTitlesAndGlobalUI();
             requestDomainRedraw(true);
         });
+        
+        imSliderContainer.appendChild(imSlider);
         imDiv.appendChild(imLabel);
-        imDiv.appendChild(imSlider);
+        imDiv.appendChild(imSliderContainer);
         coeffGrid.appendChild(imDiv);
         
         termCard.appendChild(coeffGrid);
         
         const factorsContainer = document.createElement('div');
-        factorsContainer.style.cssText = 'display: flex; flex-direction: column; gap: 6px; border-top: 1px solid rgba(255, 255, 255, 0.05); padding-top: 6px;';
+        factorsContainer.className = 'algebraic-factors-container';
         
         const factorsTitle = document.createElement('div');
-        factorsTitle.style.cssText = 'font-size: 0.7rem; font-weight: 500; color: var(--text-secondary); margin-bottom: 2px;';
-        factorsTitle.textContent = 'Functions product:';
+        factorsTitle.className = 'algebraic-factors-title';
+        factorsTitle.textContent = 'Factors';
         factorsContainer.appendChild(factorsTitle);
         
         const visibleFactors = [...term.factors];
@@ -1891,19 +1982,17 @@ function renderAlgebraicChainingTerms() {
         
         visibleFactors.forEach((factor, fIdx) => {
             const factorDiv = document.createElement('div');
-            factorDiv.style.cssText = 'background: rgba(0, 0, 0, 0.15); padding: 6px; border-radius: 4px; display: flex; flex-direction: column; gap: 4px; border: 1px solid rgba(255, 255, 255, 0.02);';
+            factorDiv.className = 'algebraic-factor-card';
             
             const row = document.createElement('div');
-            row.style.cssText = 'display: flex; align-items: center; justify-content: space-between; gap: 6px;';
+            row.className = 'algebraic-factor-main-row';
             
             const label = document.createElement('span');
-            label.style.cssText = 'font-size: 0.65rem; color: var(--text-secondary);';
-            label.textContent = `Factor ${fIdx + 1}:`;
+            label.className = 'algebraic-factor-label';
+            label.textContent = `Factor ${fIdx + 1}`;
             row.appendChild(label);
             
             const select = document.createElement('select');
-            select.className = 'control-select';
-            select.style.cssText = 'font-size: 0.75rem; padding: 2px 4px; height: auto; width: 120px;';
             funcOptions.forEach(opt => {
                 const o = document.createElement('option');
                 o.value = opt.value;
@@ -1939,20 +2028,18 @@ function renderAlgebraicChainingTerms() {
             
             if (factor.func !== 'none') {
                 const manipDiv = document.createElement('div');
-                manipDiv.style.cssText = 'border-top: 1px dashed rgba(255, 255, 255, 0.05); padding-top: 4px; margin-top: 4px; display: flex; flex-direction: column; gap: 4px;';
+                manipDiv.className = 'algebraic-factor-details';
                 
+                // Chain Select Row
                 const chainRow = document.createElement('div');
-                chainRow.style.cssText = 'display: flex; align-items: center; justify-content: space-between; gap: 6px;';
+                chainRow.className = 'algebraic-factor-detail-row';
                 
                 const chainLabel = document.createElement('span');
-                chainLabel.style.cssText = 'font-size: 0.65rem; color: var(--text-secondary);';
-                chainLabel.textContent = 'Chained f(g(z)):';
+                chainLabel.className = 'algebraic-factor-label';
+                chainLabel.textContent = 'Chain f(g(z))';
                 chainRow.appendChild(chainLabel);
                 
                 const chainSelect = document.createElement('select');
-                chainSelect.className = 'control-select';
-                chainSelect.style.cssText = 'font-size: 0.75rem; padding: 2px 4px; height: auto; width: 120px;';
-                
                 funcOptions.forEach(opt => {
                     const o = document.createElement('option');
                     o.value = opt.value;
@@ -1963,6 +2050,7 @@ function renderAlgebraicChainingTerms() {
                 
                 chainSelect.addEventListener('change', (e) => {
                     factor.chainedFunc = e.target.value;
+                    formulaPreview.textContent = getTermPreview(term);
                     updateTitlesAndGlobalUI();
                     syncParameterControlsPanelVisibility();
                     requestDomainRedraw(true);
@@ -1970,12 +2058,16 @@ function renderAlgebraicChainingTerms() {
                 chainRow.appendChild(chainSelect);
                 manipDiv.appendChild(chainRow);
                 
+                // Power Slider Row
                 const powerRow = document.createElement('div');
-                powerRow.style.cssText = 'display: flex; flex-direction: column; gap: 2px;';
+                powerRow.className = 'algebraic-slider-row';
                 
                 const powerLabel = document.createElement('label');
-                powerLabel.style.cssText = 'font-size: 0.65rem; color: var(--text-secondary); display: flex; justify-content: space-between;';
-                powerLabel.innerHTML = `Power: <span>${(factor.power || 1.0).toFixed(1)}</span>`;
+                powerLabel.className = 'algebraic-slider-label';
+                powerLabel.innerHTML = `Power <span class="algebraic-slider-value">${(factor.power || 1.0).toFixed(1)}</span>`;
+                
+                const powerSliderContainer = document.createElement('div');
+                powerSliderContainer.className = 'algebraic-slider-container';
                 
                 const powerSlider = document.createElement('input');
                 powerSlider.type = 'range';
@@ -1983,37 +2075,43 @@ function renderAlgebraicChainingTerms() {
                 powerSlider.max = '5';
                 powerSlider.step = '0.1';
                 powerSlider.value = factor.power !== undefined ? factor.power : 1.0;
-                powerSlider.style.width = '100%';
                 
                 powerSlider.addEventListener('input', (e) => {
                     factor.power = parseFloat(e.target.value);
-                    powerLabel.querySelector('span').textContent = factor.power.toFixed(1);
+                    powerLabel.querySelector('.algebraic-slider-value').textContent = factor.power.toFixed(1);
+                    formulaPreview.textContent = getTermPreview(term);
                     updateTitlesAndGlobalUI();
                     requestDomainRedraw(true);
                 });
                 
+                powerSliderContainer.appendChild(powerSlider);
                 powerRow.appendChild(powerLabel);
-                powerRow.appendChild(powerSlider);
+                powerRow.appendChild(powerSliderContainer);
                 manipDiv.appendChild(powerRow);
                 
+                // Modifier Checkboxes
                 const checkboxContainer = document.createElement('div');
-                checkboxContainer.style.cssText = 'display: flex; flex-wrap: wrap; gap: 8px; margin-top: 2px;';
+                checkboxContainer.className = 'algebraic-checkbox-row';
                 
                 const addCheck = (key, labelText) => {
                     const cbLabel = document.createElement('label');
-                    cbLabel.style.cssText = 'font-size: 0.65rem; display: flex; align-items: center; gap: 3px; cursor: pointer; color: var(--text-secondary);';
+                    cbLabel.className = 'algebraic-checkbox-label';
                     
                     const cb = document.createElement('input');
                     cb.type = 'checkbox';
                     cb.checked = !!factor[key];
-                    cb.style.cssText = 'margin: 0;';
                     cb.addEventListener('change', (e) => {
                         factor[key] = e.target.checked;
+                        formulaPreview.textContent = getTermPreview(term);
                         updateTitlesAndGlobalUI();
                         requestDomainRedraw(true);
                     });
                     
+                    const customVisual = document.createElement('span');
+                    customVisual.className = 'custom-checkbox-visual';
+                    
                     cbLabel.appendChild(cb);
+                    cbLabel.appendChild(customVisual);
                     cbLabel.appendChild(document.createTextNode(labelText));
                     checkboxContainer.appendChild(cbLabel);
                 };

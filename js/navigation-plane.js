@@ -249,7 +249,7 @@ function followNavigationViewports() {
 
 let _navImageStateSaved = null;
 
-function applyNavigationImageState() {
+function applyNavigationImageState(pos) {
     const img = getRocketImageForHeading(state.navigationHeading);
     if (!img || !(img instanceof HTMLImageElement) || !img.complete || img.naturalWidth === 0) {
         return false;
@@ -257,24 +257,24 @@ function applyNavigationImageState() {
 
     // Save existing state
     _navImageStateSaved = {
-        currentInputShape:   state.currentInputShape,
-        uploadedImage:       state.uploadedImage,
-        imageAspectRatio:    state.imageAspectRatio,
-        imageSize:           state.imageSize,
-        imageOpacity:        state.imageOpacity,
-        a0:                  state.a0,
-        b0:                  state.b0,
+        currentInputShape: state.currentInputShape,
+        uploadedImage: state.uploadedImage,
+        imageAspectRatio: state.imageAspectRatio,
+        imageSize: state.imageSize,
+        imageOpacity: state.imageOpacity,
+        a0: state.a0,
+        b0: state.b0,
         imageContentVersion: state.imageContentVersion,
     };
 
     // Inject the rocket image as the active raster source
-    state.currentInputShape  = 'image';
-    state.uploadedImage      = img;
-    state.imageAspectRatio   = img.naturalWidth / Math.max(1, img.naturalHeight);
-    state.imageSize          = state.navigationSize * 2;
-    state.imageOpacity       = state.navigationOpacity;
-    state.a0                 = state.navigationPosition.re;
-    state.b0                 = state.navigationPosition.im;
+    state.currentInputShape = 'image';
+    state.uploadedImage = img;
+    state.imageAspectRatio = img.naturalWidth / Math.max(1, img.naturalHeight);
+    state.imageSize = state.navigationSize * 2;
+    state.imageOpacity = state.navigationOpacity;
+    state.a0 = pos.re;
+    state.b0 = pos.im;
     state.imageContentVersion = _navImageStateSaved.imageContentVersion + 1;
 
     return true;
@@ -283,13 +283,13 @@ function applyNavigationImageState() {
 function restoreNavigationImageState() {
     if (!_navImageStateSaved) return;
 
-    state.currentInputShape   = _navImageStateSaved.currentInputShape;
-    state.uploadedImage       = _navImageStateSaved.uploadedImage;
-    state.imageAspectRatio    = _navImageStateSaved.imageAspectRatio;
-    state.imageSize           = _navImageStateSaved.imageSize;
-    state.imageOpacity        = _navImageStateSaved.imageOpacity;
-    state.a0                  = _navImageStateSaved.a0;
-    state.b0                  = _navImageStateSaved.b0;
+    state.currentInputShape = _navImageStateSaved.currentInputShape;
+    state.uploadedImage = _navImageStateSaved.uploadedImage;
+    state.imageAspectRatio = _navImageStateSaved.imageAspectRatio;
+    state.imageSize = _navImageStateSaved.imageSize;
+    state.imageOpacity = _navImageStateSaved.imageOpacity;
+    state.a0 = _navImageStateSaved.a0;
+    state.b0 = _navImageStateSaved.b0;
     state.imageContentVersion = _navImageStateSaved.imageContentVersion;
 
     _navImageStateSaved = null;
@@ -319,25 +319,33 @@ function drawNavigationTrail(ctx, planeParams, transformFunc) {
  * This function injects the rocket image into the global state, then calls the
  * SAME pipeline that the regular image-upload feature uses:
  *   - Z-plane: drawImageWithWebGL(ctx, planeParams, false)
- *   - W-plane: drawImageWithWebGL(ctx, planeParams, true, 0)
+ *   - W-plane: drawImageWithWebGL(ctx, planeParams, false, 0)
  *
- * The pipeline reads state.uploadedImage, state.a0/b0, state.imageSize, etc.
- * to position and transform the image. We just set those to match the rocket.
+ * Since the position is pre-mapped via the global JS transform function,
+ * WebGL is called with isWP = false (identity mapping) on both planes to render
+ * the vehicle correctly without distortions or branch-cut issues.
  */
 function drawNavigationLayer(ctx, planeParams, planeKey, transformFunc = null) {
     if (!state.navigationModeEnabled) return;
 
-    const isWPlane = !!transformFunc;
-
     // Draw trail
     drawNavigationTrail(ctx, planeParams, transformFunc);
 
-    // Inject the rocket image into state, then use the normal pipeline
-    if (!applyNavigationImageState()) return;
+    // Compute the correct position of the vehicle in this plane's coordinates
+    const pos = transformFunc
+        ? transformFunc(state.navigationPosition.re, state.navigationPosition.im)
+        : state.navigationPosition;
+
+    if (!pos || isNaN(pos.re) || isNaN(pos.im) || !isFinite(pos.re) || !isFinite(pos.im)) {
+        return;
+    }
+
+    // Inject the rocket image into state, centering it at pos
+    if (!applyNavigationImageState(pos)) return;
 
     try {
         if (typeof drawImageWithWebGL === 'function') {
-            drawImageWithWebGL(ctx, planeParams, isWPlane, 0);
+            drawImageWithWebGL(ctx, planeParams, false, 0);
         }
     } finally {
         restoreNavigationImageState();
