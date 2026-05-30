@@ -288,6 +288,24 @@ const CONSTANT_MAP_MIN_GLOBAL_SAMPLES = 9;
 const CONSTANT_MAP_MIN_LINE_SAMPLES = 5;
 const CONSTANT_MAP_MAX_LINE_SAMPLES = 96;
 const CONSTANT_MAP_RELIABLE_RADIUS = 4;
+// Transform-level probe points are deliberately independent of the visible camera window.
+const CONSTANT_MAP_DIAGNOSTIC_STENCIL = Object.freeze([
+    Object.freeze({ re: 0, im: 0 }),
+    Object.freeze({ re: 1, im: 0 }),
+    Object.freeze({ re: -1, im: 0.75 }),
+    Object.freeze({ re: 0.5, im: -1 }),
+    Object.freeze({ re: 2.25, im: 0.25 }),
+    Object.freeze({ re: -2, im: -0.5 }),
+    Object.freeze({ re: 1.75, im: 1.25 }),
+    Object.freeze({ re: -1.5, im: -1.25 }),
+    Object.freeze({ re: 0.25, im: 2 }),
+    Object.freeze({ re: -0.75, im: -2 }),
+    Object.freeze({ re: 2, im: -1.75 }),
+    Object.freeze({ re: -2.25, im: 1.5 }),
+    Object.freeze({ re: 0.33, im: -2.5 }),
+    Object.freeze({ re: 2.75, im: 2.25 }),
+    Object.freeze({ re: -2.5, im: -2.25 })
+]);
 
 function getConstantMapTolerance(w) {
     return CONSTANT_MAP_ABS_EPSILON + CONSTANT_MAP_REL_EPSILON * Math.max(1, Math.hypot(w.re, w.im));
@@ -357,51 +375,12 @@ function getConstantCluster(samples, minValidSamples = CONSTANT_MAP_MIN_LINE_SAM
     };
 }
 
-function getAxisSamplesNearOrigin(minValue, maxValue) {
-    const reliableMin = Math.max(minValue, -CONSTANT_MAP_RELIABLE_RADIUS);
-    const reliableMax = Math.min(maxValue, CONSTANT_MAP_RELIABLE_RADIUS);
-    if (!Number.isFinite(reliableMin) || !Number.isFinite(reliableMax) || reliableMin > reliableMax) {
-        return [];
-    }
-
-    const baseOffsets = [-2, -1, -0.5, 0, 0.5, 1, 2];
-    const samples = [];
-    const addUnique = value => {
-        if (!Number.isFinite(value) || value < reliableMin || value > reliableMax) return;
-        if (!samples.some(existing => Math.abs(existing - value) <= 1e-12)) {
-            samples.push(value);
-        }
-    };
-
-    baseOffsets.forEach(addUnique);
-
-    if (samples.length < 3) {
-        const span = reliableMax - reliableMin;
-        for (let i = 0; i <= 4; i++) {
-            addUnique(span === 0 ? reliableMin : reliableMin + (i / 4) * span);
-        }
-    }
-
-    return samples.sort((a, b) => a - b);
-}
-
-function detectConstantTransformNearVisibleOrigin(tf, sourcePlaneParams) {
-    const xRange = sourcePlaneParams.currentVisXRange || sourcePlaneParams.xRange || [-1, 1];
-    const yRange = sourcePlaneParams.currentVisYRange || sourcePlaneParams.yRange || [-1, 1];
-    const xSamples = getAxisSamplesNearOrigin(xRange[0], xRange[1]);
-    const ySamples = getAxisSamplesNearOrigin(yRange[0], yRange[1]);
-
-    if (xSamples.length === 0 || ySamples.length === 0) {
-        return null;
-    }
-
+function detectConstantTransformByStableStencil(tf) {
     const mappedSamples = [];
-    for (const re of xSamples) {
-        for (const im of ySamples) {
-            const w = evaluateRenderedTransform(tf, { re, im });
-            if (w) {
-                mappedSamples.push(w);
-            }
+    for (const z_pt of CONSTANT_MAP_DIAGNOSTIC_STENCIL) {
+        const w = evaluateRenderedTransform(tf, z_pt);
+        if (w) {
+            mappedSamples.push(w);
         }
     }
 
@@ -689,7 +668,7 @@ function drawPlanarTransformedShape(ctx, planeParams, tf, options = {}) {
                 currentFunction: state.currentFunction,
                 zetaContinuationEnabled: state.zetaContinuationEnabled
             });
-            const constantTransform = detectConstantTransformNearVisibleOrigin(tf, zPlaneParams);
+            const constantTransform = detectConstantTransformByStableStencil(tf);
             if (constantTransform) {
                 const constantColor = (pointSets.find(pointSet => pointSet && pointSet.color) || {}).color || COLOR_Z_GRID_HORZ;
                 drawConstantMappedPoint(ctx, planeParams, constantTransform.value, constantColor);
