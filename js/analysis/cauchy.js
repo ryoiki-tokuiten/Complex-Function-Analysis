@@ -9,7 +9,7 @@ function performCauchyAnalysis() {
     }
     controls.cauchy_integral_results_info.classList.remove('hidden');
 
-    const func = transformFunctions[state.currentFunction];
+    const func = getChainedTransformFunction(state.currentFunction);
     if (!func) {
         controls.cauchy_integral_results_info.innerHTML = 'Error: Current function not found.';
         return;

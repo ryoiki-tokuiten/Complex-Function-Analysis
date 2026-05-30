@@ -648,6 +648,7 @@ function drawPlanarTransformedProbe(ctx, planeParams, tf, index) {
         // Output Chaining: "Spiderweb" Orbit Trajectory
         if (index === 0 && state.chainingEnabled && state.chainCount > 1) {
             const baseFunc = transformFunctions[state.currentFunction];
+            const baseProfile = getMappedTransformProfile(state.currentFunction, baseFunc);
             let w_prev = pW;
             let w_0 = pW;
             let last_canvas_pt = p_p_c;
@@ -666,7 +667,7 @@ function drawPlanarTransformedProbe(ctx, planeParams, tf, index) {
                     case 'exp': w_k = complexExp(w_prev); break;
                     case 'reciprocal': w_k = complexReciprocal(w_prev); break;
                     case 'recursion':
-                    default: w_k = baseFunc(w_prev); break;
+                    default: w_k = evaluateMappedTransform(baseProfile, w_prev.re, w_prev.im) || { re: NaN, im: NaN }; break;
                 }
 
                 if (!w_k || isNaN(w_k.re) || isNaN(w_k.im) || !isFinite(w_k.re) || !isFinite(w_k.im) || !isNumericallyStable(w_k)) break;

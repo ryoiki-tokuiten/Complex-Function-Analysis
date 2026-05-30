@@ -380,7 +380,7 @@ function updateProbeInfo(){
         
         const z_str = `z = ${formatProbeComplex(state.probeZ.re, state.probeZ.im)}`;
         controls.zPlaneProbeInfo.innerHTML = z_str; controls.zPlaneProbeInfo.classList.remove('hidden');
-        const tf = transformFunctions[state.currentFunction]; const pW = tf(state.probeZ.re, state.probeZ.im);
+        const tf = getChainedTransformFunction(state.currentFunction); const pW = tf(state.probeZ.re, state.probeZ.im);
         let w_info = "";
         if(!isNaN(pW.re) && !isNaN(pW.im) && isFinite(pW.re) && isFinite(pW.im)){
             w_info += `w = ${formatProbeComplex(pW.re, pW.im)}<br>`;
@@ -575,6 +575,66 @@ function updateTitlesAndGlobalUI() {
         return res;
     }
 
+    function getChainedFormula(baseFormulaStr, chainingMode, chainCount) {
+        if (!state.chainingEnabled || chainCount <= 1) {
+            return baseFormulaStr;
+        }
+        let formula = baseFormulaStr;
+        switch (chainingMode) {
+            case 'power':
+                formula = `(${baseFormulaStr})<sup>${chainCount}</sup>`;
+                break;
+            case 'sqrt':
+                for (let i = 1; i < chainCount; i++) {
+                    formula = `√(${formula})`;
+                }
+                break;
+            case 'ln':
+                for (let i = 1; i < chainCount; i++) {
+                    formula = `ln(${formula})`;
+                }
+                break;
+            case 'exp':
+                for (let i = 1; i < chainCount; i++) {
+                    formula = `e<sup>${formula}</sup>`;
+                }
+                break;
+            case 'reciprocal':
+                for (let i = 1; i < chainCount; i++) {
+                    formula = `1/(${formula})`;
+                }
+                break;
+            case 'recursion':
+            default:
+                let symbol = state.currentFunction;
+                if (symbol === 'exp') symbol = 'e<sup>(·)</sup>';
+                else if (symbol === 'ln') symbol = 'ln(·)';
+                else if (symbol === 'reciprocal') symbol = '1/(·)';
+                else if (symbol === 'zeta') symbol = 'ζ(·)';
+                else if (symbol === 'polynomial') symbol = `P<sub>deg ${state.polynomialN}</sub>(·)`;
+                else if (symbol === 'mobius') symbol = 'Möbius(·)';
+                else if (symbol === 'power') symbol = `(·)<sup>${Number((state.fractionalPowerN || 0.5).toFixed(2))}</sup>`;
+                else if (symbol === 'poincare') symbol = 'Poincare(·)';
+                else if (symbol === 'sinh') symbol = 'sinh(·)';
+                else if (symbol === 'cosh') symbol = 'cosh(·)';
+                else if (symbol === 'tanh') symbol = 'tanh(·)';
+                else if (symbol === 'algebraic_chaining') {
+                    symbol = 'f<sub>alg</sub>(·)';
+                } else {
+                    symbol = `${symbol}(·)`;
+                }
+                for (let i = 1; i < chainCount; i++) {
+                    if (symbol.includes('(·)')) {
+                        formula = symbol.replace('(·)', formula);
+                    } else {
+                        formula = `${symbol}(${formula})`;
+                    }
+                }
+                break;
+        }
+        return formula;
+    }
+
     let fND; 
     if (state.currentFunction === 'algebraic_chaining') {
         if (!state.algebraicChainingTerms || state.algebraicChainingTerms.length === 0) {
@@ -617,6 +677,10 @@ function updateTitlesAndGlobalUI() {
     else if (state.currentFunction === 'cosh') fND = 'cosh(z)';
     else if (state.currentFunction === 'tanh') fND = 'tanh(z)';
     else fND = `${state.currentFunction}(z)`;
+
+    if (state.chainingEnabled && state.chainCount > 1) {
+        fND = getChainedFormula(fND, state.chainingMode, state.chainCount);
+    }
 
     let zPlaneTitleText = "z-plane (Input";
     if (state.currentInputShape === 'line') zPlaneTitleText += ": Lines)";

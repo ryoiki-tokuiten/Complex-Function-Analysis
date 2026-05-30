@@ -504,6 +504,9 @@ const _VF_FS = [
 ].join('\n');
 
 function drawVectorFieldWithWebGL(ctx, planeParams) {
+    if (state.chainingEnabled && state.chainCount > 1) {
+        return false;
+    }
     const funcId = getWebGLDomainColorFunctionIdShared(state.currentFunction);
     if (funcId === 0) return false;
 

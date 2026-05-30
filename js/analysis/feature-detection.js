@@ -5,7 +5,7 @@ function findCriticalPoints() {
     if (!state.showCriticalPoints || !isZPlanar) return;
 
 
-    const func = transformFunctions[state.currentFunction];
+    const func = getChainedTransformFunction(state.currentFunction);
     const { currentVisXRange: xR, currentVisYRange: yR } = zPlaneParams;
     
     const cpCheckDist = (xR[1] - xR[0]) / CRITICAL_POINT_FIND_GRID_SIZE * ZP_CP_CHECK_DISTANCE_FACTOR;
@@ -86,7 +86,7 @@ function findZerosAndPoles() {
     if (!state.showZerosPoles || !isZPlanar) return;
 
 
-    const funcOriginal = transformFunctions[state.currentFunction]; 
+    const funcOriginal = getChainedTransformFunction(state.currentFunction); 
     const { currentVisXRange: xR, currentVisYRange: yR } = zPlaneParams;
     const zpCheckDist = (xR[1] - xR[0]) / ZERO_POLE_GRID_SIZE * ZP_CP_CHECK_DISTANCE_FACTOR; 
 
@@ -127,66 +127,70 @@ function findZerosAndPoles() {
     const N_subdivision_points = 30; 
 
     
-    if (['exp', 'poincare'].includes(state.currentFunction)) {
-        state.zeros = []; state.poles = []; return;
-    }
-    if (state.currentFunction === 'sin') {
-        for (let n = Math.ceil(xR[0] / Math.PI) - 1; n <= Math.floor(xR[1] / Math.PI) + 1; n++) addZero(n * Math.PI, 0);
-        state.poles = []; return;
-    }
-    if (state.currentFunction === 'cos') {
-        for (let n = Math.ceil(xR[0] / Math.PI - 0.5) - 1; n <= Math.floor(xR[1] / Math.PI - 0.5) + 1; n++) addZero((n + 0.5) * Math.PI, 0);
-        state.poles = []; return;
-    }
-    if (state.currentFunction === 'tan') {
-        for (let n = Math.ceil(xR[0] / Math.PI) - 1; n <= Math.floor(xR[1] / Math.PI) + 1; n++) addZero(n * Math.PI, 0);
-        for (let n = Math.ceil(xR[0] / Math.PI - 0.5) - 1; n <= Math.floor(xR[1] / Math.PI - 0.5) + 1; n++) addPole((n + 0.5) * Math.PI, 0, 'pole', 1); 
-        return;
-    }
-    if (state.currentFunction === 'sec') { 
-        state.zeros = [];
-        for (let n = Math.ceil(xR[0] / Math.PI - 0.5) - 1; n <= Math.floor(xR[1] / Math.PI - 0.5) + 1; n++) addPole((n + 0.5) * Math.PI, 0, 'pole', 1); 
-        return;
-    }
-    if (state.currentFunction === 'reciprocal') { 
-        addPole(0,0, 'pole', 1); state.zeros = []; return;
-    }
-     if (state.currentFunction === 'ln') { 
-        addZero(1,0); addPole(0,0, 'branch_point'); return;
-    }
+    const isChained = state.chainingEnabled && state.chainCount > 1;
 
-    
-    if (state.currentFunction === 'polynomial') {
-        
-        
-        const coeffsForDK = state.polynomialCoeffs.map(c => c.re).reverse();
-        const roots = findPolynomialRoots_DurandKerner(coeffsForDK); 
-        roots.forEach(root => addZero(root.real, root.imag));
-        state.poles = []; 
-        return;
-    }
+    if (!isChained) {
+        if (['exp', 'poincare'].includes(state.currentFunction)) {
+            state.zeros = []; state.poles = []; return;
+        }
+        if (state.currentFunction === 'sin') {
+            for (let n = Math.ceil(xR[0] / Math.PI) - 1; n <= Math.floor(xR[1] / Math.PI) + 1; n++) addZero(n * Math.PI, 0);
+            state.poles = []; return;
+        }
+        if (state.currentFunction === 'cos') {
+            for (let n = Math.ceil(xR[0] / Math.PI - 0.5) - 1; n <= Math.floor(xR[1] / Math.PI - 0.5) + 1; n++) addZero((n + 0.5) * Math.PI, 0);
+            state.poles = []; return;
+        }
+        if (state.currentFunction === 'tan') {
+            for (let n = Math.ceil(xR[0] / Math.PI) - 1; n <= Math.floor(xR[1] / Math.PI) + 1; n++) addZero(n * Math.PI, 0);
+            for (let n = Math.ceil(xR[0] / Math.PI - 0.5) - 1; n <= Math.floor(xR[1] / Math.PI - 0.5) + 1; n++) addPole((n + 0.5) * Math.PI, 0, 'pole', 1); 
+            return;
+        }
+        if (state.currentFunction === 'sec') { 
+            state.zeros = [];
+            for (let n = Math.ceil(xR[0] / Math.PI - 0.5) - 1; n <= Math.floor(xR[1] / Math.PI - 0.5) + 1; n++) addPole((n + 0.5) * Math.PI, 0, 'pole', 1); 
+            return;
+        }
+        if (state.currentFunction === 'reciprocal') { 
+            addPole(0,0, 'pole', 1); state.zeros = []; return;
+        }
+         if (state.currentFunction === 'ln') { 
+            addZero(1,0); addPole(0,0, 'branch_point'); return;
+        }
 
-    if (state.currentFunction === 'mobius') {
         
-        
-        
-        
-        if (state.mobiusA.re !== 0 || state.mobiusA.im !== 0) {
-            const negB = {re: -state.mobiusB.re, im: -state.mobiusB.im};
-            const zero_mobius = complexDivide(negB, state.mobiusA); 
-            addZero(zero_mobius.re, zero_mobius.im);
-        } else if (state.mobiusB.re !== 0 || state.mobiusB.im !== 0) {
+        if (state.currentFunction === 'polynomial') {
             
+            
+            const coeffsForDK = state.polynomialCoeffs.map(c => c.re).reverse();
+            const roots = findPolynomialRoots_DurandKerner(coeffsForDK); 
+            roots.forEach(root => addZero(root.real, root.imag));
+            state.poles = []; 
+            return;
         }
 
-        if (state.mobiusC.re !== 0 || state.mobiusC.im !== 0) {
-            const negD = {re: -state.mobiusD.re, im: -state.mobiusD.im};
-            const pole_mobius = complexDivide(negD, state.mobiusC); 
-            addPole(pole_mobius.re, pole_mobius.im, 'pole', 1); 
+        if (state.currentFunction === 'mobius') {
+            
+            
+            
+            
+            if (state.mobiusA.re !== 0 || state.mobiusA.im !== 0) {
+                const negB = {re: -state.mobiusB.re, im: -state.mobiusB.im};
+                const zero_mobius = complexDivide(negB, state.mobiusA); 
+                addZero(zero_mobius.re, zero_mobius.im);
+            } else if (state.mobiusB.re !== 0 || state.mobiusB.im !== 0) {
+                
+            }
+
+            if (state.mobiusC.re !== 0 || state.mobiusC.im !== 0) {
+                const negD = {re: -state.mobiusD.re, im: -state.mobiusD.im};
+                const pole_mobius = complexDivide(negD, state.mobiusC); 
+                addPole(pole_mobius.re, pole_mobius.im, 'pole', 1); 
+            }
+            
+            
+            return;
         }
-        
-        
-        return;
     }
 
     
@@ -194,7 +198,7 @@ function findZerosAndPoles() {
     const generalAnalyticFunctions = ['zeta', 'sin', 'cos', 'tan', 'sec', 'exp', 'ln', 'reciprocal']; 
 
     
-    if (generalAnalyticFunctions.includes(state.currentFunction)) {
+    if (isChained || generalAnalyticFunctions.includes(state.currentFunction)) {
 
         
         const funcForSubdivision = (zComplex) => {

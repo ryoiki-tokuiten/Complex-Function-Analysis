@@ -1407,15 +1407,6 @@ window.setupEventListeners = function () {
     if (controls.enableChainingCb) {
         controls.enableChainingCb.addEventListener('change', (e) => {
             state.chainingEnabled = e.target.checked;
-            if (state.chainingEnabled && state.algebraicChainingEnabled) {
-                state.algebraicChainingEnabled = false;
-                if (controls.enableAlgebraicChainingCb) controls.enableAlgebraicChainingCb.checked = false;
-                if (controls.algebraicChainingControlsContainer) controls.algebraicChainingControlsContainer.style.display = 'none';
-                state.currentFunction = 'cos';
-                setActiveFunctionButton('cos');
-                updateTitlesAndGlobalUI();
-                syncParameterControlsPanelVisibility();
-            }
             if (controls.chainingControlsContainer) {
                 controls.chainingControlsContainer.style.display = state.chainingEnabled ? 'block' : 'none';
             }
@@ -1743,14 +1734,6 @@ function bindAlgebraicChainingControls() {
                 state.currentFunction = 'algebraic_chaining';
                 if (typeof setActiveFunctionButton === 'function') {
                     setActiveFunctionButton('algebraic_chaining');
-                }
-                if (state.chainingEnabled) {
-                    state.chainingEnabled = false;
-                    if (controls.enableChainingCb) controls.enableChainingCb.checked = false;
-                    if (controls.chainingControlsContainer) controls.chainingControlsContainer.style.display = 'none';
-                    if (typeof updateChainingColumns === 'function') {
-                        updateChainingColumns(1);
-                    }
                 }
                 renderAlgebraicChainingTerms();
             } else {

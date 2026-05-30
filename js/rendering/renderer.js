@@ -139,13 +139,16 @@ function buildPlanarLayerCacheKey(isWPlane) {
 
     appendCurrentFunctionStateToCacheKey(keyParts);
 
+    keyParts.push(`chain:${state.chainingEnabled ? 1 : 0}`);
+    if (state.chainingEnabled) {
+        keyParts.push(`cM:${state.chainingMode}`);
+        keyParts.push(`cC:${state.chainCount}`);
+    }
+
     if (isWPlane) {
         if (state.taylorSeriesEnabled) {
             appendPointToCacheKey(keyParts, 'tC', state.taylorSeriesCenter);
             keyParts.push(`tO:${state.taylorSeriesOrder}`);
-        }
-        if (state.chainingEnabled) {
-            keyParts.push(`cM:${state.chainingMode}`);
         }
     }
     return keyParts.join('|');
@@ -354,7 +357,7 @@ function drawZPlaneContent(){
         return;
     }
     
-    const curFunc=transformFunctions[state.currentFunction];
+    const curFunc = getChainedTransformFunction(state.currentFunction);
     const drawZAsSphere = state.riemannSphereViewEnabled && !state.splitViewEnabled;
 
     if(drawZAsSphere){
@@ -490,7 +493,9 @@ function drawZPlaneContent(){
 }
 
 function drawWPlaneContent() {
-    const baseFunc = transformFunctions[state.currentFunction];
+    const baseFunc = getEffectiveBaseTransformFunction(state.currentFunction);
+    const baseProfile = getMappedTransformProfile(state.currentFunction, baseFunc);
+    const evalBaseFunc = value => evaluateMappedTransform(baseProfile, value.re, value.im) || { re: NaN, im: NaN };
     if (state.fourierModeEnabled || state.laplaceModeEnabled) {
         // Ensure lists exist to prevent errors during early setup
         if (!wCanvasList || wCanvasList.length === 0) return;
@@ -512,7 +517,7 @@ function drawWPlaneContent() {
             case 'power':
                 curFunc = (re, im) => {
                     const temp = prevFunc(re, im);
-                    const w0 = baseFunc(re, im);
+                    const w0 = evaluateMappedTransform(baseProfile, re, im) || { re: NaN, im: NaN };
                     return complexMul(temp, w0);
                 };
                 break;
@@ -544,7 +549,7 @@ function drawWPlaneContent() {
             default:
                 curFunc = (re, im) => {
                     const temp = prevFunc(re, im);
-                    return baseFunc(temp);
+                    return evalBaseFunc(temp);
                 };
                 break;
         }

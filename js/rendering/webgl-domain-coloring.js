@@ -395,6 +395,9 @@ function renderDomainColoringWithWebGL(targetCtx, planeParams, options = null) {
     if (!renderer || !renderer.gl) return false;
 
     const isWPlaneColoring = !!opts.isWPlaneColoring;
+    if (!isWPlaneColoring && state.chainingEnabled && state.chainCount > 1) {
+        return false;
+    }
     const functionName = state.currentFunction;
     if (!isWebGLDomainColoringFunctionSupported(functionName, isWPlaneColoring)) {
         warnWebGLDomainFunctionFallback(functionName);

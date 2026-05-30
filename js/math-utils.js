@@ -581,7 +581,7 @@ function complexPoincareCustomMetric(a, b) {
 
 
 function numericDerivative(funcName, z, h = 1e-7) {
-    const func = transformFunctions[funcName];
+    const func = getChainedTransformFunction(funcName);
     if (!func) return {re: NaN, im: NaN};
     const step = Number.isFinite(h) ? h : 1e-7;
 
@@ -890,6 +890,78 @@ function evaluateMappedTransform(profileOrTransform, re, im, functionKey = state
         { re, im },
         profileOrTransform.functionKey || functionKey
     );
+}
+
+function getEffectiveBaseTransformFunction(funcKey = state.currentFunction) {
+    let baseFunc = transformFunctions[funcKey];
+    if (!baseFunc) return (re, im) => ({ re, im });
+    
+    if (state.taylorSeriesEnabled && (!state.riemannSphereViewEnabled || state.splitViewEnabled)) {
+        if (typeof createTaylorApproximationTransform === 'function') {
+            baseFunc = createTaylorApproximationTransform(
+                funcKey,
+                state.taylorSeriesCenter,
+                state.taylorSeriesOrder
+            );
+        }
+    }
+    return baseFunc;
+}
+
+function getChainedTransformFunction(funcKey = state.currentFunction) {
+    const baseFunc = getEffectiveBaseTransformFunction(funcKey);
+    if (!state.chainingEnabled || state.chainCount <= 1) {
+        return baseFunc;
+    }
+    const baseProfile = getMappedTransformProfile(funcKey, baseFunc);
+    const evalBaseFunc = value => evaluateMappedTransform(baseProfile, value.re, value.im) || { re: NaN, im: NaN };
+    
+    let curFunc = baseFunc;
+    const count = state.chainCount;
+    for (let i = 1; i < count; i++) {
+        const prevFunc = curFunc;
+        switch(state.chainingMode) {
+            case 'power':
+                curFunc = (re, im) => {
+                    const temp = prevFunc(re, im);
+                    const w0 = evaluateMappedTransform(baseProfile, re, im) || { re: NaN, im: NaN };
+                    return complexMul(temp, w0);
+                };
+                break;
+            case 'sqrt':
+                curFunc = (re, im) => {
+                    const temp = prevFunc(re, im);
+                    return complexPow(temp, 0.5, 0);
+                };
+                break;
+            case 'ln':
+                curFunc = (re, im) => {
+                    const temp = prevFunc(re, im);
+                    return complexLn(temp);
+                };
+                break;
+            case 'exp':
+                curFunc = (re, im) => {
+                    const temp = prevFunc(re, im);
+                    return complexExp(temp);
+                };
+                break;
+            case 'reciprocal':
+                curFunc = (re, im) => {
+                    const temp = prevFunc(re, im);
+                    return complexReciprocal(temp);
+                };
+                break;
+            case 'recursion':
+            default:
+                curFunc = (re, im) => {
+                    const temp = prevFunc(re, im);
+                    return evalBaseFunc(temp);
+                };
+                break;
+        }
+    }
+    return curFunc;
 }
 
 

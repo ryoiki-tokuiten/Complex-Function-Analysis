@@ -226,7 +226,7 @@ function centerPlaneOnNavigationPoint(planeParams, point, panState) {
 function followNavigationViewports() {
     let shifted = centerPlaneOnNavigationPoint(zPlaneParams, state.navigationPosition, state.panStateZ);
 
-    const transformFunc = transformFunctions[state.currentFunction];
+    const transformFunc = getChainedTransformFunction(state.currentFunction);
     if (typeof transformFunc !== 'function') return shifted;
 
     // Center w-plane on the mapped point of the vehicle position
