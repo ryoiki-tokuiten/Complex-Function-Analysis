@@ -31,9 +31,24 @@ function updateSliderLabelsAndDisplay() {
             const isCircle = state.currentInputShape === 'circle';
             const isEllipse = state.currentInputShape === 'ellipse';
             const isHyperbola = state.currentInputShape === 'hyperbola';
-            const isMobiusFunc = state.currentFunction === 'mobius';
-            const isPolyFunc = state.currentFunction === 'polynomial';
-            const isPowerFunc = state.currentFunction === 'power';
+            let hasMobiusInChain = false;
+            let hasPolyInChain = false;
+            let hasPowerInChain = false;
+            if (state.algebraicChainingEnabled && state.algebraicChainingTerms) {
+                state.algebraicChainingTerms.forEach(t => {
+                    if (t.factors) {
+                        t.factors.forEach(f => {
+                            if (f.func === 'mobius' || f.chainedFunc === 'mobius') hasMobiusInChain = true;
+                            if (f.func === 'polynomial' || f.chainedFunc === 'polynomial') hasPolyInChain = true;
+                            if (f.func === 'power' || f.chainedFunc === 'power') hasPowerInChain = true;
+                        });
+                    }
+                });
+            }
+
+            const isMobiusFunc = (state.currentFunction === 'mobius') || hasMobiusInChain;
+            const isPolyFunc = (state.currentFunction === 'polynomial') || hasPolyInChain;
+            const isPowerFunc = (state.currentFunction === 'power') || hasPowerInChain;
             const isStripH = state.currentInputShape === 'strip_horizontal';
             const isSectorA = state.currentInputShape === 'sector_angular';
             const isImage = state.currentInputShape === 'image';
@@ -329,6 +344,23 @@ function syncTaylorSeriesPresetSelection() {
         });
 }
 
+function formatProbeValue(v) {
+    if (v === 0) return '0';
+    const absV = Math.abs(v);
+    if (absV >= 0.001 && absV < 1e6) {
+        return v.toFixed(3);
+    }
+    return v.toExponential(3);
+}
+
+function formatProbeComplex(re, im) {
+    const reStr = formatProbeValue(re);
+    const imAbs = Math.abs(im);
+    const imSign = im >= 0 ? '+' : '-';
+    const imStr = formatProbeValue(imAbs);
+    return `${reStr} ${imSign} ${imStr}i`;
+}
+
 function updateProbeInfo(){
     try {
         const zIsPlanar = !state.riemannSphereViewEnabled || state.splitViewEnabled;
@@ -346,12 +378,12 @@ function updateProbeInfo(){
             return;
         }
         
-        const z_str = `z = ${state.probeZ.re.toFixed(3)} + ${state.probeZ.im.toFixed(3)}i`;
+        const z_str = `z = ${formatProbeComplex(state.probeZ.re, state.probeZ.im)}`;
         controls.zPlaneProbeInfo.innerHTML = z_str; controls.zPlaneProbeInfo.classList.remove('hidden');
         const tf = transformFunctions[state.currentFunction]; const pW = tf(state.probeZ.re, state.probeZ.im);
         let w_info = "";
         if(!isNaN(pW.re) && !isNaN(pW.im) && isFinite(pW.re) && isFinite(pW.im)){
-            w_info += `w = ${pW.re.toFixed(3)} + ${pW.im.toFixed(3)}i<br>`;
+            w_info += `w = ${formatProbeComplex(pW.re, pW.im)}<br>`;
             
             if (state.currentFunction === 'poincare') {
                 w_info += "f'(z): N/A for Poincare map<br>";
@@ -359,12 +391,12 @@ function updateProbeInfo(){
             } else {
                 const deriv = numericDerivative(state.currentFunction, state.probeZ);
                 if(!isNaN(deriv.re) && !isNaN(deriv.im) && isFinite(deriv.re) && isFinite(deriv.im)){
-                    w_info += `f'(z) ≈ ${deriv.re.toFixed(3)} + ${deriv.im.toFixed(3)}i<br>`;
+                    w_info += `f'(z) ≈ ${formatProbeComplex(deriv.re, deriv.im)}<br>`;
                     const mag_deriv_sq = deriv.re*deriv.re + deriv.im*deriv.im;
                     const isConformal = (mag_deriv_sq > CRITICAL_POINT_EPSILON * CRITICAL_POINT_EPSILON); 
                     w_info += isConformal ? "Conformal at z<br>" : "Not conformal (f'(z) ≈ 0)<br>";
                     const mag = Math.sqrt(mag_deriv_sq); const arg_r = Math.atan2(deriv.im, deriv.re); const arg_d = arg_r * 180 / Math.PI;
-                    w_info += `|f'(z)| ≈ ${mag.toFixed(3)} (mag.)<br>`;
+                    w_info += `|f'(z)| ≈ ${formatProbeValue(mag)} (mag.)<br>`;
                     w_info += `arg(f'(z)) ≈ ${arg_r.toFixed(3)}rad (${arg_d.toFixed(2)}°) (rot.)`;
                 } else { w_info += `f'(z) calculation failed.<br>`; w_info += "Conformality: Unknown<br>"; }
             }
@@ -453,8 +485,127 @@ function updateTitlesAndGlobalUI() {
         controls.visualizationOptionsPanel.classList.remove('hidden');
     }
     
+    function formatComplexCoeff(c) {
+        if (Math.abs(c.im) < 1e-9) {
+            if (Math.abs(c.re - 1) < 1e-9) return '';
+            if (Math.abs(c.re + 1) < 1e-9) return '-';
+            return `${Number(c.re.toFixed(2))}`;
+        }
+        const reStr = Math.abs(c.re) < 1e-9 ? '' : `${Number(c.re.toFixed(2))}`;
+        const sign = c.im >= 0 ? '+' : '-';
+        const imVal = Math.abs(c.im);
+        const imStr = Math.abs(imVal - 1) < 1e-9 ? 'i' : `${Number(imVal.toFixed(2))}i`;
+        if (reStr === '') {
+            return c.im >= 0 ? imStr : `-${imStr}`;
+        }
+        return `(${reStr}${sign}${imStr})`;
+    }
+
+    function formatFuncForFormula(funcKey, termFactor = null) {
+        if (!funcKey || funcKey === 'none') return '';
+        
+        let baseStr = '';
+        switch (funcKey) {
+            case 'cos': baseStr = 'cos'; break;
+            case 'sin': baseStr = 'sin'; break;
+            case 'tan': baseStr = 'tan'; break;
+            case 'sec': baseStr = 'sec'; break;
+            case 'exp': baseStr = 'exp'; break;
+            case 'ln': baseStr = 'ln'; break;
+            case 'sinh': baseStr = 'sinh'; break;
+            case 'cosh': baseStr = 'cosh'; break;
+            case 'tanh': baseStr = 'tanh'; break;
+            case 'power': baseStr = `(·)<sup>${Number((state.fractionalPowerN || 0.5).toFixed(2))}</sup>`; break;
+            case 'reciprocal': baseStr = 'reciprocal'; break;
+            case 'mobius': baseStr = 'Möbius'; break;
+            case 'zeta': baseStr = 'ζ'; break;
+            case 'polynomial': baseStr = `P (deg ${state.polynomialN})`; break;
+            case 'poincare': baseStr = 'Poincare'; break;
+            default: baseStr = funcKey;
+        }
+
+        let innerArg = 'z';
+        if (termFactor && termFactor.chainedFunc && termFactor.chainedFunc !== 'none') {
+            let chainedStr = '';
+            switch (termFactor.chainedFunc) {
+                case 'cos': chainedStr = 'cos(z)'; break;
+                case 'sin': chainedStr = 'sin(z)'; break;
+                case 'tan': chainedStr = 'tan(z)'; break;
+                case 'sec': chainedStr = 'sec(z)'; break;
+                case 'exp': chainedStr = 'e<sup>z</sup>'; break;
+                case 'ln': chainedStr = 'ln(z)'; break;
+                case 'sinh': chainedStr = 'sinh(z)'; break;
+                case 'cosh': chainedStr = 'cosh(z)'; break;
+                case 'tanh': chainedStr = 'tanh(z)'; break;
+                case 'power': chainedStr = `z<sup>${Number((state.fractionalPowerN || 0.5).toFixed(2))}</sup>`; break;
+                case 'reciprocal': chainedStr = '1/z'; break;
+                case 'mobius': chainedStr = 'Möbius(z)'; break;
+                case 'zeta': chainedStr = 'ζ(z)'; break;
+                case 'polynomial': chainedStr = 'P(z)'; break;
+                case 'poincare': chainedStr = 'Poincare(z)'; break;
+                default: chainedStr = `${termFactor.chainedFunc}(z)`;
+            }
+            innerArg = chainedStr;
+        }
+
+        let res = '';
+        if (funcKey === 'power') {
+            res = baseStr.replace('(·)', innerArg);
+        } else if (funcKey === 'reciprocal') {
+            res = `1/${innerArg}`;
+        } else {
+            res = `${baseStr}(${innerArg})`;
+        }
+
+        if (termFactor) {
+            if (termFactor.power !== undefined && termFactor.power !== 1) {
+                res = `(${res})<sup>${Number(termFactor.power.toFixed(2))}</sup>`;
+            }
+            if (termFactor.reciprocal) {
+                res = `1/(${res})`;
+            }
+            if (termFactor.log) {
+                res = `ln(${res})`;
+            }
+            if (termFactor.exp) {
+                res = `e<sup>${res}</sup>`;
+            }
+        }
+
+        return res;
+    }
+
     let fND; 
-    if (state.currentFunction === 'polynomial') fND = `P(z) (deg ${state.polynomialN})`;
+    if (state.currentFunction === 'algebraic_chaining') {
+        if (!state.algebraicChainingTerms || state.algebraicChainingTerms.length === 0) {
+            fND = '0';
+        } else {
+            const parts = state.algebraicChainingTerms.map(term => {
+                const activeFactors = (term.factors || []).filter(f => f.func && f.func !== 'none');
+                
+                let factorsStr = '';
+                if (activeFactors.length === 0) {
+                    factorsStr = '';
+                } else {
+                    factorsStr = activeFactors.map(f => formatFuncForFormula(f.func, f)).join('·');
+                }
+                
+                const coeffStr = formatComplexCoeff(term.coeff);
+                if (coeffStr === '') {
+                    return factorsStr || '1';
+                }
+                if (coeffStr === '-') {
+                    return `-${factorsStr || '1'}`;
+                }
+                if (factorsStr === '') {
+                    return coeffStr;
+                }
+                return `${coeffStr}·${factorsStr}`;
+            });
+            fND = parts.join(' + ').replace(/\+ \-/g, '- ');
+        }
+    }
+    else if (state.currentFunction === 'polynomial') fND = `P(z) (deg ${state.polynomialN})`;
     else if (state.currentFunction === 'exp') fND = 'e<sup>z</sup>';
     else if (state.currentFunction === 'ln') fND = 'ln(z)';
     else if (state.currentFunction === 'reciprocal') fND = '1/z';

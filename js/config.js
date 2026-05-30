@@ -164,6 +164,16 @@ let state = {
     chainingMode: 'recursion',
     chainCount: 1,
 
+    algebraicChainingEnabled: false,
+    algebraicChainingTerms: [
+        {
+            coeff: { re: 1.0, im: 0.0 },
+            factors: [
+                { func: 'cos', chainedFunc: 'none', power: 1.0, reciprocal: false, log: false, exp: false }
+            ]
+        }
+    ],
+
     navigationModeEnabled: false,
     navigationPosition: { re: 0, im: 0 },
     navigationHeading: 0,

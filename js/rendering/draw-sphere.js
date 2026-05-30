@@ -15,9 +15,65 @@ function drawMappedLineSetOnSphere(ctx, cSP, z_pts_src_arr, col, isWP, tf) {
 
     z_pts_src_arr.forEach(z_pts_src => {
         if (!z_pts_src || z_pts_src.length === 0) return;
+
+        // Detect if the entire transformed line is constant on the sphere
+        // Only sample the center window of points for reliable detection
+        let firstW = null;
+        let isConstant = true;
+        let validCount = 0;
+        const cStart = Math.floor(z_pts_src.length * 0.35);
+        const cEnd = Math.ceil(z_pts_src.length * 0.65);
+        for (let idx = cStart; idx < cEnd; idx++) {
+            const z_orig = z_pts_src[idx];
+            if (!z_orig || z_orig.re === undefined || z_orig.im === undefined) continue;
+            let transformedPoint;
+            let skipDrawing = false;
+            if (isWP) {
+                if (state.currentFunction === 'zeta' && !state.zetaContinuationEnabled && z_orig.re <= ZETA_REFLECTION_POINT_RE) {
+                    skipDrawing = true;
+                }
+                transformedPoint = skipDrawing ? { re: NaN, im: NaN } : (tf ? tf(z_orig.re, z_orig.im) : z_orig);
+            } else {
+                transformedPoint = z_orig;
+            }
+            if (isNaN(transformedPoint.re) || isNaN(transformedPoint.im) || !isFinite(transformedPoint.re) || !isFinite(transformedPoint.im)) {
+                continue;
+            }
+            if (firstW === null) {
+                firstW = transformedPoint;
+                validCount++;
+            } else {
+                if (Math.abs(transformedPoint.re - firstW.re) > 1e-5 || Math.abs(transformedPoint.im - firstW.im) > 1e-5) {
+                    isConstant = false;
+                    break;
+                }
+                validCount++;
+            }
+        }
+
+        if (firstW !== null && isConstant && validCount >= 3) {
+            const spherePoint = complexToSphere(firstW.re, firstW.im);
+            const rotatedSpherePoint = rotate3D(spherePoint, rotX, rotY);
+            const canvasPoint = projectSphereToCanvas2D(rotatedSpherePoint, cX, cY, r);
+            if (canvasPoint.isVisible) {
+                ctx.save();
+                ctx.beginPath();
+                ctx.arc(canvasPoint.x, canvasPoint.y, 6, 0, 2 * Math.PI);
+                ctx.fillStyle = col;
+                ctx.fill();
+                ctx.lineWidth = 1.5;
+                ctx.strokeStyle = 'rgba(255, 255, 255, 0.8)';
+                ctx.stroke();
+                ctx.restore();
+            }
+            return;
+        }
+
         ctx.beginPath();
         let firstVisiblePointInCurrentPath = true;
         let lastProjectedPoint = null; 
+        let lastTransformedPoint = null;
+        const jumpThresholdSq = 1e8; // ~31622 units - very large jumps indicate discontinuities
 
         for (const z_orig of z_pts_src) {
             if (!z_orig || z_orig.re === undefined || z_orig.im === undefined) { 
@@ -27,6 +83,7 @@ function drawMappedLineSetOnSphere(ctx, cSP, z_pts_src_arr, col, isWP, tf) {
                 ctx.beginPath(); 
                 firstVisiblePointInCurrentPath = true;
                 lastProjectedPoint = null;
+                lastTransformedPoint = null;
                 continue;
             }
 
@@ -52,8 +109,23 @@ function drawMappedLineSetOnSphere(ctx, cSP, z_pts_src_arr, col, isWP, tf) {
                 ctx.beginPath();
                 firstVisiblePointInCurrentPath = true;
                 lastProjectedPoint = null;
+                lastTransformedPoint = null;
                 continue;
             }
+
+            // Jump detection in w-plane before projecting to sphere
+            if (lastTransformedPoint !== null) {
+                const distSq = (transformedPoint.re - lastTransformedPoint.re) ** 2 + (transformedPoint.im - lastTransformedPoint.im) ** 2;
+                if (distSq > jumpThresholdSq) {
+                    if (lastProjectedPoint && lastProjectedPoint.isVisible && !firstVisiblePointInCurrentPath) {
+                        ctx.stroke();
+                    }
+                    ctx.beginPath();
+                    firstVisiblePointInCurrentPath = true;
+                    lastProjectedPoint = null;
+                }
+            }
+            lastTransformedPoint = transformedPoint;
 
             const spherePoint = complexToSphere(transformedPoint.re, transformedPoint.im);
             const rotatedSpherePoint = rotate3D(spherePoint, rotX, rotY);
@@ -133,7 +205,7 @@ function drawSphereProbeAndNeighborhood(ctx, cSP, sourceProbeZ, neighborhoodSize
     const isWSphere = typeof transformFuncIfWSphere === 'function';
     const centerToDisplayOnSphere = isWSphere ? transformFuncIfWSphere(sourceProbeZ.re, sourceProbeZ.im) : sourceProbeZ;
 
-    if (isNaN(centerToDisplayOnSphere.re) || isNaN(centerToDisplayOnSphere.im) || !isFinite(centerToDisplayOnSphere.re) || !isFinite(centerToDisplayOnSphere.im)) {
+    if (isNaN(centerToDisplayOnSphere.re) || isNaN(centerToDisplayOnSphere.im) || !isFinite(centerToDisplayOnSphere.re) || !isFinite(centerToDisplayOnSphere.im) || !isNumericallyStable(centerToDisplayOnSphere)) {
         return; 
     }
 

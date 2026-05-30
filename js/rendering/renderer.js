@@ -60,6 +60,39 @@ function appendCurrentFunctionStateToCacheKey(parts) {
     if (state.currentFunction === 'power') {
         parts.push(`fracN:${toCacheKeyNumber(state.fractionalPowerN !== undefined ? state.fractionalPowerN : 0.5)}`);
     }
+
+    if (state.currentFunction === 'algebraic_chaining') {
+        parts.push(`algTerms:${state.algebraicChainingTerms.length}`);
+        state.algebraicChainingTerms.forEach((term, idx) => {
+            parts.push(`t${idx}:${term.factors.map(f => f.func).join(',')}`);
+            appendPointToCacheKey(parts, `t${idx}c`, term.coeff);
+            term.factors.forEach((factor, fIdx) => {
+                if (factor.func === 'none') return;
+                parts.push(`t${idx}f${fIdx}chain:${factor.chainedFunc}`);
+                parts.push(`t${idx}f${fIdx}pow:${toCacheKeyNumber(factor.power)}`);
+                parts.push(`t${idx}f${fIdx}recip:${factor.reciprocal ? 1 : 0}`);
+                parts.push(`t${idx}f${fIdx}log:${factor.log ? 1 : 0}`);
+                parts.push(`t${idx}f${fIdx}exp:${factor.exp ? 1 : 0}`);
+                
+                if (factor.func === 'mobius' || factor.chainedFunc === 'mobius') {
+                    appendPointToCacheKey(parts, `t${idx}f${fIdx}mA`, state.mobiusA);
+                    appendPointToCacheKey(parts, `t${idx}f${fIdx}mB`, state.mobiusB);
+                    appendPointToCacheKey(parts, `t${idx}f${fIdx}mC`, state.mobiusC);
+                    appendPointToCacheKey(parts, `t${idx}f${fIdx}mD`, state.mobiusD);
+                }
+                if (factor.func === 'polynomial' || factor.chainedFunc === 'polynomial') {
+                    const polyDegree = Math.max(0, Math.min(MAX_POLY_DEGREE, Number.isFinite(state.polynomialN) ? state.polynomialN : 0));
+                    parts.push(`t${idx}f${fIdx}polyN:${polyDegree}`);
+                    for (let i = 0; i <= polyDegree; i++) {
+                        appendPointToCacheKey(parts, `t${idx}f${fIdx}p${i}`, (state.polynomialCoeffs && state.polynomialCoeffs[i]) ? state.polynomialCoeffs[i] : null);
+                    }
+                }
+                if (factor.func === 'power' || factor.chainedFunc === 'power') {
+                    parts.push(`t${idx}f${fIdx}fracN:${toCacheKeyNumber(state.fractionalPowerN !== undefined ? state.fractionalPowerN : 0.5)}`);
+                }
+            });
+        });
+    }
 }
 
 function buildPlanarLayerCacheKey(isWPlane) {
@@ -485,32 +518,32 @@ function drawWPlaneContent() {
             case 'sqrt':
                 curFunc = (re, im) => {
                     const temp = prevFunc(re, im);
-                    return complexPow(temp.re, temp.im, 0.5, 0);
+                    return complexPow(temp, 0.5, 0);
                 };
                 break;
             case 'ln':
                 curFunc = (re, im) => {
                     const temp = prevFunc(re, im);
-                    return complexLn(temp.re, temp.im);
+                    return complexLn(temp);
                 };
                 break;
             case 'exp':
                 curFunc = (re, im) => {
                     const temp = prevFunc(re, im);
-                    return complexExp(temp.re, temp.im);
+                    return complexExp(temp);
                 };
                 break;
             case 'reciprocal':
                 curFunc = (re, im) => {
                     const temp = prevFunc(re, im);
-                    return complexReciprocal(temp.re, temp.im);
+                    return complexReciprocal(temp);
                 };
                 break;
             case 'recursion':
             default:
                 curFunc = (re, im) => {
                     const temp = prevFunc(re, im);
-                    return baseFunc(temp.re, temp.im);
+                    return baseFunc(temp);
                 };
                 break;
         }

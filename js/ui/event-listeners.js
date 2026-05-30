@@ -284,6 +284,16 @@ function activateFunctionMode(key) {
         pauseUploadedVideoPlayback();
     }
 
+    if (state.algebraicChainingEnabled) {
+        state.algebraicChainingEnabled = false;
+        if (controls.enableAlgebraicChainingCb) {
+            controls.enableAlgebraicChainingCb.checked = false;
+        }
+        if (controls.algebraicChainingControlsContainer) {
+            controls.algebraicChainingControlsContainer.style.display = 'none';
+        }
+    }
+
     state.currentFunction = key;
     state.fourierModeEnabled = enteringFourier;
     state.laplaceModeEnabled = enteringLaplace;
@@ -1361,6 +1371,7 @@ window.setupEventListeners = function () {
     uiEventListenersBound = true;
 
     bindBaseParameterControls();
+    bindAlgebraicChainingControls();
     bindMobiusControls();
     bindFunctionButtons();
     bindImageControls();
@@ -1396,6 +1407,15 @@ window.setupEventListeners = function () {
     if (controls.enableChainingCb) {
         controls.enableChainingCb.addEventListener('change', (e) => {
             state.chainingEnabled = e.target.checked;
+            if (state.chainingEnabled && state.algebraicChainingEnabled) {
+                state.algebraicChainingEnabled = false;
+                if (controls.enableAlgebraicChainingCb) controls.enableAlgebraicChainingCb.checked = false;
+                if (controls.algebraicChainingControlsContainer) controls.algebraicChainingControlsContainer.style.display = 'none';
+                state.currentFunction = 'cos';
+                setActiveFunctionButton('cos');
+                updateTitlesAndGlobalUI();
+                syncParameterControlsPanelVisibility();
+            }
             if (controls.chainingControlsContainer) {
                 controls.chainingControlsContainer.style.display = state.chainingEnabled ? 'block' : 'none';
             }
@@ -1710,4 +1730,323 @@ function handleFullScreenToggle(planeType) {
     }
 
     requestDomainRedraw(true);
+}
+
+function bindAlgebraicChainingControls() {
+    if (controls.enableAlgebraicChainingCb) {
+        controls.enableAlgebraicChainingCb.addEventListener('change', (e) => {
+            state.algebraicChainingEnabled = e.target.checked;
+            if (controls.algebraicChainingControlsContainer) {
+                controls.algebraicChainingControlsContainer.style.display = state.algebraicChainingEnabled ? 'block' : 'none';
+            }
+            if (state.algebraicChainingEnabled) {
+                state.currentFunction = 'algebraic_chaining';
+                if (typeof setActiveFunctionButton === 'function') {
+                    setActiveFunctionButton('algebraic_chaining');
+                }
+                if (state.chainingEnabled) {
+                    state.chainingEnabled = false;
+                    if (controls.enableChainingCb) controls.enableChainingCb.checked = false;
+                    if (controls.chainingControlsContainer) controls.chainingControlsContainer.style.display = 'none';
+                    if (typeof updateChainingColumns === 'function') {
+                        updateChainingColumns(1);
+                    }
+                }
+                renderAlgebraicChainingTerms();
+            } else {
+                state.currentFunction = 'cos';
+                if (typeof setActiveFunctionButton === 'function') {
+                    setActiveFunctionButton('cos');
+                }
+            }
+            updateTitlesAndGlobalUI();
+            syncParameterControlsPanelVisibility();
+            requestDomainRedraw(true);
+        });
+    }
+
+    if (controls.addAlgebraicTermBtn) {
+        controls.addAlgebraicTermBtn.addEventListener('click', () => {
+            state.algebraicChainingTerms.push({
+                coeff: { re: 1.0, im: 0.0 },
+                factors: [
+                    { func: 'cos', chainedFunc: 'none', power: 1.0, reciprocal: false, log: false, exp: false }
+                ]
+            });
+            renderAlgebraicChainingTerms();
+            updateTitlesAndGlobalUI();
+            syncParameterControlsPanelVisibility();
+            requestDomainRedraw(true);
+        });
+    }
+}
+
+function renderAlgebraicChainingTerms() {
+    if (!controls.algebraicTermsList) return;
+    
+    controls.algebraicTermsList.innerHTML = '';
+    
+    state.algebraicChainingTerms.forEach((term, tIdx) => {
+        const termCard = document.createElement('div');
+        termCard.className = 'algebraic-term-card';
+        termCard.style.cssText = `
+            background: rgba(255, 255, 255, 0.04);
+            padding: 10px;
+            border-radius: 6px;
+            border: 1px solid var(--border-color);
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            position: relative;
+            margin-bottom: 5px;
+        `;
+        
+        const header = document.createElement('div');
+        header.style.cssText = 'display: flex; align-items: center; justify-content: space-between; gap: 8px;';
+        
+        const title = document.createElement('span');
+        title.style.cssText = 'font-weight: 600; font-size: 0.8rem; color: var(--accent-purple);';
+        title.textContent = `Term ${tIdx + 1}`;
+        header.appendChild(title);
+        
+        if (state.algebraicChainingTerms.length > 1) {
+            const removeBtn = document.createElement('button');
+            removeBtn.type = 'button';
+            removeBtn.style.cssText = 'background: transparent; border: none; color: #ff5555; cursor: pointer; font-size: 0.8rem; padding: 0 4px;';
+            removeBtn.textContent = '✕';
+            removeBtn.addEventListener('click', () => {
+                state.algebraicChainingTerms.splice(tIdx, 1);
+                renderAlgebraicChainingTerms();
+                updateTitlesAndGlobalUI();
+                syncParameterControlsPanelVisibility();
+                requestDomainRedraw(true);
+            });
+            header.appendChild(removeBtn);
+        }
+        termCard.appendChild(header);
+        
+        const coeffGrid = document.createElement('div');
+        coeffGrid.style.cssText = 'display: grid; grid-template-columns: 1fr 1fr; gap: 8px;';
+        
+        const reDiv = document.createElement('div');
+        const reLabel = document.createElement('label');
+        reLabel.style.cssText = 'font-size: 0.7rem; color: var(--text-secondary); display: block; margin-bottom: 2px;';
+        reLabel.innerHTML = `Re(coeff): <span style="color: var(--text-primary); font-weight: 500;">${term.coeff.re.toFixed(1)}</span>`;
+        
+        const reSlider = document.createElement('input');
+        reSlider.type = 'range';
+        reSlider.min = '-5';
+        reSlider.max = '5';
+        reSlider.step = '0.1';
+        reSlider.value = term.coeff.re;
+        reSlider.style.width = '100%';
+        reSlider.addEventListener('input', (e) => {
+            term.coeff.re = parseFloat(e.target.value);
+            reLabel.querySelector('span').textContent = term.coeff.re.toFixed(1);
+            updateTitlesAndGlobalUI();
+            requestDomainRedraw(true);
+        });
+        reDiv.appendChild(reLabel);
+        reDiv.appendChild(reSlider);
+        coeffGrid.appendChild(reDiv);
+        
+        const imDiv = document.createElement('div');
+        const imLabel = document.createElement('label');
+        imLabel.style.cssText = 'font-size: 0.7rem; color: var(--text-secondary); display: block; margin-bottom: 2px;';
+        imLabel.innerHTML = `Im(coeff): <span style="color: var(--text-primary); font-weight: 500;">${term.coeff.im.toFixed(1)}</span>`;
+        
+        const imSlider = document.createElement('input');
+        imSlider.type = 'range';
+        imSlider.min = '-5';
+        imSlider.max = '5';
+        imSlider.step = '0.1';
+        imSlider.value = term.coeff.im;
+        imSlider.style.width = '100%';
+        imSlider.addEventListener('input', (e) => {
+            term.coeff.im = parseFloat(e.target.value);
+            imLabel.querySelector('span').textContent = term.coeff.im.toFixed(1);
+            updateTitlesAndGlobalUI();
+            requestDomainRedraw(true);
+        });
+        imDiv.appendChild(imLabel);
+        imDiv.appendChild(imSlider);
+        coeffGrid.appendChild(imDiv);
+        
+        termCard.appendChild(coeffGrid);
+        
+        const factorsContainer = document.createElement('div');
+        factorsContainer.style.cssText = 'display: flex; flex-direction: column; gap: 6px; border-top: 1px solid rgba(255, 255, 255, 0.05); padding-top: 6px;';
+        
+        const factorsTitle = document.createElement('div');
+        factorsTitle.style.cssText = 'font-size: 0.7rem; font-weight: 500; color: var(--text-secondary); margin-bottom: 2px;';
+        factorsTitle.textContent = 'Functions product:';
+        factorsContainer.appendChild(factorsTitle);
+        
+        const visibleFactors = [...term.factors];
+        if (visibleFactors.length < 5 && (visibleFactors.length === 0 || visibleFactors[visibleFactors.length - 1].func !== 'none')) {
+            visibleFactors.push({ func: 'none', chainedFunc: 'none', power: 1.0, reciprocal: false, log: false, exp: false });
+        }
+        
+        const funcOptions = [
+            { value: 'none', label: 'None' },
+            { value: 'cos', label: 'cos(z)' },
+            { value: 'sin', label: 'sin(z)' },
+            { value: 'tan', label: 'tan(z)' },
+            { value: 'sec', label: 'sec(z)' },
+            { value: 'exp', label: 'e^z' },
+            { value: 'ln', label: 'ln(z)' },
+            { value: 'sinh', label: 'sinh(z)' },
+            { value: 'cosh', label: 'cosh(z)' },
+            { value: 'tanh', label: 'tanh(z)' },
+            { value: 'power', label: 'z^n' },
+            { value: 'reciprocal', label: '1/z' },
+            { value: 'mobius', label: 'Möbius' },
+            { value: 'zeta', label: 'ζ(z)' },
+            { value: 'polynomial', label: 'Polynomial' },
+            { value: 'poincare', label: 'Poincare Disk' }
+        ];
+        
+        visibleFactors.forEach((factor, fIdx) => {
+            const factorDiv = document.createElement('div');
+            factorDiv.style.cssText = 'background: rgba(0, 0, 0, 0.15); padding: 6px; border-radius: 4px; display: flex; flex-direction: column; gap: 4px; border: 1px solid rgba(255, 255, 255, 0.02);';
+            
+            const row = document.createElement('div');
+            row.style.cssText = 'display: flex; align-items: center; justify-content: space-between; gap: 6px;';
+            
+            const label = document.createElement('span');
+            label.style.cssText = 'font-size: 0.65rem; color: var(--text-secondary);';
+            label.textContent = `Factor ${fIdx + 1}:`;
+            row.appendChild(label);
+            
+            const select = document.createElement('select');
+            select.className = 'control-select';
+            select.style.cssText = 'font-size: 0.75rem; padding: 2px 4px; height: auto; width: 120px;';
+            funcOptions.forEach(opt => {
+                const o = document.createElement('option');
+                o.value = opt.value;
+                o.textContent = opt.label;
+                if (factor.func === opt.value) o.selected = true;
+                select.appendChild(o);
+            });
+            
+            select.addEventListener('change', (e) => {
+                const val = e.target.value;
+                if (fIdx < term.factors.length) {
+                    term.factors[fIdx].func = val;
+                } else {
+                    term.factors.push({ func: val, chainedFunc: 'none', power: 1.0, reciprocal: false, log: false, exp: false });
+                }
+                
+                let cleanedFactors = [];
+                for (let f of term.factors) {
+                    cleanedFactors.push(f);
+                    if (f.func === 'none') {
+                        break;
+                    }
+                }
+                term.factors = cleanedFactors;
+                
+                renderAlgebraicChainingTerms();
+                updateTitlesAndGlobalUI();
+                syncParameterControlsPanelVisibility();
+                requestDomainRedraw(true);
+            });
+            row.appendChild(select);
+            factorDiv.appendChild(row);
+            
+            if (factor.func !== 'none') {
+                const manipDiv = document.createElement('div');
+                manipDiv.style.cssText = 'border-top: 1px dashed rgba(255, 255, 255, 0.05); padding-top: 4px; margin-top: 4px; display: flex; flex-direction: column; gap: 4px;';
+                
+                const chainRow = document.createElement('div');
+                chainRow.style.cssText = 'display: flex; align-items: center; justify-content: space-between; gap: 6px;';
+                
+                const chainLabel = document.createElement('span');
+                chainLabel.style.cssText = 'font-size: 0.65rem; color: var(--text-secondary);';
+                chainLabel.textContent = 'Chained f(g(z)):';
+                chainRow.appendChild(chainLabel);
+                
+                const chainSelect = document.createElement('select');
+                chainSelect.className = 'control-select';
+                chainSelect.style.cssText = 'font-size: 0.75rem; padding: 2px 4px; height: auto; width: 120px;';
+                
+                funcOptions.forEach(opt => {
+                    const o = document.createElement('option');
+                    o.value = opt.value;
+                    o.textContent = opt.label;
+                    if (factor.chainedFunc === opt.value) o.selected = true;
+                    chainSelect.appendChild(o);
+                });
+                
+                chainSelect.addEventListener('change', (e) => {
+                    factor.chainedFunc = e.target.value;
+                    updateTitlesAndGlobalUI();
+                    syncParameterControlsPanelVisibility();
+                    requestDomainRedraw(true);
+                });
+                chainRow.appendChild(chainSelect);
+                manipDiv.appendChild(chainRow);
+                
+                const powerRow = document.createElement('div');
+                powerRow.style.cssText = 'display: flex; flex-direction: column; gap: 2px;';
+                
+                const powerLabel = document.createElement('label');
+                powerLabel.style.cssText = 'font-size: 0.65rem; color: var(--text-secondary); display: flex; justify-content: space-between;';
+                powerLabel.innerHTML = `Power: <span>${(factor.power || 1.0).toFixed(1)}</span>`;
+                
+                const powerSlider = document.createElement('input');
+                powerSlider.type = 'range';
+                powerSlider.min = '-5';
+                powerSlider.max = '5';
+                powerSlider.step = '0.1';
+                powerSlider.value = factor.power !== undefined ? factor.power : 1.0;
+                powerSlider.style.width = '100%';
+                
+                powerSlider.addEventListener('input', (e) => {
+                    factor.power = parseFloat(e.target.value);
+                    powerLabel.querySelector('span').textContent = factor.power.toFixed(1);
+                    updateTitlesAndGlobalUI();
+                    requestDomainRedraw(true);
+                });
+                
+                powerRow.appendChild(powerLabel);
+                powerRow.appendChild(powerSlider);
+                manipDiv.appendChild(powerRow);
+                
+                const checkboxContainer = document.createElement('div');
+                checkboxContainer.style.cssText = 'display: flex; flex-wrap: wrap; gap: 8px; margin-top: 2px;';
+                
+                const addCheck = (key, labelText) => {
+                    const cbLabel = document.createElement('label');
+                    cbLabel.style.cssText = 'font-size: 0.65rem; display: flex; align-items: center; gap: 3px; cursor: pointer; color: var(--text-secondary);';
+                    
+                    const cb = document.createElement('input');
+                    cb.type = 'checkbox';
+                    cb.checked = !!factor[key];
+                    cb.style.cssText = 'margin: 0;';
+                    cb.addEventListener('change', (e) => {
+                        factor[key] = e.target.checked;
+                        updateTitlesAndGlobalUI();
+                        requestDomainRedraw(true);
+                    });
+                    
+                    cbLabel.appendChild(cb);
+                    cbLabel.appendChild(document.createTextNode(labelText));
+                    checkboxContainer.appendChild(cbLabel);
+                };
+                
+                addCheck('reciprocal', '1/f');
+                addCheck('log', 'ln(f)');
+                addCheck('exp', 'e^f');
+                
+                manipDiv.appendChild(checkboxContainer);
+                factorDiv.appendChild(manipDiv);
+            }
+            
+            factorsContainer.appendChild(factorDiv);
+        });
+        
+        termCard.appendChild(factorsContainer);
+        controls.algebraicTermsList.appendChild(termCard);
+    });
 }

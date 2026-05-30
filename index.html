@@ -455,6 +455,29 @@
                         </div>
                     </div>
 
+                    <!-- Algebraic Chaining Panel -->
+                    <div id="algebraic_chaining_params" class="control-group"
+                        style="padding-bottom: 0.5rem; border-bottom: 1px solid var(--border-color); margin-bottom: 0.5rem;">
+                        <label for="enable_algebraic_chaining_cb" class="control-label tooltip-label slider-label"
+                            data-tooltip="Sum multiple complex functions together: a*f(z)*g(z) + b*h(z)...">
+                            <input type="checkbox" id="enable_algebraic_chaining_cb" class="control-checkbox">
+                            <span class="custom-checkbox-visual"></span>
+                            Enable Algebraic Chaining
+                        </label>
+
+                        <div id="algebraic_chaining_controls_container"
+                            style="display: none; margin-top: 10px; padding-left: 10px; border-left: 2px solid var(--border-color);">
+                            <div id="algebraic_terms_list" style="display: flex; flex-direction: column; gap: 12px; margin-bottom: 10px;">
+                                <!-- Dynamically populated by JS -->
+                            </div>
+
+                            <button id="add_algebraic_term_btn" class="sidebar-button"
+                                style="margin-top: 10px; width: 100%; border: 1px dashed var(--accent-purple); color: var(--accent-purple); background: transparent; padding: 6px 12px; font-size: 0.85rem; border-radius: 4px; cursor: pointer; transition: all 0.2s ease;">
+                                <span class="icon">＋</span> Add Summand Term
+                            </button>
+                        </div>
+                    </div>
+
                     <!-- Complex Plane Navigation Panel -->
                     <div id="navigation_params" class="control-group"
                         style="padding-bottom: 0.5rem; border-bottom: 1px solid var(--border-color); margin-bottom: 0.5rem;">

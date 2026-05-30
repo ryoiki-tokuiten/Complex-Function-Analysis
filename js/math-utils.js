@@ -1,22 +1,34 @@
 // --- Inline complex arithmetic: zero allocations through math.js ---
 
+function withMaxMag(res, ...inputs) {
+    return res;
+}
+
+function isNumericallyStable(w) {
+    return true;
+}
+
 function complexAdd(z1, z2) {
-    return { re: z1.re + z2.re, im: z1.im + z2.im };
+    const res = { re: z1.re + z2.re, im: z1.im + z2.im };
+    return withMaxMag(res, z1, z2);
 }
 
 function complexSub(z1, z2) {
-    return { re: z1.re - z2.re, im: z1.im - z2.im };
+    const res = { re: z1.re - z2.re, im: z1.im - z2.im };
+    return withMaxMag(res, z1, z2);
 }
 
 function complexMul(z1, z2) {
-    return {
+    const res = {
         re: z1.re * z2.re - z1.im * z2.im,
         im: z1.re * z2.im + z1.im * z2.re
     };
+    return withMaxMag(res, z1, z2);
 }
 
 function complexScalarMul(s, z) {
-    return { re: s * z.re, im: s * z.im };
+    const res = { re: s * z.re, im: s * z.im };
+    return withMaxMag(res, s, z);
 }
 
 function complexDivide(num, den) {
@@ -27,12 +39,14 @@ function complexDivide(num, den) {
         const large_val = POLE_MAGNITUDE_THRESHOLD * 2;
         if (Math.abs(num.re) < 1e-15 && Math.abs(num.im) < 1e-15) return { re: 0, im: 0 };
         const scale = large_val / Math.sqrt(numMagSq);
-        return { re: num.re * scale, im: num.im * scale };
+        const res = { re: num.re * scale, im: num.im * scale };
+        return withMaxMag(res, num, den);
     }
-    return {
+    const res = {
         re: (num.re * den.re + num.im * den.im) / denMagSq,
         im: (num.im * den.re - num.re * den.im) / denMagSq
     };
+    return withMaxMag(res, num, den);
 }
 
 function complexAbs(z) {
@@ -47,81 +61,119 @@ function _cosh(x) { return Math.cosh(x); }
 function _sinh(x) { return Math.sinh(x); }
 
 function complexCos(a, b) {
-    if (typeof a === 'object') { b = a.im; a = a.re; }
-    return { re: Math.cos(a) * _cosh(b), im: -Math.sin(a) * _sinh(b) };
+    let zInput = null;
+    if (typeof a === 'object') { b = a.im; a = a.re; zInput = a; }
+    const cosh_b = _cosh(b);
+    const sinh_b = _sinh(b);
+    const res = { re: Math.cos(a) * cosh_b, im: -Math.sin(a) * sinh_b };
+    return withMaxMag(res, zInput, cosh_b, sinh_b);
 }
 
 function complexSin(a, b) {
-    if (typeof a === 'object') { b = a.im; a = a.re; }
-    return { re: Math.sin(a) * _cosh(b), im: Math.cos(a) * _sinh(b) };
+    let zInput = null;
+    if (typeof a === 'object') { b = a.im; a = a.re; zInput = a; }
+    const cosh_b = _cosh(b);
+    const sinh_b = _sinh(b);
+    const res = { re: Math.sin(a) * cosh_b, im: Math.cos(a) * sinh_b };
+    return withMaxMag(res, zInput, cosh_b, sinh_b);
 }
 
 function complexTan(a, b) {
-    if (typeof a === 'object') { b = a.im; a = a.re; }
+    let zInput = null;
+    if (typeof a === 'object') { b = a.im; a = a.re; zInput = a; }
     const sinZ = complexSin(a, b);
     const cosZ = complexCos(a, b);
-    return complexDivide(sinZ, cosZ);
+    const res = complexDivide(sinZ, cosZ);
+    return withMaxMag(res, zInput, sinZ, cosZ);
 }
 
 function complexSec(a, b) {
-    if (typeof a === 'object') { b = a.im; a = a.re; }
+    let zInput = null;
+    if (typeof a === 'object') { b = a.im; a = a.re; zInput = a; }
     const cosZ = complexCos(a, b);
-    return complexDivide({ re: 1, im: 0 }, cosZ);
+    const res = complexDivide({ re: 1, im: 0 }, cosZ);
+    return withMaxMag(res, zInput, cosZ);
 }
 
 function complexExp(a, b) {
-    if (typeof a === 'object') { b = a.im; a = a.re; }
+    let zInput = null;
+    if (typeof a === 'object') { b = a.im; a = a.re; zInput = a; }
     const ea = expSafe(a);
-    return { re: ea * Math.cos(b), im: ea * Math.sin(b) };
+    const res = { re: ea * Math.cos(b), im: ea * Math.sin(b) };
+    return withMaxMag(res, zInput, ea);
 }
 
 function complexLn(a, b) {
-    if (typeof a === 'object') { b = a.im; a = a.re; }
+    let zInput = null;
+    if (typeof a === 'object') { b = a.im; a = a.re; zInput = a; }
     if (a === 0 && b === 0) return { re: -Infinity, im: 0 };
-    return { re: Math.log(Math.sqrt(a * a + b * b)), im: Math.atan2(b, a) };
+    const res = { re: Math.log(Math.sqrt(a * a + b * b)), im: Math.atan2(b, a) };
+    return withMaxMag(res, zInput);
 }
 
 function complexReciprocal(a, b) {
-    if (typeof a === 'object') { b = a.im; a = a.re; }
+    let zInput = null;
+    if (typeof a === 'object') { b = a.im; a = a.re; zInput = a; }
     if (a === 0 && b === 0) return { re: NaN, im: NaN };
     const magSq = a * a + b * b;
-    return { re: a / magSq, im: -b / magSq };
+    const res = { re: a / magSq, im: -b / magSq };
+    return withMaxMag(res, zInput);
 }
 
 function complexSinh(a, b) {
-    if (typeof a === 'object') { b = a.im; a = a.re; }
-    return { re: _sinh(a) * Math.cos(b), im: _cosh(a) * Math.sin(b) };
+    let zInput = null;
+    if (typeof a === 'object') { b = a.im; a = a.re; zInput = a; }
+    const cosh_a = _cosh(a);
+    const sinh_a = _sinh(a);
+    const res = { re: sinh_a * Math.cos(b), im: cosh_a * Math.sin(b) };
+    return withMaxMag(res, zInput, cosh_a, sinh_a);
 }
 
 function complexCosh(a, b) {
-    if (typeof a === 'object') { b = a.im; a = a.re; }
-    return { re: _cosh(a) * Math.cos(b), im: _sinh(a) * Math.sin(b) };
+    let zInput = null;
+    if (typeof a === 'object') { b = a.im; a = a.re; zInput = a; }
+    const cosh_a = _cosh(a);
+    const sinh_a = _sinh(a);
+    const res = { re: cosh_a * Math.cos(b), im: sinh_a * Math.sin(b) };
+    return withMaxMag(res, zInput, cosh_a, sinh_a);
 }
 
 function complexTanh(a, b) {
-    if (typeof a === 'object') { b = a.im; a = a.re; }
+    let zInput = null;
+    if (typeof a === 'object') { b = a.im; a = a.re; zInput = a; }
     const sinhZ = complexSinh(a, b);
     const coshZ = complexCosh(a, b);
-    return complexDivide(sinhZ, coshZ);
+    const res = complexDivide(sinhZ, coshZ);
+    return withMaxMag(res, zInput, sinhZ, coshZ);
 }
 
 function complexPowerFractional(a, b) {
-    if (typeof a === 'object') { b = a.im; a = a.re; }
+    let zInput = null;
+    if (typeof a === 'object') { b = a.im; a = a.re; zInput = a; }
     const n = state.fractionalPowerN !== undefined ? state.fractionalPowerN : 0.5;
     if (a === 0 && b === 0) return { re: 0, im: 0 };
     const lnZ = complexLn(a, b);
-    return complexExp(n * lnZ.re, n * lnZ.im);
+    const res = complexExp(n * lnZ.re, n * lnZ.im);
+    return withMaxMag(res, zInput, lnZ);
 }
 
 function complexPow(base_re, base_im, exp_re, exp_im) {
+    let baseInput = null;
+    if (typeof base_re === 'object') {
+        baseInput = base_re;
+        exp_im = exp_re;
+        exp_re = base_im;
+        base_im = base_re.im;
+        base_re = base_re.re;
+    }
     if (base_re === 0 && base_im === 0) {
         if (exp_re > 0 || (exp_re === 0 && exp_im !== 0)) return { re: 0, im: 0 };
         if (exp_re === 0 && exp_im === 0) return { re: 1, im: 0 };
     }
-    // z^w = exp(w * ln(z))
     const lnZ = complexLn(base_re, base_im);
     const wLnZ = complexMul({ re: exp_re, im: exp_im }, lnZ);
-    return complexExp(wLnZ.re, wLnZ.im);
+    const res = complexExp(wLnZ.re, wLnZ.im);
+    return withMaxMag(res, baseInput, lnZ, wLnZ);
 }
 
 /**
@@ -129,7 +181,9 @@ function complexPow(base_re, base_im, exp_re, exp_im) {
  * Internally uses the inline arithmetic above (no math.js round-trips).
  */
 function C(re, im) {
+    let initialMax = undefined;
     if (typeof re === 'object' && re !== null) {
+        initialMax = re._maxMag;
         im = re.im ?? re.imag ?? 0;
         re = re.re ?? re.real ?? 0;
     } else {
@@ -137,24 +191,28 @@ function C(re, im) {
         im = im ?? 0;
     }
 
-    return {
+    const obj = {
         re: re,
         im: im,
+        _maxMag: initialMax ?? Math.sqrt(re * re + im * im),
         get real() { return this.re; },
         get imag() { return this.im; },
         add(other) {
             const o = typeof other === 'object' ? other : { re: other, im: 0 };
-            return C(this.re + (o.re ?? o.real ?? 0), this.im + (o.im ?? o.imag ?? 0));
+            const res = C(this.re + (o.re ?? o.real ?? 0), this.im + (o.im ?? o.imag ?? 0));
+            return withMaxMag(res, this, o);
         },
         subtract(other) {
             const o = typeof other === 'object' ? other : { re: other, im: 0 };
-            return C(this.re - (o.re ?? o.real ?? 0), this.im - (o.im ?? o.imag ?? 0));
+            const res = C(this.re - (o.re ?? o.real ?? 0), this.im - (o.im ?? o.imag ?? 0));
+            return withMaxMag(res, this, o);
         },
         multiply(other) {
             const o = typeof other === 'object' ? other : { re: other, im: 0 };
             const oRe = o.re ?? o.real ?? 0;
             const oIm = o.im ?? o.imag ?? 0;
-            return C(this.re * oRe - this.im * oIm, this.re * oIm + this.im * oRe);
+            const res = C(this.re * oRe - this.im * oIm, this.re * oIm + this.im * oRe);
+            return withMaxMag(res, this, o);
         },
         divide(other) {
             const o = typeof other === 'object' ? other : { re: other, im: 0 };
@@ -162,10 +220,11 @@ function C(re, im) {
             const oIm = o.im ?? o.imag ?? 0;
             const magSq = oRe * oRe + oIm * oIm;
             if (magSq < 1e-30) return C(NaN, NaN);
-            return C(
+            const res = C(
                 (this.re * oRe + this.im * oIm) / magSq,
                 (this.im * oRe - this.re * oIm) / magSq
             );
+            return withMaxMag(res, this, o);
         },
         abs() {
             return Math.sqrt(this.re * this.re + this.im * this.im);
@@ -174,7 +233,9 @@ function C(re, im) {
             return Math.atan2(this.im, this.re);
         },
         clone() {
-            return C(this.re, this.im);
+            const res = C(this.re, this.im);
+            res._maxMag = this._maxMag;
+            return res;
         },
         equals(other, tolerance) {
             const tol = tolerance ?? 1e-12;
@@ -185,24 +246,25 @@ function C(re, im) {
             return Number.isFinite(this.re) && Number.isFinite(this.im);
         },
         conjugate() {
-            return C(this.re, -this.im);
+            const res = C(this.re, -this.im);
+            res._maxMag = this._maxMag;
+            return res;
         },
         negate() {
-            return C(-this.re, -this.im);
+            const res = C(-this.re, -this.im);
+            res._maxMag = this._maxMag;
+            return res;
         }
     };
+    return obj;
 }
 
 C.power = function(base, exp) {
-    const bRe = base.re ?? base.real ?? 0;
-    const bIm = base.im ?? base.imag ?? 0;
     if (typeof exp === 'number') {
-        const result = complexPow(bRe, bIm, exp, 0);
+        const result = complexPow(base, exp, 0);
         return C(result.re, result.im);
     }
-    const eRe = exp.re ?? exp.real ?? 0;
-    const eIm = exp.im ?? exp.imag ?? 0;
-    const result = complexPow(bRe, bIm, eRe, eIm);
+    const result = complexPow(base, exp);
     return C(result.re, result.im);
 };
 
@@ -395,6 +457,7 @@ function complexRiemannZeta_HasseSeries(a, b, numLevels) {
         negPowers[n] = complexPositiveRealPowFromLog(zetaLogIntegerCache[n], -a, -b);
     }
     let outerSum = { re: 0, im: 0 };
+    let maxTermMag = 0;
 
     for (let n = 0; n < numLevels; n++) {
         const row = hasseRows[n];
@@ -405,6 +468,9 @@ function complexRiemannZeta_HasseSeries(a, b, numLevels) {
             const term = negPowers[k + 1];
             innerSum.re += coeff * term.re;
             innerSum.im += coeff * term.im;
+            
+            const termMag = Math.abs(coeff) * Math.sqrt(term.re * term.re + term.im * term.im);
+            if (termMag > maxTermMag) maxTermMag = termMag;
         }
 
         const outerScale = Math.pow(2, -n - 1);
@@ -412,11 +478,15 @@ function complexRiemannZeta_HasseSeries(a, b, numLevels) {
         outerSum.im += outerScale * innerSum.im;
     }
 
-    return complexDivide(outerSum, denom);
+    const res = complexDivide(outerSum, denom);
+    return withMaxMag(res, maxTermMag, denom);
 }
 
 function complexRiemannZeta(a,b){
-    const s = {re: a, im: b};
+    let s = {re: a, im: b};
+    if (typeof a === 'object') {
+        s = a;
+    }
     const continuationEnabled = !!state.zetaContinuationEnabled;
     const cacheKey = getZetaEvalCacheKey(s.re, s.im, continuationEnabled);
     const cached = readZetaEvalCache(cacheKey);
@@ -458,7 +528,10 @@ function complexRiemannZeta(a,b){
 
 
 function complexMobius(z_re, z_im) {
-    const z = {re: z_re, im: z_im};
+    let z = {re: z_re, im: z_im};
+    if (typeof z_re === 'object') {
+        z = z_re;
+    }
     
     const ta = state.mobiusA;
     const tb = state.mobiusB;
@@ -471,8 +544,10 @@ function complexMobius(z_re, z_im) {
 
 function complexPolynomial(z_re, z_im) {
     let w = {re: 0, im: 0};
-    const z = {re: z_re, im: z_im};
-    
+    let z = {re: z_re, im: z_im};
+    if (typeof z_re === 'object') {
+        z = z_re;
+    }
     
     for (let k = 0; k <= state.polynomialN; ++k) {
         const ck = state.polynomialCoeffs[k];
@@ -482,10 +557,9 @@ function complexPolynomial(z_re, z_im) {
         if (k === 0) {
             z_pow_k = {re: 1, im: 0}; 
         } else if (z.re === 0 && z.im === 0) {
-            
             z_pow_k = {re: 0, im: 0};
         } else {
-            z_pow_k = complexPow(z.re, z.im, k, 0);
+            z_pow_k = complexPow(z, k, 0);
         }
         const term = complexMul(ck, z_pow_k);
         w = complexAdd(w, term);
@@ -493,9 +567,11 @@ function complexPolynomial(z_re, z_im) {
     return w;
 }
 
-
-
 function complexPoincareCustomMetric(a, b) {
+    if (typeof a === 'object') {
+        b = a.im;
+        a = a.re;
+    }
     if (b <= 1e-9) { 
         return { re: NaN, im: NaN };
     }
@@ -543,13 +619,90 @@ function numericDerivative(funcName, z, h = 1e-7) {
     return complexDivide(numerator, denominator);
 }
 
+function evaluateFunctionBlock(block, z_re, z_im) {
+    if (!block || block.func === 'none') {
+        return (typeof z_re === 'object') ? z_re : { re: z_re, im: z_im };
+    }
+    
+    // 1. Chained function g(z)
+    let arg_z = (typeof z_re === 'object') ? z_re : { re: z_re, im: z_im };
+    if (block.chainedFunc && block.chainedFunc !== 'none') {
+        const g = transformFunctions[block.chainedFunc];
+        if (g) {
+            arg_z = g(arg_z);
+        }
+    }
+    
+    // 2. Base function f(arg)
+    const f = transformFunctions[block.func];
+    if (!f) {
+        return arg_z;
+    }
+    
+    let w = f(arg_z);
+    
+    // 3. Higher power w^n
+    if (block.power !== undefined && block.power !== 1) {
+        w = complexPow(w, block.power, 0);
+    }
+    
+    // 4. Reciprocal
+    if (block.reciprocal) {
+        w = complexReciprocal(w);
+    }
+    
+    // 5. Log
+    if (block.log) {
+        w = complexLn(w);
+    }
+    
+    // 6. Exponential
+    if (block.exp) {
+        w = complexExp(w);
+    }
+    
+    return w;
+}
+
+function evaluateAlgebraicTerm(term, z_re, z_im) {
+    let termVal = { re: term.coeff.re, im: term.coeff.im };
+    let z = (typeof z_re === 'object') ? z_re : { re: z_re, im: z_im };
+    
+    for (const factor of term.factors) {
+        if (!factor || factor.func === 'none') {
+            break;
+        }
+        const factorVal = evaluateFunctionBlock(factor, z);
+        termVal = complexMul(termVal, factorVal);
+    }
+    
+    return termVal;
+}
+
+function evaluateAlgebraicChaining(z_re, z_im) {
+    let sum = { re: 0, im: 0 };
+    if (!state.algebraicChainingEnabled || !state.algebraicChainingTerms || state.algebraicChainingTerms.length === 0) {
+        return sum;
+    }
+    let z = (typeof z_re === 'object') ? z_re : { re: z_re, im: z_im };
+    for (const term of state.algebraicChainingTerms) {
+        const termVal = evaluateAlgebraicTerm(term, z);
+        if (isNaN(termVal.re) || isNaN(termVal.im)) {
+            return { re: NaN, im: NaN };
+        }
+        sum = complexAdd(sum, termVal);
+    }
+    return sum;
+}
+
 const transformFunctions = {
     cos: complexCos, sin: complexSin, tan: complexTan, sec: complexSec,
     exp: complexExp, ln: complexLn, reciprocal: complexReciprocal,
     sinh: complexSinh, cosh: complexCosh, tanh: complexTanh,
     power: complexPowerFractional,
     mobius: complexMobius, zeta: complexRiemannZeta, polynomial: complexPolynomial,
-    poincare: complexPoincareCustomMetric 
+    poincare: complexPoincareCustomMetric,
+    algebraic_chaining: evaluateAlgebraicChaining
 };
 
 

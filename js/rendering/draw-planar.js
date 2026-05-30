@@ -252,7 +252,7 @@ function updateAndDrawParticles(ctx, planeParams, state) {
 }
 function drawConformalityProbeSegments(ctx, planeParams, center_world, tf, isWPlane) {
     const h_segment = state.probeNeighborhoodSize / PROBE_CROSSHAIR_SIZE_FACTOR; const z_c = center_world; const z_h_plus = { re: z_c.re + h_segment, im: z_c.im }; const z_h_minus = { re: z_c.re - h_segment, im: z_c.im }; const z_v_plus = { re: z_c.re, im: z_c.im + h_segment }; const z_v_minus = { re: z_c.re, im: z_c.im - h_segment }; let p1_h_world, p2_h_world, p1_v_world, p2_v_world; let color_h, color_v; if (isWPlane) { p1_h_world = tf(z_h_minus.re, z_h_minus.im); p2_h_world = tf(z_h_plus.re, z_h_plus.im); p1_v_world = tf(z_v_minus.re, z_v_minus.im); p2_v_world = tf(z_v_plus.re, z_v_plus.im); color_h = COLOR_PROBE_CONFORMAL_LINE_W_H; color_v = COLOR_PROBE_CONFORMAL_LINE_W_V; } else { p1_h_world = z_h_minus; p2_h_world = z_h_plus; p1_v_world = z_v_minus; p2_v_world = z_v_plus; color_h = COLOR_PROBE_CONFORMAL_LINE_Z_H; color_v = COLOR_PROBE_CONFORMAL_LINE_Z_V; } const drawSegmentIfValid = (p1w, p2w, color) => {
-        if (!isNaN(p1w.re) && !isNaN(p1w.im) && !isNaN(p2w.re) && !isNaN(p2w.im) && isFinite(p1w.re) && isFinite(p1w.im) && isFinite(p2w.re) && isFinite(p2w.im)) {
+        if (!isNaN(p1w.re) && !isNaN(p1w.im) && !isNaN(p2w.re) && !isNaN(p2w.im) && isFinite(p1w.re) && isFinite(p1w.im) && isFinite(p2w.re) && isFinite(p2w.im) && (!isWPlane || (isNumericallyStable(p1w) && isNumericallyStable(p2w)))) {
             const p1_canvas = mapToCanvasCoords(p1w.re, p1w.im, planeParams); const p2_canvas = mapToCanvasCoords(p2w.re, p2w.im, planeParams); const canvasWidth = planeParams.width; const canvasHeight = planeParams.height; const margin = Math.max(canvasWidth, canvasHeight) * 2; if (p1_canvas.x > -margin && p1_canvas.x < canvasWidth + margin && p1_canvas.y > -margin && p1_canvas.y < canvasHeight + margin && p2_canvas.x > -margin && p2_canvas.x < canvasWidth + margin && p2_canvas.y > -margin && p2_canvas.y < canvasHeight + margin) {
                 ctx.save(); ctx.strokeStyle = color; ctx.lineWidth = 2;
                 ctx.lineJoin = 'round';
@@ -281,12 +281,244 @@ function getPlanarTransformRenderLimit(planeParams) {
     ) * 10;
 }
 
+const CONSTANT_MAP_ABS_EPSILON = 1e-5;
+const CONSTANT_MAP_REL_EPSILON = 1e-7;
+const CONSTANT_MAP_MIN_AGREEMENT_RATIO = 0.9;
+const CONSTANT_MAP_MIN_GLOBAL_SAMPLES = 9;
+const CONSTANT_MAP_MIN_LINE_SAMPLES = 5;
+const CONSTANT_MAP_MAX_LINE_SAMPLES = 96;
+const CONSTANT_MAP_RELIABLE_RADIUS = 4;
+
+function getConstantMapTolerance(w) {
+    return CONSTANT_MAP_ABS_EPSILON + CONSTANT_MAP_REL_EPSILON * Math.max(1, Math.hypot(w.re, w.im));
+}
+
+function isFiniteMappedComplex(w) {
+    return !!(
+        w &&
+        typeof w.re === 'number' &&
+        typeof w.im === 'number' &&
+        Number.isFinite(w.re) &&
+        Number.isFinite(w.im) &&
+        isNumericallyStable(w)
+    );
+}
+
+function evaluateRenderedTransform(tf, z_pt) {
+    if (!z_pt || z_pt.re === undefined || z_pt.im === undefined) {
+        return null;
+    }
+    if (state.currentFunction === 'zeta' && !state.zetaContinuationEnabled && z_pt.re <= ZETA_REFLECTION_POINT_RE) {
+        return null;
+    }
+    const w = tf(z_pt.re, z_pt.im);
+    return isFiniteMappedComplex(w) ? w : null;
+}
+
+function getConstantCluster(samples, minValidSamples = CONSTANT_MAP_MIN_LINE_SAMPLES) {
+    if (!samples || samples.length < minValidSamples) {
+        return null;
+    }
+
+    let bestCluster = null;
+    let bestCount = 0;
+
+    for (const candidate of samples) {
+        const eps = getConstantMapTolerance(candidate);
+        const epsSq = eps * eps;
+        let count = 0;
+        let sumRe = 0;
+        let sumIm = 0;
+
+        for (const sample of samples) {
+            const dRe = sample.re - candidate.re;
+            const dIm = sample.im - candidate.im;
+            if (dRe * dRe + dIm * dIm <= epsSq) {
+                count++;
+                sumRe += sample.re;
+                sumIm += sample.im;
+            }
+        }
+
+        if (count > bestCount) {
+            bestCount = count;
+            bestCluster = { re: sumRe / count, im: sumIm / count };
+        }
+    }
+
+    if (!bestCluster || bestCount / samples.length < CONSTANT_MAP_MIN_AGREEMENT_RATIO) {
+        return null;
+    }
+
+    return {
+        value: bestCluster,
+        agreement: bestCount / samples.length,
+        validCount: samples.length
+    };
+}
+
+function getAxisSamplesNearOrigin(minValue, maxValue) {
+    const reliableMin = Math.max(minValue, -CONSTANT_MAP_RELIABLE_RADIUS);
+    const reliableMax = Math.min(maxValue, CONSTANT_MAP_RELIABLE_RADIUS);
+    if (!Number.isFinite(reliableMin) || !Number.isFinite(reliableMax) || reliableMin > reliableMax) {
+        return [];
+    }
+
+    const baseOffsets = [-2, -1, -0.5, 0, 0.5, 1, 2];
+    const samples = [];
+    const addUnique = value => {
+        if (!Number.isFinite(value) || value < reliableMin || value > reliableMax) return;
+        if (!samples.some(existing => Math.abs(existing - value) <= 1e-12)) {
+            samples.push(value);
+        }
+    };
+
+    baseOffsets.forEach(addUnique);
+
+    if (samples.length < 3) {
+        const span = reliableMax - reliableMin;
+        for (let i = 0; i <= 4; i++) {
+            addUnique(span === 0 ? reliableMin : reliableMin + (i / 4) * span);
+        }
+    }
+
+    return samples.sort((a, b) => a - b);
+}
+
+function detectConstantTransformNearVisibleOrigin(tf, sourcePlaneParams) {
+    const xRange = sourcePlaneParams.currentVisXRange || sourcePlaneParams.xRange || [-1, 1];
+    const yRange = sourcePlaneParams.currentVisYRange || sourcePlaneParams.yRange || [-1, 1];
+    const xSamples = getAxisSamplesNearOrigin(xRange[0], xRange[1]);
+    const ySamples = getAxisSamplesNearOrigin(yRange[0], yRange[1]);
+
+    if (xSamples.length === 0 || ySamples.length === 0) {
+        return null;
+    }
+
+    const mappedSamples = [];
+    for (const re of xSamples) {
+        for (const im of ySamples) {
+            const w = evaluateRenderedTransform(tf, { re, im });
+            if (w) {
+                mappedSamples.push(w);
+            }
+        }
+    }
+
+    return getConstantCluster(mappedSamples, CONSTANT_MAP_MIN_GLOBAL_SAMPLES);
+}
+
+function detectConstantTransformedLine(tf, z_pts) {
+    const mappedSamples = [];
+
+    for (let idx = 0; idx < z_pts.length; idx++) {
+        const z_pt = z_pts[idx];
+        if (!z_pt || z_pt.re === undefined || z_pt.im === undefined) continue;
+        if (Math.hypot(z_pt.re, z_pt.im) > CONSTANT_MAP_RELIABLE_RADIUS) continue;
+
+        const w = evaluateRenderedTransform(tf, z_pt);
+        if (w) {
+            mappedSamples.push(w);
+        }
+        if (mappedSamples.length >= CONSTANT_MAP_MAX_LINE_SAMPLES) break;
+    }
+
+    return getConstantCluster(mappedSamples, CONSTANT_MAP_MIN_LINE_SAMPLES);
+}
+
+function drawConstantMappedPoint(ctx, planeParams, w, col) {
+    const p_c = mapToCanvasCoords(w.re, w.im, planeParams);
+    ctx.save();
+    ctx.beginPath();
+    ctx.arc(p_c.x, p_c.y, 7, 0, 2 * Math.PI);
+    ctx.fillStyle = col;
+    ctx.fill();
+    ctx.lineWidth = 2;
+    ctx.strokeStyle = 'rgba(255, 255, 255, 0.8)';
+    ctx.stroke();
+    ctx.restore();
+}
+
 function drawPlanarTransformedLine(ctx, planeParams, tf, z_pts, col) {
+    if (!z_pts || z_pts.length === 0) return;
+
+    const constantLine = detectConstantTransformedLine(tf, z_pts);
+    if (constantLine) {
+        drawConstantMappedPoint(ctx, planeParams, constantLine.value, col);
+        return;
+    }
+
     const renderLimit = getPlanarTransformRenderLimit(planeParams);
+    // Jump threshold based on the actual w-plane viewport span, not renderLimit.
+    // If two consecutive mapped points are farther apart than the viewport diagonal,
+    // it's a discontinuity, pole, or numerical noise — break the line.
+    const xRange = planeParams.currentVisXRange || planeParams.xRange || [-1, 1];
+    const yRange = planeParams.currentVisYRange || planeParams.yRange || [-1, 1];
+    const viewportSpanX = xRange[1] - xRange[0];
+    const viewportSpanY = yRange[1] - yRange[0];
+    const jumpThresholdSq = (viewportSpanX * viewportSpanX + viewportSpanY * viewportSpanY) * 4;
+    
     ctx.strokeStyle = col;
     ctx.lineJoin = 'round';
     ctx.lineCap = 'round';
-    ctx.beginPath(); let fV = true; let lastValidCanvasPoint = null; for (const z_pt of z_pts) { if (!z_pt || z_pt.re === undefined || z_pt.im === undefined) { if (!fV && lastValidCanvasPoint) ctx.stroke(); ctx.beginPath(); fV = true; lastValidCanvasPoint = null; continue; } let w; if (state.currentFunction === 'zeta' && !state.zetaContinuationEnabled && z_pt.re <= ZETA_REFLECTION_POINT_RE) { w = { re: NaN, im: NaN }; } else { w = tf(z_pt.re, z_pt.im); } if (isNaN(w.re) || isNaN(w.im) || !isFinite(w.re) || !isFinite(w.im) || Math.abs(w.re) > renderLimit || Math.abs(w.im) > renderLimit) { if (!fV && lastValidCanvasPoint) { const edgePoint = findIntersectionWithViewport(lastValidCanvasPoint, { x: planeParams.origin.x + w.re * planeParams.scale.x, y: planeParams.origin.y - w.im * planeParams.scale.y }, planeParams); if (edgePoint) ctx.lineTo(edgePoint.x, edgePoint.y); ctx.stroke(); } ctx.beginPath(); fV = true; lastValidCanvasPoint = null; continue; } const p_c = mapToCanvasCoords(w.re, w.im, planeParams); if (fV) { ctx.moveTo(p_c.x, p_c.y); fV = false; } else { ctx.lineTo(p_c.x, p_c.y); } lastValidCanvasPoint = p_c; } if (!fV && lastValidCanvasPoint) { ctx.stroke(); }
+    ctx.beginPath();
+    let fV = true;
+    let lastValidCanvasPoint = null;
+    let lastW = null;
+    for (const z_pt of z_pts) {
+        if (!z_pt || z_pt.re === undefined || z_pt.im === undefined) {
+            if (!fV && lastValidCanvasPoint) ctx.stroke();
+            ctx.beginPath();
+            fV = true;
+            lastValidCanvasPoint = null;
+            lastW = null;
+            continue;
+        }
+        let w;
+        w = evaluateRenderedTransform(tf, z_pt);
+        
+        if (!w) {
+            if (!fV && lastValidCanvasPoint) ctx.stroke();
+            ctx.beginPath();
+            fV = true;
+            lastValidCanvasPoint = null;
+            lastW = null;
+            continue;
+        }
+
+        // Jump detection: break line if consecutive points jump more than 2x viewport diagonal
+        if (lastW !== null) {
+            const distSq = (w.re - lastW.re) ** 2 + (w.im - lastW.im) ** 2;
+            if (distSq > jumpThresholdSq) {
+                if (!fV && lastValidCanvasPoint) ctx.stroke();
+                ctx.beginPath();
+                fV = true;
+                lastValidCanvasPoint = null;
+            }
+        }
+        lastW = w;
+
+        // Skip points far outside viewport (don't draw edge-intersection lines toward them)
+        if (Math.abs(w.re) > renderLimit || Math.abs(w.im) > renderLimit) {
+            if (!fV && lastValidCanvasPoint) ctx.stroke();
+            ctx.beginPath();
+            fV = true;
+            lastValidCanvasPoint = null;
+            continue;
+        }
+        
+        const p_c = mapToCanvasCoords(w.re, w.im, planeParams);
+        if (fV) {
+            ctx.moveTo(p_c.x, p_c.y);
+            fV = false;
+        } else {
+            ctx.lineTo(p_c.x, p_c.y);
+        }
+        lastValidCanvasPoint = p_c;
+    }
+    if (!fV && lastValidCanvasPoint) {
+        ctx.stroke();
+    }
 }
 function findIntersectionWithViewport(p1, p2, planeParams) { const xmin = 0, xmax = planeParams.width; const ymin = 0, ymax = planeParams.height; let t = Infinity; if (p2.y < ymin && p1.y >= ymin) { t = Math.min(t, (ymin - p1.y) / (p2.y - p1.y)); } if (p2.y > ymax && p1.y <= ymax) { t = Math.min(t, (ymax - p1.y) / (p2.y - p1.y)); } if (p2.x < xmin && p1.x >= xmin) { t = Math.min(t, (xmin - p1.x) / (p2.x - p1.x)); } if (p2.x > xmax && p1.x <= xmax) { t = Math.min(t, (xmax - p1.x) / (p2.x - p1.x)); } if (isFinite(t) && t >= 0 && t <= 1) { return { x: p1.x + t * (p2.x - p1.x), y: p1.y + t * (p2.y - p1.y) }; } return null; }
 function calculateDynamicPointsForSegment(p1_world, p2_world, tf) {
@@ -320,7 +552,7 @@ function calculateDynamicPointsForSegment(p1_world, p2_world, tf) {
     }
 
     const w_at_eval_point = tf(eval_point_for_tf.re, eval_point_for_tf.im);
-    if (isNaN(w_at_eval_point.re) || isNaN(w_at_eval_point.im) || !isFinite(w_at_eval_point.re) || !isFinite(w_at_eval_point.im)) {
+    if (isNaN(w_at_eval_point.re) || isNaN(w_at_eval_point.im) || !isFinite(w_at_eval_point.re) || !isFinite(w_at_eval_point.im) || !isNumericallyStable(w_at_eval_point)) {
         return Math.max(1800, Math.floor(MAX_POINTS_ADAPTIVE_DEFAULT * 0.6));
     }
 
@@ -457,20 +689,26 @@ function drawPlanarTransformedShape(ctx, planeParams, tf, options = {}) {
                 currentFunction: state.currentFunction,
                 zetaContinuationEnabled: state.zetaContinuationEnabled
             });
-            drawPointSetCollectionOnPlane(ctx, planeParams, pointSets, {
-                transformFunc: tf,
-                colorResolver: pointSet => highlightContour && pointSet.role === 'shape-curve'
-                    ? COLOR_CAUCHY_CONTOUR_W
-                    : pointSet.color,
-                lineWidthResolver: pointSet => highlightContour && pointSet.role === 'shape-curve'
-                    ? 3.5
-                    : (pointSet.lineWidth || LINE_WIDTH_NORMAL),
-                preparePointSet: pointSet => preparePointSetForMappedPlane(pointSet, tf, {
-                    sampleCountResolver: (currentPointSet, endpoints, transformFunc) => state.currentFunction === 'zeta'
-                        ? calculateDynamicPointsForSegment(endpoints.start, endpoints.end, transformFunc)
-                        : DEFAULT_POINTS_PER_LINE
-                })
-            });
+            const constantTransform = detectConstantTransformNearVisibleOrigin(tf, zPlaneParams);
+            if (constantTransform) {
+                const constantColor = (pointSets.find(pointSet => pointSet && pointSet.color) || {}).color || COLOR_Z_GRID_HORZ;
+                drawConstantMappedPoint(ctx, planeParams, constantTransform.value, constantColor);
+            } else {
+                drawPointSetCollectionOnPlane(ctx, planeParams, pointSets, {
+                    transformFunc: tf,
+                    colorResolver: pointSet => highlightContour && pointSet.role === 'shape-curve'
+                        ? COLOR_CAUCHY_CONTOUR_W
+                        : pointSet.color,
+                    lineWidthResolver: pointSet => highlightContour && pointSet.role === 'shape-curve'
+                        ? 3.5
+                        : (pointSet.lineWidth || LINE_WIDTH_NORMAL),
+                    preparePointSet: pointSet => preparePointSetForMappedPlane(pointSet, tf, {
+                        sampleCountResolver: (currentPointSet, endpoints, transformFunc) => state.currentFunction === 'zeta'
+                            ? calculateDynamicPointsForSegment(endpoints.start, endpoints.end, transformFunc)
+                            : DEFAULT_POINTS_PER_LINE
+                    })
+                });
+            }
         }
     }
 
@@ -545,7 +783,7 @@ function drawPlanarTransformedProbe(ctx, planeParams, tf, index) {
     }
 
     const pW = effectiveTransformFunc(state.probeZ.re, state.probeZ.im);
-    if (!isNaN(pW.re) && !isNaN(pW.im) && isFinite(pW.re) && isFinite(pW.im)) {
+    if (!isNaN(pW.re) && !isNaN(pW.im) && isFinite(pW.re) && isFinite(pW.im) && isNumericallyStable(pW)) {
         const p_p_c = mapToCanvasCoords(pW.re, pW.im, planeParams);
         ctx.fillStyle = COLOR_PROBE_MARKER;
         ctx.beginPath();
@@ -568,15 +806,15 @@ function drawPlanarTransformedProbe(ctx, planeParams, tf, index) {
                 let w_k;
                 switch (state.chainingMode) {
                     case 'power': w_k = complexMul(w_prev, w_0); break;
-                    case 'sqrt': w_k = complexPow(w_prev.re, w_prev.im, 0.5, 0); break;
-                    case 'ln': w_k = complexLn(w_prev.re, w_prev.im); break;
-                    case 'exp': w_k = complexExp(w_prev.re, w_prev.im); break;
-                    case 'reciprocal': w_k = complexReciprocal(w_prev.re, w_prev.im); break;
+                    case 'sqrt': w_k = complexPow(w_prev, 0.5, 0); break;
+                    case 'ln': w_k = complexLn(w_prev); break;
+                    case 'exp': w_k = complexExp(w_prev); break;
+                    case 'reciprocal': w_k = complexReciprocal(w_prev); break;
                     case 'recursion':
-                    default: w_k = baseFunc(w_prev.re, w_prev.im); break;
+                    default: w_k = baseFunc(w_prev); break;
                 }
 
-                if (!w_k || isNaN(w_k.re) || isNaN(w_k.im) || !isFinite(w_k.re) || !isFinite(w_k.im)) break;
+                if (!w_k || isNaN(w_k.re) || isNaN(w_k.im) || !isFinite(w_k.re) || !isFinite(w_k.im) || !isNumericallyStable(w_k)) break;
                 if (Math.abs(w_k.re) > renderLimit * 3 || Math.abs(w_k.im) > renderLimit * 3) break;
 
                 const curr_canvas_pt = mapToCanvasCoords(w_k.re, w_k.im, planeParams);

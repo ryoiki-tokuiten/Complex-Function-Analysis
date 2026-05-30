@@ -41,17 +41,31 @@ function appendMappedSphereLineTraces(traces, sourcePoints, transformPoint, opti
         textCoords.length = 0;
     };
 
+    let lastMappedPoint = null;
+    const jumpThresholdSq = 1e8;
+
     sourcePoints.forEach(sourcePoint => {
         if (!sourcePoint || sourcePoint.re === undefined || sourcePoint.im === undefined) {
             flush();
+            lastMappedPoint = null;
             return;
         }
 
         const mappedPoint = transformPoint(sourcePoint);
         if (!mappedPoint || !Number.isFinite(mappedPoint.re) || !Number.isFinite(mappedPoint.im)) {
             flush();
+            lastMappedPoint = null;
             return;
         }
+
+        // Jump detection
+        if (lastMappedPoint !== null) {
+            const distSq = (mappedPoint.re - lastMappedPoint.re) ** 2 + (mappedPoint.im - lastMappedPoint.im) ** 2;
+            if (distSq > jumpThresholdSq) {
+                flush();
+            }
+        }
+        lastMappedPoint = mappedPoint;
 
         const spherePoint = complexToSphere(mappedPoint.re, mappedPoint.im);
         xCoords.push(spherePoint.x);
@@ -106,7 +120,7 @@ function getPlotlyMappedData(transformFunc) {
 
         
         const wProbeCenter = transformFunc(sourceProbeZ.re, sourceProbeZ.im);
-        if (!isNaN(wProbeCenter.re) && !isNaN(wProbeCenter.im) && isFinite(wProbeCenter.re) && isFinite(wProbeCenter.im)) {
+        if (!isNaN(wProbeCenter.re) && !isNaN(wProbeCenter.im) && isFinite(wProbeCenter.re) && isFinite(wProbeCenter.im) && isNumericallyStable(wProbeCenter)) {
             const sphereProbeCenter = complexToSphere(wProbeCenter.re, wProbeCenter.im);
             traces.push({
                 type: 'scatter3d', mode: 'markers',
