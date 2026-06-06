@@ -1311,6 +1311,16 @@
                                 <span class="viz-detail-copy">Drag to orbit, scroll to zoom, and double-click to reset.</span>
                             </div>
                             <div class="viz-settings-grid">
+                                <div class="control-group" style="grid-column: span 2;">
+                                    <label for="riemann_surface_palette_select">Color Palette</label>
+                                    <select id="riemann_surface_palette_select" class="control-select"
+                                        data-tooltip="Shared palette for Riemann surfaces and domain coloring">
+                                        <option value="calming" selected>Calming (Default)</option>
+                                        <option value="classic">Classic (Rainbow)</option>
+                                        <option value="purple">Purple / Violet</option>
+                                        <option value="green">Green / Jade / Lime</option>
+                                    </select>
+                                </div>
                                 <div class="control-group">
                                     <label for="riemann_surface_component_selector">Surface Height</label>
                                     <select id="riemann_surface_component_selector" class="control-select"
@@ -1438,7 +1448,27 @@
                             </div>
                         </div>
                         <div id="riemann_sphere_options_div"
-                            class="dependent-settings-block hidden control-group-indent viz-detail-block">
+                            class="dependent-settings-block hidden control-group-indent viz-detail-block viz-stacked-options">
+                            <div id="riemann_sphere_domain_coloring_options"
+                                class="riemann-sphere-coloring-options hidden">
+                                <div class="viz-detail-header">
+                                    <span class="viz-detail-title">Sphere Coloring</span>
+                                    <span class="viz-detail-copy">Color identifies the codomain coordinate w;
+                                        mapped curves show each output stage.</span>
+                                </div>
+                                <div class="viz-settings-grid">
+                                    <div class="control-group viz-control-span-2">
+                                        <label for="riemann_sphere_palette_select">Color Palette</label>
+                                        <select id="riemann_sphere_palette_select" class="control-select"
+                                            data-tooltip="Shared palette for Riemann spheres, surfaces, and domain coloring">
+                                            <option value="calming" selected>Calming (Default)</option>
+                                            <option value="classic">Classic (Rainbow)</option>
+                                            <option value="purple">Purple / Violet</option>
+                                            <option value="green">Green / Jade / Lime</option>
+                                        </select>
+                                    </div>
+                                </div>
+                            </div>
                             <div class="viz-toggle-grid viz-toggle-grid--duo viz-toggle-grid--compact">
                                 <label for="enable_plotly_3d_cb"
                                     class="control-label tooltip-label viz-toggle-card viz-toggle-card--compact">
@@ -1744,7 +1774,7 @@
 
         <section id="canvases_section">
             <div class="canvas-row two-column-layout">
-                <div id="z_plane_column">
+                <div id="z_plane_column" class="plane-column">
                     <div class="canvas-header-line">
                         <h2 class="section-title"><span id="z-plane-title">z-plane (Input:
                                 <code>z = a + ib</code>)</span></h2>
@@ -1798,7 +1828,7 @@
                         </div>
                     </div>
                 </div>
-                <div id="w_plane_column">
+                <div id="w_plane_column" class="plane-column">
                     <div class="canvas-header-line">
                         <h2 class="section-title"><span id="w-plane-title">w-plane (Output: <code
                                     id="w-plane-title-func">w = cos(z)</code>)</span></h2>

@@ -4,7 +4,7 @@ import { DEFAULT_TAYLOR_SERIES_CENTER, CRITICAL_POINT_EPSILON } from '../constan
 import { updatePolynomialCoeffDisplays } from './polynomial-ui.js';
 import { syncLaplacePlayPauseButton, syncLaplaceWindingSyncButton } from './event-listeners.js';
 import { syncVideoPlaybackUI } from '../utils/raster-media.js';
-import { findTaylorCenterPreset, formatTaylorNumericValue } from '../utils/dom-utils.js';
+import { findTaylorCenterPreset, formatTaylorNumericValue, getChainingTitleHTML } from '../utils/dom-utils.js';
 import { syncNavigationControls } from '../navigation-plane.js';
 import {
     getBranchWindowLabel,
@@ -713,6 +713,12 @@ export function updateTitlesAndGlobalUI() {
     if (state.chainingEnabled && state.chainCount > 1) {
         fND = getChainedFormula(fND, state.chainingMode, state.chainCount);
     }
+    const hasOutputChain = state.chainingEnabled && state.chainCount > 1;
+    const wOutputFormula = hasOutputChain
+        ? getChainingTitleHTML(0, state.chainingMode)
+        : `w = ${fND}`;
+    const wOutputDescriptor = `${hasOutputChain ? 'Chain 0' : 'Output'}: <code id="w-plane-title-func">${wOutputFormula}</code>`;
+    const mappedWOutputDescriptor = `${hasOutputChain ? 'mapped chain 0' : 'mapped output'}: <code id="w-plane-title-func">${wOutputFormula}</code>`;
 
     let zPlaneTitleText = "z-plane (Input";
     if (state.currentInputShape === 'line') zPlaneTitleText += ": Lines)";
@@ -745,7 +751,7 @@ export function updateTitlesAndGlobalUI() {
 
     if (state.riemannSurfaceEnabled) {
         controls.zPlaneTitle.innerHTML = zPlaneTitleText;
-        controls.wPlaneTitle.innerHTML = `Riemann surface (Output: <code id="w-plane-title-func">w = ${fND}</code>)`;
+        controls.wPlaneTitle.innerHTML = `Riemann surface (${wOutputDescriptor})`;
         if (controls.cauchy_integral_results_info) controls.cauchy_integral_results_info.classList.add('hidden');
     } else if (state.splitViewEnabled) {
         if (state.domainColoringEnabled) {
@@ -758,7 +764,10 @@ export function updateTitlesAndGlobalUI() {
         } else {
             controls.zPlaneTitle.innerHTML = `z-plane (Input Grid: ${state.currentInputShape.replace(/_/g, ' ')})`;
         }
-        controls.wPlaneTitle.innerHTML = `w-sphere (Output: <code id="w-plane-title-func">w = ${fND}</code>)`;
+        const sphereLabel = state.plotly3DEnabled ? '3D w-sphere' : 'w-sphere';
+        controls.wPlaneTitle.innerHTML = state.domainColoringEnabled
+            ? `${sphereLabel} (Codomain coloring; ${mappedWOutputDescriptor})`
+            : `${sphereLabel} (${wOutputDescriptor})`;
         if(controls.cauchy_integral_results_info) controls.cauchy_integral_results_info.classList.add('hidden');
     } else if (state.riemannSphereViewEnabled) {
         if (state.domainColoringEnabled) {
@@ -766,13 +775,16 @@ export function updateTitlesAndGlobalUI() {
         } else {
             controls.zPlaneTitle.innerHTML = 'z-sphere (Input)';
         }
-        controls.wPlaneTitle.innerHTML = `w-sphere (Output: <code id="w-plane-title-func">w = ${fND}</code>)`;
+        const sphereLabel = state.plotly3DEnabled ? '3D w-sphere' : 'w-sphere';
+        controls.wPlaneTitle.innerHTML = state.domainColoringEnabled
+            ? `${sphereLabel} (Codomain coloring; ${mappedWOutputDescriptor})`
+            : `${sphereLabel} (${wOutputDescriptor})`;
         if(controls.cauchy_integral_results_info) controls.cauchy_integral_results_info.classList.add('hidden');
     } else {
         controls.zPlaneTitle.innerHTML = zPlaneTitleText;
         controls.wPlaneTitle.innerHTML = state.navigationModeEnabled
-            ? `w-plane (Mapped Navigation: <code id="w-plane-title-func">w = ${fND}</code>)`
-            : `w-plane (Output: <code id="w-plane-title-func">w = ${fND}</code>)`;
+            ? `w-plane (Mapped Navigation: <code id="w-plane-title-func">${wOutputFormula}</code>)`
+            : `w-plane (${wOutputDescriptor})`;
     }
 
     controls.inputShapeSelector.disabled = false;
@@ -826,9 +838,16 @@ export function updateTitlesAndGlobalUI() {
     if (controls.domainColoringOptionsDiv) {
         controls.domainColoringOptionsDiv.classList.toggle('hidden', !state.domainColoringEnabled);
     }
-    if (controls.domainPaletteSelect) {
-        controls.domainPaletteSelect.value = state.domainPalette || 'calming';
+    if (controls.riemannSphereDomainColoringOptions) {
+        controls.riemannSphereDomainColoringOptions.classList.toggle('hidden', !state.domainColoringEnabled);
     }
+    [
+        controls.domainPaletteSelect,
+        controls.riemannSurfacePaletteSelect,
+        controls.riemannSpherePaletteSelect
+    ].filter(Boolean).forEach(selector => {
+        selector.value = state.domainPalette || 'calming';
+    });
     if (controls.domainColoringKeyDiv) {
         controls.domainColoringKeyDiv.classList.toggle('hidden', !state.domainColoringEnabled);
         updateDomainColoringKey();

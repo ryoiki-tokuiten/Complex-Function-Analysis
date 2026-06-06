@@ -800,12 +800,13 @@ function setCommonUniforms(renderer, options) {
     setTaylorUniforms(renderer);
 }
 
-function updateHud(renderer, branchIndices, hasBranches) {
+function updateHud(renderer, branchIndices, hasBranches, stage) {
     const backend = renderer.backendInfo || {};
     const backendLabel = backend.unmaskedRenderer || backend.renderer || 'WebGL';
     const branchLabel = hasBranches ? getBranchWindowLabel(branchIndices) : 'single-valued sheet';
+    const stageLabel = state.chainingEnabled ? `chain ${Math.max(0, stage - 1)}` : 'output';
     renderer.hud.textContent =
-        `${getSurfaceComponentLabel(state.riemannSurfaceComponent)} | ${branchLabel} | GPU: ${backendLabel}`;
+        `${stageLabel} | ${getSurfaceComponentLabel(state.riemannSurfaceComponent)} | ${branchLabel} | GPU: ${backendLabel}`;
 }
 
 function drawRenderer(renderer, options = renderer.lastOptions) {
@@ -864,7 +865,7 @@ function drawRenderer(renderer, options = renderer.lastOptions) {
         }
     });
 
-    updateHud(renderer, branchIndices, hasBranches);
+    updateHud(renderer, branchIndices, hasBranches, options.stage);
     return true;
 }
 

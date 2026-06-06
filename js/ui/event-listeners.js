@@ -627,18 +627,30 @@ function bindDomainColoringControls() {
         if (controls.domainColoringKeyDiv) {
             controls.domainColoringKeyDiv.classList.toggle('hidden', !state.domainColoringEnabled);
         }
+        if (controls.riemannSphereDomainColoringOptions) {
+            controls.riemannSphereDomainColoringOptions.classList.toggle('hidden', !state.domainColoringEnabled);
+        }
         requestDomainRedraw(true);
     });
 
-    if (controls.domainPaletteSelect) {
-        controls.domainPaletteSelect.addEventListener('change', (e) => {
+    const paletteSelectors = [
+        controls.domainPaletteSelect,
+        controls.riemannSurfacePaletteSelect,
+        controls.riemannSpherePaletteSelect
+    ].filter(Boolean);
+
+    paletteSelectors.forEach(selector => {
+        selector.addEventListener('change', (e) => {
             state.domainPalette = e.target.value;
+            paletteSelectors.forEach(otherSelector => {
+                otherSelector.value = state.domainPalette;
+            });
             if (typeof updateDomainColoringKey === 'function') {
                 updateDomainColoringKey();
             }
             requestDomainRedraw(true);
         });
-    }
+    });
 
     ['domainBrightness', 'domainContrast', 'domainSaturation', 'domainLightnessCycles'].forEach(stateKey => {
         bindSlider(`${stateKey}Slider`, stateKey, parseFloat, () => {
@@ -652,8 +664,8 @@ function bindViewControls() {
         if (state.splitViewEnabled && state.riemannSurfaceEnabled) {
             state.riemannSurfaceEnabled = false;
             if (controls.enableRiemannSurfaceCb) controls.enableRiemannSurfaceCb.checked = false;
-            if (typeof updateChainingTitles === 'function') updateChainingTitles();
         }
+        if (typeof updateChainingTitles === 'function') updateChainingTitles();
         requestDomainRedraw(true);
     });
 
@@ -672,7 +684,6 @@ function bindViewControls() {
             state.riemannSurfaceEnabled = false;
             if (controls.enableRiemannSurfaceCb) controls.enableRiemannSurfaceCb.checked = false;
             if (controls.riemannSurfaceOptionsDiv) controls.riemannSurfaceOptionsDiv.classList.add('hidden');
-            if (typeof updateChainingTitles === 'function') updateChainingTitles();
         }
         if (controls.riemannSphereOptionsDiv) {
             controls.riemannSphereOptionsDiv.classList.toggle('hidden', !state.riemannSphereViewEnabled);
@@ -680,6 +691,7 @@ function bindViewControls() {
         if (!state.riemannSphereViewEnabled && controls.plotly3DOptionsDiv) {
             controls.plotly3DOptionsDiv.classList.add('hidden');
         }
+        if (typeof updateChainingTitles === 'function') updateChainingTitles();
         requestDomainRedraw(true);
     });
 
@@ -687,6 +699,7 @@ function bindViewControls() {
         if (controls.plotly3DOptionsDiv) {
             controls.plotly3DOptionsDiv.classList.toggle('hidden', !state.plotly3DEnabled);
         }
+        if (typeof updateChainingTitles === 'function') updateChainingTitles();
         requestRedrawAll();
     });
 

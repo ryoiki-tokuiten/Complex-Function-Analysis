@@ -110,6 +110,9 @@ const DOM_BINDINGS = [
     { key: 'domainLightnessCyclesValueDisplay', id: 'domain_lightness_cycles_value_display' },
     { key: 'domainColoringKeyDiv', id: 'domain_coloring_key' },
     { key: 'domainPaletteSelect', id: 'domain_palette_select' },
+    { key: 'riemannSurfacePaletteSelect', id: 'riemann_surface_palette_select' },
+    { key: 'riemannSpherePaletteSelect', id: 'riemann_sphere_palette_select' },
+    { key: 'riemannSphereDomainColoringOptions', id: 'riemann_sphere_domain_coloring_options' },
     { key: 'gridDensitySlider', id: 'grid_density_slider' },
     { key: 'gridDensityValueDisplay', id: 'grid_density_value_display' },
     { key: 'showZerosPolesCb', id: 'show_zeros_poles_cb' },
@@ -544,10 +547,18 @@ export function updateChainingTitles() {
     for (let i = 1; i < wCanvasList.length; i++) {
         const titleSpan = document.getElementById(`w-plane-title_${i}`);
         if (titleSpan) {
-            const outputLabel = state.riemannSurfaceEnabled ? 'Riemann surface' : 'w-plane';
+            const outputLabel = getChainedOutputLabel();
             titleSpan.innerHTML = `${outputLabel} (Chain ${i}: <code id="w-plane-title-func_${i}">${getChainingTitleHTML(i, state.chainingMode)}</code>)`;
         }
     }
+}
+
+function getChainedOutputLabel() {
+    if (state.riemannSurfaceEnabled) return 'Riemann surface';
+    if (state.riemannSphereViewEnabled || state.splitViewEnabled) {
+        return state.plotly3DEnabled ? '3D w-sphere' : 'w-sphere';
+    }
+    return 'w-plane';
 }
 
 export function updateChainingColumns(count) {
@@ -576,7 +587,7 @@ export function updateChainingColumns(count) {
         const titleSpan = newCol.querySelector('#w-plane-title');
         if (titleSpan) {
             titleSpan.id = `w-plane-title_${i}`;
-            const outputLabel = state.riemannSurfaceEnabled ? 'Riemann surface' : 'w-plane';
+            const outputLabel = getChainedOutputLabel();
             titleSpan.innerHTML = `${outputLabel} (Chain ${i}: <code id="w-plane-title-func_${i}">${getChainingTitleHTML(i, state.chainingMode)}</code>)`;
         }
 

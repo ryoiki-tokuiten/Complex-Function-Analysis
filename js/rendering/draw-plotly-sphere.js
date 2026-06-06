@@ -9,6 +9,7 @@ import { complexToSphere } from '../utils/canvas-utils.js';
 import { isRasterInputShape } from '../utils/raster-media.js';
 import { generateCurrentMappedInputShapePointSets } from './shape-generators.js';
 import { getSpherePointSetColor } from './draw-sphere.js';
+import { domainColorForValue } from './domain-coloring.js';
 
 
 export function pushPlotlyLineTrace(traces, xCoords, yCoords, zCoords, options = {}) {
@@ -209,28 +210,48 @@ export function getPlotlyMappedData(transformFunc) {
 }
 
 
-export function renderPlotlyRiemannSphere(transformFunc) {
-    const containerId = 'w_plane_plotly_container';
-    const plotlyContainer = document.getElementById(containerId);
+export function getPlotlySphereResolution(runtimeState = state) {
+    const outputCount = runtimeState.chainingEnabled
+        ? Math.max(1, Math.min(25, Math.floor(runtimeState.chainCount || 1)))
+        : 1;
+    if (outputCount <= 3) return 200;
+    if (outputCount <= 8) return 168;
+    return 128;
+}
 
-    if (!plotlyContainer) {
-        console.error('Plotly container not found:', containerId);
-        return;
-    }
-
-    
-    const n = 300; 
-    const xSphere = [], ySphere = [], zSphere = [];
-    const iSphere = [], jSphere = [], kSphere = [];
+export function buildPlotlySphereMesh(
+    runtimeState = state,
+    resolution = getPlotlySphereResolution(runtimeState)
+) {
+    const n = Math.max(24, Math.min(240, Math.floor(resolution)));
+    const x = [];
+    const y = [];
+    const z = [];
+    const i = [];
+    const j = [];
+    const k = [];
+    const vertexcolor = runtimeState.domainColoringEnabled ? [] : null;
 
     for (let lat = 0; lat <= n; lat++) {
-        const phi = Math.PI * (-0.5 + lat / n); 
+        const phi = Math.PI * (-0.5 + lat / n);
         const cosPhi = Math.cos(phi);
         for (let lon = 0; lon <= n; lon++) {
-            const theta = 2 * Math.PI * (-0.5 + lon / n); 
-            xSphere.push(cosPhi * Math.cos(theta));
-            ySphere.push(cosPhi * Math.sin(theta));
-            zSphere.push(Math.sin(phi));
+            const theta = 2 * Math.PI * (-0.5 + lon / n);
+            const sphereX = cosPhi * Math.cos(theta);
+            const sphereY = cosPhi * Math.sin(theta);
+            const sphereZ = Math.sin(phi);
+            x.push(sphereX);
+            y.push(sphereY);
+            z.push(sphereZ);
+
+            if (vertexcolor) {
+                const denominator = 1 - sphereZ;
+                const radius = denominator > 1e-8 ? 1 / denominator : 1e8;
+                const wRe = denominator > 1e-8 ? sphereX * radius : Math.cos(theta) * radius;
+                const wIm = denominator > 1e-8 ? sphereY * radius : Math.sin(theta) * radius;
+                const rgb = domainColorForValue(wRe, wIm, runtimeState);
+                vertexcolor.push(`rgb(${rgb[0]}, ${rgb[1]}, ${rgb[2]})`);
+            }
         }
     }
 
@@ -238,29 +259,43 @@ export function renderPlotlyRiemannSphere(transformFunc) {
         for (let lon = 0; lon < n; lon++) {
             const first = lat * (n + 1) + lon;
             const second = first + (n + 1);
-            iSphere.push(first, first);
-            jSphere.push(second, first + 1);
-            kSphere.push(first + 1, second + 1);
+            i.push(first, first);
+            j.push(second, first + 1);
+            k.push(first + 1, second + 1);
         }
     }
 
+    return { x, y, z, i, j, k, vertexcolor };
+}
+
+export function renderPlotlyRiemannSphere(transformFunc, targetContainer = null) {
+    const plotlyContainer = targetContainer || document.getElementById('w_plane_plotly_container');
+
+    if (!plotlyContainer) {
+        console.error('Plotly sphere container not found.');
+        return;
+    }
+
+    const sphereMesh = buildPlotlySphereMesh(state);
     const sphereTrace = {
         type: 'mesh3d',
-        x: xSphere,
-        y: ySphere,
-        z: zSphere,
-        i: iSphere,
-        j: jSphere,
-        k: kSphere,
+        x: sphereMesh.x,
+        y: sphereMesh.y,
+        z: sphereMesh.z,
+        i: sphereMesh.i,
+        j: sphereMesh.j,
+        k: sphereMesh.k,
         opacity: state.plotlySphereOpacity !== undefined ? state.plotlySphereOpacity : 0.10, 
-        color: '#32325c',
+        ...(sphereMesh.vertexcolor
+            ? { vertexcolor: sphereMesh.vertexcolor }
+            : { color: '#32325c' }),
         flatshading: false, 
         lighting: {
-            ambient: 0.5,    
-            diffuse: 1.0,    
-            specular: 0.7,   
-            roughness: 0.3,  
-            fresnel: 0.8     
+            ambient: 1,
+            diffuse: 0,
+            specular: 0,
+            roughness: 1,
+            fresnel: 0
         },
         lightposition: {x: 50, y: 200, z: 100}, 
         hoverinfo: 'none' 
@@ -273,12 +308,16 @@ export function renderPlotlyRiemannSphere(transformFunc) {
         autosize: true,
         margin: { l: 0, r: 0, b: 0, t: 0, pad:0 },
         showlegend: false, 
+        uirevision: plotlyContainer.id,
         scene: {
             camera: {
-                eye: {x: 1.25, y: 1.25, z: 1.25}
+                eye: {x: 0.75, y: 0.75, z: 0.75},
+                center: {x: 0, y: 0, z: 0}
             },
             xaxis: {
                 title: 'Re(w)', 
+                range: [-1.16, 1.16],
+                autorange: false,
                 visible: state.showSphereAxesAndGrid, 
                 showgrid: true, 
                 zeroline: true,
@@ -290,6 +329,8 @@ export function renderPlotlyRiemannSphere(transformFunc) {
             },
             yaxis: {
                 title: 'Im(w)', 
+                range: [-1.16, 1.16],
+                autorange: false,
                 visible: state.showSphereAxesAndGrid, 
                 showgrid: true,
                 zeroline: true,
@@ -301,6 +342,8 @@ export function renderPlotlyRiemannSphere(transformFunc) {
             },
             zaxis: {
                 title: 'Z (Sphere axis)', 
+                range: [-1.16, 1.16],
+                autorange: false,
                 visible: state.showSphereAxesAndGrid, 
                 showgrid: true,
                 zeroline: true,
@@ -310,7 +353,8 @@ export function renderPlotlyRiemannSphere(transformFunc) {
                 tickfont: { color: 'rgba(200,200,220,0.7)'},
                 titlefont: { color: 'rgba(200,200,220,0.7)'}
             },
-            aspectmode: 'cube', 
+            aspectmode: 'manual',
+            aspectratio: {x: 1, y: 1, z: 1},
             bgcolor: "rgba(10,12,16,1.0)" 
         },
         paper_bgcolor: 'rgba(0,0,0,0)', 
@@ -325,7 +369,7 @@ export function renderPlotlyRiemannSphere(transformFunc) {
     }
     const plotData = [sphereTrace, ...mappedTraces, ...dynamicGridTraces];
 
-    Plotly.react(containerId, plotData, layout, {responsive: true, displaylogo: false});
+    Plotly.react(plotlyContainer, plotData, layout, {responsive: true, displaylogo: false});
 }
 
 

@@ -684,7 +684,7 @@ function _renderSingleWPlaneMode(index, curFunc, isSpecialMode) {
             controls.wPlanePlotlyContainer.style.width = `${wPlaneParams.width}px`;
             controls.wPlanePlotlyContainer.style.height = `${wPlaneParams.height}px`;
         }
-        renderPlotlyRiemannSphere(curFunc);
+        renderPlotlyRiemannSphere(curFunc, controls.wPlanePlotlyContainer);
     } else {
         if (wCanvas) wCanvas.classList.remove('hidden'); // Use global wCanvas
         if (controls.wPlanePlotlyContainer) controls.wPlanePlotlyContainer.classList.add('hidden');

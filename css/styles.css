@@ -519,6 +519,25 @@ main {
     min-width: 0;
 }
 
+.viz-control-span-2 {
+    grid-column: 1 / -1;
+}
+
+.viz-stacked-options,
+.riemann-sphere-coloring-options {
+    display: flex;
+    flex-direction: column;
+}
+
+.viz-stacked-options {
+    gap: 0.8rem;
+}
+
+.riemann-sphere-coloring-options {
+    gap: 0.55rem;
+    padding-bottom: 0.1rem;
+}
+
 .vector-flow-workspace {
     display: flex;
     flex-direction: column;
@@ -967,7 +986,8 @@ hr.panel-separator {
     align-items: stretch; /* Ensure columns stretch to the same height if content differs, default is stretch */
 }
 
-#z_plane_column, #w_plane_column, #laplace_3d_column {
+#canvases_section .plane-column,
+#laplace_3d_column {
     display: flex;
     flex-direction: column;
     min-height: 0;
@@ -975,9 +995,8 @@ hr.panel-separator {
     overflow: hidden; /* Crucial to prevent canvas from expanding its column */
 }
 
-/* Styling for the direct container of the canvas (child of #z_plane_column/#w_plane_column/#laplace_3d_column) */
-#z_plane_column > div:not(.canvas-header-line),
-#w_plane_column > div:not(.canvas-header-line),
+/* Styling for the direct container of each canvas. */
+#canvases_section .plane-column > div:not(.canvas-header-line),
 #laplace_3d_column > div:not(.canvas-header-line) {
     flex-grow: 1; /* Allows this container to take up available space in the column */
     min-height: 0; /* Essential for descendant flex items (like canvas) to scale correctly */
@@ -987,7 +1006,8 @@ hr.panel-separator {
 }
 
 
-#z_plane_column .section-title, #w_plane_column .section-title, #laplace_3d_column .section-title {
+#canvases_section .plane-column .section-title,
+#laplace_3d_column .section-title {
     flex-shrink: 0;
     /* margin-bottom: 0.75rem; from .section-title */
 }
