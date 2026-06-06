@@ -1497,19 +1497,19 @@ input[type="range"]:focus::-moz-range-thumb {
     background-color: var(--accent-purple-light);
 }
 
-.two-column-layout>div {
-    flex: 1 1 0%;
-    min-width: 320px;
+.two-column-layout > div {
+    flex: 0 0 calc(50% - 0.75rem);
+    min-width: 400px;
 }
 
-/* When a sibling is collapsed, the non-collapsed column grows freely */
-.two-column-layout:has(.plane-collapsed)>div:not(.plane-collapsed) {
+/* When a plane is collapsed in the main z/w section, let the remaining panel fill freely */
+#canvases_section .two-column-layout:has(.plane-collapsed) > div:not(.plane-collapsed) {
     flex: 1 1 0%;
     min-width: 0;
 }
 
 /* Three-column layout for Laplace mode */
-.two-column-layout:has(#laplace_3d_column:not(.hidden))>div {
+.two-column-layout:has(#laplace_3d_column:not(.hidden)) > div {
     flex: 0 0 calc(33.333% - 1rem);
     min-width: 300px;
 }
