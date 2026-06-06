@@ -398,8 +398,8 @@ export function createWebGLDomainColorRenderer() {
         uMobiusD,
         uPolyDegree,
         uPolyCoeffs,
-        uZetaContinuationEnabled,
-        uZetaReflectionBoundary,
+        uZetaCont: uZetaContinuationEnabled,
+        uZetaRefl: uZetaReflectionBoundary,
         uFracPower,
         uChainCount,
         uChainMode
