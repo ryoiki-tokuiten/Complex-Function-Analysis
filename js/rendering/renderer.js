@@ -1,3 +1,37 @@
+import { state, context, zPlaneParams as defaultZPlaneParams, wPlaneParams as defaultWPlaneParams, sphereViewParams } from '../store/state.js';
+import {
+    COLOR_CANVAS_BACKGROUND,
+    COLOR_TEXT_ON_CANVAS,
+    COLOR_CRITICAL_POINT_Z,
+    COLOR_CRITICAL_VALUE_W,
+    COLOR_PROBE_NEIGHBORHOOD,
+    COLOR_FTA_C_MARKER,
+    COLOR_W_ORIGIN_GLOW
+} from '../constants/colors.js';
+import { MAX_POLY_DEGREE, ZETA_REFLECTION_POINT_RE } from '../constants/numerical.js';
+import { ORIGIN_GLOW_DURATION_MS } from '../constants/rendering.js';
+import { mapToCanvasCoords } from '../utils/canvas-utils.js';
+import { getChainedTransformFunction, getEffectiveBaseTransformFunction, getMappedTransformProfile, evaluateMappedTransform, complexMul, complexPow, complexLn, complexExp, complexReciprocal } from '../math-utils.js';
+import { drawWithWebGLRaster, drawWithWebGLCapture, drawPlanarTransformedShapeHybrid, drawPlanarInputShapeHybrid } from './webgl-planar.js';
+import { drawWindingVisualization, drawTimeDomainSignal } from './draw-fourier-winding.js';
+import { drawLaplaceWindingVisualization, drawLaplaceTimeDomain } from './draw-laplace-panels.js';
+import { renderPlotlyRiemannSphere } from './draw-plotly-sphere.js';
+import { drawAxes, drawGridLines } from './canvas-primitives.js';
+import { drawTaylorAxes, drawZerosAndPolesMarkers, drawCriticalPointMarker, drawGeneralPointsMarkers } from './draw-primitives.js';
+import { drawPlanarTransformedShape, drawPlanarProbe, drawPlanarTransformedProbe, drawStreamlinesOnZPlane, updateAndDrawParticles, drawPlanarInputOverlays, drawPlanarTaylorApproximation, drawZPlaneVectorField } from './draw-planar.js';
+import { drawNavigationLayer } from '../navigation-plane.js';
+import { renderSphereDomainColoring, renderPlanarDomainColoring } from './domain-coloring.js';
+import { drawRiemannSphereBase, drawSphereGridAndShape, drawSphereProbeAndNeighborhood } from './draw-sphere.js';
+import { updateWindingNumberDisplay } from '../analysis/cauchy.js';
+
+let zCanvas, wCanvas, zCtx, wCtx;
+let zDomainColorCanvas, wDomainColorCanvas, zDomainColorCtx, wDomainColorCtx;
+let wCanvasList, wCtxList, wPlaneParamsList, wPlanePlotlyContainersList, sphereViewWParamsList;
+const { controls } = context;
+
+let zPlaneParams = defaultZPlaneParams;
+let wPlaneParams = defaultWPlaneParams;
+
 function drawPlaneLayer(ctx, planeParams, planeKey, drawCallback, mode = 'capture') {
     if (!ctx || !planeParams || typeof drawCallback !== 'function') return;
 
@@ -14,7 +48,7 @@ function drawPlaneLayer(ctx, planeParams, planeKey, drawCallback, mode = 'captur
 }
 
 let wPlanarTransformedLayerCache;
-const wPlanarTransformedLayerCacheList = [];
+let wPlanarTransformedLayerCacheList = [];
 const zPlanarInputLayerCache = {
     key: null,
     canvas: null,
@@ -340,7 +374,22 @@ function drawWOriginGlowOverlay(ctx, planeParams) {
     ctx.restore();
 }
 
-function drawZPlaneContent(){
+export function drawZPlaneContent() {
+    zCanvas = context.zCanvas;
+    wCanvas = context.wCanvas;
+    zCtx = context.zCtx;
+    wCtx = context.wCtx;
+    zDomainColorCanvas = context.zDomainColorCanvas;
+    wDomainColorCanvas = context.wDomainColorCanvas;
+    zDomainColorCtx = context.zDomainColorCtx;
+    wDomainColorCtx = context.wDomainColorCtx;
+    wCanvasList = context.wCanvasList;
+    wCtxList = context.wCtxList;
+    wPlaneParamsList = context.wPlaneParamsList;
+    wPlanePlotlyContainersList = context.wPlanePlotlyContainersList;
+    sphereViewWParamsList = context.sphereViewWParamsList;
+    wPlanarTransformedLayerCacheList = context.wPlanarTransformedLayerCacheList;
+
     // Handle Fourier Transform mode
     if (state.fourierModeEnabled) {
         drawPlaneLayer(zCtx, zPlaneParams, 'z', (layerCtx) => {
@@ -363,7 +412,7 @@ function drawZPlaneContent(){
     if(drawZAsSphere){
         const cSP=sphereViewParams.z;
         
-        if(state.domainColoringEnabled && domainColoringDirty){renderSphereDomainColoring(zDomainColorCtx,cSP,zPlaneParams,false,curFunc);} 
+        if(state.domainColoringEnabled && context.domainColoringDirty){renderSphereDomainColoring(zDomainColorCtx,cSP,zPlaneParams,false,curFunc);} 
         drawPlaneLayer(zCtx, zPlaneParams, 'z', (layerCtx) => {
             if (state.domainColoringEnabled) {
                 layerCtx.drawImage(zDomainColorCanvas, 0, 0);
@@ -381,7 +430,7 @@ function drawZPlaneContent(){
         }, 'capture');
     }else{ 
         
-        if(state.domainColoringEnabled && domainColoringDirty){renderPlanarDomainColoring(zDomainColorCtx,zPlaneParams,false,curFunc);} 
+        if(state.domainColoringEnabled && context.domainColoringDirty){renderPlanarDomainColoring(zDomainColorCtx,zPlaneParams,false,curFunc);} 
         const drawReferenceGrid =
             !state.domainColoringEnabled &&
             !state.navigationModeEnabled &&
@@ -498,7 +547,22 @@ function drawZPlaneContent(){
     }
 }
 
-function drawWPlaneContent() {
+export function drawWPlaneContent() {
+    zCanvas = context.zCanvas;
+    wCanvas = context.wCanvas;
+    zCtx = context.zCtx;
+    wCtx = context.wCtx;
+    zDomainColorCanvas = context.zDomainColorCanvas;
+    wDomainColorCanvas = context.wDomainColorCanvas;
+    zDomainColorCtx = context.zDomainColorCtx;
+    wDomainColorCtx = context.wDomainColorCtx;
+    wCanvasList = context.wCanvasList;
+    wCtxList = context.wCtxList;
+    wPlaneParamsList = context.wPlaneParamsList;
+    wPlanePlotlyContainersList = context.wPlanePlotlyContainersList;
+    sphereViewWParamsList = context.sphereViewWParamsList;
+    wPlanarTransformedLayerCacheList = context.wPlanarTransformedLayerCacheList;
+
     const baseFunc = getEffectiveBaseTransformFunction(state.currentFunction);
     const baseProfile = getMappedTransformProfile(state.currentFunction, baseFunc);
     const evalBaseFunc = value => evaluateMappedTransform(baseProfile, value.re, value.im) || { re: NaN, im: NaN };
@@ -696,7 +760,7 @@ function _renderSingleWPlaneMode(index, curFunc, isSpecialMode) {
         } else { // This 'else' corresponds to !(state.taylorSeriesEnabled && !isRiemannW)
             if (isRiemannW) { // This is for the 2D canvas Riemann sphere
                  const cSP = sphereViewParams.w;
-                 if (state.domainColoringEnabled && domainColoringDirty) {renderSphereDomainColoring(wDomainColorCtx, cSP, wPlaneParams, true, null);}
+                 if (state.domainColoringEnabled && context.domainColoringDirty) {renderSphereDomainColoring(wDomainColorCtx, cSP, wPlaneParams, true, null);}
                 drawPlaneLayer(wCtx, wPlaneParams, 'w', (layerCtx) => {
                     if (state.domainColoringEnabled) {
                         layerCtx.drawImage(wDomainColorCanvas, 0, 0);

@@ -1,3 +1,7 @@
+import { state } from '../store/state.js';
+
+const math = window.math;
+
 // Fourier Transform Analysis Module
 // Handles time domain signal generation and Fourier transform calculations
 
@@ -10,7 +14,7 @@
  * @param {number} samples - Number of samples
  * @returns {Array} Array of {t, value} objects
  */
-function generateTimeDomainSignal(funcType, frequency, amplitude, timeWindow, samples) {
+export function generateTimeDomainSignal(funcType, frequency, amplitude, timeWindow, samples) {
     const signal = [];
     const dt = timeWindow / samples;
     const omega = 2 * Math.PI * frequency;
@@ -117,7 +121,7 @@ function generateTimeDomainSignal(funcType, frequency, amplitude, timeWindow, sa
  * @param {Array} signal - Array of time domain values
  * @returns {Array} Array of {frequency, real, imag, magnitude, phase} objects
  */
-function computeDFT(signal) {
+export function computeDFT(signal) {
     if (!signal || signal.length === 0) return [];
     
     // Extract real values
@@ -159,7 +163,7 @@ function computeDFT(signal) {
  * Update Fourier transform calculations
  * Called when parameters change or when entering Fourier mode
  */
-function updateFourierTransform() {
+export function updateFourierTransform() {
     if (!state.fourierModeEnabled) return;
     
     // Ensure all Fourier parameters have valid values

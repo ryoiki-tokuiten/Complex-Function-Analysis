@@ -1776,58 +1776,9 @@
 
     <!-- Core Libraries -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/mathjs/12.4.0/math.js"></script>
-    <script src="js/constants/colors.js"></script>
-    <script src="js/constants/numerical.js"></script>
-    <script src="js/constants/rendering.js"></script>
-    <script src="js/config.js"></script>
-    <script src="js/math-utils.js"></script>
 
-    <!-- Utilities -->
-    <script src="js/utils/canvas-utils.js"></script>
-    <script src="js/utils/dom-utils.js"></script>
-    <script src="js/utils/raster-media.js"></script>
-
-    <!-- Analysis Modules -->
-    <script src="js/analysis/feature-detection.js"></script>
-    <script src="js/analysis/streamline.js"></script>
-    <script src="js/analysis/root-finding.js"></script>
-    <script src="js/analysis/cauchy.js"></script>
-    <script src="js/analysis/fourier-transform.js"></script>
-    <script src="js/analysis/laplace-transform.js"></script>
-
-    <!-- Rendering Modules -->
-    <script src="js/rendering/domain-coloring.js"></script>
-    <script src="js/rendering/webgl-domain-coloring.js"></script>
-    <script src="js/rendering/draw-fourier-winding.js"></script>
-    <script src="js/rendering/draw-laplace-panels.js"></script>
-    <script src="js/rendering/draw-laplace-subpanels.js"></script>
-    <script src="js/rendering/draw-laplace-winding-3b1b.js"></script>
-    <script src="js/rendering/laplace-animation.js"></script>
-    <script src="js/rendering/laplace-3d-surface.js"></script>
-    <script src="js/rendering/shape-generators.js"></script>
-    <script src="js/rendering/canvas-primitives.js"></script>
-    <script src="js/rendering/draw-primitives.js"></script>
-    <script src="js/rendering/webgl-shared.js"></script>
-    <script src="js/rendering/draw-planar.js"></script>
-    <script src="js/rendering/webgl-planar.js"></script>
-    <script src="js/rocket-assets.js"></script>
-    <script src="js/navigation-plane.js"></script>
-    <script src="js/rendering/draw-sphere.js"></script>
-    <script src="js/rendering/draw-plotly-sphere.js"></script> <!-- Added this line -->
-    <script src="js/rendering/draw-image-webgl.js"></script>
-    <script src="js/rendering/renderer.js"></script>
-
-    <!-- UI Modules -->
-    <script src="js/ui/complex-points-ui.js"></script>
-    <script src="js/ui/polynomial-ui.js"></script>
-    <script src="js/ui/ui-updates.js"></script>
-    <script src="js/ui/animation.js"></script>
-    <script src="js/ui/event-listeners.js"></script>
-    <script src="js/ui/section-animations.js"></script>
-    <script src="js/ui/tooltip.js"></script>
-
-    <!-- Main Application Logic -->
-    <script src="js/main.js"></script>
+    <!-- Entry Point -->
+    <script type="module" src="/js/main.js"></script>
     <script>
         if (window.lucide && typeof window.lucide.createIcons === 'function') {
             window.lucide.createIcons();

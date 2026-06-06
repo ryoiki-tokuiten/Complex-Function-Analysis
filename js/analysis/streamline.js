@@ -1,6 +1,21 @@
+import { state } from '../store/state.js';
+import {
+    getChainedTransformFunction,
+    getMappedTransformProfile,
+    evaluateMappedTransform,
+    numericDerivative
+} from '../math-utils.js';
+import {
+    STREAMLINE_COLOR_MIN_MAG,
+    STREAMLINE_COLOR_MAX_MAG,
+    STREAMLINE_COLOR_LOW_MAG,
+    STREAMLINE_COLOR_HIGH_MAG,
+    COLOR_STREAMLINE
+} from '../constants/colors.js';
 
 
-function getVectorFieldValueAtPoint(x, y, currentFunctionStr, vectorFieldTypeStr, runtimeState = state, transformProfile = null) {
+
+export function getVectorFieldValueAtPoint(x, y, currentFunctionStr, vectorFieldTypeStr, runtimeState = state, transformProfile = null) {
     let f_z;
     const isChained = runtimeState.chainingEnabled && runtimeState.chainCount > 1;
     if (isChained) {
@@ -57,13 +72,13 @@ function getVectorFieldValueAtPoint(x, y, currentFunctionStr, vectorFieldTypeStr
     }
 }
 
-function getVectorForStreamline(x, y, currentFunctionStr, vectorFieldTypeStr, runtimeState = state) {
+export function getVectorForStreamline(x, y, currentFunctionStr, vectorFieldTypeStr, runtimeState = state) {
     const vector = getVectorFieldValueAtPoint(x, y, currentFunctionStr, vectorFieldTypeStr, runtimeState);
     return { vx: vector.re, vy: vector.im };
 }
 
 
-function calculateStreamline(startX, startY, getVectorAtPointCallback, zPlaneParams, state) {
+export function calculateStreamline(startX, startY, getVectorAtPointCallback, zPlaneParams, state) {
     const streamlinePoints = [];
     let currentX = startX;
     let currentY = startY;
@@ -105,4 +120,25 @@ function calculateStreamline(startX, startY, getVectorAtPointCallback, zPlanePar
     }
 
     return streamlinePoints;
+}
+
+export function getStreamlineColorByMagnitude(magnitude) {
+    let t = (magnitude - STREAMLINE_COLOR_MIN_MAG) / (STREAMLINE_COLOR_MAX_MAG - STREAMLINE_COLOR_MIN_MAG);
+    t = Math.max(0, Math.min(1, t)); 
+
+    const r = Math.round(STREAMLINE_COLOR_LOW_MAG.r * (1 - t) + STREAMLINE_COLOR_HIGH_MAG.r * t);
+    const g = Math.round(STREAMLINE_COLOR_LOW_MAG.g * (1 - t) + STREAMLINE_COLOR_HIGH_MAG.g * t);
+    const b = Math.round(STREAMLINE_COLOR_LOW_MAG.b * (1 - t) + STREAMLINE_COLOR_HIGH_MAG.b * t);
+
+    let alpha = 0.75; 
+    try {
+        const parts = COLOR_STREAMLINE.substring(COLOR_STREAMLINE.indexOf('(') + 1, COLOR_STREAMLINE.lastIndexOf(')')).split(/,\s*/);
+        if (parts.length === 4) {
+            alpha = parseFloat(parts[3]);
+        }
+    } catch (e) {
+        // Fallback
+    }
+
+    return `rgba(${r}, ${g}, ${b}, ${alpha})`;
 }

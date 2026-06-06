@@ -1,0 +1,27 @@
+{
+  "name": "complex-function-analysis",
+  "version": "1.0.0",
+  "description": "![Example](./Example1.png)",
+  "main": "index.js",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/ryoiki-tokuiten/Complex-Function-Analysis.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/ryoiki-tokuiten/Complex-Function-Analysis/issues"
+  },
+  "homepage": "https://github.com/ryoiki-tokuiten/Complex-Function-Analysis#readme",
+  "devDependencies": {
+    "vite": "^8.0.16"
+  }
+}

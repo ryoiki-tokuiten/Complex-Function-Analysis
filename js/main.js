@@ -1,11 +1,37 @@
+import { state, context, zPlaneParams } from './store/state.js';
+import { eventBus } from './store/events.js';
+import { findZerosAndPoles, findCriticalPoints } from './analysis/feature-detection.js';
+import { updateTaylorSeriesCenterAndRadius } from './math-utils.js';
+import { performCauchyAnalysis } from './analysis/cauchy.js';
+import { drawZPlaneContent, drawWPlaneContent } from './rendering/renderer.js';
+import { updateTitlesAndGlobalUI } from './ui/ui-updates.js';
+import { drawLaplace3DSurface } from './rendering/laplace-3d-surface.js';
+import { setupDOMReferences, setupVisualParameters } from './utils/dom-utils.js';
+import { initializePolynomialCoeffs, generatePolynomialCoeffSliders } from './ui/polynomial-ui.js';
+import { setupEventListeners, setActiveFunctionButton, initializeStateFromControls } from './ui/event-listeners.js';
+import { initializeSectionAnimations } from './ui/section-animations.js';
+import { initializeTooltips, showDynamicTooltip, hideDynamicTooltip } from './ui/tooltip.js';
+import { mapCanvasToWorldCoords } from './utils/canvas-utils.js';
 
-function requestRedrawAll(){
-    if(!redrawRequest){
-        redrawRequest = requestAnimationFrame(() => {
+const { controls } = context;
+
+export function requestRedrawAll() {
+    if (!context.redrawRequest) {
+        context.redrawRequest = requestAnimationFrame(() => {
             try {
                 const zIsPlanar = !state.riemannSphereViewEnabled || state.splitViewEnabled;
-                if(state.showZerosPoles && !state.navigationModeEnabled && zIsPlanar && state.currentFunction !== 'poincare') findZerosAndPoles(); else { state.zeros = []; state.poles = [];}
-                if(state.showCriticalPoints && !state.navigationModeEnabled && zIsPlanar && state.currentFunction !== 'poincare') findCriticalPoints(); else { state.criticalPoints = []; state.criticalValues = [];}
+                if (state.showZerosPoles && !state.navigationModeEnabled && zIsPlanar && state.currentFunction !== 'poincare') {
+                    findZerosAndPoles();
+                } else {
+                    state.zeros = [];
+                    state.poles = [];
+                }
+                if (state.showCriticalPoints && !state.navigationModeEnabled && zIsPlanar && state.currentFunction !== 'poincare') {
+                    findCriticalPoints();
+                } else {
+                    state.criticalPoints = [];
+                    state.criticalValues = [];
+                }
 
                 updateTaylorSeriesCenterAndRadius(); 
                 performCauchyAnalysis();
@@ -21,19 +47,18 @@ function requestRedrawAll(){
                     drawLaplace3DSurface('laplace_3d_container');
                 }
 
-                domainColoringDirty = false;
-                redrawRequest = null;
+                context.domainColoringDirty = false;
+                context.redrawRequest = null;
 
-                
                 if (state.particleAnimationEnabled || (state.webglGpuStressMode && state.domainColoringEnabled)) {
                     if (state.webglGpuStressMode && state.domainColoringEnabled) {
-                        domainColoringDirty = true;
+                        context.domainColoringDirty = true;
                     }
                     requestRedrawAll();
                 }
             } catch (error) {
                 console.error("Error during redraw (requestAnimationFrame):", error);
-                redrawRequest = null; 
+                context.redrawRequest = null; 
             }
         });
     }
@@ -50,7 +75,6 @@ function initializeAnimationSpeedSelectors() {
         });
     });
 }
-
 
 function setup() {
     try {
@@ -72,7 +96,7 @@ function setup() {
         initializeAnimationSpeedSelectors();
 
         setupEventListeners();
-        domainColoringDirty = true;
+        context.domainColoringDirty = true;
         initializeSectionAnimations();
         initializeTooltips();
         setupCanvasTooltipEvents(); 
@@ -98,7 +122,6 @@ function setupCanvasTooltipEvents() {
             const clickRadiusWorld = zPlaneParams.currentVisXRange[1] - zPlaneParams.currentVisXRange[0];
             const tolerance = (clickRadiusWorld / zPlaneParams.width) * 5; 
 
-            
             if (state.poles && state.showZerosPoles) {
                 for (const pole of state.poles) {
                     if (Math.abs(pole.re - probeWorld.re) < tolerance && Math.abs(pole.im - probeWorld.im) < tolerance) {
@@ -117,23 +140,19 @@ function setupCanvasTooltipEvents() {
                 }
             }
 
-            
             if (!foundItem && state.zeros && state.showZerosPoles) {
                 for (const zero of state.zeros) {
                     if (Math.abs(zero.re - probeWorld.re) < tolerance && Math.abs(zero.im - probeWorld.im) < tolerance) {
                         foundItem = `<b>Zero</b><br>z = ${zero.re.toFixed(3)} + ${zero.im.toFixed(3)}i`;
-                        
                         break;
                     }
                 }
             }
 
-            
             if (!foundItem && state.criticalPoints && state.showCriticalPoints) {
                 for (const cp of state.criticalPoints) {
                     if (Math.abs(cp.re - probeWorld.re) < tolerance && Math.abs(cp.im - probeWorld.im) < tolerance) {
                         foundItem = `<b>Critical Point</b><br>z = ${cp.re.toFixed(3)} + ${cp.im.toFixed(3)}i`;
-                        
                         break;
                     }
                 }
@@ -158,19 +177,39 @@ function setupCanvasTooltipEvents() {
     });
 }
 
+// Event bus subscriptions for asynchronous redraw events from raster-media
+eventBus.on('redraw:all', () => {
+    requestRedrawAll();
+});
 
-window.addEventListener('load', () => {
-    setup(); 
+eventBus.on('redraw:domain', (markDirty) => {
+    if (markDirty !== false) {
+        context.domainColoringDirty = true;
+    }
+    requestRedrawAll();
+});
 
+if (document.readyState === 'complete') {
+    setup();
+    hidePreloader();
+} else {
+    window.addEventListener('load', () => {
+        setup();
+        hidePreloader();
+    });
+}
+
+function hidePreloader() {
     if (controls.preloader) {
         controls.preloader.style.opacity = '0';
         setTimeout(() => {
             controls.preloader.style.display = 'none';
         }, 500); 
     }
-});
+}
+
 window.addEventListener('resize', () => {
     setupVisualParameters(false, false); 
-    domainColoringDirty = true;
+    context.domainColoringDirty = true;
     requestRedrawAll();
 });

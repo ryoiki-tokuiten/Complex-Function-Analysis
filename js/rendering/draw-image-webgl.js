@@ -1,3 +1,23 @@
+import { state } from '../store/state.js';
+import {
+    createWebGLProgramShared,
+    getWebGLDomainColorFunctionIdShared,
+    GLSL_COMPLEX_INVERSE_LIBRARY,
+    setComplexFunctionUniformsShared,
+    getGLSLComplexMathLibrary
+} from './webgl-shared.js';
+import {
+    getRasterSourceForShape,
+    getRasterVersionTokenForShape,
+    getRasterAspectRatioForShape,
+    getRasterDisplayDimensions,
+    getRasterOpacityForShape,
+    isRasterInputShape,
+    getRasterResolutionForShape
+} from '../utils/raster-media.js';
+import { getChainedTransformFunction } from '../math-utils.js';
+import { ZETA_REFLECTION_POINT_RE } from '../constants/numerical.js';
+
 // WebGL-based raster media transformation renderer
 // Two rendering paths:
 //   1. Inverse full-screen quad (O(1) geometry, pixel-perfect) for analytically invertible functions
@@ -13,14 +33,14 @@ const webglImageSupport = {
 // Newton-Raphson numerical inversion exists in the shader for zeta/poly>2 but is
 // not viable for image rendering: multi-valued functions converge to wrong branches
 // from an arbitrary initial guess. These fall back to the forward indexed mesh.
-function isInverseImageRenderSupported() {
+export function isInverseImageRenderSupported() {
     const funcId = getWebGLDomainColorFunctionIdShared(state.currentFunction);
     if (funcId === 11) return false; // zeta — no stable inverse
     if (funcId === 9) return (state.polynomialN || 0) <= 2; // poly — analytic only for deg ≤ 2
     return funcId >= 1 && funcId <= 15;
 }
 
-function createWebGLImageRenderer() {
+export function createWebGLImageRenderer() {
     const canvas = document.createElement('canvas');
     const gl = canvas.getContext('webgl', {
         antialias: false,
@@ -62,7 +82,7 @@ function createWebGLImageRenderer() {
         'uniform int u_chainMode;',
         'uniform float u_fracPower;',
         '',
-        GLSL_COMPLEX_MATH_LIBRARY,
+        getGLSLComplexMathLibrary(state),
         GLSL_COMPLEX_INVERSE_LIBRARY,
         '',
         'vec2 complexPowReal(vec2 b, float e) { vec2 l=complexLn(b); return complexExp(vec2(l.x*e,l.y*e)); }',
@@ -123,7 +143,7 @@ function createWebGLImageRenderer() {
         'uniform float u_zetaReflectionBoundary;',
         'uniform float u_fracPower;',
         '',
-        GLSL_COMPLEX_MATH_LIBRARY,
+        getGLSLComplexMathLibrary(state),
         '',
         'void main() {',
         '  v_uv = a_texCoord;',
@@ -236,7 +256,7 @@ function createWebGLImageRenderer() {
     };
 }
 
-function initWebGLImageSupportIfNeeded() {
+export function initWebGLImageSupportIfNeeded() {
     if (webglImageSupport.renderer) return;
     const renderer = createWebGLImageRenderer();
     if (renderer) {
@@ -249,7 +269,7 @@ function initWebGLImageSupportIfNeeded() {
     }
 }
 
-function updateImageTexture(renderer) {
+export function updateImageTexture(renderer) {
     const gl = renderer.gl;
     const currentShape = state.currentInputShape;
     const source = getRasterSourceForShape(currentShape);
@@ -272,7 +292,7 @@ function updateImageTexture(renderer) {
 
 // Build indexed mesh for forward path. Uses Uint16/Uint32 index buffer to avoid
 // duplicating shared vertices — 3x less data than the old 6-verts-per-quad approach.
-function ensureForwardMesh(renderer, currentRes) {
+export function ensureForwardMesh(renderer, currentRes) {
     if (renderer.forwardResolution === currentRes) return;
     renderer.forwardResolution = currentRes;
     const gl = renderer.gl;
@@ -321,7 +341,7 @@ function ensureForwardMesh(renderer, currentRes) {
 }
 
 // Set common uniforms shared by both paths
-function setImageUniforms(gl, locs, planeParams, isWP, currentShape) {
+export function setImageUniforms(gl, locs, planeParams, isWP, currentShape) {
     const { width: mediaWidth, height: mediaHeight } = getRasterDisplayDimensions(currentShape);
     const cx = state.a0 || 0;
     const cy = state.b0 || 0;
@@ -358,7 +378,13 @@ function setImageUniforms(gl, locs, planeParams, isWP, currentShape) {
     }
 }
 
-function drawImageWithWebGL(targetCtx, planeParams, isWP, chainIndex) {
+export function drawImageWithWebGL(targetCtx, planeParams, isWP, chainIndex) {
+    const currentAlgHash = JSON.stringify(state.algebraicChainingTerms || []);
+    if (state.currentFunction === 'algebraic_chaining' && webglImageSupport.lastAlgHash !== currentAlgHash) {
+        webglImageSupport.lastAlgHash = currentAlgHash;
+        webglImageSupport.renderer = null;
+    }
+
     initWebGLImageSupportIfNeeded();
     const currentShape = state.currentInputShape;
     const source = getRasterSourceForShape(currentShape);
@@ -425,7 +451,7 @@ function drawImageWithWebGL(targetCtx, planeParams, isWP, chainIndex) {
         gl.vertexAttribPointer(locs.aTexCoord, 2, gl.FLOAT, false, 0, 0);
         gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, renderer.forwardIndexBuffer);
 
-        const useCpuEval = state.currentFunction === 'algebraic_chaining' || (state.chainingEnabled && state.chainCount > 1);
+        const useCpuEval = (state.chainingEnabled && state.chainCount > 1);
         if (locs.uUseCpuEval) {
             gl.uniform1f(locs.uUseCpuEval, useCpuEval ? 1.0 : 0.0);
         }
@@ -526,7 +552,7 @@ const _VF_FS = [
     'uniform float u_fracPower;',
     'uniform float u_brightness;',
     '',
-    GLSL_COMPLEX_MATH_LIBRARY,
+    getGLSLComplexMathLibrary(state),
     '',
     'vec3 hsl2rgb(float h,float s,float l){float c=(1.0-abs(2.0*l-1.0))*s;float x=c*(1.0-abs(mod(h*6.0,2.0)-1.0));float m=l-c*0.5;vec3 r;float hh=h*6.0;if(hh<1.0)r=vec3(c,x,0);else if(hh<2.0)r=vec3(x,c,0);else if(hh<3.0)r=vec3(0,c,x);else if(hh<4.0)r=vec3(0,x,c);else if(hh<5.0)r=vec3(x,0,c);else r=vec3(c,0,x);return r+m;}',
     '',
@@ -573,9 +599,15 @@ const _VF_FS = [
     '}'
 ].join('\n');
 
-function drawVectorFieldWithWebGL(ctx, planeParams) {
+export function drawVectorFieldWithWebGL(ctx, planeParams) {
     if (state.chainingEnabled && state.chainCount > 1) {
         return false;
+    }
+
+    const currentAlgHash = JSON.stringify(state.algebraicChainingTerms || []);
+    if (state.currentFunction === 'algebraic_chaining' && webglImageSupport.lastVFAlgHash !== currentAlgHash) {
+        webglImageSupport.lastVFAlgHash = currentAlgHash;
+        _vfProgram = null;
     }
     const funcId = getWebGLDomainColorFunctionIdShared(state.currentFunction);
     if (funcId === 0) return false;

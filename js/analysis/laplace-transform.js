@@ -1,3 +1,5 @@
+import { state } from '../store/state.js';
+
 // Laplace Transform Analysis Module
 // Handles time domain signal generation and Laplace transform calculations
 // F(s) = ∫₀^∞ f(t)e^(-st) dt where s = σ + jω
@@ -12,7 +14,7 @@
  * @param {number} samples - Number of samples
  * @returns {Array} Array of {t, value} objects
  */
-function generateLaplaceTimeDomainSignal(funcType, frequency, damping, amplitude, timeWindow, samples) {
+export function generateLaplaceTimeDomainSignal(funcType, frequency, damping, amplitude, timeWindow, samples) {
     const signal = [];
     const dt = timeWindow / samples;
     const omega = 2 * Math.PI * frequency;
@@ -93,7 +95,7 @@ function generateLaplaceTimeDomainSignal(funcType, frequency, damping, amplitude
  * @param {Object} params - Additional parameters (frequency, damping, amplitude)
  * @returns {Object} {real, imag, magnitude, phase} or null if no closed form
  */
-function computeClosedFormLaplace(funcType, sigmaS, omegaS, params) {
+export function computeClosedFormLaplace(funcType, sigmaS, omegaS, params) {
     const { frequency, damping, amplitude } = params;
     const omega = 2 * Math.PI * frequency;
     const a = damping;
@@ -300,7 +302,7 @@ function computeClosedFormLaplace(funcType, sigmaS, omegaS, params) {
  * @param {Object} grid - {sigmaRange, omegaRange, sigmaSteps, omegaSteps}
  * @returns {Array} Grid of {sigma, omega, magnitude, phase} values
  */
-function computeLaplaceSurface(funcType, params, signal, timeWindow, grid) {
+export function computeLaplaceSurface(funcType, params, signal, timeWindow, grid) {
     const { sigmaRange, omegaRange, sigmaSteps, omegaSteps } = grid;
     const surface = [];
     
@@ -336,7 +338,7 @@ function computeLaplaceSurface(funcType, params, signal, timeWindow, grid) {
  * @param {Object} params - Parameters
  * @returns {Object} {poles: Array, zeros: Array}
  */
-function findPolesZeros(funcType, params) {
+export function findPolesZeros(funcType, params) {
     const { frequency, damping } = params;
     const omega = 2 * Math.PI * frequency;
     const a = damping;
@@ -391,7 +393,7 @@ function findPolesZeros(funcType, params) {
  * @param {Array} poles - Array of pole objects
  * @returns {Object} {stable, message, marginally_stable}
  */
-function analyzeStability(poles) {
+export function analyzeStability(poles) {
     if (!poles || poles.length === 0) {
         return { stable: true, message: 'No poles detected', marginally_stable: false };
     }
@@ -437,7 +439,7 @@ function analyzeStability(poles) {
  * @param {Array} poles - Array of poles
  * @returns {Object} {rocType, boundary, description}
  */
-function computeROC(poles) {
+export function computeROC(poles) {
     if (!poles || poles.length === 0) {
         return {
             rocType: 'entire',
@@ -465,7 +467,7 @@ function computeROC(poles) {
  * Update ONLY the evaluation point (fast - for slider interaction)
  * Called when σ or ω changes
  */
-function updateLaplaceEvaluationPoint() {
+export function updateLaplaceEvaluationPoint() {
     if (!state.laplaceModeEnabled) return;
     
     const funcType = state.laplaceFunction || 'damped_sine';
@@ -485,7 +487,7 @@ function updateLaplaceEvaluationPoint() {
  * Update Laplace transform calculations (full recompute - expensive!)
  * Only call when signal parameters change, not when exploring s-plane
  */
-function updateLaplaceTransform() {
+export function updateLaplaceTransform() {
     if (!state.laplaceModeEnabled) return;
     
     const funcType = state.laplaceFunction || 'damped_sine';

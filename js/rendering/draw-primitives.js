@@ -1,4 +1,11 @@
-function drawTaylorAxes(ctx, params, colorX, colorY, labelX, labelY) {
+import { state } from '../store/state.js';
+import { COLOR_TEXT_ON_CANVAS, COLOR_ZERO_MARKER, COLOR_POLE_MARKER, COLOR_POLE_INSIDE_CONTOUR_MARKER } from '../constants/colors.js';
+import { TWO_PI } from '../constants/numerical.js';
+import { LINE_WIDTH_THIN, LINE_WIDTH_NORMAL, LINE_WIDTH_THICK } from '../constants/rendering.js';
+import { isPointInsideContour } from '../math-utils.js';
+import { mapToCanvasCoords } from '../utils/canvas-utils.js';
+
+export function drawTaylorAxes(ctx, params, colorX, colorY, labelX, labelY) {
     ctx.save();
     if (ctx.imageSmoothingEnabled !== undefined) ctx.imageSmoothingEnabled = true;
     ctx.lineWidth = LINE_WIDTH_THIN;
@@ -66,7 +73,7 @@ function drawTaylorAxes(ctx, params, colorX, colorY, labelX, labelY) {
     ctx.restore();
 }
 
-function drawZerosAndPolesMarkers(ctx, planeParams) {
+export function drawZerosAndPolesMarkers(ctx, planeParams) {
     let contourParams = null;
     if (
         state.cauchyIntegralModeEnabled &&
@@ -108,7 +115,7 @@ function drawZerosAndPolesMarkers(ctx, planeParams) {
     });
 }
 
-function drawCriticalPointMarker(ctx, canvasPoint, color) {
+export function drawCriticalPointMarker(ctx, canvasPoint, color) {
     ctx.save();
     ctx.fillStyle = color;
     ctx.strokeStyle = 'rgba(250, 250, 250, 0.85)';
@@ -126,7 +133,7 @@ function drawCriticalPointMarker(ctx, canvasPoint, color) {
     ctx.restore();
 }
 
-function drawGeneralPointsMarkers(ctx, planeParams) {
+export function drawGeneralPointsMarkers(ctx, planeParams) {
     if (!state.generalPointsEnabled || !state.generalPointsList || state.generalPointsList.length === 0) {
         return;
     }

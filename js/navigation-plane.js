@@ -1,3 +1,14 @@
+import { state, context, zPlaneParams, wPlaneParams } from './store/state.js';
+import { eventBus } from './store/events.js';
+import { ROCKET_DATA_URIS } from './rocket-assets.js';
+import { getChainedTransformFunction } from './math-utils.js';
+import { updatePlaneViewportRanges } from './utils/canvas-utils.js';
+import { drawImageWithWebGL } from './rendering/draw-image-webgl.js';
+import { drawPlanarTransformedLine, drawComplexLineSetOnPlane } from './rendering/draw-planar.js';
+import { setupVisualParameters } from './utils/dom-utils.js';
+
+const { controls } = context;
+
 const NAVIGATION_KEYS = new Set(['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight']);
 let navigationAnimationFrame = null;
 
@@ -58,7 +69,7 @@ function readNavigationControlValue(controlKey, fallback, parser = parseFloat) {
     return Number.isNaN(value) ? fallback : value;
 }
 
-function initializeNavigationStateFromControls() {
+export function initializeNavigationStateFromControls() {
     state.navigationSize = readNavigationControlValue('navigationSizeSlider', state.navigationSize);
     state.navigationOpacity = readNavigationControlValue('navigationOpacitySlider', state.navigationOpacity);
     state.navigationSpeed = readNavigationControlValue('navigationSpeedSlider', state.navigationSpeed);
@@ -67,7 +78,7 @@ function initializeNavigationStateFromControls() {
     syncNavigationControls();
 }
 
-function syncNavigationControls() {
+export function syncNavigationControls() {
     const inSpecialMode = state.fourierModeEnabled || state.laplaceModeEnabled;
     if (controls.navigationParamsBlock) {
         controls.navigationParamsBlock.classList.toggle('hidden', inSpecialMode);
@@ -89,7 +100,7 @@ function syncNavigationControls() {
     if (controls.navigationTrailLengthValueDisplay) controls.navigationTrailLengthValueDisplay.textContent = state.navigationTrailLength;
 }
 
-function setNavigationModeEnabled(enabled) {
+export function setNavigationModeEnabled(enabled) {
     if (enabled && (state.fourierModeEnabled || state.laplaceModeEnabled)) {
         enabled = false;
     }
@@ -113,13 +124,13 @@ function setNavigationModeEnabled(enabled) {
     syncNavigationControls();
 }
 
-function resetNavigationVehicle() {
+export function resetNavigationVehicle() {
     state.navigationPosition = { re: 0, im: 0 };
     state.navigationHeading = 0;
     state.navigationTrail = [];
     setupVisualParameters(true, true);
     followNavigationViewports();
-    requestDomainRedraw(true);
+    eventBus.emit('redraw:domain', true);
 }
 
 function getNavigationInputVector() {
@@ -138,7 +149,7 @@ function hasNavigationInput() {
     return !!getNavigationInputVector();
 }
 
-function setNavigationKey(event, pressed) {
+export function setNavigationKey(event, pressed) {
     if (!state.navigationModeEnabled || !NAVIGATION_KEYS.has(event.key) || isNavigationFormTarget(event.target)) {
         return false;
     }
@@ -166,7 +177,7 @@ function startNavigationLoop() {
     navigationAnimationFrame = requestAnimationFrame(updateNavigationLoop);
 }
 
-function stopNavigationLoop() {
+export function stopNavigationLoop() {
     if (navigationAnimationFrame) {
         cancelAnimationFrame(navigationAnimationFrame);
         navigationAnimationFrame = null;
@@ -178,7 +189,7 @@ function updateNavigationLoop(now) {
     if (!state.navigationModeEnabled || !hasNavigationInput()) return;
 
     const viewportShifted = updateNavigationVehicle(now);
-    requestDomainRedraw(Boolean(viewportShifted && state.domainColoringEnabled));
+    eventBus.emit('redraw:domain', Boolean(viewportShifted && state.domainColoringEnabled));
 
     if (hasNavigationInput()) {
         navigationAnimationFrame = requestAnimationFrame(updateNavigationLoop);
@@ -223,7 +234,7 @@ function centerPlaneOnNavigationPoint(planeParams, point, panState) {
     return shifted;
 }
 
-function followNavigationViewports() {
+export function followNavigationViewports() {
     let shifted = centerPlaneOnNavigationPoint(zPlaneParams, state.navigationPosition, state.panStateZ);
 
     const transformFunc = getChainedTransformFunction(state.currentFunction);
@@ -325,7 +336,7 @@ function drawNavigationTrail(ctx, planeParams, transformFunc) {
  * WebGL is called with isWP = false (identity mapping) on both planes to render
  * the vehicle correctly without distortions or branch-cut issues.
  */
-function drawNavigationLayer(ctx, planeParams, planeKey, transformFunc = null) {
+export function drawNavigationLayer(ctx, planeParams, planeKey, transformFunc = null) {
     if (!state.navigationModeEnabled) return;
 
     // Draw trail
@@ -353,6 +364,6 @@ function drawNavigationLayer(ctx, planeParams, planeKey, transformFunc = null) {
 }
 
 // Alias kept for any renderer.js call sites that use this name directly.
-function drawNavigationVehicle(ctx, planeParams, transformFunc = null) {
+export function drawNavigationVehicle(ctx, planeParams, transformFunc = null) {
     drawNavigationLayer(ctx, planeParams, null, transformFunc);
 }

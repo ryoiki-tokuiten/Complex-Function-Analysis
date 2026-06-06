@@ -1,6 +1,26 @@
+import { state, zPlaneParams } from '../store/state.js';
+import {
+    COLOR_PROBE_MARKER, COLOR_PROBE_NEIGHBORHOOD, COLOR_TEXT_ON_CANVAS, COLOR_GRID_LINES,
+    COLOR_Z_GRID_HORZ, COLOR_CAUCHY_CONTOUR_Z, COLOR_CAUCHY_CONTOUR_W,
+    COLOR_PARTICLE, COLOR_FOCI,
+    COLOR_PROBE_CONFORMAL_LINE_W_H, COLOR_PROBE_CONFORMAL_LINE_W_V,
+    COLOR_PROBE_CONFORMAL_LINE_Z_H, COLOR_PROBE_CONFORMAL_LINE_Z_V,
+    STREAMLINE_COLOR_MIN_MAG, STREAMLINE_COLOR_MAX_MAG
+} from '../constants/colors.js';
+import { TWO_PI, MIN_POINTS_ADAPTIVE, MAX_POINTS_ADAPTIVE_DEFAULT, ADAPTIVE_ANCHOR_DENSITY, DEFAULT_POINTS_PER_LINE, ZETA_POLE, ZETA_REFLECTION_POINT_RE, PROBE_CROSSHAIR_SIZE_FACTOR } from '../constants/numerical.js';
+import { LINE_WIDTH_NORMAL, PARTICLE_RADIUS } from '../constants/rendering.js';
+import { mapToCanvasCoords } from '../utils/canvas-utils.js';
+import { getMappedTransformProfile, evaluateMappedTransform, isNumericallyStable, complexMul, complexPow, complexLn, complexExp, complexReciprocal, createTaylorApproximationTransform, transformFunctions } from '../math-utils.js';
+import { calculateStreamline, getVectorForStreamline, getVectorFieldValueAtPoint, getStreamlineColorByMagnitude } from '../analysis/streamline.js';
+import { isRasterInputShape } from '../utils/raster-media.js';
+import { drawImageWithWebGL, drawVectorFieldWithWebGL } from './draw-image-webgl.js';
+import { generateCurrentInputShapePointSets, generateCurrentMappedInputShapePointSets, generateRadialDiscreteStepPointSets } from './shape-generators.js';
+import { hslToRgb } from './canvas-primitives.js';
+import { drawTaylorAxes } from './draw-primitives.js';
+
 const MAX_VECTOR_DISPLAY_LENGTH_CANVAS = 75;
 
-function isRenderableComplexPoint(point) {
+export function isRenderableComplexPoint(point) {
     return !!(
         point &&
         typeof point.re === 'number' &&
@@ -10,7 +30,7 @@ function isRenderableComplexPoint(point) {
     );
 }
 
-function drawComplexLineSetOnPlane(ctx, planeParams, points) {
+export function drawComplexLineSetOnPlane(ctx, planeParams, points) {
     ctx.beginPath();
     let segmentOpen = false;
 
@@ -38,7 +58,7 @@ function drawComplexLineSetOnPlane(ctx, planeParams, points) {
     }
 }
 
-function drawPointSetCollectionOnPlane(ctx, planeParams, pointSets, options = {}) {
+export function drawPointSetCollectionOnPlane(ctx, planeParams, pointSets, options = {}) {
     if (!pointSets || pointSets.length === 0) {
         return;
     }
@@ -88,7 +108,7 @@ function drawPointSetCollectionOnPlane(ctx, planeParams, pointSets, options = {}
     ctx.restore();
 }
 
-function drawRadialDiscreteSteps(ctx, planeParams, currentFunctionKey, stepsCount) {
+export function drawRadialDiscreteSteps(ctx, planeParams, currentFunctionKey, stepsCount) {
     const transformFunc = transformFunctions[currentFunctionKey];
     if (typeof transformFunc !== 'function') {
         return;
@@ -105,7 +125,7 @@ function drawRadialDiscreteSteps(ctx, planeParams, currentFunctionKey, stepsCoun
     });
 }
 
-function drawStreamlinesOnZPlane(ctx, planeParams, state) {
+export function drawStreamlinesOnZPlane(ctx, planeParams, state) {
     ctx.save();
     ctx.lineWidth = state.streamlineThickness;
     ctx.lineJoin = 'round';
@@ -156,7 +176,7 @@ function drawStreamlinesOnZPlane(ctx, planeParams, state) {
     ctx.restore();
 }
 
-function drawPlanarInputShape(ctx, planeParams) {
+export function drawPlanarInputShape(ctx, planeParams) {
     const inputShape = state.currentInputShape;
 
     if (isRasterInputShape(inputShape)) {
@@ -180,7 +200,7 @@ function drawPlanarInputShape(ctx, planeParams) {
     });
 }
 
-function initializeSingleParticle(planeParams) {
+export function initializeSingleParticle(planeParams) {
 
     const xMin = planeParams.currentVisXRange[0];
     const xMax = planeParams.currentVisXRange[1];
@@ -194,7 +214,7 @@ function initializeSingleParticle(planeParams) {
     };
 }
 
-function updateAndDrawParticles(ctx, planeParams, state) {
+export function updateAndDrawParticles(ctx, planeParams, state) {
     if (!state.particleAnimationEnabled) {
         state.particles = [];
         return;
@@ -259,7 +279,7 @@ function updateAndDrawParticles(ctx, planeParams, state) {
     ctx.fill();
     ctx.restore();
 }
-function drawConformalityProbeSegments(ctx, planeParams, center_world, tf, isWPlane) {
+export function drawConformalityProbeSegments(ctx, planeParams, center_world, tf, isWPlane) {
     const h_segment = state.probeNeighborhoodSize / PROBE_CROSSHAIR_SIZE_FACTOR; const z_c = center_world; const z_h_plus = { re: z_c.re + h_segment, im: z_c.im }; const z_h_minus = { re: z_c.re - h_segment, im: z_c.im }; const z_v_plus = { re: z_c.re, im: z_c.im + h_segment }; const z_v_minus = { re: z_c.re, im: z_c.im - h_segment }; let p1_h_world, p2_h_world, p1_v_world, p2_v_world; let color_h, color_v; if (isWPlane) { p1_h_world = tf(z_h_minus.re, z_h_minus.im); p2_h_world = tf(z_h_plus.re, z_h_plus.im); p1_v_world = tf(z_v_minus.re, z_v_minus.im); p2_v_world = tf(z_v_plus.re, z_v_plus.im); color_h = COLOR_PROBE_CONFORMAL_LINE_W_H; color_v = COLOR_PROBE_CONFORMAL_LINE_W_V; } else { p1_h_world = z_h_minus; p2_h_world = z_h_plus; p1_v_world = z_v_minus; p2_v_world = z_v_plus; color_h = COLOR_PROBE_CONFORMAL_LINE_Z_H; color_v = COLOR_PROBE_CONFORMAL_LINE_Z_V; } const drawSegmentIfValid = (p1w, p2w, color) => {
         if (!isNaN(p1w.re) && !isNaN(p1w.im) && !isNaN(p2w.re) && !isNaN(p2w.im) && isFinite(p1w.re) && isFinite(p1w.im) && isFinite(p2w.re) && isFinite(p2w.im) && (!isWPlane || (isNumericallyStable(p1w) && isNumericallyStable(p2w)))) {
             const p1_canvas = mapToCanvasCoords(p1w.re, p1w.im, planeParams); const p2_canvas = mapToCanvasCoords(p2w.re, p2w.im, planeParams); const canvasWidth = planeParams.width; const canvasHeight = planeParams.height; const margin = Math.max(canvasWidth, canvasHeight) * 2; if (p1_canvas.x > -margin && p1_canvas.x < canvasWidth + margin && p1_canvas.y > -margin && p1_canvas.y < canvasHeight + margin && p2_canvas.x > -margin && p2_canvas.x < canvasWidth + margin && p2_canvas.y > -margin && p2_canvas.y < canvasHeight + margin) {
@@ -271,14 +291,14 @@ function drawConformalityProbeSegments(ctx, planeParams, center_world, tf, isWPl
         }
     }; drawSegmentIfValid(p1_h_world, p2_h_world, color_h); drawSegmentIfValid(p1_v_world, p2_v_world, color_v);
 }
-function drawPlanarProbe(ctx, planeParams) {
+export function drawPlanarProbe(ctx, planeParams) {
     const p_p_c = mapToCanvasCoords(state.probeZ.re, state.probeZ.im, planeParams); ctx.fillStyle = COLOR_PROBE_MARKER; ctx.beginPath(); ctx.arc(p_p_c.x, p_p_c.y, 5, 0, 2 * Math.PI); ctx.fill(); ctx.strokeStyle = COLOR_PROBE_NEIGHBORHOOD; ctx.lineWidth = 1.5;
     ctx.lineJoin = 'round';
     ctx.lineCap = 'round';
     ctx.beginPath(); const r_l = state.probeNeighborhoodSize; for (let i = 0; i <= 60; ++i) { const a = (i / 60) * 2 * Math.PI; const z_b = { re: state.probeZ.re + r_l * Math.cos(a), im: state.probeZ.im + r_l * Math.sin(a) }; const p_c = mapToCanvasCoords(z_b.re, z_b.im, planeParams); if (i === 0) ctx.moveTo(p_c.x, p_c.y); else ctx.lineTo(p_c.x, p_c.y); } ctx.closePath(); ctx.stroke(); drawConformalityProbeSegments(ctx, planeParams, state.probeZ, null, false);
 }
 
-function getPlanarTransformRenderLimit(planeParams) {
+export function getPlanarTransformRenderLimit(planeParams) {
     const xRange = planeParams.currentVisXRange || planeParams.xRange || [-1, 1];
     const yRange = planeParams.currentVisYRange || planeParams.yRange || [-1, 1];
     return Math.max(
@@ -290,7 +310,7 @@ function getPlanarTransformRenderLimit(planeParams) {
     ) * 10;
 }
 
-function drawConstantMappedPoint(ctx, planeParams, w, col) {
+export function drawConstantMappedPoint(ctx, planeParams, w, col) {
     const p_c = mapToCanvasCoords(w.re, w.im, planeParams);
     ctx.save();
     ctx.beginPath();
@@ -303,7 +323,7 @@ function drawConstantMappedPoint(ctx, planeParams, w, col) {
     ctx.restore();
 }
 
-function drawPlanarTransformedLine(ctx, planeParams, mappedTransform, z_pts, col) {
+export function drawPlanarTransformedLine(ctx, planeParams, mappedTransform, z_pts, col) {
     if (!z_pts || z_pts.length === 0) return;
 
     const renderLimit = getPlanarTransformRenderLimit(planeParams);
@@ -377,8 +397,8 @@ function drawPlanarTransformedLine(ctx, planeParams, mappedTransform, z_pts, col
         ctx.stroke();
     }
 }
-function findIntersectionWithViewport(p1, p2, planeParams) { const xmin = 0, xmax = planeParams.width; const ymin = 0, ymax = planeParams.height; let t = Infinity; if (p2.y < ymin && p1.y >= ymin) { t = Math.min(t, (ymin - p1.y) / (p2.y - p1.y)); } if (p2.y > ymax && p1.y <= ymax) { t = Math.min(t, (ymax - p1.y) / (p2.y - p1.y)); } if (p2.x < xmin && p1.x >= xmin) { t = Math.min(t, (xmin - p1.x) / (p2.x - p1.x)); } if (p2.x > xmax && p1.x <= xmax) { t = Math.min(t, (xmax - p1.x) / (p2.x - p1.x)); } if (isFinite(t) && t >= 0 && t <= 1) { return { x: p1.x + t * (p2.x - p1.x), y: p1.y + t * (p2.y - p1.y) }; } return null; }
-function calculateDynamicPointsForSegment(p1_world, p2_world, tf) {
+export function findIntersectionWithViewport(p1, p2, planeParams) { const xmin = 0, xmax = planeParams.width; const ymin = 0, ymax = planeParams.height; let t = Infinity; if (p2.y < ymin && p1.y >= ymin) { t = Math.min(t, (ymin - p1.y) / (p2.y - p1.y)); } if (p2.y > ymax && p1.y <= ymax) { t = Math.min(t, (ymax - p1.y) / (p2.y - p1.y)); } if (p2.x < xmin && p1.x >= xmin) { t = Math.min(t, (xmin - p1.x) / (p2.x - p1.x)); } if (p2.x > xmax && p1.x <= xmax) { t = Math.min(t, (xmax - p1.x) / (p2.x - p1.x)); } if (isFinite(t) && t >= 0 && t <= 1) { return { x: p1.x + t * (p2.x - p1.x), y: p1.y + t * (p2.y - p1.y) }; } return null; }
+export function calculateDynamicPointsForSegment(p1_world, p2_world, tf) {
     const v_re = p2_world.re - p1_world.re;
     const v_im = p2_world.im - p1_world.im;
     const pole_to_p1_re = p1_world.re - ZETA_POLE.re;
@@ -442,7 +462,7 @@ const LINEAR_SOURCE_POINT_SET_ROLES = new Set([
     'line-vertical'
 ]);
 
-function generateLinearSegmentPoints(startPoint, endPoint, sampleCount) {
+export function generateLinearSegmentPoints(startPoint, endPoint, sampleCount) {
     const points = [];
     for (let i = 0; i <= sampleCount; i++) {
         const t = i / sampleCount;
@@ -454,7 +474,7 @@ function generateLinearSegmentPoints(startPoint, endPoint, sampleCount) {
     return points;
 }
 
-function getPointSetEndpoints(pointSet) {
+export function getPointSetEndpoints(pointSet) {
     const validPoints = pointSet.points.filter(Boolean);
     if (validPoints.length < 2) {
         return null;
@@ -465,7 +485,7 @@ function getPointSetEndpoints(pointSet) {
     };
 }
 
-function preparePointSetForMappedPlane(pointSet, transformFunc, options = {}) {
+export function preparePointSetForMappedPlane(pointSet, transformFunc, options = {}) {
     if (!LINEAR_SOURCE_POINT_SET_ROLES.has(pointSet.role)) {
         return pointSet;
     }
@@ -485,7 +505,7 @@ function preparePointSetForMappedPlane(pointSet, transformFunc, options = {}) {
     };
 }
 
-function drawFunctionFociOverlay(ctx, planeParams) {
+export function drawFunctionFociOverlay(ctx, planeParams) {
     if (state.currentFunction !== 'cos' && state.currentFunction !== 'sin') {
         return;
     }
@@ -507,32 +527,21 @@ function drawFunctionFociOverlay(ctx, planeParams) {
     ctx.restore();
 }
 
-function shouldDrawPlanarFunctionFociOverlay() {
+export function shouldDrawPlanarFunctionFociOverlay() {
     return state.currentInputShape === 'line' && (state.currentFunction === 'cos' || state.currentFunction === 'sin');
 }
 
-function shouldDrawPlanarInputRadialOverlay() {
+export function shouldDrawPlanarInputRadialOverlay() {
     return state.radialDiscreteStepsEnabled && state.currentFunction !== 'poincare';
 }
 
-function isWithinTaylorConvergenceRegion(zInputComplex, z0Complex) {
-    const radius = state.taylorSeriesConvergenceRadius;
-    if (!Number.isFinite(radius)) {
-        return true;
-    }
-
-    const dx = zInputComplex.re - z0Complex.re;
-    const dy = zInputComplex.im - z0Complex.im;
-    return dx * dx + dy * dy <= (radius * radius * 1.000001);
-}
-
-function drawPlanarInputOverlays(ctx, planeParams) {
+export function drawPlanarInputOverlays(ctx, planeParams) {
     if (shouldDrawPlanarInputRadialOverlay()) {
         drawRadialDiscreteSteps(ctx, planeParams, state.currentFunction, state.radialDiscreteStepsCount);
     }
 }
 
-function drawPlanarTransformedShape(ctx, planeParams, tf, options = {}) {
+export function drawPlanarTransformedShape(ctx, planeParams, tf, options = {}) {
     const includeGeometry = options.includeGeometry !== false;
     const includeOverlays = options.includeOverlays !== false;
     const inputShape = state.currentInputShape;
@@ -570,25 +579,8 @@ function drawPlanarTransformedShape(ctx, planeParams, tf, options = {}) {
     }
 }
 
-function createTaylorApproximationTransform(functionKey, taylorCenter, taylorOrder) {
-    const z0Complex = { re: taylorCenter.re, im: taylorCenter.im };
-    const coefficients = computeTaylorSeriesCoefficients(functionKey, z0Complex, taylorOrder);
 
-    return (re, im) => {
-        if (!coefficients) {
-            return { re: NaN, im: NaN };
-        }
-
-        const zInputComplex = { re, im };
-        if (!isWithinTaylorConvergenceRegion(zInputComplex, z0Complex)) {
-            return { re: NaN, im: NaN };
-        }
-        const result = evaluateTaylorSeries(coefficients, zInputComplex, z0Complex);
-        return { re: result.re, im: result.im };
-    };
-}
-
-function getTaylorPointSetColor(pointSet, axisColorX, axisColorY) {
+export function getTaylorPointSetColor(pointSet, axisColorX, axisColorY) {
     switch (pointSet.role) {
         case 'grid-horizontal':
         case 'polar-angular':
@@ -602,7 +594,7 @@ function getTaylorPointSetColor(pointSet, axisColorX, axisColorY) {
     }
 }
 
-function drawPlanarTaylorApproximation(ctx, wPlaneParamsOriginal, originalFuncKey, taylorCenter, taylorOrder, axisColorX, axisColorY, options = {}) {
+export function drawPlanarTaylorApproximation(ctx, wPlaneParamsOriginal, originalFuncKey, taylorCenter, taylorOrder, axisColorX, axisColorY, options = {}) {
     if (options.includeAxes !== false) {
         drawTaylorAxes(ctx, wPlaneParamsOriginal, axisColorX, axisColorY, 'Re(w_approx)', 'Im(w_approx)');
     }
@@ -624,7 +616,7 @@ function drawPlanarTaylorApproximation(ctx, wPlaneParamsOriginal, originalFuncKe
 }
 
 
-function drawPlanarTransformedProbe(ctx, planeParams, tf, index) {
+export function drawPlanarTransformedProbe(ctx, planeParams, tf, index) {
     let effectiveTransformFunc = tf;
     const renderLimit = getPlanarTransformRenderLimit(planeParams);
     if (state.taylorSeriesEnabled && (!state.riemannSphereViewEnabled || state.splitViewEnabled)) {
@@ -729,14 +721,14 @@ function drawPlanarTransformedProbe(ctx, planeParams, tf, index) {
     drawConformalityProbeSegments(ctx, planeParams, state.probeZ, profileTransformFunc, true);
 }
 
-function drawZPlaneVectorField(ctx, planeParams, currentFunctionStr, vectorFuncType) {
+export function drawZPlaneVectorField(ctx, planeParams, currentFunctionStr, vectorFuncType) {
     const rendered = drawVectorFieldWithWebGL(ctx, planeParams);
     if (!rendered) {
         drawVectorFieldCPU(ctx, planeParams, currentFunctionStr, vectorFuncType);
     }
 }
 
-function drawVectorFieldCPU(ctx, planeParams, currentFunctionStr, vectorFuncType) {
+export function drawVectorFieldCPU(ctx, planeParams, currentFunctionStr, vectorFuncType) {
     const xMin = planeParams.currentVisXRange[0];
     const xMax = planeParams.currentVisXRange[1];
     const yMin = planeParams.currentVisYRange[0];

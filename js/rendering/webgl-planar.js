@@ -1,4 +1,14 @@
-function createWebGLLineRenderer() {
+import { state, context } from '../store/state.js';
+import {
+    createWebGLProgramShared,
+    getWebGLBackendInfoShared
+} from './webgl-shared.js';
+import { drawPlanarTransformedShape, drawPlanarInputShape, shouldDrawPlanarFunctionFociOverlay } from './draw-planar.js';
+import { WEBGL_LINE_BATCH_LIMIT, WEBGL_SUPERSAMPLE_FACTOR } from '../constants/rendering.js';
+
+const { webglSupport } = context;
+
+export function createWebGLLineRenderer() {
     const canvas = document.createElement('canvas');
     const gl = canvas.getContext('webgl2', {
         antialias: true,
@@ -141,7 +151,7 @@ function createWebGLLineRenderer() {
     };
 }
 
-function getWebGLSupersampleScale() {
+export function getWebGLSupersampleScale() {
     const configured = (typeof WEBGL_SUPERSAMPLE_FACTOR === 'number' && Number.isFinite(WEBGL_SUPERSAMPLE_FACTOR))
         ? WEBGL_SUPERSAMPLE_FACTOR
         : 1.15;
@@ -159,7 +169,7 @@ function getWebGLSupersampleScale() {
     return Math.min(1.32, baseScale * qualityBoost * deviceScale);
 }
 
-function ensureWebGLRendererSize(renderer, width, height, renderScaleOverride = null) {
+export function ensureWebGLRendererSize(renderer, width, height, renderScaleOverride = null) {
     if (!renderer || !renderer.canvas || width <= 0 || height <= 0) return;
 
     const renderScale = (typeof renderScaleOverride === 'number' && Number.isFinite(renderScaleOverride) && renderScaleOverride > 0)
@@ -179,11 +189,11 @@ function ensureWebGLRendererSize(renderer, width, height, renderScaleOverride = 
     renderer.gl.viewport(0, 0, internalWidth, internalHeight);
 }
 
-function clampToUnit(value) {
+export function clampToUnit(value) {
     return Math.min(1, Math.max(0, value));
 }
 
-function parseCssColorToRgba(colorString) {
+export function parseCssColorToRgba(colorString) {
     if (typeof colorString !== 'string') {
         return [1, 1, 1, 1];
     }
@@ -249,7 +259,7 @@ function parseCssColorToRgba(colorString) {
     return [1, 1, 1, 1];
 }
 
-function getCachedWebGLColor(renderer, colorString, alphaMultiplier) {
+export function getCachedWebGLColor(renderer, colorString, alphaMultiplier) {
     const cacheKey = `${colorString}|${alphaMultiplier.toFixed(4)}`;
     if (!renderer || !renderer.colorCache) {
         const parsed = parseCssColorToRgba(colorString);
@@ -263,7 +273,7 @@ function getCachedWebGLColor(renderer, colorString, alphaMultiplier) {
     return parsed;
 }
 
-class PolylineCaptureContext {
+export class PolylineCaptureContext {
     constructor() {
         this.strokeStyle = 'rgba(255, 255, 255, 1)';
         this.fillStyle = 'rgba(255, 255, 255, 1)';
@@ -411,7 +421,7 @@ class PolylineCaptureContext {
     }
 }
 
-function renderWebGLPolylineBatches(renderer, width, height, batches) {
+export function renderWebGLPolylineBatches(renderer, width, height, batches) {
     if (!renderer || !renderer.gl || !Array.isArray(batches)) return false;
 
     const gl = renderer.gl;
@@ -476,7 +486,7 @@ function renderWebGLPolylineBatches(renderer, width, height, batches) {
     return true;
 }
 
-function buildPolylineTriangles(points, halfWidth) {
+export function buildPolylineTriangles(points, halfWidth) {
     if (!(points instanceof Float32Array) || points.length < 4 || !Number.isFinite(halfWidth) || halfWidth <= 0) {
         return null;
     }
@@ -523,7 +533,7 @@ function buildPolylineTriangles(points, halfWidth) {
 }
 
 
-function compositeWebGLToCanvas(ctx, renderer, width, height) {
+export function compositeWebGLToCanvas(ctx, renderer, width, height) {
     ctx.save();
     if (ctx.imageSmoothingEnabled !== undefined) ctx.imageSmoothingEnabled = true;
     if (ctx.imageSmoothingQuality !== undefined) ctx.imageSmoothingQuality = 'high';
@@ -532,7 +542,7 @@ function compositeWebGLToCanvas(ctx, renderer, width, height) {
 }
 
 
-function ensureRasterCanvasSize(renderer, width, height) {
+export function ensureRasterCanvasSize(renderer, width, height) {
     if (!renderer || !renderer.rasterCanvas) return null;
     if (!renderer.rasterCtx) {
         renderer.rasterCtx = renderer.rasterCanvas.getContext('2d');
@@ -551,7 +561,7 @@ function ensureRasterCanvasSize(renderer, width, height) {
 
 
 
-function renderCanvasTextureToWebGL(renderer, sourceCanvas, width, height) {
+export function renderCanvasTextureToWebGL(renderer, sourceCanvas, width, height) {
     if (!renderer || !renderer.gl || !renderer.textureProgram || !sourceCanvas) return false;
 
     const gl = renderer.gl;
@@ -585,7 +595,7 @@ function renderCanvasTextureToWebGL(renderer, sourceCanvas, width, height) {
     return true;
 }
 
-function initializeWebGLLineSupport() {
+export function initializeWebGLLineSupport() {
     webglSupport.available = false;
     webglSupport.reason = 'disabled-or-unavailable';
     webglSupport.renderers.z = null;
@@ -626,12 +636,12 @@ function initializeWebGLLineSupport() {
     }
 }
 
-function getWebGLRendererForPlane(planeKey) {
+export function getWebGLRendererForPlane(planeKey) {
     if (!webglSupport || !webglSupport.renderers) return null;
     return planeKey === 'z' ? webglSupport.renderers.z : webglSupport.renderers.w;
 }
 
-function drawWithWebGLCapture(ctx, planeParams, planeKey, drawCallback) {
+export function drawWithWebGLCapture(ctx, planeParams, planeKey, drawCallback) {
     if (!state.webglLineRenderingEnabled || !webglSupport.available) return false;
     if (!ctx || !planeParams || typeof drawCallback !== 'function') return false;
 
@@ -650,7 +660,7 @@ function drawWithWebGLCapture(ctx, planeParams, planeKey, drawCallback) {
     return true;
 }
 
-function drawWithWebGLRaster(ctx, planeParams, planeKey, drawCallback, options = null) {
+export function drawWithWebGLRaster(ctx, planeParams, planeKey, drawCallback, options = null) {
     if (!state.webglLineRenderingEnabled || !webglSupport.available) return false;
     if (!ctx || !planeParams || typeof drawCallback !== 'function') return false;
 
@@ -688,7 +698,7 @@ function drawWithWebGLRaster(ctx, planeParams, planeKey, drawCallback, options =
     return true;
 }
 
-function drawPlanarTransformedShapeHybrid(ctx, planeParams, tf, planeKey) {
+export function drawPlanarTransformedShapeHybrid(ctx, planeParams, tf, planeKey) {
     let geometryRendered = drawWithWebGLCapture(ctx, planeParams, planeKey, (captureCtx) => {
         drawPlanarTransformedShape(captureCtx, planeParams, tf, { includeOverlays: false });
     });
@@ -712,7 +722,7 @@ function drawPlanarTransformedShapeHybrid(ctx, planeParams, tf, planeKey) {
     return true;
 }
 
-function drawPlanarInputShapeHybrid(ctx, planeParams, planeKey) {
+export function drawPlanarInputShapeHybrid(ctx, planeParams, planeKey) {
     const renderedByCapture = drawWithWebGLCapture(ctx, planeParams, planeKey, (captureCtx) => {
         drawPlanarInputShape(captureCtx, planeParams);
     });

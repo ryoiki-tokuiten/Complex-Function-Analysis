@@ -1,4 +1,4 @@
-function initializeSectionAnimations() {
+export function initializeSectionAnimations() {
     const sections = document.querySelectorAll('.section');
 
     if (!sections.length) {

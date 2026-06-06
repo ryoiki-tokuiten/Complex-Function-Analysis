@@ -1,10 +1,14 @@
+import { state } from '../store/state.js';
+import { Complex } from '../math-utils.js';
+import { ZERO_POLE_EPSILON } from '../constants/numerical.js';
+
 /**
  * Evaluates a polynomial P(z) = a_n z^n + ... + a_1 z + a_0 at a given complex point z.
  * @param {Complex[]} polyCoeffsComplex - Array of complex polynomial coefficients [a_n, ..., a_0].
  * @param {Complex} z - The complex point at which to evaluate the polynomial.
  * @returns {Complex} P(z).
  */
-function evaluatePolynomial(polyCoeffsComplex, z) {
+export function evaluatePolynomial(polyCoeffsComplex, z) {
     let result = new Complex(0, 0);
     const n = polyCoeffsComplex.length - 1;
     for (let i = 0; i <= n; i++) {
@@ -21,7 +25,7 @@ function evaluatePolynomial(polyCoeffsComplex, z) {
  *                                Coefficients can be real numbers.
  * @returns {Complex[]} Array of complex roots.
  */
-function findPolynomialRoots_DurandKerner(inputCoeffs) {
+export function findPolynomialRoots_DurandKerner(inputCoeffs) {
     if (!inputCoeffs || inputCoeffs.length === 0) {
         return [];
     }
@@ -121,7 +125,7 @@ function findPolynomialRoots_DurandKerner(inputCoeffs) {
  *   estimation of zero/pole count (currently unused in placeholder).
  * @returns {Complex[]} Array of complex numbers representing the found zeros.
  */
-function findGeneralRoots_Subdivision(func, bounds, N_initial_grid_search_points) {
+export function findGeneralRoots_Subdivision(func, bounds, N_initial_grid_search_points) {
     const roots = [];
     const queue = [{ bounds: bounds, depth: 0 }]; 
 
@@ -209,7 +213,7 @@ function findGeneralRoots_Subdivision(func, bounds, N_initial_grid_search_points
  * @param {number} numIntegrationPointsPerSide - Number of points for numerical integration along each side.
  * @returns {number} The estimated winding number (should be close to an integer).
  */
-function calculateWindingNumber(func, rectBounds, numIntegrationPointsPerSide) {
+export function calculateWindingNumber(func, rectBounds, numIntegrationPointsPerSide) {
     const { xMin, xMax, yMin, yMax } = rectBounds;
     let totalArgChange = 0;
     let prevArg = 0;

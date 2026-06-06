@@ -1,4 +1,29 @@
-function findCriticalPoints() {
+import { state, zPlaneParams } from '../store/state.js';
+import {
+    getChainedTransformFunction,
+    numericDerivative,
+    complexDivide,
+    estimateResidue,
+    numericDerivativeNthOrder,
+    factorial,
+    Complex
+} from '../math-utils.js';
+import {
+    findPolynomialRoots_DurandKerner,
+    findGeneralRoots_Subdivision
+} from './root-finding.js';
+import {
+    CRITICAL_POINT_FIND_GRID_SIZE,
+    ZP_CP_CHECK_DISTANCE_FACTOR,
+    CRITICAL_POINT_EPSILON,
+    ZERO_POLE_GRID_SIZE,
+    ZETA_REFLECTION_POINT_RE,
+    ZETA_POLE,
+    ZERO_POLE_EPSILON,
+    POLE_MAGNITUDE_THRESHOLD
+} from '../constants/numerical.js';
+
+export function findCriticalPoints() {
     state.criticalPoints = [];
     state.criticalValues = [];
     const isZPlanar = !state.riemannSphereViewEnabled || state.splitViewEnabled; 
@@ -79,7 +104,7 @@ function findCriticalPoints() {
     }
 }
 
-function findZerosAndPoles() {
+export function findZerosAndPoles() {
     state.zeros = [];
     state.poles = [];
     const isZPlanar = !state.riemannSphereViewEnabled || state.splitViewEnabled;
@@ -281,7 +306,7 @@ function findZerosAndPoles() {
 
 
 
-function analyzeSingularity(pole_obj, funcWrapper, funcString) {
+export function analyzeSingularity(pole_obj, funcWrapper, funcString) {
     const z0 = new Complex(pole_obj.re, pole_obj.im);
     const MAX_POLE_ORDER_CHECK = 5; 
     const LIMIT_DELTA = 1e-6; 

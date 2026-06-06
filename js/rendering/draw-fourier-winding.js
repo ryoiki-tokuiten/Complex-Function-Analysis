@@ -1,3 +1,8 @@
+import { state } from '../store/state.js';
+import { COLOR_TEXT_ON_CANVAS, COLOR_CANVAS_BACKGROUND } from '../constants/colors.js';
+import { mapToCanvasCoords } from '../utils/canvas-utils.js';
+import { drawAxes } from './canvas-primitives.js';
+
 
 // 3Blue1Brown-style Fourier "Winding" Visualization
 // This shows the KEY intuition: wrapping the signal around the origin
@@ -8,7 +13,7 @@
  * @param {Array} signal - Time domain signal data
  * @param {Object} planeParams - Plane parameters for drawing
  */
-function drawWindingVisualization(ctx, signal, planeParams) {
+export function drawWindingVisualization(ctx, signal, planeParams) {
     if (!signal || signal.length === 0) {
         ctx.save();
         ctx.fillStyle = COLOR_TEXT_ON_CANVAS;
@@ -239,7 +244,7 @@ function drawWindingVisualization(ctx, signal, planeParams) {
 /**
  * Draw time domain signal with highlighted current time
  */
-function drawTimeDomainSignal(ctx, signal, planeParams) {
+export function drawTimeDomainSignal(ctx, signal, planeParams) {
     if (!signal || signal.length === 0) {
         ctx.save();
         ctx.fillStyle = COLOR_TEXT_ON_CANVAS;
@@ -403,7 +408,7 @@ function drawTimeDomainSignal(ctx, signal, planeParams) {
 /**
  * Get display text for Fourier function type
  */
-function getFourierFunctionText(funcType) {
+export function getFourierFunctionText(funcType) {
     const funcMap = {
         // Basic waves
         'sine': 'f(t) = A·sin(ωt)',

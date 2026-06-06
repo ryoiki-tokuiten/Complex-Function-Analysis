@@ -1,4 +1,9 @@
-function toggleAnimation(sliderElement, stateUpdateFn, playButton, speedSelector, isPolyCoeff = false, polyCoeffIndex = -1, polyCoeffPart = '') {
+import { state, context } from '../store/state.js';
+import { requestRedrawAll } from '../main.js';
+
+const { animationStates } = context;
+
+export function toggleAnimation(sliderElement, stateUpdateFn, playButton, speedSelector, isPolyCoeff = false, polyCoeffIndex = -1, polyCoeffPart = '') {
     const sliderId = sliderElement.id;
     if (!animationStates[sliderId]) {
         animationStates[sliderId] = {
@@ -61,7 +66,7 @@ function toggleAnimation(sliderElement, stateUpdateFn, playButton, speedSelector
             } else {
                 stateUpdateFn(newNumericValue); 
             }
-            domainColoringDirty = true;
+            context.domainColoringDirty = true;
             requestRedrawAll(); 
             animState.frameId = requestAnimationFrame(animationLoop);
         }

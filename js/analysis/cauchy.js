@@ -1,4 +1,23 @@
-function performCauchyAnalysis() {
+import { state, context } from '../store/state.js';
+import {
+    getChainedTransformFunction,
+    getContourPoints,
+    numericalLineIntegral,
+    isPointInsideContour,
+    estimateResidue,
+    complexAdd,
+    complexMul
+} from '../math-utils.js';
+import {
+    NUM_INTEGRAL_STEPS,
+    RESIDUE_CALC_EPSILON_RADIUS,
+    RESIDUE_BOUNDARY_CHECK_FACTOR,
+    NUM_RESIDUE_INTEGRAL_STEPS
+} from '../constants/numerical.js';
+
+const { controls } = context;
+
+export function performCauchyAnalysis() {
     if (!controls.cauchy_integral_results_info) return;
     const isZPlanar = !state.riemannSphereViewEnabled || state.splitViewEnabled;
 
@@ -159,7 +178,7 @@ function performCauchyAnalysis() {
     controls.cauchy_integral_results_info.innerHTML = resultsHTML;
 }
 
-function updateWindingNumberDisplay(tf) {
+export function updateWindingNumberDisplay(tf) {
     controls.wPlaneAnalysisInfo.innerHTML = ''; 
     let contourC_points = null;
     let contourParams = {};

@@ -1,15 +1,20 @@
+import { COLOR_GRID_LINES, COLOR_AXES, COLOR_TEXT_ON_CANVAS } from '../constants/colors.js';
+import { TWO_PI } from '../constants/numerical.js';
+import { LINE_WIDTH_THIN, LINE_WIDTH_NORMAL, LINE_WIDTH_THICK } from '../constants/rendering.js';
+import { mapToCanvasCoords } from '../utils/canvas-utils.js';
+
 /**
  * Shared canvas primitives used across planar, Fourier, and Laplace renderers.
  */
 
-function getCanvasPlaneRanges(params) {
+export function getCanvasPlaneRanges(params) {
     return {
         xRange: params.currentVisXRange || params.xRange || [0, 0],
         yRange: params.currentVisYRange || params.yRange || [0, 0]
     };
 }
 
-function createRgbTuple(r, g, b) {
+export function createRgbTuple(r, g, b) {
     const rgb = [r, g, b];
     rgb.r = r;
     rgb.g = g;
@@ -17,7 +22,7 @@ function createRgbTuple(r, g, b) {
     return rgb;
 }
 
-function parseHslString(hsl) {
+export function parseHslString(hsl) {
     if (typeof hsl !== 'string') return null;
     const match = hsl.match(/hsl\(\s*(-?\d+(?:\.\d+)?)\s*,\s*(\d+(?:\.\d+)?)%\s*,\s*(\d+(?:\.\d+)?)%\s*\)/i);
     if (!match) return null;
@@ -29,7 +34,7 @@ function parseHslString(hsl) {
     };
 }
 
-function hslToRgb(h, s, l) {
+export function hslToRgb(h, s, l) {
     if (typeof h === 'string') {
         const parsed = parseHslString(h);
         return parsed ? hslToRgb(parsed.h, parsed.s, parsed.l) : createRgbTuple(0, 0, 0);
@@ -64,7 +69,7 @@ function hslToRgb(h, s, l) {
     );
 }
 
-function drawGridLines(ctx, params, stepX = 1, stepY = 1, color = COLOR_GRID_LINES) {
+export function drawGridLines(ctx, params, stepX = 1, stepY = 1, color = COLOR_GRID_LINES) {
     const { xRange, yRange } = getCanvasPlaneRanges(params);
 
     ctx.save();
@@ -96,7 +101,7 @@ function drawGridLines(ctx, params, stepX = 1, stepY = 1, color = COLOR_GRID_LIN
     ctx.restore();
 }
 
-function calculateGridStep(span, targetCount = 10) {
+export function calculateGridStep(span, targetCount = 10) {
     const rawStep = span / targetCount;
     if (rawStep <= 0) return 1;
     const log = Math.log10(rawStep);
@@ -113,7 +118,7 @@ function calculateGridStep(span, targetCount = 10) {
     return step * base;
 }
 
-function drawGrid(ctx, params, options = {}) {
+export function drawGrid(ctx, params, options = {}) {
     const { xRange, yRange } = getCanvasPlaneRanges(params);
     if (!xRange || !yRange) return;
 
@@ -140,7 +145,7 @@ function drawGrid(ctx, params, options = {}) {
     drawGridLines(ctx, params, stepX, stepY, 'rgba(60, 80, 100, 0.3)');
 }
 
-function normalizeAxesOptions(labelOrOptions, maybeYLabel) {
+export function normalizeAxesOptions(labelOrOptions, maybeYLabel) {
     if (typeof labelOrOptions === 'string' || typeof maybeYLabel === 'string') {
         return {
             xLabel: labelOrOptions || 'Re',
@@ -168,7 +173,7 @@ function normalizeAxesOptions(labelOrOptions, maybeYLabel) {
     };
 }
 
-function drawAxes(ctx, params, labelOrOptions, maybeYLabel) {
+export function drawAxes(ctx, params, labelOrOptions, maybeYLabel) {
     const options = normalizeAxesOptions(labelOrOptions, maybeYLabel);
     const origin = mapToCanvasCoords(0, 0, params);
     const { xRange, yRange } = getCanvasPlaneRanges(params);
@@ -274,7 +279,7 @@ function drawAxes(ctx, params, labelOrOptions, maybeYLabel) {
     ctx.restore();
 }
 
-function drawArrowHead(ctx, x, y, angle, size, color) {
+export function drawArrowHead(ctx, x, y, angle, size, color) {
     ctx.fillStyle = color;
     ctx.beginPath();
     ctx.moveTo(x, y);
@@ -290,7 +295,7 @@ function drawArrowHead(ctx, x, y, angle, size, color) {
     ctx.fill();
 }
 
-function drawArrow(ctx, fromX, fromY, toX, toY, color = 'white', headLength = 8, lineWidth = LINE_WIDTH_NORMAL) {
+export function drawArrow(ctx, fromX, fromY, toX, toY, color = 'white', headLength = 8, lineWidth = LINE_WIDTH_NORMAL) {
     ctx.save();
     ctx.strokeStyle = color;
     ctx.fillStyle = color;
@@ -307,7 +312,7 @@ function drawArrow(ctx, fromX, fromY, toX, toY, color = 'white', headLength = 8,
     ctx.restore();
 }
 
-function drawTipToTailVectors(ctx, windingData, params, options = {}) {
+export function drawTipToTailVectors(ctx, windingData, params, options = {}) {
     const {
         numVectors = 12,
         style = 'enhanced',
@@ -383,7 +388,7 @@ function drawTipToTailVectors(ctx, windingData, params, options = {}) {
     ctx.fill();
 }
 
-function drawSpiral(ctx, data, params, options = {}) {
+export function drawSpiral(ctx, data, params, options = {}) {
     const { baseColor = { r: 150, g: 200, b: 255 }, enhanced = true } = options;
     const points = data.points;
     if (points.length < 2) return;

@@ -1,40 +1,51 @@
+import { state, context } from '../store/state.js';
+import { eventBus } from '../store/events.js';
+const { controls } = context;
+
+function requestDomainRedraw() {
+    eventBus.emit('redraw:domain');
+}
+function requestRedrawAll() {
+    eventBus.emit('redraw:all');
+}
+
 const RASTER_INPUT_SHAPES = new Set(['image', 'video']);
 const RASTER_MEDIA_TIME_EPSILON = 1e-4;
 
 
 
-function isRasterInputShape(shape = state.currentInputShape) {
+export function isRasterInputShape(shape = state.currentInputShape) {
     return RASTER_INPUT_SHAPES.has(shape);
 }
 
-function getRasterSourceForShape(shape = state.currentInputShape) {
+export function getRasterSourceForShape(shape = state.currentInputShape) {
     return shape === 'video' ? state.uploadedVideo : state.uploadedImage;
 }
 
 
 
-function getRasterResolutionForShape(shape = state.currentInputShape) {
+export function getRasterResolutionForShape(shape = state.currentInputShape) {
     return shape === 'video' ? state.videoResolution : state.imageResolution;
 }
 
-function getRasterSizeForShape(shape = state.currentInputShape) {
+export function getRasterSizeForShape(shape = state.currentInputShape) {
     return shape === 'video' ? state.videoSize : state.imageSize;
 }
 
-function getRasterOpacityForShape(shape = state.currentInputShape) {
+export function getRasterOpacityForShape(shape = state.currentInputShape) {
     return shape === 'video' ? state.videoOpacity : state.imageOpacity;
 }
 
-function getRasterAspectRatioForShape(shape = state.currentInputShape) {
+export function getRasterAspectRatioForShape(shape = state.currentInputShape) {
     const aspectRatio = shape === 'video' ? state.videoAspectRatio : state.imageAspectRatio;
     return Number.isFinite(aspectRatio) && aspectRatio > 0 ? aspectRatio : 1;
 }
 
-function getRasterVersionTokenForShape(shape = state.currentInputShape) {
+export function getRasterVersionTokenForShape(shape = state.currentInputShape) {
     return shape === 'video' ? state.videoFrameVersion : state.imageContentVersion;
 }
 
-function getRasterSourceDimensions(source) {
+export function getRasterSourceDimensions(source) {
     if (!source) {
         return { width: 0, height: 0, aspectRatio: 1 };
     }
@@ -59,7 +70,7 @@ function getRasterSourceDimensions(source) {
     };
 }
 
-function getRasterDisplayDimensions(shape = state.currentInputShape) {
+export function getRasterDisplayDimensions(shape = state.currentInputShape) {
     const size = Math.max(0.1, getRasterSizeForShape(shape) || 2.0);
     const aspectRatio = getRasterAspectRatioForShape(shape);
 
@@ -80,7 +91,7 @@ function getRasterDisplayDimensions(shape = state.currentInputShape) {
 
 
 
-function processUploadedImageSource(img) {
+export function processUploadedImageSource(img) {
     if (!img) {
         return false;
     }
@@ -92,7 +103,7 @@ function processUploadedImageSource(img) {
     return true;
 }
 
-function processUploadedVideoFrame(force = false) {
+export function processUploadedVideoFrame(force = false) {
     const video = state.uploadedVideo;
     if (!video || video.readyState < HTMLMediaElement.HAVE_CURRENT_DATA) {
         return false;
@@ -114,7 +125,7 @@ function processUploadedVideoFrame(force = false) {
     return true;
 }
 
-function formatMediaClockTime(totalSeconds) {
+export function formatMediaClockTime(totalSeconds) {
     if (!Number.isFinite(totalSeconds) || totalSeconds < 0) {
         return '--:--';
     }
@@ -131,7 +142,7 @@ function formatMediaClockTime(totalSeconds) {
     return `${minutes}:${String(seconds).padStart(2, '0')}`;
 }
 
-function buildVideoStatusText() {
+export function buildVideoStatusText() {
     if (!state.uploadedVideo) {
         return state.videoStatusMessage || 'No video loaded.';
     }
@@ -147,7 +158,7 @@ function buildVideoStatusText() {
     return `${statusLabel} · ${currentTime} / ${duration}${dims} · ${fps} FPS`;
 }
 
-function syncVideoPlaybackUI() {
+export function syncVideoPlaybackUI() {
     if (controls.videoPlayPauseBtn) {
         controls.videoPlayPauseBtn.disabled = !state.uploadedVideo;
         controls.videoPlayPauseBtn.textContent = state.videoIsPlaying ? '⏸ Pause' : '▶ Play';
@@ -158,14 +169,14 @@ function syncVideoPlaybackUI() {
     }
 }
 
-function stopVideoProcessingLoop() {
+export function stopVideoProcessingLoop() {
     if (state.videoProcessingLoopHandle) {
         cancelAnimationFrame(state.videoProcessingLoopHandle);
         state.videoProcessingLoopHandle = null;
     }
 }
 
-function runVideoProcessingLoop(now) {
+export function runVideoProcessingLoop(now) {
     state.videoProcessingLoopHandle = null;
 
     if (!state.uploadedVideo || !state.videoIsPlaying || state.currentInputShape !== 'video') {
@@ -193,7 +204,7 @@ function runVideoProcessingLoop(now) {
     state.videoProcessingLoopHandle = requestAnimationFrame(runVideoProcessingLoop);
 }
 
-function startVideoProcessingLoop() {
+export function startVideoProcessingLoop() {
     stopVideoProcessingLoop();
 
     if (!state.uploadedVideo || !state.videoIsPlaying || state.currentInputShape !== 'video') {
@@ -206,7 +217,7 @@ function startVideoProcessingLoop() {
     syncVideoPlaybackUI();
 }
 
-function pauseUploadedVideoPlayback() {
+export function pauseUploadedVideoPlayback() {
     const video = state.uploadedVideo;
     if (video) {
         video.pause();
@@ -224,7 +235,7 @@ function pauseUploadedVideoPlayback() {
     }
 }
 
-function startUploadedVideoPlayback() {
+export function startUploadedVideoPlayback() {
     const video = state.uploadedVideo;
     if (!video) {
         syncVideoPlaybackUI();
@@ -258,7 +269,7 @@ function startUploadedVideoPlayback() {
     });
 }
 
-function toggleUploadedVideoPlayback() {
+export function toggleUploadedVideoPlayback() {
     if (state.videoIsPlaying) {
         pauseUploadedVideoPlayback();
         return;
@@ -267,7 +278,7 @@ function toggleUploadedVideoPlayback() {
     startUploadedVideoPlayback();
 }
 
-function cleanupUploadedVideo() {
+export function cleanupUploadedVideo() {
     const previousVideo = state.uploadedVideo;
     const previousUrl = state.uploadedVideoUrl;
 
@@ -299,7 +310,7 @@ function cleanupUploadedVideo() {
     syncVideoPlaybackUI();
 }
 
-function loadUploadedVideoFile(file) {
+export function loadUploadedVideoFile(file) {
     cleanupUploadedVideo();
 
     if (!file) {

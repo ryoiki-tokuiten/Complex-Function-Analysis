@@ -1,3 +1,8 @@
+import { state } from '../store/state.js';
+import { COLOR_TEXT_ON_CANVAS } from '../constants/colors.js';
+import { mapToCanvasCoords, updatePlaneViewportRanges } from '../utils/canvas-utils.js';
+import { drawAxes, drawGrid, drawTipToTailVectors, drawSpiral } from './canvas-primitives.js';
+
 // 3Blue1Brown-Quality Laplace Winding Visualization
 // Shows f(t)·e^(-st) building up over time with vectors and labels
 
@@ -9,7 +14,7 @@
  * Compute auto-fitting viewport params for one panel of the winding view.
  * boxOffsetY is the top-left Y of the panel in canvas coordinates.
  */
-function autoFitLaplacePanel(minRe, maxRe, minIm, maxIm, boxW, boxH, boxOffsetY) {
+export function autoFitLaplacePanel(minRe, maxRe, minIm, maxIm, boxW, boxH, boxOffsetY) {
     const pad = 0.4;
     let spanRe = maxRe - minRe;
     let spanIm = maxIm - minIm;
@@ -39,7 +44,7 @@ function autoFitLaplacePanel(minRe, maxRe, minIm, maxIm, boxW, boxH, boxOffsetY)
     };
 }
 
-function drawLaplaceWindingPremium(ctx, signal, planeParams) {
+export function drawLaplaceWindingPremium(ctx, signal, planeParams) {
     if (!signal || signal.length === 0) {
         ctx.save();
         ctx.fillStyle = COLOR_TEXT_ON_CANVAS;
@@ -163,7 +168,7 @@ function drawLaplaceWindingPremium(ctx, signal, planeParams) {
 /**
  * Compute e^(-st) spiral data (no f(t) modulation)
  */
-function computeExponentialSpiralData(signal, sigma, omega) {
+export function computeExponentialSpiralData(signal, sigma, omega) {
     const points = [];
 
     // Animation time parameter
@@ -201,7 +206,7 @@ function computeExponentialSpiralData(signal, sigma, omega) {
 /**
  * Compute winding path data with animation support
  */
-function computeLaplaceWindingData(signal, sigma, omega) {
+export function computeLaplaceWindingData(signal, sigma, omega) {
     const points = [];
     let integralReal = 0;
     let integralImag = 0;
@@ -260,7 +265,7 @@ function computeLaplaceWindingData(signal, sigma, omega) {
 /**
  * Setup viewport to show winding nicely - ONLY on first init, preserve pan/zoom after
  */
-function setupWindingViewport(planeParams, windingData, includeIntegral = false) {
+export function setupWindingViewport(planeParams, windingData, includeIntegral = false) {
     if (planeParams.scale && planeParams.origin && !state.laplaceNeedViewportReset) {
         updatePlaneViewportRanges(planeParams);
         return;
@@ -337,7 +342,7 @@ function setupWindingViewport(planeParams, windingData, includeIntegral = false)
     state.laplaceNeedViewportReset = false;
 }
 
-function setupWindingViewportSplit(params, windingData) {
+export function setupWindingViewportSplit(params, windingData) {
     setupWindingViewport(params, windingData, true);
 }
 
@@ -346,7 +351,7 @@ function setupWindingViewportSplit(params, windingData) {
  * Draw the winding spiral path with progressive coloring (3b1b style!)
  * Uses perceptually uniform color gradient showing time evolution
  */
-function drawWindingSpiral(ctx, windingData, planeParams) {
+export function drawWindingSpiral(ctx, windingData, planeParams) {
     const points = windingData.points;
     if (points.length < 2) return;
 
@@ -421,7 +426,7 @@ function drawWindingSpiral(ctx, windingData, planeParams) {
 /**
  * Draw vector arrows at key sample points with labels
  */
-function drawWindingVectors(ctx, windingData, planeParams) {
+export function drawWindingVectors(ctx, windingData, planeParams) {
     const points = windingData.points;
     if (points.length === 0) return;
 
@@ -483,7 +488,7 @@ function drawWindingVectors(ctx, windingData, planeParams) {
  * Draw CENTER OF MASS - THE KEY INSIGHT! (3b1b emphasis)
  * This is what makes the Laplace transform intuitive
  */
-function drawIntegralResult(ctx, windingData, planeParams) {
+export function drawIntegralResult(ctx, windingData, planeParams) {
     const points = windingData.points;
     if (points.length === 0) return;
 

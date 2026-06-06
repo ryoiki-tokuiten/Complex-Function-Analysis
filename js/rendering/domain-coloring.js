@@ -1,10 +1,15 @@
-function getDomainColorPlaneKey(targetCtx) {
-    if (typeof zDomainColorCtx !== 'undefined' && targetCtx === zDomainColorCtx) return 'z';
-    if (typeof wDomainColorCtx !== 'undefined' && targetCtx === wDomainColorCtx) return 'w';
+import { state, context } from '../store/state.js';
+import { getMappedTransformProfile, evaluateMappedTransform } from '../math-utils.js';
+import { renderDomainColoringWithWebGL } from './webgl-domain-coloring.js';
+import { hslToRgb } from './canvas-primitives.js';
+
+export function getDomainColorPlaneKey(targetCtx) {
+    if (targetCtx === context.zDomainColorCtx) return 'z';
+    if (targetCtx === context.wDomainColorCtx) return 'w';
     return 'z';
 }
 
-function renderPlanarDomainColoring(tCtx, pP, isWPC, sTF) {
+export function renderPlanarDomainColoring(tCtx, pP, isWPC, sTF) {
     const w = pP.width; const h = pP.height; if (w === 0 || h === 0) return;
     const sourceProfile = (!isWPC && typeof sTF === 'function')
         ? getMappedTransformProfile(state.currentFunction, sTF)
@@ -24,7 +29,7 @@ function renderPlanarDomainColoring(tCtx, pP, isWPC, sTF) {
     }
 }
 
-function renderSphereDomainColoring(tCtx, cSP, cDOMP, isWPC, sTF) {
+export function renderSphereDomainColoring(tCtx, cSP, cDOMP, isWPC, sTF) {
     const w = cDOMP.width; const h = cDOMP.height; if (w === 0 || h === 0) return;
     const sourceProfile = (!isWPC && typeof sTF === 'function')
         ? getMappedTransformProfile(state.currentFunction, sTF)
@@ -44,7 +49,7 @@ function renderSphereDomainColoring(tCtx, cSP, cDOMP, isWPC, sTF) {
     }
 }
 
-function inverseRotate3D(x, y, z, rotX, rotY) {
+export function inverseRotate3D(x, y, z, rotX, rotY) {
     const cY = Math.cos(-rotY);
     const sY = Math.sin(-rotY);
     const cX = Math.cos(-rotX);
@@ -57,7 +62,7 @@ function inverseRotate3D(x, y, z, rotX, rotY) {
     return { x: rx, y: ry, z: rz };
 }
 
-function getPaletteColor(paletteId, h) {
+export function getPaletteColor(paletteId, h) {
     if (paletteId === 'classic') {
         const rgb = hslToRgb(h, 1.0, 0.5);
         return [rgb[0] / 255, rgb[1] / 255, rgb[2] / 255];
@@ -106,7 +111,7 @@ function getPaletteColor(paletteId, h) {
     return [r, g, b];
 }
 
-function applyLightnessAndSaturation(rgb, L, S) {
+export function applyLightnessAndSaturation(rgb, L, S) {
     let r = rgb[0];
     let g = rgb[1];
     let b = rgb[2];
@@ -137,7 +142,7 @@ function applyLightnessAndSaturation(rgb, L, S) {
     ];
 }
 
-function domainColorForValue(re, im, runtimeState) {
+export function domainColorForValue(re, im, runtimeState) {
     const phase = Math.atan2(im, re);
     const modValue = Math.sqrt(re * re + im * im);
     if (!Number.isFinite(modValue)) return [0, 0, 0];
@@ -164,7 +169,7 @@ function domainColorForValue(re, im, runtimeState) {
     return applyLightnessAndSaturation(baseColor, lFinal, sFinal);
 }
 
-function renderConstantPlanarDomainColoring(tCtx, pP, value) {
+export function renderConstantPlanarDomainColoring(tCtx, pP, value) {
     const rgb = domainColorForValue(value.re, value.im, state);
     tCtx.save();
     tCtx.setTransform(1, 0, 0, 1, 0, 0);
@@ -173,7 +178,7 @@ function renderConstantPlanarDomainColoring(tCtx, pP, value) {
     tCtx.restore();
 }
 
-function renderPlanarDomainColoringCPU(tCtx, pP, isWPC, sTF, sourceProfile = null) {
+export function renderPlanarDomainColoringCPU(tCtx, pP, isWPC, sTF, sourceProfile = null) {
     const targetW = pP.width;
     const targetH = pP.height;
     const isHighQuality = !!(state && state.isHighQualityCpuRender);
@@ -239,7 +244,7 @@ function renderPlanarDomainColoringCPU(tCtx, pP, isWPC, sTF, sourceProfile = nul
     tCtx.restore();
 }
 
-function renderSphereDomainColoringCPU(tCtx, cSP, cDOMP, isWPC, sTF, sourceProfile = null) {
+export function renderSphereDomainColoringCPU(tCtx, cSP, cDOMP, isWPC, sTF, sourceProfile = null) {
     const targetW = cDOMP.width;
     const targetH = cDOMP.height;
     const isHighQuality = !!(state && state.isHighQualityCpuRender);

@@ -1,3 +1,7 @@
+import { state } from '../store/state.js';
+import { requestRedrawAll } from '../main.js';
+import { syncLaplacePlayPauseButton } from '../ui/event-listeners.js';
+
 // Laplace Transform Animation Controller
 // Smooth progressive animation of winding spiral
 
@@ -7,7 +11,7 @@ let laplaceLastFrameTime = 0;
 /**
  * Start animating the Laplace winding visualization
  */
-function startLaplaceAnimation() {
+export function startLaplaceAnimation() {
     if (laplaceAnimationHandle) {
         return; // Already running
     }
@@ -57,7 +61,7 @@ function startLaplaceAnimation() {
 /**
  * Stop animating
  */
-function stopLaplaceAnimation() {
+export function stopLaplaceAnimation() {
     state.laplaceAnimationPlaying = false;
     if (laplaceAnimationHandle) {
         cancelAnimationFrame(laplaceAnimationHandle);
@@ -69,7 +73,7 @@ function stopLaplaceAnimation() {
 /**
  * Toggle animation play/pause
  */
-function toggleLaplaceAnimation() {
+export function toggleLaplaceAnimation() {
     if (state.laplaceAnimationPlaying) {
         stopLaplaceAnimation();
     } else {
@@ -80,7 +84,7 @@ function toggleLaplaceAnimation() {
 /**
  * Reset animation to beginning
  */
-function resetLaplaceAnimation() {
+export function resetLaplaceAnimation() {
     stopLaplaceAnimation();
     state.laplaceAnimationTime = 0;
     syncLaplacePlayPauseButton();
@@ -90,7 +94,7 @@ function resetLaplaceAnimation() {
 /**
  * Set animation to show full spiral (default)
  */
-function showFullLaplaceSpiral() {
+export function showFullLaplaceSpiral() {
     stopLaplaceAnimation();
     state.laplaceAnimationTime = 1.0;
     syncLaplacePlayPauseButton();

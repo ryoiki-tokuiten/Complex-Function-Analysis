@@ -1,15 +1,28 @@
-function createLineSet(points, color, role, lineWidth) {
+import { state } from '../store/state.js';
+import { TWO_PI, NUM_POINTS_CURVE, ZETA_REFLECTION_POINT_RE } from '../constants/numerical.js';
+import {
+    COLOR_Z_GRID_HORZ, COLOR_Z_GRID_VERT, COLOR_Z_GRID_HORZ_FUNCTIONAL_EQ, COLOR_Z_GRID_VERT_FUNCTIONAL_EQ,
+    COLOR_Z_GRID_ZETA_UNDEFINED_SUM_REGION,
+    COLOR_INPUT_SHAPE_Z, COLOR_INPUT_LINE_IM_Z,
+    COLOR_POLAR_RADIAL, COLOR_POLAR_ANGULAR,
+    COLOR_LOGPOLAR_EXP_R, COLOR_LOGPOLAR_ANGULAR,
+    COLOR_STRIP_LINES, COLOR_SECTOR_LINES
+} from '../constants/colors.js';
+import { LINE_WIDTH_THIN, LINE_WIDTH_NORMAL, LINE_WIDTH_MEDIUM, LINE_WIDTH_THICK } from '../constants/rendering.js';
+
+
+export function createLineSet(points, color, role, lineWidth) {
     return { points, color, role, lineWidth };
 }
 
-function getVisiblePlaneRanges(planeParams) {
+export function getVisiblePlaneRanges(planeParams) {
     return {
         xRange: planeParams.currentVisXRange || planeParams.xRange || [-1, 1],
         yRange: planeParams.currentVisYRange || planeParams.yRange || [-1, 1]
     };
 }
 
-function buildInputShapeGeometryConfig(planeParams, options = {}) {
+export function buildInputShapeGeometryConfig(planeParams, options = {}) {
     const { xRange, yRange } = getVisiblePlaneRanges(planeParams);
 
     return {
@@ -36,7 +49,7 @@ function buildInputShapeGeometryConfig(planeParams, options = {}) {
     };
 }
 
-function generateCirclePoints(cx, cy, radius, numPoints) {
+export function generateCirclePoints(cx, cy, radius, numPoints) {
     const points = [];
     for (let i = 0; i <= numPoints; ++i) {
         const t = (i / numPoints) * TWO_PI;
@@ -45,7 +58,7 @@ function generateCirclePoints(cx, cy, radius, numPoints) {
     return points;
 }
 
-function generateEllipsePoints(cx, cy, a, b, numPoints) {
+export function generateEllipsePoints(cx, cy, a, b, numPoints) {
     const points = [];
     for (let i = 0; i <= numPoints; ++i) {
         const t = (i / numPoints) * TWO_PI;
@@ -54,7 +67,7 @@ function generateEllipsePoints(cx, cy, a, b, numPoints) {
     return points;
 }
 
-function generateHyperbolaPoints(cx, cy, a, b, numPoints) {
+export function generateHyperbolaPoints(cx, cy, a, b, numPoints) {
     const points = [];
     const uMax = 2.5;
     const halfSteps = Math.max(2, Math.floor(numPoints / 2));
@@ -74,7 +87,7 @@ function generateHyperbolaPoints(cx, cy, a, b, numPoints) {
     return points;
 }
 
-function generateLinePoints(xMin, xMax, y, numPoints) {
+export function generateLinePoints(xMin, xMax, y, numPoints) {
     const points = [];
     for (let i = 0; i <= numPoints; ++i) {
         points.push({ re: xMin + i * (xMax - xMin) / numPoints, im: y });
@@ -82,7 +95,7 @@ function generateLinePoints(xMin, xMax, y, numPoints) {
     return points;
 }
 
-function generateVerticalLinePoints(x, yMin, yMax, numPoints) {
+export function generateVerticalLinePoints(x, yMin, yMax, numPoints) {
     const points = [];
     for (let i = 0; i <= numPoints; ++i) {
         points.push({ re: x, im: yMin + i * (yMax - yMin) / numPoints });
@@ -90,7 +103,7 @@ function generateVerticalLinePoints(x, yMin, yMax, numPoints) {
     return points;
 }
 
-function generateCartesianGridPointSets(config) {
+export function generateCartesianGridPointSets(config) {
     const sets = [];
     const sampleCount = Math.max(2, Math.floor(config.curvePoints / 2));
 
@@ -120,7 +133,7 @@ function generateCartesianGridPointSets(config) {
     return sets;
 }
 
-function generatePolarGridPointSets(config) {
+export function generatePolarGridPointSets(config) {
     const sets = [];
     const maxRadius = Math.max(
         Math.abs(config.xRange[0]),
@@ -154,7 +167,7 @@ function generatePolarGridPointSets(config) {
     return sets;
 }
 
-function generateLogPolarGridPointSets(config) {
+export function generateLogPolarGridPointSets(config) {
     const sets = [];
     const maxRadius = Math.max(
         Math.abs(config.xRange[0]),
@@ -196,7 +209,7 @@ function generateLogPolarGridPointSets(config) {
     return sets;
 }
 
-function generateStripPointSets(config) {
+export function generateStripPointSets(config) {
     const sampleCount = Math.max(2, config.curvePoints);
     return [
         createLineSet(
@@ -214,7 +227,7 @@ function generateStripPointSets(config) {
     ];
 }
 
-function generateSectorPointSets(config) {
+export function generateSectorPointSets(config) {
     const angle1 = config.sectorAngle1 * Math.PI / 180;
     const angle2 = config.sectorAngle2 * Math.PI / 180;
     const linePointCount = Math.max(8, Math.floor(config.curvePoints / 2));
@@ -245,7 +258,7 @@ function generateSectorPointSets(config) {
     ];
 }
 
-function generateLineShapePointSets(config) {
+export function generateLineShapePointSets(config) {
     const sampleCount = Math.max(2, config.curvePoints);
     return [
         createLineSet(
@@ -263,7 +276,7 @@ function generateLineShapePointSets(config) {
     ];
 }
 
-function generateGeometricShapePointSets(config) {
+export function generateGeometricShapePointSets(config) {
     const shape = config.currentInputShape;
     if (shape === 'circle') {
         return [createLineSet(
@@ -292,7 +305,7 @@ function generateGeometricShapePointSets(config) {
     return [];
 }
 
-function generateInputShapePointSets(config) {
+export function generateInputShapePointSets(config) {
     switch (config.currentInputShape) {
         case 'grid_cartesian':
             return generateCartesianGridPointSets(config);
@@ -318,16 +331,16 @@ function generateInputShapePointSets(config) {
     }
 }
 
-function generateCurrentInputShapePointSets(planeParams, options = {}) {
+export function generateCurrentInputShapePointSets(planeParams, options = {}) {
     return generateInputShapePointSets(buildInputShapeGeometryConfig(planeParams, options));
 }
 
-function generateCurrentMappedInputShapePointSets(planeParams, options = {}) {
+export function generateCurrentMappedInputShapePointSets(planeParams, options = {}) {
     const pointSets = generateCurrentInputShapePointSets(planeParams, options);
     return prepareInputShapePointSetsForMapping(pointSets, options);
 }
 
-function cloneLineSet(pointSet, overrides = {}) {
+export function cloneLineSet(pointSet, overrides = {}) {
     return {
         points: pointSet.points,
         color: pointSet.color,
@@ -337,7 +350,7 @@ function cloneLineSet(pointSet, overrides = {}) {
     };
 }
 
-function splitPointSetAtRealBoundary(pointSet, splitRe, leftColor, rightColor) {
+export function splitPointSetAtRealBoundary(pointSet, splitRe, leftColor, rightColor) {
     const sourcePoints = pointSet.points.filter(Boolean);
     if (sourcePoints.length < 2) {
         return [];
@@ -397,7 +410,7 @@ function splitPointSetAtRealBoundary(pointSet, splitRe, leftColor, rightColor) {
     ].filter(set => set.points.length > 1);
 }
 
-function prepareInputShapePointSetsForMapping(pointSets, options = {}) {
+export function prepareInputShapePointSetsForMapping(pointSets, options = {}) {
     const currentFunction = options.currentFunction ?? state.currentFunction;
     const zetaContinuationEnabled = options.zetaContinuationEnabled ?? state.zetaContinuationEnabled;
 
@@ -433,7 +446,7 @@ function prepareInputShapePointSetsForMapping(pointSets, options = {}) {
     return preparedSets;
 }
 
-function getRadialDiscreteStepDomain(functionKey) {
+export function getRadialDiscreteStepDomain(functionKey) {
     switch (functionKey) {
         case 'cos':
         case 'sin':
@@ -456,7 +469,7 @@ function getRadialDiscreteStepDomain(functionKey) {
     }
 }
 
-function generateRadialDiscreteStepPointSets(functionKey, transformFunc, stepsCount, options = {}) {
+export function generateRadialDiscreteStepPointSets(functionKey, transformFunc, stepsCount, options = {}) {
     if (stepsCount < 2 || typeof transformFunc !== 'function') {
         return [];
     }

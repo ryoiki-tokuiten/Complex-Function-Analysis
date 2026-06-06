@@ -1,6 +1,6 @@
 // js/ui/complex-points-ui.js
 
-class ComplexPointsUI {
+export class ComplexPointsUI {
     constructor(container, options = {}) {
         this.container = typeof container === 'string' ? document.getElementById(container) : container;
         if (!this.container) {

@@ -1,3 +1,8 @@
+import { state } from '../store/state.js';
+import { COLOR_TEXT_ON_CANVAS, COLOR_CANVAS_BACKGROUND } from '../constants/colors.js';
+import { mapToCanvasCoords } from '../utils/canvas-utils.js';
+import { drawAxes } from './canvas-primitives.js';
+
 // Laplace Transform 3D Surface Visualization using Plotly.js
 // Beautiful WebGL rendering of |F(s)| magnitude and phase surfaces
 
@@ -5,7 +10,7 @@
  * Draw 3D surface plot of Laplace transform magnitude/phase
  * Uses Plotly for interactive 3D WebGL rendering
  */
-function drawLaplace3DSurface(containerId) {
+export function drawLaplace3DSurface(containerId) {
     if (!state.laplaceSurface || state.laplaceSurface.length === 0) {
         // Show placeholder
         const container = document.getElementById(containerId);
@@ -211,7 +216,7 @@ function drawLaplace3DSurface(containerId) {
 /**
  * Update 3D surface when parameters change
  */
-function updateLaplace3DSurface() {
+export function updateLaplace3DSurface() {
     if (!state.laplaceModeEnabled) return;
 
     // Redraw the surface
@@ -222,7 +227,7 @@ function updateLaplace3DSurface() {
  * Draw 2D canvas-based preview for the right panel if 3D not available
  * Shows a simplified magnitude plot as fallback
  */
-function drawLaplaceMagnitudePlot(ctx, planeParams) {
+export function drawLaplaceMagnitudePlot(ctx, planeParams) {
     if (!state.laplaceSurface || state.laplaceSurface.length === 0) {
         ctx.save();
         ctx.fillStyle = COLOR_TEXT_ON_CANVAS;

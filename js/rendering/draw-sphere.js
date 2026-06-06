@@ -1,6 +1,19 @@
-function drawRiemannSphereBase(ctx,cSP){const{centerX:cX,centerY:cY,radius:r}=cSP;ctx.save();ctx.strokeStyle=COLOR_SPHERE_OUTLINE;ctx.lineWidth=1.5;ctx.beginPath();ctx.arc(cX,cY,r,0,2*Math.PI);ctx.stroke();ctx.restore();}
+import { state, zPlaneParams } from '../store/state.js';
+import {
+    COLOR_SPHERE_OUTLINE, COLOR_PROBE_MARKER, COLOR_PROBE_NEIGHBORHOOD, COLOR_SPHERE_GRID,
+    COLOR_PROBE_CONFORMAL_LINE_Z_H, COLOR_PROBE_CONFORMAL_LINE_Z_V,
+    COLOR_PROBE_CONFORMAL_LINE_W_H, COLOR_PROBE_CONFORMAL_LINE_W_V
+} from '../constants/colors.js';
+import { NUM_POINTS_CURVE, PROBE_CROSSHAIR_SIZE_FACTOR } from '../constants/numerical.js';
+import { SPHERE_GRID_LINE_DEPTH_EFFECT, SPHERE_GRID_LINE_MAX_WIDTH_W, SPHERE_GRID_LINE_MAX_WIDTH_Z } from '../constants/rendering.js';
+import { evaluateMappedTransform, getMappedTransformProfile, isNumericallyStable } from '../math-utils.js';
+import { complexToSphere, rotate3D, projectSphereToCanvas2D } from '../utils/canvas-utils.js';
+import { isRasterInputShape } from '../utils/raster-media.js';
+import { generateCurrentInputShapePointSets, generateCurrentMappedInputShapePointSets } from './shape-generators.js';
 
-function drawSphereMappedPoint(ctx, cSP, value, col, radius = 6) {
+export function drawRiemannSphereBase(ctx,cSP){const{centerX:cX,centerY:cY,radius:r}=cSP;ctx.save();ctx.strokeStyle=COLOR_SPHERE_OUTLINE;ctx.lineWidth=1.5;ctx.beginPath();ctx.arc(cX,cY,r,0,2*Math.PI);ctx.stroke();ctx.restore();}
+
+export function drawSphereMappedPoint(ctx, cSP, value, col, radius = 6) {
     const spherePoint = complexToSphere(value.re, value.im);
     const rotatedSpherePoint = rotate3D(spherePoint, cSP.rotX, cSP.rotY);
     const canvasPoint = projectSphereToCanvas2D(rotatedSpherePoint, cSP.centerX, cSP.centerY, cSP.radius);
@@ -17,7 +30,7 @@ function drawSphereMappedPoint(ctx, cSP, value, col, radius = 6) {
     ctx.restore();
 }
 
-function drawMappedLineSetOnSphere(ctx, cSP, z_pts_src_arr, col, isWP, mappedTransform) {
+export function drawMappedLineSetOnSphere(ctx, cSP, z_pts_src_arr, col, isWP, mappedTransform) {
     const { centerX: cX, centerY: cY, radius: r, rotX, rotY } = cSP;
     ctx.strokeStyle = col; 
     
@@ -118,14 +131,14 @@ function drawMappedLineSetOnSphere(ctx, cSP, z_pts_src_arr, col, isWP, mappedTra
     });
 }
 
-function getSpherePointSetColor(pointSet, isWP) {
+export function getSpherePointSetColor(pointSet, isWP) {
     if (!isWP) {
         return COLOR_SPHERE_GRID;
     }
     return pointSet.color || COLOR_SPHERE_GRID;
 }
 
-function drawSphereGridAndShape(ctx, cSP, isWP, tf = null) {
+export function drawSphereGridAndShape(ctx, cSP, isWP, tf = null) {
     if (isRasterInputShape(state.currentInputShape)) {
         return; // CPU Image mapping removed. Riemann sphere doesn't natively support video textures yet.
     }
@@ -164,7 +177,7 @@ function drawSphereGridAndShape(ctx, cSP, isWP, tf = null) {
     });
 }
 
-function drawSphereProbeAndNeighborhood(ctx, cSP, sourceProbeZ, neighborhoodSize, transformFuncIfWSphere) {
+export function drawSphereProbeAndNeighborhood(ctx, cSP, sourceProbeZ, neighborhoodSize, transformFuncIfWSphere) {
     const isWSphere = typeof transformFuncIfWSphere === 'function';
     const transformProfile = isWSphere ? getMappedTransformProfile(state.currentFunction, transformFuncIfWSphere) : null;
     const centerToDisplayOnSphere = isWSphere

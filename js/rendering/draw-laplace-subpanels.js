@@ -1,11 +1,10 @@
-// Helper functions for drawing split-panel Laplace visualizations
-
 // We are now using shared primitives from canvas-primitives.js
+import { drawArrowHead } from './canvas-primitives.js';
 
 /**
  * Draw final integral result for split panel (smaller, less emphasis)
  */
-function drawIntegralResultSplit(ctx, windingData, params) {
+export function drawIntegralResultSplit(ctx, windingData, params) {
     const integral = windingData.integral;
     const origin = { x: params.origin.x, y: params.origin.y };
     const resultCanvas = {
@@ -58,7 +57,7 @@ function drawIntegralResultSplit(ctx, windingData, params) {
 /**
  * Draw exponential spiral path (for top panel) and vectors
  */
-function drawExponentialPath(ctx, expData, params) {
+export function drawExponentialPath(ctx, expData, params) {
     const points = expData.points;
     if (points.length < 2) return;
     

@@ -1,10 +1,42 @@
+// js/store/state.js
 
+import { eventBus } from './events.js';
+import {
+    DEFAULT_CANVAS_WIDTH,
+    DEFAULT_CANVAS_HEIGHT,
+    SPHERE_INITIAL_ROT_X,
+    SPHERE_INITIAL_ROT_Y
+} from '../constants/rendering.js';
 
+export const zPlaneInitialRanges = { x: [-3.5, 3.5], y: [-3.0, 3.0] };
+export const wPlaneInitialRanges = { x: [-6.5, 6.5], y: [-6.5, 6.5] };
 
-const sliderParamKeys = ['a0', 'b0', 'circleR', 'ellipseA', 'ellipseB', 'hyperbolaA', 'hyperbolaB', 'fractionalPowerN'];
+export const zPlaneParams = {
+    width: DEFAULT_CANVAS_WIDTH,
+    height: DEFAULT_CANVAS_HEIGHT,
+    origin: { x: 0, y: 0 },
+    scale: { x: 1, y: 1 },
+    currentVisXRange: [...zPlaneInitialRanges.x],
+    currentVisYRange: [...zPlaneInitialRanges.y]
+};
 
+export const wPlaneParams = {
+    width: DEFAULT_CANVAS_WIDTH,
+    height: DEFAULT_CANVAS_HEIGHT,
+    origin: { x: 0, y: 0 },
+    scale: { x: 1, y: 1 },
+    xRange: [...wPlaneInitialRanges.x],
+    yRange: [...wPlaneInitialRanges.y]
+};
 
-let state = {
+export const sphereViewParams = {
+    z: { rotX: SPHERE_INITIAL_ROT_X, rotY: SPHERE_INITIAL_ROT_Y, dragging: false, lastMouseX: 0, lastMouseY: 0, radius: 0, centerX: 0, centerY: 0 },
+    w: { rotX: SPHERE_INITIAL_ROT_X, rotY: SPHERE_INITIAL_ROT_Y, dragging: false, lastMouseX: 0, lastMouseY: 0, radius: 0, centerX: 0, centerY: 0 }
+};
+
+export const sliderParamKeys = ['a0', 'b0', 'circleR', 'ellipseA', 'ellipseB', 'hyperbolaA', 'hyperbolaB', 'fractionalPowerN'];
+
+const rawState = {
     a0: 0.0, b0: 0.0,
     circleR: 1.0, ellipseA: 1.5, ellipseB: 0.7, hyperbolaA: 1.0, hyperbolaB: 0.5,
     mobiusA: { re: 1, im: 0 },
@@ -50,14 +82,12 @@ let state = {
     streamlineSeedDensityFactor: 0.8,
     manualSeedPoints: [], 
 
-
     imageResolution: 300,
     imageSize: 2.0,
     imageOpacity: 1.0,
     imageAspectRatio: 1.0,
     imageContentVersion: 0,
     uploadedImage: null,
-
 
     videoResolution: 300,
     videoProcessingFps: 60,
@@ -112,7 +142,7 @@ let state = {
     vectorFlowOptionsEnabled: false, 
     globalViewOptionsEnabled: false,
     plotly3DEnabled: false,
-    showSphereAxesAndGrid: false, // Default to hidden
+    showSphereAxesAndGrid: false, 
     plotlySphereOpacity: 0.10,
     plotlyGridDensity: 12,
     showPlotlySphereGrid: true,
@@ -120,7 +150,6 @@ let state = {
     webglDomainColoringEnabled: true,
     webglGpuStressMode: false,
 
-    // Fourier Transform state
     fourierModeEnabled: false,
     fourierFunction: 'sine',
     fourierFrequency: 1.0,
@@ -129,10 +158,9 @@ let state = {
     fourierSamples: 128,
     fourierTimeDomainSignal: [],
     fourierDFTResult: [],
-    fourierWindingFrequency: 1.0, // The frequency we're testing (KEY CONTROL!)
-    fourierWindingTime: 1.0, // How far along in time (0 to 1, for animation)
+    fourierWindingFrequency: 1.0, 
+    fourierWindingTime: 1.0, 
 
-    // Laplace Transform state
     laplaceModeEnabled: false,
     laplaceFunction: 'damped_sine',
     laplaceFrequency: 2.0,
@@ -188,80 +216,72 @@ let state = {
     navigationTrailLength: 0,
     navigationKeys: {},
     navigationTrail: [],
-    navigationLastTime: 0,
+    navigationLastTime: 0
 };
 
-
-const zPlaneInitialRanges = { x: [-3.5, 3.5], y: [-3.0, 3.0] };
-const wPlaneInitialRanges = { x: [-6.5, 6.5], y: [-6.5, 6.5] };
-
-let zPlaneParams = {
-    width: DEFAULT_CANVAS_WIDTH, height: DEFAULT_CANVAS_HEIGHT,
-    origin: {x:0, y:0}, scale: {x:1, y:1},
-    currentVisXRange: [...zPlaneInitialRanges.x], currentVisYRange: [...zPlaneInitialRanges.y]
-};
-let wPlaneParams = {
-    width: DEFAULT_CANVAS_WIDTH, height: DEFAULT_CANVAS_HEIGHT,
-    origin: {x:0, y:0}, scale: {x:1, y:1},
-    xRange: [...wPlaneInitialRanges.x], yRange: [...wPlaneInitialRanges.y]
-};
-let sphereViewParams = {
-    z: { rotX: SPHERE_INITIAL_ROT_X, rotY: SPHERE_INITIAL_ROT_Y, dragging: false, lastMouseX: 0, lastMouseY: 0, radius: 0, centerX: 0, centerY: 0 },
-    w: { rotX: SPHERE_INITIAL_ROT_X, rotY: SPHERE_INITIAL_ROT_Y, dragging: false, lastMouseX: 0, lastMouseY: 0, radius: 0, centerX: 0, centerY: 0 }
-};
-
-
-let redrawRequest = null;
-let animationStates = {};
-let domainColoringDirty = true;
-
-
-const controls = {}; 
-const polynomialCoeffUIElements = [];
-let zCtx, wCtx, zDomainColorCtx, wDomainColorCtx;
-let zCanvas, wCanvas, zDomainColorCanvas, wDomainColorCanvas;
-
-// Lists for recursive W-planes
-let wCanvasList = [];
-let wCtxList = [];
-let wPlaneParamsList = [];
-let wPlanePlotlyContainersList = [];
-let sphereViewWParamsList = [];
-let webglSupport = {
-    available: false,
-    reason: 'not-initialized',
-    renderers: { z: null, w: null },
-    diagnostics: { z: null, w: null }
-};
-let webglDomainColorSupport = {
-    available: false,
-    reason: 'not-initialized',
-    renderers: { z: null, w: null },
-    diagnostics: { z: null, w: null },
-    warnedFunctionFallbacks: new Set(),
-    warnedRuntimeFallback: false
-};
-
-function getStreamlineColorByMagnitude(magnitude) {
-    
-    let t = (magnitude - STREAMLINE_COLOR_MIN_MAG) / (STREAMLINE_COLOR_MAX_MAG - STREAMLINE_COLOR_MIN_MAG);
-    t = Math.max(0, Math.min(1, t)); 
-
-    
-    const r = Math.round(STREAMLINE_COLOR_LOW_MAG.r * (1 - t) + STREAMLINE_COLOR_HIGH_MAG.r * t);
-    const g = Math.round(STREAMLINE_COLOR_LOW_MAG.g * (1 - t) + STREAMLINE_COLOR_HIGH_MAG.g * t);
-    const b = Math.round(STREAMLINE_COLOR_LOW_MAG.b * (1 - t) + STREAMLINE_COLOR_HIGH_MAG.b * t);
-
-    
-    let alpha = 0.75; 
-    try {
-        const parts = COLOR_STREAMLINE.substring(COLOR_STREAMLINE.indexOf('(') + 1, COLOR_STREAMLINE.lastIndexOf(')')).split(/,\s*/);
-        if (parts.length === 4) {
-            alpha = parseFloat(parts[3]);
+function createDeepProxy(obj, path = []) {
+    return new Proxy(obj, {
+        get(target, prop, receiver) {
+            const value = Reflect.get(target, prop, receiver);
+            if (value && typeof value === 'object' && !Array.isArray(value) && !(value instanceof Element) && !(value instanceof Image) && !(value instanceof HTMLVideoElement)) {
+                return createDeepProxy(value, [...path, prop]);
+            }
+            return value;
+        },
+        set(target, prop, value, receiver) {
+            const oldValue = target[prop];
+            if (oldValue === value) return true;
+            
+            const success = Reflect.set(target, prop, value, receiver);
+            if (success) {
+                const fullPath = [...path, prop].join('.');
+                eventBus.emit(`state:${fullPath}`, { value, oldValue });
+                eventBus.emit('state:change', { path: fullPath, value, oldValue });
+            }
+            return success;
         }
-    } catch (e) {
-        
-    }
-
-    return `rgba(${r}, ${g}, ${b}, ${alpha})`;
+    });
 }
+
+export const state = createDeepProxy(rawState);
+
+export const context = {
+    zCanvas: null,
+    wCanvas: null,
+    zCtx: null,
+    wCtx: null,
+    zDomainColorCanvas: null,
+    wDomainColorCanvas: null,
+    zDomainColorCtx: null,
+    wDomainColorCtx: null,
+
+    wCanvasList: [],
+    wCtxList: [],
+    wPlaneParamsList: [],
+    wPlanePlotlyContainersList: [],
+    sphereViewWParamsList: [],
+    wPlanarTransformedLayerCacheList: [],
+
+    redrawRequest: null,
+    animationStates: {},
+    domainColoringDirty: true,
+
+    controls: {},
+    polynomialCoeffUIElements: [],
+
+    webglSupport: {
+        available: false,
+        reason: 'not-initialized',
+        renderers: { z: null, w: null },
+        diagnostics: { z: null, w: null }
+    },
+
+    webglDomainColorSupport: {
+        available: false,
+        reason: 'not-initialized',
+        renderers: { z: null, w: null },
+        diagnostics: { z: null, w: null },
+        warnedFunctionFallbacks: new Set(),
+        warnedRuntimeFallback: false
+    }
+};

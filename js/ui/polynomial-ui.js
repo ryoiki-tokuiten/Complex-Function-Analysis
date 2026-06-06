@@ -1,4 +1,10 @@
-function initializePolynomialCoeffs(n, preserveExisting = false) {
+import { state, context } from '../store/state.js';
+import { toggleAnimation } from './animation.js';
+import { requestRedrawAll } from '../main.js';
+
+const { controls, polynomialCoeffUIElements, animationStates } = context;
+
+export function initializePolynomialCoeffs(n, preserveExisting = false) {
     const oldCoeffs = preserveExisting ? [...state.polynomialCoeffs] : [];
     state.polynomialCoeffs = [];
     for (let i = 0; i <= n; i++) {
@@ -19,7 +25,7 @@ function initializePolynomialCoeffs(n, preserveExisting = false) {
     }
 }
 
-function generatePolynomialCoeffSliders() {
+export function generatePolynomialCoeffSliders() {
     if (!controls.polynomialCoeffsContainer) return;
     controls.polynomialCoeffsContainer.innerHTML = ''; 
     polynomialCoeffUIElements.length = 0; 
@@ -128,21 +134,21 @@ function generatePolynomialCoeffSliders() {
         
         reSlider.addEventListener('input', () => {
             state.polynomialCoeffs[k].re = parseFloat(reSlider.value);
-            domainColoringDirty = true;
+            context.domainColoringDirty = true;
             requestRedrawAll(); 
         });
         rePlayBtn.addEventListener('click', () => toggleAnimation(reSlider, '', rePlayBtn, reSpeedSel, true, k, 're'));
 
         imSlider.addEventListener('input', () => {
             state.polynomialCoeffs[k].im = parseFloat(imSlider.value);
-            domainColoringDirty = true;
+            context.domainColoringDirty = true;
             requestRedrawAll(); 
         });
         imPlayBtn.addEventListener('click', () => toggleAnimation(imSlider, '', imPlayBtn, imSpeedSel, true, k, 'im'));
     }
 }
 
-function updatePolynomialCoeffDisplays() {
+export function updatePolynomialCoeffDisplays() {
     if (state.currentFunction !== 'polynomial' || !state.polynomialCoeffs) return;
     for (let k = 0; k <= state.polynomialN; ++k) {
         if (state.polynomialCoeffs[k] && polynomialCoeffUIElements[k]) {

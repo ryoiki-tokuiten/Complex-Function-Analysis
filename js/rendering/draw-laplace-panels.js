@@ -1,3 +1,9 @@
+import { state } from '../store/state.js';
+import { COLOR_TEXT_ON_CANVAS, COLOR_CANVAS_BACKGROUND } from '../constants/colors.js';
+import { mapToCanvasCoords } from '../utils/canvas-utils.js';
+import { drawAxes } from './canvas-primitives.js';
+import { drawLaplaceWindingPremium } from './draw-laplace-winding-3b1b.js';
+
 // Laplace Transform 3-Panel Visualization
 // Professional rendering with time domain, s-plane, and 3D surface
 
@@ -5,7 +11,7 @@
  * Draw LEFT PANEL: Time domain signal with exponential weighting e^(-σt)
  * Shows both original signal f(t) and weighted version f(t)·e^(-σt)
  */
-function drawLaplaceTimeDomain(ctx, signal, planeParams) {
+export function drawLaplaceTimeDomain(ctx, signal, planeParams) {
     if (!signal || signal.length === 0) {
         ctx.save();
         ctx.fillStyle = COLOR_TEXT_ON_CANVAS;
@@ -181,7 +187,7 @@ function drawLaplaceTimeDomain(ctx, signal, planeParams) {
 /**
  * Draw MIDDLE PANEL: Premium 3b1b-quality winding visualization
  */
-function drawLaplaceWindingVisualization(ctx, signal, planeParams) {
+export function drawLaplaceWindingVisualization(ctx, signal, planeParams) {
     // Use the new premium renderer
     drawLaplaceWindingPremium(ctx, signal, planeParams);
 
@@ -192,7 +198,7 @@ function drawLaplaceWindingVisualization(ctx, signal, planeParams) {
 /**
  * Draw poles (×) and zeros (○) on the s-plane with 3b1b quality
  */
-function drawPolesAndZerosOverlay(ctx, planeParams) {
+export function drawPolesAndZerosOverlay(ctx, planeParams) {
     // Check if user wants to see poles/zeros
     const showPolesZeros = state.laplaceShowPolesZeros !== false;
     const showROC = state.laplaceShowROC !== false;
@@ -310,7 +316,7 @@ function drawPolesAndZerosOverlay(ctx, planeParams) {
 /**
  * Get display text for Laplace function type
  */
-function getLaplaceFunctionText(funcType) {
+export function getLaplaceFunctionText(funcType) {
     const funcMap = {
         'step': 'Step function',
         'exponential': 'e^(-at)',

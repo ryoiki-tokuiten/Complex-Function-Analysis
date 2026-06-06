@@ -1,24 +1,37 @@
+import { state } from './store/state.js';
+import {
+    POLE_MAGNITUDE_THRESHOLD,
+    MAX_POLY_DEGREE,
+    DEFAULT_TAYLOR_SERIES_CENTER,
+    TWO_PI,
+    PI,
+    ZETA_REFLECTION_POINT_RE,
+    NUM_ZETA_TERMS_DIRECT_SUM,
+    NUM_ZETA_TERMS_ETA_SERIES,
+    NUM_ZETA_HASSE_LEVELS
+} from './constants/numerical.js';
+
 // --- Inline complex arithmetic: zero allocations through math.js ---
 
-function withMaxMag(res, ...inputs) {
+export function withMaxMag(res, ...inputs) {
     return res;
 }
 
-function isNumericallyStable(w) {
+export function isNumericallyStable(w) {
     return true;
 }
 
-function complexAdd(z1, z2) {
+export function complexAdd(z1, z2) {
     const res = { re: z1.re + z2.re, im: z1.im + z2.im };
     return withMaxMag(res, z1, z2);
 }
 
-function complexSub(z1, z2) {
+export function complexSub(z1, z2) {
     const res = { re: z1.re - z2.re, im: z1.im - z2.im };
     return withMaxMag(res, z1, z2);
 }
 
-function complexMul(z1, z2) {
+export function complexMul(z1, z2) {
     const res = {
         re: z1.re * z2.re - z1.im * z2.im,
         im: z1.re * z2.im + z1.im * z2.re
@@ -26,12 +39,12 @@ function complexMul(z1, z2) {
     return withMaxMag(res, z1, z2);
 }
 
-function complexScalarMul(s, z) {
+export function complexScalarMul(s, z) {
     const res = { re: s * z.re, im: s * z.im };
     return withMaxMag(res, s, z);
 }
 
-function complexDivide(num, den) {
+export function complexDivide(num, den) {
     const denMagSq = den.re * den.re + den.im * den.im;
     if (denMagSq < 1e-30) {
         const numMagSq = num.re * num.re + num.im * num.im;
@@ -49,18 +62,18 @@ function complexDivide(num, den) {
     return withMaxMag(res, num, den);
 }
 
-function complexAbs(z) {
+export function complexAbs(z) {
     return Math.sqrt(z.re * z.re + z.im * z.im);
 }
 
-function complexArg(z) {
+export function complexArg(z) {
     return Math.atan2(z.im, z.re);
 }
 
-function _cosh(x) { return Math.cosh(x); }
-function _sinh(x) { return Math.sinh(x); }
+export function _cosh(x) { return Math.cosh(x); }
+export function _sinh(x) { return Math.sinh(x); }
 
-function complexCos(a, b) {
+export function complexCos(a, b) {
     let zInput = null;
     if (typeof a === 'object') { b = a.im; a = a.re; zInput = a; }
     const cosh_b = _cosh(b);
@@ -69,7 +82,7 @@ function complexCos(a, b) {
     return withMaxMag(res, zInput, cosh_b, sinh_b);
 }
 
-function complexSin(a, b) {
+export function complexSin(a, b) {
     let zInput = null;
     if (typeof a === 'object') { b = a.im; a = a.re; zInput = a; }
     const cosh_b = _cosh(b);
@@ -78,7 +91,7 @@ function complexSin(a, b) {
     return withMaxMag(res, zInput, cosh_b, sinh_b);
 }
 
-function complexTan(a, b) {
+export function complexTan(a, b) {
     let zInput = null;
     if (typeof a === 'object') { b = a.im; a = a.re; zInput = a; }
     const sinZ = complexSin(a, b);
@@ -87,7 +100,7 @@ function complexTan(a, b) {
     return withMaxMag(res, zInput, sinZ, cosZ);
 }
 
-function complexSec(a, b) {
+export function complexSec(a, b) {
     let zInput = null;
     if (typeof a === 'object') { b = a.im; a = a.re; zInput = a; }
     const cosZ = complexCos(a, b);
@@ -95,7 +108,7 @@ function complexSec(a, b) {
     return withMaxMag(res, zInput, cosZ);
 }
 
-function complexExp(a, b) {
+export function complexExp(a, b) {
     let zInput = null;
     if (typeof a === 'object') { b = a.im; a = a.re; zInput = a; }
     const ea = expSafe(a);
@@ -103,7 +116,7 @@ function complexExp(a, b) {
     return withMaxMag(res, zInput, ea);
 }
 
-function complexLn(a, b) {
+export function complexLn(a, b) {
     let zInput = null;
     if (typeof a === 'object') { b = a.im; a = a.re; zInput = a; }
     if (a === 0 && b === 0) return { re: -Infinity, im: 0 };
@@ -111,7 +124,7 @@ function complexLn(a, b) {
     return withMaxMag(res, zInput);
 }
 
-function complexReciprocal(a, b) {
+export function complexReciprocal(a, b) {
     let zInput = null;
     if (typeof a === 'object') { b = a.im; a = a.re; zInput = a; }
     if (a === 0 && b === 0) return { re: NaN, im: NaN };
@@ -120,7 +133,7 @@ function complexReciprocal(a, b) {
     return withMaxMag(res, zInput);
 }
 
-function complexSinh(a, b) {
+export function complexSinh(a, b) {
     let zInput = null;
     if (typeof a === 'object') { b = a.im; a = a.re; zInput = a; }
     const cosh_a = _cosh(a);
@@ -129,7 +142,7 @@ function complexSinh(a, b) {
     return withMaxMag(res, zInput, cosh_a, sinh_a);
 }
 
-function complexCosh(a, b) {
+export function complexCosh(a, b) {
     let zInput = null;
     if (typeof a === 'object') { b = a.im; a = a.re; zInput = a; }
     const cosh_a = _cosh(a);
@@ -138,7 +151,7 @@ function complexCosh(a, b) {
     return withMaxMag(res, zInput, cosh_a, sinh_a);
 }
 
-function complexTanh(a, b) {
+export function complexTanh(a, b) {
     let zInput = null;
     if (typeof a === 'object') { b = a.im; a = a.re; zInput = a; }
     const sinhZ = complexSinh(a, b);
@@ -147,7 +160,7 @@ function complexTanh(a, b) {
     return withMaxMag(res, zInput, sinhZ, coshZ);
 }
 
-function complexPowerFractional(a, b) {
+export function complexPowerFractional(a, b) {
     let zInput = null;
     if (typeof a === 'object') { b = a.im; a = a.re; zInput = a; }
     const n = state.fractionalPowerN !== undefined ? state.fractionalPowerN : 0.5;
@@ -157,7 +170,7 @@ function complexPowerFractional(a, b) {
     return withMaxMag(res, zInput, lnZ);
 }
 
-function complexPow(base_re, base_im, exp_re, exp_im) {
+export function complexPow(base_re, base_im, exp_re, exp_im) {
     let baseInput = null;
     if (typeof base_re === 'object') {
         baseInput = base_re;
@@ -180,7 +193,7 @@ function complexPow(base_re, base_im, exp_re, exp_im) {
  * C() factory — thin wrapper providing fluent API for analysis modules.
  * Internally uses the inline arithmetic above (no math.js round-trips).
  */
-function C(re, im) {
+export function C(re, im) {
     let initialMax = undefined;
     if (typeof re === 'object' && re !== null) {
         initialMax = re._maxMag;
@@ -268,7 +281,7 @@ C.power = function(base, exp) {
     return C(result.re, result.im);
 };
 
-const Complex = C;
+export const Complex = C;
 
 
 const LANCZOS_G = 7;
@@ -278,7 +291,7 @@ const zetaLogIntegerCache = [0, 0]; // index n -> log(n), valid for n >= 1
 const zetaEvalCache = new Map();
 const ZETA_EVAL_CACHE_MAX = 180000;
 
-function ensureZetaLogIntegerCache(maxN) {
+export function ensureZetaLogIntegerCache(maxN) {
     if (!Number.isFinite(maxN) || maxN < 1) return;
     const target = Math.floor(maxN);
     for (let n = zetaLogIntegerCache.length; n <= target; n++) {
@@ -286,31 +299,31 @@ function ensureZetaLogIntegerCache(maxN) {
     }
 }
 
-function expSafe(x) {
+export function expSafe(x) {
     if (x > 700) return Math.exp(700);
     if (x < -745) return 0;
     return Math.exp(x);
 }
 
-function complexPositiveRealPowFromLog(logBase, expRe, expIm) {
+export function complexPositiveRealPowFromLog(logBase, expRe, expIm) {
     const magnitude = expSafe(expRe * logBase);
     const angle = expIm * logBase;
     return { re: magnitude * Math.cos(angle), im: magnitude * Math.sin(angle) };
 }
 
-function getZetaEvalCacheKey(a, b, continuationEnabled) {
+export function getZetaEvalCacheKey(a, b, continuationEnabled) {
     const reKey = Math.round(a * 1e7);
     const imKey = Math.round(b * 1e7);
     return `${continuationEnabled ? 1 : 0}:${reKey}:${imKey}`;
 }
 
-function readZetaEvalCache(cacheKey) {
+export function readZetaEvalCache(cacheKey) {
     const cached = zetaEvalCache.get(cacheKey);
     if (!cached) return null;
     return { re: cached.re, im: cached.im };
 }
 
-function writeZetaEvalCache(cacheKey, value) {
+export function writeZetaEvalCache(cacheKey, value) {
     if (!cacheKey || !value) return;
     if (zetaEvalCache.size >= ZETA_EVAL_CACHE_MAX) {
         zetaEvalCache.clear();
@@ -318,7 +331,7 @@ function writeZetaEvalCache(cacheKey, value) {
     zetaEvalCache.set(cacheKey, { re: value.re, im: value.im });
 }
 
-function getDynamicZetaDirectTerms() {
+export function getDynamicZetaDirectTerms() {
     const isInteracting = !!(
         (state.panStateZ && state.panStateZ.isPanning) ||
         (state.panStateW && state.panStateW.isPanning) ||
@@ -328,7 +341,7 @@ function getDynamicZetaDirectTerms() {
     return Math.max(40, Math.floor(NUM_ZETA_TERMS_DIRECT_SUM * 0.65));
 }
 
-function getDynamicZetaHasseLevels() {
+export function getDynamicZetaHasseLevels() {
     const isInteracting = !!(
         (state.panStateZ && state.panStateZ.isPanning) ||
         (state.panStateW && state.panStateW.isPanning) ||
@@ -338,7 +351,7 @@ function getDynamicZetaHasseLevels() {
     return Math.max(14, Math.floor(NUM_ZETA_HASSE_LEVELS * 0.62));
 }
 
-function complexGamma(re, im) {
+export function complexGamma(re, im) {
     const z = {re, im};
     
     if (z.re < 0.5) {
@@ -373,7 +386,7 @@ function complexGamma(re, im) {
 }
 
 
-function complexRiemannZeta_DirectSum(a, b, numTerms) {
+export function complexRiemannZeta_DirectSum(a, b, numTerms) {
     
     if (a <= 1.0) return { re: NaN, im: NaN }; 
     let sum_s = { re: 0, im: 0 };
@@ -385,7 +398,7 @@ function complexRiemannZeta_DirectSum(a, b, numTerms) {
     return sum_s;
 }
 
-function complexRiemannZeta_EtaSeries(a, b, numTerms) {
+export function complexRiemannZeta_EtaSeries(a, b, numTerms) {
     
     if(a === 1 && b === 0) return {re: Infinity, im: NaN}; 
 
@@ -424,7 +437,7 @@ function complexRiemannZeta_EtaSeries(a, b, numTerms) {
 }
 
 const zetaHasseBinomialRowsCache = {};
-function getZetaHasseBinomialRows(maxLevel) {
+export function getZetaHasseBinomialRows(maxLevel) {
     if (zetaHasseBinomialRowsCache[maxLevel]) {
         return zetaHasseBinomialRowsCache[maxLevel];
     }
@@ -442,7 +455,7 @@ function getZetaHasseBinomialRows(maxLevel) {
     return rows;
 }
 
-function complexRiemannZeta_HasseSeries(a, b, numLevels) {
+export function complexRiemannZeta_HasseSeries(a, b, numLevels) {
     if (a === 1 && b === 0) return { re: Infinity, im: NaN };
 
     const denom = complexSub({ re: 1, im: 0 }, complexPositiveRealPowFromLog(LN_2, 1 - a, -b));
@@ -482,7 +495,7 @@ function complexRiemannZeta_HasseSeries(a, b, numLevels) {
     return withMaxMag(res, maxTermMag, denom);
 }
 
-function complexRiemannZeta(a,b){
+export function complexRiemannZeta(a,b){
     let s = {re: a, im: b};
     if (typeof a === 'object') {
         s = a;
@@ -527,7 +540,7 @@ function complexRiemannZeta(a,b){
 }
 
 
-function complexMobius(z_re, z_im) {
+export function complexMobius(z_re, z_im) {
     let z = {re: z_re, im: z_im};
     if (typeof z_re === 'object') {
         z = z_re;
@@ -542,7 +555,7 @@ function complexMobius(z_re, z_im) {
     return complexDivide(num, den);
 }
 
-function complexPolynomial(z_re, z_im) {
+export function complexPolynomial(z_re, z_im) {
     let w = {re: 0, im: 0};
     let z = {re: z_re, im: z_im};
     if (typeof z_re === 'object') {
@@ -567,7 +580,7 @@ function complexPolynomial(z_re, z_im) {
     return w;
 }
 
-function complexPoincareCustomMetric(a, b) {
+export function complexPoincareCustomMetric(a, b) {
     if (typeof a === 'object') {
         b = a.im;
         a = a.re;
@@ -580,7 +593,7 @@ function complexPoincareCustomMetric(a, b) {
 }
 
 
-function numericDerivative(funcName, z, h = 1e-7) {
+export function numericDerivative(funcName, z, h = 1e-7) {
     const func = getChainedTransformFunction(funcName);
     if (!func) return {re: NaN, im: NaN};
     const step = Number.isFinite(h) ? h : 1e-7;
@@ -619,7 +632,7 @@ function numericDerivative(funcName, z, h = 1e-7) {
     return complexDivide(numerator, denominator);
 }
 
-function evaluateFunctionBlock(block, z_re, z_im) {
+export function evaluateFunctionBlock(block, z_re, z_im) {
     if (!block || block.func === 'none') {
         return (typeof z_re === 'object') ? z_re : { re: z_re, im: z_im };
     }
@@ -664,7 +677,7 @@ function evaluateFunctionBlock(block, z_re, z_im) {
     return w;
 }
 
-function evaluateAlgebraicTerm(term, z_re, z_im) {
+export function evaluateAlgebraicTerm(term, z_re, z_im) {
     let termVal = { re: term.coeff.re, im: term.coeff.im };
     let z = (typeof z_re === 'object') ? z_re : { re: z_re, im: z_im };
     
@@ -679,7 +692,7 @@ function evaluateAlgebraicTerm(term, z_re, z_im) {
     return termVal;
 }
 
-function evaluateAlgebraicChaining(z_re, z_im) {
+export function evaluateAlgebraicChaining(z_re, z_im) {
     let sum = { re: 0, im: 0 };
     if (!state.algebraicChainingEnabled || !state.algebraicChainingTerms || state.algebraicChainingTerms.length === 0) {
         return sum;
@@ -695,7 +708,7 @@ function evaluateAlgebraicChaining(z_re, z_im) {
     return sum;
 }
 
-const transformFunctions = {
+export const transformFunctions = {
     cos: complexCos, sin: complexSin, tan: complexTan, sec: complexSec,
     exp: complexExp, ln: complexLn, reciprocal: complexReciprocal,
     sinh: complexSinh, cosh: complexCosh, tanh: complexTanh,
@@ -730,16 +743,16 @@ const MAPPED_TRANSFORM_DIAGNOSTIC_STENCIL = Object.freeze([
 let mappedTransformProfileCacheKey = null;
 let mappedTransformProfileCacheValue = null;
 
-function mappedTransformNumberKey(value) {
+export function mappedTransformNumberKey(value) {
     return Number.isFinite(value) ? value.toFixed(12) : `${value}`;
 }
 
-function mappedTransformComplexKey(value) {
+export function mappedTransformComplexKey(value) {
     if (!value) return 'none';
     return `${mappedTransformNumberKey(value.re ?? 0)},${mappedTransformNumberKey(value.im ?? 0)}`;
 }
 
-function buildMappedTransformProfileKey(functionKey) {
+export function buildMappedTransformProfileKey(functionKey) {
     const parts = [
         `f:${functionKey}`,
         `zetaC:${state.zetaContinuationEnabled ? 1 : 0}`,
@@ -766,11 +779,11 @@ function buildMappedTransformProfileKey(functionKey) {
     return parts.join('|');
 }
 
-function cloneMappedComplex(value) {
+export function cloneMappedComplex(value) {
     return value ? { re: value.re, im: value.im } : null;
 }
 
-function isValidMappedTransformValue(value) {
+export function isValidMappedTransformValue(value) {
     return !!(
         value &&
         typeof value.re === 'number' &&
@@ -781,14 +794,14 @@ function isValidMappedTransformValue(value) {
     );
 }
 
-function shouldSkipMappedTransformPoint(functionKey, zPoint) {
+export function shouldSkipMappedTransformPoint(functionKey, zPoint) {
     return functionKey === 'zeta' &&
         !state.zetaContinuationEnabled &&
         zPoint &&
         zPoint.re <= ZETA_REFLECTION_POINT_RE;
 }
 
-function evaluateRawMappedTransform(transformFunc, zPoint, functionKey = state.currentFunction) {
+export function evaluateRawMappedTransform(transformFunc, zPoint, functionKey = state.currentFunction) {
     if (!transformFunc || !zPoint || zPoint.re === undefined || zPoint.im === undefined) {
         return null;
     }
@@ -799,12 +812,12 @@ function evaluateRawMappedTransform(transformFunc, zPoint, functionKey = state.c
     return isValidMappedTransformValue(mapped) ? mapped : null;
 }
 
-function getMappedTransformTolerance(value) {
+export function getMappedTransformTolerance(value) {
     return MAPPED_TRANSFORM_ABS_EPSILON +
         MAPPED_TRANSFORM_REL_EPSILON * Math.max(1, Math.hypot(value.re, value.im));
 }
 
-function getMappedConstantCluster(samples, minSamples = MAPPED_TRANSFORM_MIN_CONSTANT_SAMPLES) {
+export function getMappedConstantCluster(samples, minSamples = MAPPED_TRANSFORM_MIN_CONSTANT_SAMPLES) {
     if (!samples || samples.length < minSamples) return null;
 
     let bestValue = null;
@@ -838,7 +851,7 @@ function getMappedConstantCluster(samples, minSamples = MAPPED_TRANSFORM_MIN_CON
         : null;
 }
 
-function detectMappedConstantTransform(transformFunc, functionKey = state.currentFunction) {
+export function detectMappedConstantTransform(transformFunc, functionKey = state.currentFunction) {
     const samples = [];
     for (const point of MAPPED_TRANSFORM_DIAGNOSTIC_STENCIL) {
         const mapped = evaluateRawMappedTransform(transformFunc, point, functionKey);
@@ -847,7 +860,7 @@ function detectMappedConstantTransform(transformFunc, functionKey = state.curren
     return getMappedConstantCluster(samples);
 }
 
-function getMappedTransformProfile(functionKey = state.currentFunction, transformFunc = null) {
+export function getMappedTransformProfile(functionKey = state.currentFunction, transformFunc = null) {
     const resolvedTransform = transformFunc || transformFunctions[functionKey];
     if (typeof resolvedTransform !== 'function') {
         return { functionKey, transformFunc: null, isConstant: false, constantValue: null };
@@ -877,7 +890,7 @@ function getMappedTransformProfile(functionKey = state.currentFunction, transfor
     return profile;
 }
 
-function evaluateMappedTransform(profileOrTransform, re, im, functionKey = state.currentFunction) {
+export function evaluateMappedTransform(profileOrTransform, re, im, functionKey = state.currentFunction) {
     if (!profileOrTransform) return null;
     if (typeof profileOrTransform === 'function') {
         return evaluateRawMappedTransform(profileOrTransform, { re, im }, functionKey);
@@ -892,7 +905,7 @@ function evaluateMappedTransform(profileOrTransform, re, im, functionKey = state
     );
 }
 
-function getEffectiveBaseTransformFunction(funcKey = state.currentFunction) {
+export function getEffectiveBaseTransformFunction(funcKey = state.currentFunction) {
     let baseFunc = transformFunctions[funcKey];
     if (!baseFunc) return (re, im) => ({ re, im });
     
@@ -908,7 +921,7 @@ function getEffectiveBaseTransformFunction(funcKey = state.currentFunction) {
     return baseFunc;
 }
 
-function getChainedTransformFunction(funcKey = state.currentFunction) {
+export function getChainedTransformFunction(funcKey = state.currentFunction) {
     const baseFunc = getEffectiveBaseTransformFunction(funcKey);
     if (!state.chainingEnabled || state.chainCount <= 1) {
         return baseFunc;
@@ -965,7 +978,7 @@ function getChainedTransformFunction(funcKey = state.currentFunction) {
 }
 
 
-function getContourPoints(shapeType, params, numSteps) {
+export function getContourPoints(shapeType, params, numSteps) {
     const points = [];
     if (shapeType === 'circle') {
         const { cx, cy, r } = params;
@@ -986,7 +999,7 @@ function getContourPoints(shapeType, params, numSteps) {
     return points; 
 }
 
-function numericalLineIntegral(transformFunc, contourPoints) {
+export function numericalLineIntegral(transformFunc, contourPoints) {
     let totalIntegral = { re: 0, im: 0 };
     if (!contourPoints || contourPoints.length < 2) return totalIntegral;
 
@@ -1014,7 +1027,7 @@ function numericalLineIntegral(transformFunc, contourPoints) {
     return totalIntegral;
 }
 
-function isPointInsideContour(point, contourType, params) {
+export function isPointInsideContour(point, contourType, params) {
     const { re: px, im: py } = point;
     const toleranceFactor = 1 - 1e-9; 
 
@@ -1033,7 +1046,7 @@ function isPointInsideContour(point, contourType, params) {
     return false;
 }
 
-function estimateResidue(transformFunc, pole, epsilonRadius, numSteps) {
+export function estimateResidue(transformFunc, pole, epsilonRadius, numSteps) {
     
     const safeEpsilonRadius = Math.max(epsilonRadius, 1e-6);
 
@@ -1060,7 +1073,7 @@ function estimateResidue(transformFunc, pole, epsilonRadius, numSteps) {
 }
 
 
-function factorial(n) {
+export function factorial(n) {
     if (n < 0) return NaN; 
     if (n === 0 || n === 1) return 1;
     let result = 1;
@@ -1075,11 +1088,11 @@ function factorial(n) {
 
 
 
-function isFiniteComplex(c) {
+export function isFiniteComplex(c) {
     return isFinite(c.re) && isFinite(c.im);
 }
 
-function getTaylorDerivativeStep(zComplex, order, hBase = 1e-4) {
+export function getTaylorDerivativeStep(zComplex, order, hBase = 1e-4) {
     const scale = Math.max(1, Math.abs(zComplex.re), Math.abs(zComplex.im));
     const multipliers = {
         1: 1,
@@ -1091,7 +1104,7 @@ function getTaylorDerivativeStep(zComplex, order, hBase = 1e-4) {
     return hBase * multiplier * scale;
 }
 
-function numericDerivativeNthOrder(funcWrapper, zComplex, order, h_base = 1e-5) {
+export function numericDerivativeNthOrder(funcWrapper, zComplex, order, h_base = 1e-5) {
     if (order < 1) return funcWrapper(zComplex);
 
     let h = getTaylorDerivativeStep(zComplex, order, h_base);
@@ -1145,17 +1158,17 @@ const taylorSeriesCoefficientCache = {
     coefficients: null
 };
 
-function toTaylorCacheNumber(value) {
+export function toTaylorCacheNumber(value) {
     return Number.isFinite(value) ? value.toFixed(9) : `${value}`;
 }
 
-function appendTaylorCacheComplexParts(parts, prefix, value) {
+export function appendTaylorCacheComplexParts(parts, prefix, value) {
     const safeValue = value || DEFAULT_TAYLOR_SERIES_CENTER;
     parts.push(`${prefix}r:${toTaylorCacheNumber(safeValue.re)}`);
     parts.push(`${prefix}i:${toTaylorCacheNumber(safeValue.im)}`);
 }
 
-function buildTaylorSeriesCoefficientCacheKey(functionKey, z0Complex, order) {
+export function buildTaylorSeriesCoefficientCacheKey(functionKey, z0Complex, order) {
     const keyParts = [
         `f:${functionKey}`,
         `order:${order}`,
@@ -1212,7 +1225,7 @@ function buildTaylorSeriesCoefficientCacheKey(functionKey, z0Complex, order) {
     return keyParts.join('|');
 }
 
-function getTaylorContourRadius(z0Complex) {
+export function getTaylorContourRadius(z0Complex) {
     const convergenceRadius = state && Number.isFinite(state.taylorSeriesConvergenceRadius)
         ? state.taylorSeriesConvergenceRadius
         : null;
@@ -1228,7 +1241,7 @@ function getTaylorContourRadius(z0Complex) {
     return Math.max(0.25, Math.min(1.25, centerScale * 0.35));
 }
 
-function computeTaylorSeriesCoefficients(originalTransformFuncKey, z0Complex, order) {
+export function computeTaylorSeriesCoefficients(originalTransformFuncKey, z0Complex, order) {
     const originalTransformFunc = transformFunctions[originalTransformFuncKey];
     if (!originalTransformFunc) {
         console.error("Taylor: Original transform function not found for key:", originalTransformFuncKey);
@@ -1300,7 +1313,7 @@ function computeTaylorSeriesCoefficients(originalTransformFuncKey, z0Complex, or
     return coefficients;
 }
 
-function evaluateTaylorSeries(coefficients, zInputComplex, z0Complex) {
+export function evaluateTaylorSeries(coefficients, zInputComplex, z0Complex) {
     if (!Array.isArray(coefficients) || coefficients.length === 0) {
         return { re: NaN, im: NaN };
     }
@@ -1320,7 +1333,7 @@ function evaluateTaylorSeries(coefficients, zInputComplex, z0Complex) {
     return seriesSum;
 }
 
-function updateTaylorSeriesCenterAndRadius() {
+export function updateTaylorSeriesCenterAndRadius() {
     if (state.taylorSeriesCustomCenterEnabled) {
         state.taylorSeriesCenter = {
             re: state.taylorSeriesCustomCenter.re,
@@ -1383,4 +1396,33 @@ function updateTaylorSeriesCenterAndRadius() {
     
     
     
+}
+
+export function isWithinTaylorConvergenceRegion(zInputComplex, z0Complex) {
+    const radius = state.taylorSeriesConvergenceRadius;
+    if (!Number.isFinite(radius)) {
+        return true;
+    }
+
+    const dx = zInputComplex.re - z0Complex.re;
+    const dy = zInputComplex.im - z0Complex.im;
+    return dx * dx + dy * dy <= (radius * radius * 1.000001);
+}
+
+export function createTaylorApproximationTransform(functionKey, taylorCenter, taylorOrder) {
+    const z0Complex = { re: taylorCenter.re, im: taylorCenter.im };
+    const coefficients = computeTaylorSeriesCoefficients(functionKey, z0Complex, taylorOrder);
+
+    return (re, im) => {
+        if (!coefficients) {
+            return { re: NaN, im: NaN };
+        }
+
+        const zInputComplex = { re, im };
+        if (!isWithinTaylorConvergenceRegion(zInputComplex, z0Complex)) {
+            return { re: NaN, im: NaN };
+        }
+        const result = evaluateTaylorSeries(coefficients, zInputComplex, z0Complex);
+        return { re: result.re, im: result.im };
+    };
 }

@@ -1,5 +1,17 @@
+import { state, zPlaneParams } from '../store/state.js';
+import {
+    COLOR_SPHERE_GRID, COLOR_PROBE_MARKER, COLOR_PROBE_NEIGHBORHOOD,
+    COLOR_PROBE_CONFORMAL_LINE_W_H, COLOR_PROBE_CONFORMAL_LINE_W_V
+} from '../constants/colors.js';
+import { NUM_POINTS_CURVE, PROBE_CROSSHAIR_SIZE_FACTOR } from '../constants/numerical.js';
+import { evaluateMappedTransform, isNumericallyStable, getMappedTransformProfile } from '../math-utils.js';
+import { complexToSphere } from '../utils/canvas-utils.js';
+import { isRasterInputShape } from '../utils/raster-media.js';
+import { generateCurrentMappedInputShapePointSets } from './shape-generators.js';
+import { getSpherePointSetColor } from './draw-sphere.js';
 
-function pushPlotlyLineTrace(traces, xCoords, yCoords, zCoords, options = {}) {
+
+export function pushPlotlyLineTrace(traces, xCoords, yCoords, zCoords, options = {}) {
     if (xCoords.length < 2) {
         return;
     }
@@ -21,7 +33,7 @@ function pushPlotlyLineTrace(traces, xCoords, yCoords, zCoords, options = {}) {
     });
 }
 
-function appendMappedSphereLineTraces(traces, sourcePoints, transformPoint, options = {}) {
+export function appendMappedSphereLineTraces(traces, sourcePoints, transformPoint, options = {}) {
     const xCoords = [];
     const yCoords = [];
     const zCoords = [];
@@ -80,7 +92,7 @@ function appendMappedSphereLineTraces(traces, sourcePoints, transformPoint, opti
     flush();
 }
 
-function pushPlotlyMappedPointTrace(traces, mappedPoint, options = {}) {
+export function pushPlotlyMappedPointTrace(traces, mappedPoint, options = {}) {
     if (!mappedPoint || !Number.isFinite(mappedPoint.re) || !Number.isFinite(mappedPoint.im)) return;
     const spherePoint = complexToSphere(mappedPoint.re, mappedPoint.im);
     traces.push({
@@ -98,7 +110,7 @@ function pushPlotlyMappedPointTrace(traces, mappedPoint, options = {}) {
 
 
 
-function getPlotlyMappedData(transformFunc) {
+export function getPlotlyMappedData(transformFunc) {
     const traces = [];
     if (isRasterInputShape(state.currentInputShape)) {
         return traces; // CPU Image mapping removed. Plotly 3D Riemann sphere doesn't natively support video textures yet.
@@ -197,7 +209,7 @@ function getPlotlyMappedData(transformFunc) {
 }
 
 
-function renderPlotlyRiemannSphere(transformFunc) {
+export function renderPlotlyRiemannSphere(transformFunc) {
     const containerId = 'w_plane_plotly_container';
     const plotlyContainer = document.getElementById(containerId);
 
@@ -317,7 +329,7 @@ function renderPlotlyRiemannSphere(transformFunc) {
 }
 
 
-function getPlotlyDynamicGridTraces() {
+export function getPlotlyDynamicGridTraces() {
     const traces = [];
     const numPointsPerLine = 250; 
     const gridColor = 'rgba(150, 150, 180, 0.4)';

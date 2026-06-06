@@ -1,3 +1,25 @@
+import { state, context, zPlaneParams, wPlaneParams, sphereViewParams, sliderParamKeys } from '../store/state.js';
+import { eventBus } from '../store/events.js';
+import { setupVisualParameters, updateChainingColumns, updateChainingTitles } from '../utils/dom-utils.js';
+import { processUploadedImageSource, loadUploadedVideoFile, toggleUploadedVideoPlayback, pauseUploadedVideoPlayback, startVideoProcessingLoop, syncVideoPlaybackUI, processUploadedVideoFrame } from '../utils/raster-media.js';
+import { updatePlaneViewportRanges, mapCanvasToWorldCoords } from '../utils/canvas-utils.js';
+import { requestRedrawAll } from '../main.js';
+import { updateFourierTransform } from '../analysis/fourier-transform.js';
+import { updateLaplaceTransform, updateLaplaceEvaluationPoint, analyzeStability, findPolesZeros } from '../analysis/laplace-transform.js';
+import { ComplexPointsUI } from './complex-points-ui.js';
+import { TAYLOR_CENTER_PRESET_GROUPS, ZOOM_IN_FACTOR, ZOOM_OUT_FACTOR, MIN_STATE_ZOOM_LEVEL, MAX_STATE_ZOOM_LEVEL } from '../constants/numerical.js';
+import { SPHERE_SENSITIVITY, SPHERE_INITIAL_ROT_X, SPHERE_INITIAL_ROT_Y } from '../constants/rendering.js';
+import { updateTitlesAndGlobalUI, syncTaylorSeriesCenterStatus, updateDomainColoringKey, syncParameterControlsPanelVisibility } from './ui-updates.js';
+import { stopLaplaceAnimation, toggleLaplaceAnimation, resetLaplaceAnimation, showFullLaplaceSpiral } from '../rendering/laplace-animation.js';
+import { setNavigationModeEnabled, followNavigationViewports, resetNavigationVehicle, setNavigationKey, stopNavigationLoop, initializeNavigationStateFromControls } from '../navigation-plane.js';
+import { toggleAnimation } from './animation.js';
+import { initializePolynomialCoeffs, generatePolynomialCoeffSliders } from './polynomial-ui.js';
+import { updateLaplace3DSurface } from '../rendering/laplace-3d-surface.js';
+
+const { controls, polynomialCoeffUIElements } = context;
+
+let zCanvas, wCanvas;
+
 const DOMAIN_DIRTY_STATE_KEYS = new Set([
     'a0',
     'b0',
@@ -109,9 +131,8 @@ const SPHERE_VIEW_BUTTONS = {
     sphereViewResetBtn: { rotX: SPHERE_INITIAL_ROT_X, rotY: SPHERE_INITIAL_ROT_Y }
 };
 
+// Taylor and General points UI instances are stored on context to share with ui-updates
 let uiEventListenersBound = false;
-let taylorCenterUI = null;
-let generalPointsUI = null;
 
 function parseInteger(value) {
     return parseInt(value, 10);
@@ -164,9 +185,9 @@ function shouldMarkDomainDirty(controlKey, stateKey) {
 
 let cpuHighQualityTimeout = null;
 
-function requestDomainRedraw(markDomainDirty = false) {
+export function requestDomainRedraw(markDomainDirty = false) {
     if (markDomainDirty) {
-        domainColoringDirty = true;
+        context.domainColoringDirty = true;
     }
 
     if (cpuHighQualityTimeout) {
@@ -177,7 +198,7 @@ function requestDomainRedraw(markDomainDirty = false) {
     if (state.domainColoringEnabled && !state.isHighQualityCpuRender) {
         cpuHighQualityTimeout = setTimeout(() => {
             state.isHighQualityCpuRender = true;
-            domainColoringDirty = true;
+            context.domainColoringDirty = true;
             requestRedrawAll();
             requestAnimationFrame(() => {
                 state.isHighQualityCpuRender = false;
@@ -245,7 +266,7 @@ function bindSelector(controlKey, stateKey, customCallback = null) {
     });
 }
 
-function syncLaplacePlayPauseButton() {
+export function syncLaplacePlayPauseButton() {
     if (!controls.laplacePlayPauseBtn) {
         return;
     }
@@ -253,7 +274,7 @@ function syncLaplacePlayPauseButton() {
     controls.laplacePlayPauseBtn.innerHTML = state.laplaceAnimationPlaying ? '⏸ Pause' : '▶ Play';
 }
 
-function syncLaplaceWindingSyncButton() {
+export function syncLaplaceWindingSyncButton() {
     if (!controls.laplaceWindingSyncBtn) {
         return;
     }
@@ -267,7 +288,7 @@ function syncLaplaceWindingSyncButton() {
         : 'rgba(80, 80, 80, 0.4)';
 }
 
-function setActiveFunctionButton(activeKey) {
+export function setActiveFunctionButton(activeKey) {
     Object.entries(controls.funcButtons).forEach(([key, button]) => {
         if (!button) {
             return;
@@ -393,14 +414,14 @@ function initializeMobiusState() {
 }
 
 function initializeCustomTaylorCenter() {
-    if (taylorCenterUI) {
-        taylorCenterUI.setPoints([state.taylorSeriesCustomCenter], false);
+    if (context.taylorCenterUI) {
+        context.taylorCenterUI.setPoints([state.taylorSeriesCustomCenter], false);
     }
 }
 
 function syncTaylorCustomCenterInputs() {
-    if (taylorCenterUI) {
-        taylorCenterUI.setPoints([state.taylorSeriesCustomCenter], false);
+    if (context.taylorCenterUI) {
+        context.taylorCenterUI.setPoints([state.taylorSeriesCustomCenter], false);
     }
 }
 
@@ -442,14 +463,14 @@ function initializeScalarBindings() {
     }
 }
 
-window.initializeStateFromControls = function () {
+export function initializeStateFromControls() {
     initializeScalarBindings();
     updateModePanels();
     setActiveFunctionButton(state.currentFunction);
     if (typeof syncVideoPlaybackUI === 'function') {
         syncVideoPlaybackUI();
     }
-};
+}
 
 function bindBaseParameterControls() {
     sliderParamKeys.forEach(key => {
@@ -773,7 +794,7 @@ function bindTaylorControls() {
     });
 
     if (controls.taylorComplexPointsUiContainer) {
-        taylorCenterUI = new ComplexPointsUI(controls.taylorComplexPointsUiContainer, {
+        context.taylorCenterUI = new ComplexPointsUI(controls.taylorComplexPointsUiContainer, {
             multiple: false,
             presets: TAYLOR_CENTER_PRESET_GROUPS,
             initialPoints: [state.taylorSeriesCustomCenter],
@@ -794,7 +815,7 @@ function bindGeneralPointsControls() {
     });
 
     if (controls.generalPointsRoot) {
-        generalPointsUI = new ComplexPointsUI(controls.generalPointsRoot, {
+        context.generalPointsUI = new ComplexPointsUI(controls.generalPointsRoot, {
             multiple: true,
             presets: TAYLOR_CENTER_PRESET_GROUPS,
             initialPoints: state.generalPointsList,
@@ -1153,7 +1174,7 @@ function bindCanvasInteractions() {
             if (panState.isPanning) {
                 panState.isPanning = false;
                 canvas.style.cursor = 'crosshair';
-                domainColoringDirty = true;
+                 context.domainColoringDirty = true;
             }
 
             if (isZCanvas) {
@@ -1378,12 +1399,19 @@ function bindTopControlsToggle() {
     bindControlListener('toggleTopControlsCollapsedBtn', 'click', toggleTopControls);
 }
 
-window.setupEventListeners = function () {
+export function setupEventListeners() {
+    zCanvas = context.zCanvas;
+    wCanvas = context.wCanvas;
+
     if (uiEventListenersBound) {
         return;
     }
 
     uiEventListenersBound = true;
+
+    eventBus.on('state:laplaceAnimationPlaying', () => {
+        syncLaplacePlayPauseButton();
+    });
 
     bindBaseParameterControls();
     bindAlgebraicChainingControls();

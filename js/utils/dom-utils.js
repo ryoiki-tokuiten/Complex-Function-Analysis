@@ -1,3 +1,15 @@
+import { state, context, zPlaneParams, wPlaneParams, sphereViewParams, sliderParamKeys, wPlaneInitialRanges, zPlaneInitialRanges } from '../store/state.js';
+import { DEFAULT_CANVAS_WIDTH, DEFAULT_CANVAS_HEIGHT, SPHERE_INITIAL_ROT_X, SPHERE_INITIAL_ROT_Y, SPHERE_VIEW_RADIUS_FACTOR } from '../constants/rendering.js';
+import { TAYLOR_CENTER_PRESETS, TAYLOR_CENTER_PRESET_GROUPS } from '../constants/numerical.js';
+import { updatePlaneViewportRanges } from './canvas-utils.js';
+import { initializeWebGLLineSupport } from '../rendering/webgl-planar.js';
+import { initializeWebGLDomainColoringSupport } from '../rendering/webgl-domain-coloring.js';
+
+const { controls, polynomialCoeffUIElements } = context;
+
+let zCanvas, wCanvas, zCtx, wCtx, zDomainColorCanvas, wDomainColorCanvas, zDomainColorCtx, wDomainColorCtx;
+let wCanvasList, wCtxList, wPlaneParamsList, wPlanePlotlyContainersList, sphereViewWParamsList;
+
 const DOM_BINDINGS = [
     { key: 'controlsOptionsSection', id: 'controls_options_section' },
     { key: 'controlsPanelsRow', id: 'controls_panels_row' },
@@ -232,7 +244,7 @@ const DOM_BINDINGS = [
     { key: 'visualizationOptionsPanel', id: 'visualization-options-panel' }
 ];
 
-function formatTaylorNumericValue(value) {
+export function formatTaylorNumericValue(value) {
     if (!Number.isFinite(value)) {
         return '0';
     }
@@ -241,14 +253,14 @@ function formatTaylorNumericValue(value) {
     return Number(normalizedValue.toFixed(6)).toString();
 }
 
-function findTaylorCenterPreset(re, im) {
+export function findTaylorCenterPreset(re, im) {
     return TAYLOR_CENTER_PRESETS.find(preset =>
         Math.abs(preset.re - re) < 1e-9 &&
         Math.abs(preset.im - im) < 1e-9
     ) || null;
 }
 
-function renderTaylorPresetGroups() {
+export function renderTaylorPresetGroups() {
     if (!controls.taylorSeriesPresetGroups) {
         return;
     }
@@ -284,7 +296,7 @@ function renderTaylorPresetGroups() {
     controls.taylorSeriesPresetGroups.replaceChildren(fragment);
 }
 
-function setupDOMReferences() {
+export function setupDOMReferences() {
     zCanvas = document.getElementById('z_plane_canvas'); wCanvas = document.getElementById('w_plane_canvas');
     zCtx = zCanvas.getContext('2d');
     zCtx.imageSmoothingEnabled = true;
@@ -370,9 +382,22 @@ function setupDOMReferences() {
             }
         }
     });
+    context.zCanvas = zCanvas;
+    context.wCanvas = wCanvas;
+    context.zCtx = zCtx;
+    context.wCtx = wCtx;
+    context.zDomainColorCanvas = zDomainColorCanvas;
+    context.wDomainColorCanvas = wDomainColorCanvas;
+    context.zDomainColorCtx = zDomainColorCtx;
+    context.wDomainColorCtx = wDomainColorCtx;
+    context.wCanvasList = wCanvasList;
+    context.wCtxList = wCtxList;
+    context.wPlaneParamsList = wPlaneParamsList;
+    context.wPlanePlotlyContainersList = wPlanePlotlyContainersList;
+    context.sphereViewWParamsList = sphereViewWParamsList;
 }
 
-function setupCanvasBaseParams(planeParams, canvasElement, sphereViewObj, isFullscreen = false) {
+export function setupCanvasBaseParams(planeParams, canvasElement, sphereViewObj, isFullscreen = false) {
     let newWidth, newHeight;
     if (isFullscreen) {
         const container = canvasElement.parentElement; 
@@ -403,7 +428,7 @@ function setupCanvasBaseParams(planeParams, canvasElement, sphereViewObj, isFull
     domainColorCanvas.height = planeParams.height;
 }
 
-function setupVisualParameters(updateZFromSlider = true, updateWFromSlider = true) {
+export function setupVisualParameters(updateZFromSlider = true, updateWFromSlider = true) {
     const zIsFullscreen = state.isZFullScreen;
     const wIsFullscreen = state.isWFullScreen;
 
@@ -485,7 +510,7 @@ function setupVisualParameters(updateZFromSlider = true, updateWFromSlider = tru
     }
 }
 
-function getChainingTitleHTML(i, mode) {
+export function getChainingTitleHTML(i, mode) {
     if (i === 0) return `w = f(z)`;
     const prevSub = i === 1 ? `0` : `${i-1}`;
     switch (mode) {
@@ -499,7 +524,7 @@ function getChainingTitleHTML(i, mode) {
     }
 }
 
-function updateChainingTitles() {
+export function updateChainingTitles() {
     if (!wCanvasList) return;
     for (let i = 1; i < wCanvasList.length; i++) {
         const titleSpan = document.getElementById(`w-plane-title_${i}`);
@@ -509,7 +534,7 @@ function updateChainingTitles() {
     }
 }
 
-function updateChainingColumns(count) {
+export function updateChainingColumns(count) {
     if (!wCanvasList || wCanvasList.length === 0) {
         wCanvasList = [wCanvas];
         wCtxList = [wCtx];
@@ -612,4 +637,9 @@ function updateChainingColumns(count) {
     }
     
     setupVisualParameters(false, false);
+    context.wCanvasList = wCanvasList;
+    context.wCtxList = wCtxList;
+    context.wPlaneParamsList = wPlaneParamsList;
+    context.wPlanePlotlyContainersList = wPlanePlotlyContainersList;
+    context.sphereViewWParamsList = sphereViewWParamsList;
 }

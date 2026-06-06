@@ -1,6 +1,6 @@
 let globalTooltipElement = null;
 
-function initializeTooltips() {
+export function initializeTooltips() {
     globalTooltipElement = document.getElementById('tooltip');
     if (!globalTooltipElement) {
         console.warn("Tooltip element with ID 'tooltip' not found.");
@@ -41,7 +41,7 @@ function initializeTooltips() {
     });
 }
 
-function moveTooltip(pageX, pageY) {
+export function moveTooltip(pageX, pageY) {
     if (!globalTooltipElement) return;
 
     let x = pageX + 15; 
@@ -89,7 +89,7 @@ function moveTooltip(pageX, pageY) {
  * @param {boolean} isStatic - If true, this tooltip is for a static HTML element [data-tooltip].
  * @param {HTMLElement} targetElement - The element triggering the tooltip (optional, for static).
  */
-function showDynamicTooltip(htmlContent, pageX, pageY, isStatic = false, targetElement = null) {
+export function showDynamicTooltip(htmlContent, pageX, pageY, isStatic = false, targetElement = null) {
     if (!globalTooltipElement) return;
     globalTooltipElement.innerHTML = htmlContent;
     globalTooltipElement.style.display = 'block'; 
@@ -112,7 +112,7 @@ function showDynamicTooltip(htmlContent, pageX, pageY, isStatic = false, targetE
 /**
  * Hides the dynamic tooltip.
  */
-function hideDynamicTooltip() {
+export function hideDynamicTooltip() {
     if (!globalTooltipElement) return;
 
     

@@ -1,4 +1,15 @@
-function syncParameterControlsPanelVisibility() {
+import { state, context, sliderParamKeys } from '../store/state.js';
+import { getChainedTransformFunction, numericDerivative } from '../math-utils.js';
+import { DEFAULT_TAYLOR_SERIES_CENTER, CRITICAL_POINT_EPSILON } from '../constants/numerical.js';
+import { updatePolynomialCoeffDisplays } from './polynomial-ui.js';
+import { syncLaplacePlayPauseButton, syncLaplaceWindingSyncButton } from './event-listeners.js';
+import { syncVideoPlaybackUI } from '../utils/raster-media.js';
+import { findTaylorCenterPreset, formatTaylorNumericValue } from '../utils/dom-utils.js';
+import { syncNavigationControls } from '../navigation-plane.js';
+
+const { controls } = context;
+
+export function syncParameterControlsPanelVisibility() {
     if (!controls.parameterControlsPanel) {
         return;
     }
@@ -10,7 +21,7 @@ function syncParameterControlsPanelVisibility() {
     controls.parameterControlsPanel.classList.toggle('hidden', !hasVisibleContent);
 }
 
-function updateSliderLabelsAndDisplay() {
+export function updateSliderLabelsAndDisplay() {
     try {
         const isFourierMode = state.fourierModeEnabled;
         const isLaplaceMode = state.laplaceModeEnabled;
@@ -171,16 +182,16 @@ function updateSliderLabelsAndDisplay() {
         controls.enableTaylorSeriesCustomCenterCb.checked = state.taylorSeriesCustomCenterEnabled;
     }
     syncTaylorSeriesCenterStatus();
-    if (typeof taylorCenterUI !== 'undefined' && taylorCenterUI) {
-        taylorCenterUI.setPoints([state.taylorSeriesCustomCenter], false);
+    if (context.taylorCenterUI) {
+        context.taylorCenterUI.setPoints([state.taylorSeriesCustomCenter], false);
     }
 
     if (controls.generalPointsControlsContainer && controls.enableGeneralPointsCb) {
         controls.generalPointsControlsContainer.classList.toggle('hidden', !state.generalPointsEnabled);
         controls.enableGeneralPointsCb.checked = state.generalPointsEnabled;
     }
-    if (typeof generalPointsUI !== 'undefined' && generalPointsUI) {
-        generalPointsUI.setPoints(state.generalPointsList, false);
+    if (context.generalPointsUI) {
+        context.generalPointsUI.setPoints(state.generalPointsList, false);
     }
 
     syncParameterControlsPanelVisibility();
@@ -300,13 +311,13 @@ function updateSliderLabelsAndDisplay() {
     }
 }
 
-function getTaylorDisplayCenter() {
+export function getTaylorDisplayCenter() {
     return state.taylorSeriesCustomCenterEnabled
         ? state.taylorSeriesCustomCenter
         : DEFAULT_TAYLOR_SERIES_CENTER;
 }
 
-function formatTaylorCenterStatusText(center) {
+export function formatTaylorCenterStatusText(center) {
     const preset = findTaylorCenterPreset(center.re, center.im);
     if (preset) {
         return `z0 = ${preset.label}`;
@@ -318,7 +329,7 @@ function formatTaylorCenterStatusText(center) {
     return `z0 = ${re} ${sign} ${imMagnitude}i`;
 }
 
-function syncTaylorSeriesCenterStatus() {
+export function syncTaylorSeriesCenterStatus() {
     if (!controls.taylorSeriesCenterStatus) {
         return;
     }
@@ -326,13 +337,13 @@ function syncTaylorSeriesCenterStatus() {
     controls.taylorSeriesCenterStatus.textContent = formatTaylorCenterStatusText(getTaylorDisplayCenter());
 }
 
-function syncTaylorSeriesPresetSelection() {
-    if (typeof taylorCenterUI !== 'undefined' && taylorCenterUI) {
-        taylorCenterUI.setPoints([state.taylorSeriesCustomCenter], false);
+export function syncTaylorSeriesPresetSelection() {
+    if (context.taylorCenterUI) {
+        context.taylorCenterUI.setPoints([state.taylorSeriesCustomCenter], false);
     }
 }
 
-function formatProbeValue(v) {
+export function formatProbeValue(v) {
     if (v === 0) return '0';
     const absV = Math.abs(v);
     if (absV >= 0.001 && absV < 1e6) {
@@ -341,7 +352,7 @@ function formatProbeValue(v) {
     return v.toExponential(3);
 }
 
-function formatProbeComplex(re, im) {
+export function formatProbeComplex(re, im) {
     const reStr = formatProbeValue(re);
     const imAbs = Math.abs(im);
     const imSign = im >= 0 ? '+' : '-';
@@ -349,7 +360,7 @@ function formatProbeComplex(re, im) {
     return `${reStr} ${imSign} ${imStr}i`;
 }
 
-function updateProbeInfo(){
+export function updateProbeInfo(){
     try {
         const zIsPlanar = !state.riemannSphereViewEnabled || state.splitViewEnabled;
         if (state.navigationModeEnabled) {
@@ -399,7 +410,7 @@ function updateProbeInfo(){
     }
 }
 
-function updateTitlesAndGlobalUI() {
+export function updateTitlesAndGlobalUI() {
     try {
         updateSliderLabelsAndDisplay();
         updateProbeInfo(); 
@@ -818,7 +829,7 @@ function updateTitlesAndGlobalUI() {
     }
 }
 
-function updateDomainColoringKey() {
+export function updateDomainColoringKey() {
     if (!controls.domainColoringKeyDiv) return;
 
     const palette = state.domainPalette || 'calming';

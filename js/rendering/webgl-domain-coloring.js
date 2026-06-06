@@ -1,4 +1,24 @@
-function getWebGLDomainColorRenderScale() {
+import { state, context } from '../store/state.js';
+import {
+    createWebGLProgramShared,
+    getWebGLDomainColorFunctionIdShared,
+    getWebGLBackendInfoShared,
+    setComplexFunctionUniformsShared,
+    getGLSLComplexMathLibrary
+} from './webgl-shared.js';
+import {
+    WEBGL_DOMAIN_COLOR_SUPERSAMPLE,
+    WEBGL_DOMAIN_COLOR_STRESS_SCALE,
+    SPHERE_LIGHT_DIRECTION_CAMERA,
+    SPHERE_TEXTURE_AMBIENT_INTENSITY,
+    SPHERE_TEXTURE_DIFFUSE_INTENSITY,
+    SPHERE_TEXTURE_SPECULAR_INTENSITY,
+    SPHERE_TEXTURE_SHININESS_FACTOR
+} from '../constants/rendering.js';
+
+const { webglDomainColorSupport } = context;
+
+export function getWebGLDomainColorRenderScale() {
     const baseScale = Number.isFinite(WEBGL_DOMAIN_COLOR_SUPERSAMPLE)
         ? WEBGL_DOMAIN_COLOR_SUPERSAMPLE
         : 1.75;
@@ -18,7 +38,7 @@ function getWebGLDomainColorRenderScale() {
     return Math.max(1, Math.min(3, scale * dprBoost));
 }
 
-function createWebGLDomainColorRenderer() {
+export function createWebGLDomainColorRenderer() {
     const canvas = document.createElement('canvas');
     const gl = canvas.getContext('webgl', {
         antialias: false,
@@ -45,6 +65,7 @@ function createWebGLDomainColorRenderer() {
         'uniform vec2 u_resolution;',
         'uniform vec4 u_viewBounds;',
         'uniform float u_domainBrightness;',
+        'uniform float u_domainContrast;',
         'uniform float u_domainSaturation;',
         'uniform float u_domainLightnessCycles;',
         'uniform int u_domainPalette;',
@@ -71,7 +92,7 @@ function createWebGLDomainColorRenderer() {
         'uniform int u_chainCount;',
         'uniform int u_chainMode;',
         '',
-        GLSL_COMPLEX_MATH_LIBRARY,
+        getGLSLComplexMathLibrary(state),
         '',
         'vec2 complexSqrt(vec2 z) {',
         '  float r = length(z);',
@@ -385,12 +406,12 @@ function createWebGLDomainColorRenderer() {
     };
 }
 
-function isWebGLDomainColoringFunctionSupported(functionName, isWPlaneColoring = false) {
+export function isWebGLDomainColoringFunctionSupported(functionName, isWPlaneColoring = false) {
     if (isWPlaneColoring) return true;
     return getWebGLDomainColorFunctionIdShared(functionName) !== 0;
 }
 
-function resizeWebGLDomainColorRenderer(renderer, width, height) {
+export function resizeWebGLDomainColorRenderer(renderer, width, height) {
     if (!renderer || !renderer.canvas || width <= 0 || height <= 0) return;
     if (renderer.canvas.width !== width || renderer.canvas.height !== height) {
         renderer.canvas.width = width;
@@ -398,7 +419,7 @@ function resizeWebGLDomainColorRenderer(renderer, width, height) {
     }
 }
 
-function getNormalizedSphereLightDirection() {
+export function getNormalizedSphereLightDirection() {
     const lx = SPHERE_LIGHT_DIRECTION_CAMERA.x;
     const ly = SPHERE_LIGHT_DIRECTION_CAMERA.y;
     const lz = SPHERE_LIGHT_DIRECTION_CAMERA.z;
@@ -411,7 +432,7 @@ function getNormalizedSphereLightDirection() {
 
 
 
-function initializeWebGLDomainColoringSupport() {
+export function initializeWebGLDomainColoringSupport() {
     webglDomainColorSupport.available = false;
     webglDomainColorSupport.reason = 'disabled-or-unavailable';
     webglDomainColorSupport.renderers.z = null;
@@ -457,30 +478,37 @@ function initializeWebGLDomainColoringSupport() {
     }
 }
 
-function getWebGLDomainColorRenderer(planeKey) {
+export function getWebGLDomainColorRenderer(planeKey) {
     if (!webglDomainColorSupport || !webglDomainColorSupport.renderers) return null;
     if (planeKey === 'z') return webglDomainColorSupport.renderers.z;
     if (planeKey === 'w') return webglDomainColorSupport.renderers.w;
     return null;
 }
 
-function inferDomainColorPlaneKey(targetCtx, planeKeyHint) {
+export function inferDomainColorPlaneKey(targetCtx, planeKeyHint) {
     if (planeKeyHint === 'z' || planeKeyHint === 'w') return planeKeyHint;
-    if (typeof zDomainColorCtx !== 'undefined' && targetCtx === zDomainColorCtx) return 'z';
-    if (typeof wDomainColorCtx !== 'undefined' && targetCtx === wDomainColorCtx) return 'w';
+    if (targetCtx === context.zDomainColorCtx) return 'z';
+    if (targetCtx === context.wDomainColorCtx) return 'w';
     return 'z';
 }
 
-function warnWebGLDomainFunctionFallback(functionName) {
+export function warnWebGLDomainFunctionFallback(functionName) {
     if (!webglDomainColorSupport || !webglDomainColorSupport.warnedFunctionFallbacks) return;
     if (webglDomainColorSupport.warnedFunctionFallbacks.has(functionName)) return;
     webglDomainColorSupport.warnedFunctionFallbacks.add(functionName);
     console.info(`GPU domain coloring not available for "${functionName}", using CPU fallback.`);
 }
 
-function renderDomainColoringWithWebGL(targetCtx, planeParams, options = null) {
+export function renderDomainColoringWithWebGL(targetCtx, planeParams, options = null) {
     if (!targetCtx || !planeParams || !webglDomainColorSupport || !webglDomainColorSupport.available) return false;
     if (!state || !state.webglDomainColoringEnabled) return false;
+
+    const currentAlgHash = JSON.stringify(state.algebraicChainingTerms || []);
+    if (state.currentFunction === 'algebraic_chaining' && webglDomainColorSupport.lastAlgHash !== currentAlgHash) {
+        webglDomainColorSupport.lastAlgHash = currentAlgHash;
+        initializeWebGLDomainColoringSupport();
+        if (!webglDomainColorSupport.available) return false;
+    }
 
     const opts = options && typeof options === 'object' ? options : {};
     const planeKey = inferDomainColorPlaneKey(targetCtx, opts.planeKey);
@@ -488,6 +516,14 @@ function renderDomainColoringWithWebGL(targetCtx, planeParams, options = null) {
     if (!renderer || !renderer.gl) return false;
 
     const isWPlaneColoring = !!opts.isWPlaneColoring;
+
+    // WebGL uses 32-bit floats, which break down past ~100,000x zoom when off-origin.
+    // Fall back to CPU 64-bit float rendering for deep Mandelbrot/Newton fractal zooming.
+    const currentZoom = isWPlaneColoring ? state.wPlaneZoom : state.zPlaneZoom;
+    if (currentZoom > 100000) {
+        return false;
+    }
+
     const functionName = state.currentFunction;
     if (!isWebGLDomainColoringFunctionSupported(functionName, isWPlaneColoring)) {
         warnWebGLDomainFunctionFallback(functionName);
@@ -600,9 +636,9 @@ function renderDomainColoringWithWebGL(targetCtx, planeParams, options = null) {
     return true;
 }
 
-function getGPUBackendStatus() {
-    const lineDiag = (typeof webglSupport !== 'undefined') ? webglSupport : null;
-    const domainDiag = (typeof webglDomainColorSupport !== 'undefined') ? webglDomainColorSupport : null;
+export function getGPUBackendStatus() {
+    const lineDiag = context.webglSupport || null;
+    const domainDiag = context.webglDomainColorSupport || null;
     const currentFunctionName = (typeof state !== 'undefined' && state && state.currentFunction)
         ? state.currentFunction
         : null;
