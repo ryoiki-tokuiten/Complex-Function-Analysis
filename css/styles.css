@@ -25,21 +25,30 @@ html {
     scroll-behavior: smooth;
 }
 
-html, body {
+html,
+body {
     height: 100%;
-    overflow: hidden; /* Prevent body scroll if main handles it */
+    overflow: hidden;
+    /* Prevent body scroll if main handles it */
 }
 
 body {
     background-color: var(--bg-color);
     color: var(--text-color);
-    font-family: var(--font-family); /* Ensured */
-    overflow-x: hidden; /* already exists, keep it */
-    line-height: 1.6; /* already exists */
-    -webkit-font-smoothing: antialiased; /* already exists */
-    -moz-osx-font-smoothing: grayscale; /* already exists */
-    display: flex; /* Make body a flex container */
-    flex-direction: column; /* Stack children vertically */
+    font-family: var(--font-family);
+    /* Ensured */
+    overflow-x: hidden;
+    /* already exists, keep it */
+    line-height: 1.6;
+    /* already exists */
+    -webkit-font-smoothing: antialiased;
+    /* already exists */
+    -moz-osx-font-smoothing: grayscale;
+    /* already exists */
+    display: flex;
+    /* Make body a flex container */
+    flex-direction: column;
+    /* Stack children vertically */
 }
 
 #preloader {
@@ -65,7 +74,11 @@ body {
     animation: spin 1s linear infinite;
 }
 
-@keyframes spin { to { transform: rotate(360deg); } }
+@keyframes spin {
+    to {
+        transform: rotate(360deg);
+    }
+}
 
 .background-container {
     position: fixed;
@@ -75,38 +88,52 @@ body {
     height: 100%;
     z-index: -1;
     overflow: hidden;
+    background-color: var(--bg-color);
+    background-image: radial-gradient(rgba(255, 255, 255, 0.04) 1px, transparent 1px);
+    background-size: 30px 30px;
+    transition: background-color 0.4s ease;
 }
 
-.background-gradient::before,
-.background-gradient::after {
-    content: '';
-    position: absolute;
-    width: 50vmax;
-    height: 50vmax;
-    border-radius: 50%;
-    opacity: 0.15;
-    filter: blur(140px);
-    will-change: transform;
+.background-gradient {
+    display: none;
 }
-
-.background-gradient::before { background-color: var(--accent-purple); top: -20%; left: -20%; animation: move1 15s infinite alternate ease-in-out; }
-.background-gradient::after { background-color: var(--accent-pink); bottom: -20%; right: -20%; animation: move2 18s infinite alternate ease-in-out; }
 
 .background-noise {
     position: absolute;
-    top: -50%; left: -50%;
-    width: 200%; height: 200%;
+    top: -50%;
+    left: -50%;
+    width: 200%;
+    height: 200%;
     background: transparent url('data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200"><filter id="n"><feTurbulence type="fractalNoise" baseFrequency="0.8" numOctaves="4" stitchTiles="stitch"/></filter><rect width="100%" height="100%" filter="url(%23n)"/></svg>') 0% 0% / 200px 200px;
     opacity: 0.03;
     animation: noise-pan 10s linear infinite;
 }
 
-@keyframes move1 { to { transform: translate(10vw, 15vh) scale(1.2); } }
-@keyframes move2 { to { transform: translate(-15vw, -10vh) scale(0.8); } }
-@keyframes noise-pan { 0% { transform: translate(0,0); } 100% { transform: translate(-100px, -100px); } }
+@keyframes move1 {
+    to {
+        transform: translate(10vw, 15vh) scale(1.2);
+    }
+}
+
+@keyframes move2 {
+    to {
+        transform: translate(-15vw, -10vh) scale(0.8);
+    }
+}
+
+@keyframes noise-pan {
+    0% {
+        transform: translate(0, 0);
+    }
+
+    100% {
+        transform: translate(-100px, -100px);
+    }
+}
 
 main {
-    width: 100%; /* Ensure it takes up width within flex context */
+    width: 100%;
+    /* Ensure it takes up width within flex context */
     /* margin: 0 auto; /* Removed for full width */
     display: flex;
     flex-direction: column;
@@ -117,11 +144,14 @@ main {
     /* max-width: 1000px; /* Removed for full width */
 }
 
-.section { /* This is the generic .section style */
+.section {
+    /* This is the generic .section style */
     display: flex;
     flex-direction: column;
-    gap: 1.5rem; /* Default gap for content within a section */
-    padding: 2.5rem; /* Default padding for a section */
+    gap: 1.5rem;
+    /* Default gap for content within a section */
+    padding: 2.5rem;
+    /* Default padding for a section */
     background: var(--card-bg-color);
     border: 1px solid var(--border-color);
     border-radius: 20px;
@@ -133,11 +163,14 @@ main {
     transition: opacity 0.6s ease-out, transform 0.6s ease-out;
 }
 
-.section.is-visible { opacity: 1; transform: translateY(0); }
+.section.is-visible {
+    opacity: 1;
+    transform: translateY(0);
+}
 
 #controls_options_section {
     flex-shrink: 0;
-    padding: 1.5rem;
+    padding: 0.7rem;
     border-radius: 20px;
     background: var(--card-bg-color);
     border: 1px solid var(--border-color);
@@ -207,11 +240,9 @@ main {
     flex-direction: column;
     gap: 1rem;
     position: relative;
-    background:
-        linear-gradient(180deg, rgba(14, 18, 42, 0.22), rgba(14, 18, 42, 0.08)),
-        rgba(255, 255, 255, 0.01);
+    background: var(--card-bg-color);
     scrollbar-width: thin;
-    scrollbar-color: var(--border-color) rgba(0,0,0,0.1);
+    scrollbar-color: var(--border-color) rgba(0, 0, 0, 0.1);
 }
 
 .controls-panel::-webkit-scrollbar {
@@ -219,7 +250,7 @@ main {
 }
 
 .controls-panel::-webkit-scrollbar-track {
-    background: rgba(0,0,0,0.1);
+    background: rgba(0, 0, 0, 0.1);
     border-radius: 4px;
 }
 
@@ -279,6 +310,13 @@ main {
     gap: 0.75rem;
 }
 
+.controls-panel-header-actions {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-left: auto;
+}
+
 .controls-panel-name {
     color: var(--text-color);
     font-size: 0.98rem;
@@ -294,9 +332,12 @@ main {
 /* Styles for the top-right controls container in the visualization panel */
 .viz-panel-top-right-controls {
     position: absolute;
-    top: 1rem; /* Corresponds to panel's internal padding */
-    right: 1rem; /* Corresponds to panel's internal padding */
-    z-index: 10; /* Above other static grid content */
+    top: 1rem;
+    /* Corresponds to panel's internal padding */
+    right: 1rem;
+    /* Corresponds to panel's internal padding */
+    z-index: 10;
+    /* Above other static grid content */
 }
 
 .viz-panel-top-right-controls button {
@@ -309,12 +350,16 @@ main {
 .slider-row {
     display: flex;
     flex-direction: row;
-    gap: 1rem; /* Space between the two control groups in the row */
+    gap: 1rem;
+    /* Space between the two control groups in the row */
     width: 100%;
 }
-.slider-row > .control-group {
-    flex: 1; /* Each control group takes half the space */
-    min-width: 0; /* Allow shrinking */
+
+.slider-row>.control-group {
+    flex: 1;
+    /* Each control group takes half the space */
+    min-width: 0;
+    /* Allow shrinking */
 }
 
 .viz-feature-section {
@@ -324,16 +369,12 @@ main {
     padding: 0.95rem;
     border: 1px solid color-mix(in srgb, var(--border-color) 82%, transparent);
     border-radius: 16px;
-    background:
-        linear-gradient(180deg, rgba(29, 24, 63, 0.42), rgba(10, 12, 30, 0.4)),
-        rgba(255, 255, 255, 0.02);
-    box-shadow: inset 0 1px 0 rgba(255,255,255,0.04), 0 10px 26px rgba(0, 0, 0, 0.12);
+    background: color-mix(in srgb, var(--card-bg-color) 80%, black);
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04), 0 10px 26px rgba(0, 0, 0, 0.12);
 }
 
 .viz-feature-section--vector {
-    background:
-        linear-gradient(180deg, rgba(22, 26, 60, 0.48), rgba(10, 12, 30, 0.44)),
-        rgba(255, 255, 255, 0.02);
+    background: color-mix(in srgb, var(--card-bg-color) 80%, black);
 }
 
 .viz-feature-section-header,
@@ -379,31 +420,27 @@ main {
     min-height: 84px;
     padding: 0.9rem;
     border-radius: 14px;
-    border: 1px solid rgba(128, 137, 255, 0.18);
-    background: rgba(9, 13, 33, 0.36);
+    border: 1px solid color-mix(in srgb, var(--border-color) 60%, transparent);
+    background: color-mix(in srgb, var(--card-bg-color) 40%, transparent);
     transition: border-color 0.2s ease, background-color 0.2s ease, box-shadow 0.2s ease, transform 0.15s ease;
 }
 
 .viz-toggle-card:hover {
     border-color: color-mix(in srgb, var(--accent-purple) 65%, transparent);
-    background: rgba(15, 20, 43, 0.5);
+    background: color-mix(in srgb, var(--card-bg-color) 80%, transparent);
     transform: translateY(-1px);
     box-shadow: 0 8px 18px rgba(0, 0, 0, 0.16);
 }
 
 .viz-toggle-card:has(input[type="checkbox"]:checked) {
     border-color: color-mix(in srgb, var(--accent-purple) 82%, transparent);
-    background:
-        linear-gradient(180deg, rgba(85, 58, 154, 0.28), rgba(18, 20, 47, 0.52)),
-        rgba(11, 15, 36, 0.55);
-    box-shadow: inset 0 1px 0 rgba(255,255,255,0.04), 0 0 0 1px rgba(167, 139, 250, 0.08), 0 12px 24px rgba(0, 0, 0, 0.18);
+    background: color-mix(in srgb, var(--accent-purple) 15%, var(--card-bg-color));
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04), 0 0 0 1px color-mix(in srgb, var(--accent-purple) 8%, transparent), 0 12px 24px rgba(0, 0, 0, 0.18);
 }
 
 .viz-toggle-card--hero {
     min-height: 96px;
-    background:
-        linear-gradient(180deg, rgba(39, 28, 82, 0.56), rgba(13, 18, 42, 0.5)),
-        rgba(255, 255, 255, 0.02);
+    background: var(--card-bg-color);
 }
 
 .viz-toggle-card--wide {
@@ -450,18 +487,19 @@ main {
     transition: transform 0.2s ease-out, opacity 0.2s ease-out;
 }
 
-.viz-toggle-card input[type="checkbox"]:checked + .custom-checkbox-visual {
-    background-color: var(--accent-purple);
+.viz-toggle-card input[type="checkbox"]:checked+.custom-checkbox-visual {
+    background-color: color-mix(in srgb, var(--accent-purple) 12%, rgba(255, 255, 255, 0.04));
     border-color: var(--accent-purple);
+    box-shadow: 0 0 10px var(--glow-color);
 }
 
-.viz-toggle-card input[type="checkbox"]:checked + .custom-checkbox-visual::after {
-    border-color: #fff;
+.viz-toggle-card input[type="checkbox"]:checked+.custom-checkbox-visual::after {
+    border-color: var(--accent-purple);
     transform: rotate(45deg) scale(1);
     opacity: 1;
 }
 
-.viz-toggle-card input[type="checkbox"]:focus + .custom-checkbox-visual {
+.viz-toggle-card input[type="checkbox"]:focus+.custom-checkbox-visual {
     box-shadow: 0 0 0 3px var(--glow-color);
     border-color: var(--accent-purple);
 }
@@ -492,9 +530,9 @@ main {
     margin-bottom: 0;
     padding: 0.95rem 1rem;
     border-radius: 14px;
-    border: 1px solid rgba(128, 137, 255, 0.15);
-    background: rgba(6, 10, 24, 0.48);
-    box-shadow: inset 0 1px 0 rgba(255,255,255,0.03);
+    border: 1px solid var(--border-color);
+    background: var(--card-bg-color);
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.03);
 }
 
 #visualization-options-panel .viz-subdetail-block {
@@ -502,8 +540,8 @@ main {
     margin-bottom: 0;
     padding: 0.9rem;
     border-radius: 12px;
-    border: 1px solid rgba(128, 137, 255, 0.12);
-    background: rgba(7, 11, 27, 0.5);
+    border: 1px solid var(--border-color);
+    background: color-mix(in srgb, var(--bg-color) 40%, var(--card-bg-color));
 }
 
 .viz-settings-grid,
@@ -573,8 +611,8 @@ main {
     align-items: center;
     padding: 0.85rem 0.9rem;
     border-radius: 12px;
-    border: 1px solid rgba(128, 137, 255, 0.14);
-    background: rgba(10, 14, 31, 0.45);
+    border: 1px solid var(--border-color);
+    background: var(--card-bg-color);
 }
 
 .slider-group .slider-label {
@@ -595,8 +633,8 @@ main {
     min-width: 54px;
     padding: 0.35rem 0.55rem;
     border-radius: 999px;
-    background: rgba(0, 0, 0, 0.24);
-    border: 1px solid rgba(128, 137, 255, 0.16);
+    background: color-mix(in srgb, var(--bg-color) 60%, transparent);
+    border: 1px solid var(--border-color);
     color: var(--text-color);
     font-size: 0.78rem;
     text-align: center;
@@ -612,7 +650,8 @@ main {
     margin-top: 0.75rem;
     padding: 0.85rem;
     border-radius: 6px;
-    background: rgba(12, 12, 25, 0.55);
+    background: var(--card-bg-color);
+    border: 1px solid var(--border-color);
 }
 
 .navigation-settings-grid {
@@ -641,10 +680,10 @@ main {
     gap: 4px;
     padding: 8px 10px 6px;
     border-radius: 8px;
-    background: rgba(10, 10, 22, 0.65);
+    background: color-mix(in srgb, var(--card-bg-color) 80%, black);
     backdrop-filter: blur(6px);
     -webkit-backdrop-filter: blur(6px);
-    border: 1px solid rgba(139, 92, 246, 0.2);
+    border: 1px solid color-mix(in srgb, var(--accent-purple) 20%, transparent);
     pointer-events: none;
 }
 
@@ -663,9 +702,9 @@ main {
     width: 30px;
     height: 30px;
     border-radius: 5px;
-    border: 1px solid rgba(139, 92, 246, 0.35);
-    background: rgba(139, 92, 246, 0.1);
-    color: rgba(200, 180, 255, 0.7);
+    border: 1px solid color-mix(in srgb, var(--accent-purple) 35%, transparent);
+    background: color-mix(in srgb, var(--accent-purple) 10%, transparent);
+    color: var(--text-secondary-color);
     transition: background 0.1s ease, border-color 0.1s ease, transform 0.08s ease;
 }
 
@@ -675,10 +714,10 @@ main {
 }
 
 .keyhint-key.active {
-    background: rgba(139, 92, 246, 0.4);
-    border-color: rgba(139, 92, 246, 0.8);
+    background: color-mix(in srgb, var(--accent-purple) 40%, transparent);
+    border-color: color-mix(in srgb, var(--accent-purple) 80%, transparent);
     color: #fff;
-    box-shadow: 0 0 10px rgba(139, 92, 246, 0.35);
+    box-shadow: 0 0 10px color-mix(in srgb, var(--accent-purple) 35%, transparent);
     transform: scale(0.92);
 }
 
@@ -702,6 +741,7 @@ main {
 }
 
 @media (max-width: 960px) {
+
     .viz-toggle-grid,
     .viz-settings-grid,
     .vector-settings-grid,
@@ -728,17 +768,23 @@ hr.panel-separator {
 
 .dependent-settings-block {
     background-color: rgba(12, 12, 25, 0.7);
-    padding: 1.15rem; /* Increased padding */
+    padding: 1.15rem;
+    /* Increased padding */
     border-radius: 6px;
     backdrop-filter: blur(10px);
     -webkit-backdrop-filter: blur(10px);
-    margin-top: 0.25rem; /* Keep margin-top as is, or adjust if needed relative to panel gap */
+    margin-top: 0.25rem;
+    /* Keep margin-top as is, or adjust if needed relative to panel gap */
     margin-bottom: 1rem;
-    transition: opacity 0.3s ease-out, transform 0.3s ease-out, max-height 0.3s ease-out; /* For animations */
+    transition: opacity 0.3s ease-out, transform 0.3s ease-out, max-height 0.3s ease-out;
+    /* For animations */
 }
+
 .dependent-settings-block .control-group {
-    margin-bottom: 0.75rem; /* Increased margin */
+    margin-bottom: 0.75rem;
+    /* Increased margin */
 }
+
 .dependent-settings-block .control-group:last-child {
     margin-bottom: 0;
 }
@@ -751,17 +797,15 @@ hr.panel-separator {
     margin: 0;
     border-radius: 16px;
     border: 1px solid color-mix(in srgb, var(--border-color) 88%, transparent);
-    background:
-        linear-gradient(180deg, rgba(26, 21, 58, 0.62), rgba(10, 13, 30, 0.72)),
-        rgba(255, 255, 255, 0.015);
-    box-shadow: inset 0 1px 0 rgba(255,255,255,0.04), 0 10px 24px rgba(0, 0, 0, 0.14);
+    background: color-mix(in srgb, var(--card-bg-color) 90%, black);
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04), 0 10px 24px rgba(0, 0, 0, 0.14);
 }
 
 #parameter-controls-panel .control-group {
     gap: 0.55rem;
 }
 
-#parameter-controls-panel .control-group > label:not([for]) {
+#parameter-controls-panel .control-group>label:not([for]) {
     font-size: 0.72rem;
     font-weight: 600;
     letter-spacing: 0.14em;
@@ -769,7 +813,7 @@ hr.panel-separator {
     color: color-mix(in srgb, var(--accent-purple) 56%, var(--text-secondary-color));
 }
 
-#parameter-controls-panel .control-group > label.panel-formula-label {
+#parameter-controls-panel .control-group>label.panel-formula-label {
     justify-content: flex-start;
     align-items: baseline;
     font-size: 0.9rem;
@@ -780,7 +824,7 @@ hr.panel-separator {
     line-height: 1.45;
 }
 
-#parameter-controls-panel .control-group > label[for],
+#parameter-controls-panel .control-group>label[for],
 #parameter-controls-panel .mobius-coeff-row .control-group label,
 #parameter-controls-panel .polynomial-coeff-row .control-group label {
     color: var(--text-secondary-color);
@@ -789,8 +833,8 @@ hr.panel-separator {
 #parameter-controls-panel .slider-container {
     padding: 0.72rem 0.82rem;
     border-radius: 12px;
-    border: 1px solid rgba(128, 137, 255, 0.14);
-    background: rgba(7, 10, 24, 0.42);
+    border: 1px solid var(--border-color);
+    background: var(--card-bg-color);
 }
 
 #parameter-controls-panel button,
@@ -805,12 +849,12 @@ hr.panel-separator {
     gap: 1rem;
 }
 
-#parameter-controls-panel .mobius-coeff-row > .control-group,
-#parameter-controls-panel .polynomial-coeff-row > .control-group {
+#parameter-controls-panel .mobius-coeff-row>.control-group,
+#parameter-controls-panel .polynomial-coeff-row>.control-group {
     padding: 0.9rem;
     border-radius: 14px;
-    border: 1px solid rgba(128, 137, 255, 0.14);
-    background: rgba(8, 12, 28, 0.38);
+    border: 1px solid var(--border-color);
+    background: color-mix(in srgb, var(--bg-color) 20%, var(--card-bg-color));
 }
 
 #parameter-controls-panel #polynomial_coeffs_container {
@@ -852,7 +896,7 @@ hr.panel-separator {
     padding: 0.95rem;
     border-radius: 14px;
     border: 1px dashed color-mix(in srgb, var(--accent-purple) 42%, var(--border-color));
-    background: rgba(10, 14, 31, 0.36);
+    background: var(--card-bg-color);
 }
 
 .upload-control-label {
@@ -876,8 +920,8 @@ hr.panel-separator {
 .control-file-input {
     width: 100%;
     padding: 0.42rem;
-    border: 1px solid rgba(128, 137, 255, 0.18);
-    background: rgba(7, 10, 24, 0.58);
+    border: 1px solid var(--border-color);
+    background: var(--card-bg-color);
     color: var(--text-secondary-color);
     font-family: var(--font-family);
     font-size: 0.82rem;
@@ -886,13 +930,13 @@ hr.panel-separator {
 
 .control-file-input:hover {
     border-color: color-mix(in srgb, var(--accent-purple) 58%, var(--border-color));
-    background: rgba(10, 14, 31, 0.72);
+    background: color-mix(in srgb, var(--card-bg-color) 80%, black);
 }
 
 .control-file-input:focus {
     outline: none;
     border-color: var(--accent-purple);
-    box-shadow: 0 0 0 3px rgba(167, 139, 250, 0.18);
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent-purple) 18%, transparent);
 }
 
 .control-file-input::file-selector-button,
@@ -935,14 +979,18 @@ hr.panel-separator {
     position: absolute;
     top: 10px;
     left: 10px;
-    z-index: 50; /* Below probe-info (100) but above canvas */
-    background-color: rgba(var(--bg-color-rgb, 13, 15, 38), 0.75); /* Fallback if var fails */
+    z-index: 50;
+    /* Below probe-info (100) but above canvas */
+    background-color: rgba(var(--bg-color-rgb, 13, 15, 38), 0.75);
+    /* Fallback if var fails */
     backdrop-filter: blur(5px);
-    -webkit-backdrop-filter: blur(5px); /* For Safari */
+    -webkit-backdrop-filter: blur(5px);
+    /* For Safari */
     padding: 0.75rem;
     border-radius: 8px;
     border: 1px solid var(--border-color);
-    max-width: calc(100% - 20px); /* Prevent overflow from parent */
+    max-width: calc(100% - 20px);
+    /* Prevent overflow from parent */
     font-size: 0.8rem;
     line-height: 1.4;
     color: var(--text-secondary-color);
@@ -952,12 +1000,15 @@ hr.panel-separator {
 #domain_coloring_key strong {
     color: var(--text-color);
     font-weight: 600;
-    display: block; /* Ensures the <br> after it works as expected */
-    margin-bottom: 0.25rem; /* Space after the title */
+    display: block;
+    /* Ensures the <br> after it works as expected */
+    margin-bottom: 0.25rem;
+    /* Space after the title */
 }
 
 #domain_coloring_key span[style*="color"] {
-    font-weight: 500; /* Optional: slightly bolder for color examples */
+    font-weight: 500;
+    /* Optional: slightly bolder for color examples */
     /* display: inline-block; /* Ensures proper rendering of text with background color */
     /* padding: 0 0.2em; /* Small padding around color names if needed */
 }
@@ -968,7 +1019,7 @@ hr.panel-separator {
     display: flex;
     flex-direction: column;
     min-height: 0;
-    padding: 1.5rem;
+    padding: 0.7rem;
     border-radius: 20px;
     background: var(--card-bg-color);
     border: 1px solid var(--border-color);
@@ -983,7 +1034,8 @@ hr.panel-separator {
     flex-grow: 1;
     min-height: 0;
     /* gap: 2.5rem; already exists */
-    align-items: stretch; /* Ensure columns stretch to the same height if content differs, default is stretch */
+    align-items: stretch;
+    /* Ensure columns stretch to the same height if content differs, default is stretch */
 }
 
 #canvases_section .plane-column,
@@ -991,18 +1043,119 @@ hr.panel-separator {
     display: flex;
     flex-direction: column;
     min-height: 0;
-    position: relative; /* For overlays and ensuring children are contained */
-    overflow: hidden; /* Crucial to prevent canvas from expanding its column */
+    position: relative;
+    /* For overlays and ensuring children are contained */
+    overflow: hidden;
+    /* Crucial to prevent canvas from expanding its column */
+    background: var(--card-bg-color);
+    border: 1px solid var(--border-color);
+    border-radius: 16px;
+    padding: 1.5rem;
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
+    transition: flex 0.32s cubic-bezier(0.4, 0, 0.2, 1),
+        min-width 0.32s cubic-bezier(0.4, 0, 0.2, 1),
+        max-width 0.32s cubic-bezier(0.4, 0, 0.2, 1),
+        padding 0.32s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* ── Collapsed strip ─────────────────────────────────────── */
+#canvases_section .plane-column.plane-collapsed {
+    flex: 0 0 48px !important;
+    min-width: 48px !important;
+    max-width: 48px !important;
+    padding: 0.75rem 0;
+    overflow: visible;
+    cursor: default;
+    align-items: center;
+}
+
+/* Hide all normal content when collapsed */
+#canvases_section .plane-column.plane-collapsed .canvas-header-line,
+#canvases_section .plane-column.plane-collapsed>div:not(.collapsed-placeholder-content) {
+    display: none !important;
+}
+
+/* Show placeholder only when collapsed */
+.collapsed-placeholder-content {
+    display: none;
+    flex-direction: column;
+    align-items: center;
+    justify-content: flex-start;
+    gap: 0.75rem;
+    height: 100%;
+    padding-top: 0.25rem;
+}
+
+#canvases_section .plane-column.plane-collapsed .collapsed-placeholder-content {
+    display: flex;
+    overflow: visible;
+    width: 48px;
+}
+
+/* Expand button inside placeholder */
+.expand-plane-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 32px;
+    height: 32px;
+    background: transparent;
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    color: var(--text-color);
+    cursor: pointer;
+    flex-shrink: 0;
+    transition: background 0.18s, color 0.18s, border-color 0.18s;
+}
+
+.expand-plane-btn:hover {
+    background: var(--accent-color);
+    border-color: var(--accent-color);
+    color: var(--bg-color);
+}
+
+.expand-plane-btn svg,
+.expand-plane-btn i svg {
+    width: 14px;
+    height: 14px;
+    stroke: currentColor;
+    fill: none;
+    stroke-width: 2.5;
+    display: block;
+    overflow: visible;
+}
+
+/* Vertical rotated label */
+.collapsed-vertical-title {
+    color: var(--text-muted-color);
+    font-size: 0.65rem;
+    font-weight: 600;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    writing-mode: vertical-lr;
+    transform: rotate(180deg);
+    white-space: nowrap;
+    user-select: none;
+    line-height: 1;
 }
 
 /* Styling for the direct container of each canvas. */
-#canvases_section .plane-column > div:not(.canvas-header-line),
-#laplace_3d_column > div:not(.canvas-header-line) {
-    flex-grow: 1; /* Allows this container to take up available space in the column */
-    min-height: 0; /* Essential for descendant flex items (like canvas) to scale correctly */
-    position: relative; /* For positioning overlays like probe_info */
-    display: flex; /* Use flex to manage canvas and overlays if needed */
-    flex-direction: column; /* Stack canvas and overlays */
+#canvases_section .plane-column>div:not(.canvas-header-line):not(.collapsed-placeholder-content),
+#laplace_3d_column>div:not(.canvas-header-line):not(.collapsed-placeholder-content) {
+    flex-grow: 1;
+    /* Allows this container to take up available space in the column */
+    min-height: 0;
+    /* Essential for descendant flex items (like canvas) to scale correctly */
+    position: relative;
+    /* For positioning overlays like probe_info */
+    display: flex;
+    /* Use flex to manage canvas and overlays if needed */
+    flex-direction: column;
+    /* Stack canvas and overlays */
+    border: 1px solid var(--border-color);
+    border-radius: 12px;
+    overflow: hidden;
+    background: rgba(0, 0, 0, 0.15);
 }
 
 
@@ -1016,33 +1169,46 @@ hr.panel-separator {
     display: flex;
     justify-content: space-between;
     align-items: center;
-    margin-bottom: 1rem; /* Space between header line and canvas content below */
-    flex-wrap: nowrap; /* Ensure title and controls stay on one line */
-    gap: 1rem; /* Spacing between title and controls block */
+    margin-bottom: 1rem;
+    /* Space between header line and canvas content below */
+    flex-wrap: nowrap;
+    /* Ensure title and controls stay on one line */
+    gap: 1rem;
+    /* Spacing between title and controls block */
 }
 
 .canvas-header-line .section-title {
-    /* font-size: 1.2rem; padding-bottom: 0; border-bottom: none; margin-bottom:0; */ /* Applied as per prompt */
+    /* font-size: 1.2rem; padding-bottom: 0; border-bottom: none; margin-bottom:0; */
+    /* Applied as per prompt */
     font-size: 1.2rem;
     padding-bottom: 0;
     border-bottom: none;
     margin-bottom: 0;
-    min-width: 100px; /* Ensure some part of the title is always visible */
-    flex-grow: 1; /* Allow title to take available space */
-    flex-shrink: 1; /* Allow title to shrink and truncate */
-    overflow: hidden; /* Required for text-overflow */
-    text-overflow: ellipsis; /* Add ... if text is too long */
-    white-space: nowrap; /* Prevent title from wrapping to multiple lines */
+    min-width: 100px;
+    /* Ensure some part of the title is always visible */
+    flex-grow: 1;
+    /* Allow title to take available space */
+    flex-shrink: 1;
+    /* Allow title to shrink and truncate */
+    overflow: hidden;
+    /* Required for text-overflow */
+    text-overflow: ellipsis;
+    /* Add ... if text is too long */
+    white-space: nowrap;
+    /* Prevent title from wrapping to multiple lines */
 }
 
 .canvas-header-controls {
     display: flex;
     align-items: center;
-    gap: 1rem; /* Space between controls like select and button */
-    flex-wrap: nowrap; /* Ensure controls themselves don't wrap to new lines within their container */
+    gap: 1rem;
+    /* Space between controls like select and button */
+    flex-wrap: nowrap;
+    /* Ensure controls themselves don't wrap to new lines within their container */
     /* justify-content: flex-start; /* Not as relevant if not wrapping */
     /* min-width: 0; /* Not needed if flex-shrink is 0 */
-    flex-shrink: 0; /* Prevent this container from shrinking, forcing title to shrink first */
+    flex-shrink: 0;
+    /* Prevent this container from shrinking, forcing title to shrink first */
 }
 
 .canvas-header-controls label {
@@ -1052,14 +1218,20 @@ hr.panel-separator {
 
 
 canvas {
-    width: 100%; /* Fallback for non-flex scenarios, or can be primary if parent isn't flex column */
-    height: 100%; /* Similar to width */
+    width: 100%;
+    /* Fallback for non-flex scenarios, or can be primary if parent isn't flex column */
+    height: 100%;
+    /* Similar to width */
     /* object-fit: contain; /* Not applicable to canvas, content is drawn */
-    display: block; /* Good default */
+    display: block;
+    /* Good default */
     border-radius: 8px;
-    flex-grow: 1; /* Allows canvas to fill its flex parent (the new div) */
-    min-height: 0; /* Essential for scaling within a flex container */
-    cursor: crosshair; /* Added default cursor */
+    flex-grow: 1;
+    /* Allows canvas to fill its flex parent (the new div) */
+    min-height: 0;
+    /* Essential for scaling within a flex container */
+    cursor: crosshair;
+    /* Added default cursor */
 }
 
 .riemann-surface-canvas {
@@ -1086,10 +1258,10 @@ canvas {
     z-index: 4;
     max-width: calc(100% - 24px);
     padding: 6px 9px;
-    border: 1px solid rgba(167, 139, 250, 0.28);
+    border: 1px solid color-mix(in srgb, var(--accent-purple) 28%, transparent);
     border-radius: 8px;
-    background: rgba(8, 10, 18, 0.72);
-    color: rgba(224, 228, 255, 0.78);
+    background: color-mix(in srgb, var(--card-bg-color) 80%, black);
+    color: var(--text-color);
     font: 10px/1.35 'SF Mono', 'Roboto Mono', monospace;
     letter-spacing: 0.02em;
     pointer-events: none;
@@ -1126,8 +1298,15 @@ canvas {
     margin-bottom: 0.6rem;
 }
 
-.section-text { color: var(--text-secondary-color); max-width: 80ch; }
-.section-text strong { color: var(--text-color); font-weight: 600; }
+.section-text {
+    color: var(--text-secondary-color);
+    max-width: 80ch;
+}
+
+.section-text strong {
+    color: var(--text-color);
+    font-weight: 600;
+}
 
 /* The .input-controls class is now used by the new panels if they inherit that class,
    or its styles are directly applied to #function-controls-panel and #visualization-options-panel.
@@ -1146,29 +1325,67 @@ canvas {
 }
 */
 
-.control-group { display: flex; flex-direction: column; gap: 0.6rem; }
-.control-group label { font-size: 0.9rem; font-weight: 400; display: flex; justify-content: space-between; align-items: center; color: var(--text-secondary-color); letter-spacing: 0.01em; /* Align label text with the center of taller inputs */ }
+.control-group {
+    display: flex;
+    flex-direction: column;
+    gap: 0.6rem;
+}
+
+.control-group label {
+    font-size: 0.9rem;
+    font-weight: 400;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    color: var(--text-secondary-color);
+    letter-spacing: 0.01em;
+    /* Align label text with the center of taller inputs */
+}
+
 /* Override for checkbox labels to align left */
 .control-group label:has(span.custom-checkbox-visual) {
     justify-content: flex-start;
 }
-.control-group label > output,
-.control-group .slider-value-output { /* If output is part of label OR a sibling with this class */
-    margin-left: auto; /* Push output to the right if it's meant to be inline */
+
+.control-group label>output,
+.control-group .slider-value-output {
+    /* If output is part of label OR a sibling with this class */
+    margin-left: auto;
+    /* Push output to the right if it's meant to be inline */
     font-size: 0.8rem;
     padding: 0.25rem 0.5rem;
-    background-color: rgba(0,0,0,0.25);
+    background-color: rgba(0, 0, 0, 0.25);
     border-radius: 6px;
     color: var(--text-color);
-    min-width: 40px; /* Ensure consistent width */
+    min-width: 40px;
+    /* Ensure consistent width */
     text-align: center;
 }
+
 .control-group .number-input {
-    width: 70px; padding: 0.5rem; background: rgba(0,0,0,0.2); border: 1px solid var(--border-color);
-    color: var(--text-color); border-radius: 8px; font-size: 1.25rem; font-weight: 700; text-align: center; transition: box-shadow var(--transition-speed);
+    width: 70px;
+    padding: 0.5rem;
+    background: rgba(0, 0, 0, 0.2);
+    border: 1px solid var(--border-color);
+    color: var(--text-color);
+    border-radius: 8px;
+    font-size: 1.25rem;
+    font-weight: 700;
+    text-align: center;
+    transition: box-shadow var(--transition-speed);
 }
-.control-group .number-input:focus { outline: none; box-shadow: 0 0 0 3px var(--glow-color); }
-.sum-output { font-size: 1.75rem; font-weight: 700; padding: 0.5rem; color: #fff; }
+
+.control-group .number-input:focus {
+    outline: none;
+    box-shadow: 0 0 0 3px var(--glow-color);
+}
+
+.sum-output {
+    font-size: 1.75rem;
+    font-weight: 700;
+    padding: 0.5rem;
+    color: #fff;
+}
 
 input[type="range"] {
     -webkit-appearance: none;
@@ -1178,10 +1395,12 @@ input[type="range"] {
     background: rgba(160, 168, 216, 0.3);
     border-radius: 3px;
     outline: none;
-    transition: background-color var(--transition-speed), box-shadow var(--transition-speed); /* Smooth transition for background and shadow */
+    transition: background-color var(--transition-speed), box-shadow var(--transition-speed);
+    /* Smooth transition for background and shadow */
 }
 
-input[type="range"]::-moz-range-track { /* Basic track styling for Firefox */
+input[type="range"]::-moz-range-track {
+    /* Basic track styling for Firefox */
     width: 100%;
     height: 6px;
     background: rgba(160, 168, 216, 0.3);
@@ -1255,7 +1474,8 @@ input[type="range"]:focus::-moz-range-thumb {
     overflow-y: hidden;
     gap: 1.5rem;
     align-items: stretch;
-    padding-bottom: 0.5rem; /* Space for scrollbar */
+    padding-bottom: 0.5rem;
+    /* Space for scrollbar */
 }
 
 .two-column-layout::-webkit-scrollbar {
@@ -1277,13 +1497,19 @@ input[type="range"]:focus::-moz-range-thumb {
     background-color: var(--accent-purple-light);
 }
 
-.two-column-layout > div {
-    flex: 0 0 calc(50% - 0.75rem);
-    min-width: 400px;
+.two-column-layout>div {
+    flex: 1 1 0%;
+    min-width: 320px;
+}
+
+/* When a sibling is collapsed, the non-collapsed column grows freely */
+.two-column-layout:has(.plane-collapsed)>div:not(.plane-collapsed) {
+    flex: 1 1 0%;
+    min-width: 0;
 }
 
 /* Three-column layout for Laplace mode */
-.two-column-layout:has(#laplace_3d_column:not(.hidden)) > div {
+.two-column-layout:has(#laplace_3d_column:not(.hidden))>div {
     flex: 0 0 calc(33.333% - 1rem);
     min-width: 300px;
 }
@@ -1312,7 +1538,7 @@ input[type="range"]:focus::-moz-range-thumb {
     justify-items: stretch;
 }
 
-.two-column-layout.chaining-grid-view > div {
+.two-column-layout.chaining-grid-view>div {
     flex: unset !important;
     min-width: 0 !important;
     min-height: 0 !important;
@@ -1348,8 +1574,16 @@ input[type="range"]:focus::-moz-range-thumb {
 }
 
 @media (max-width: 800px) {
-    .two-column-layout { flex-direction: column; overflow-x: hidden; }
-    .two-column-layout > div { flex: 1 1 auto; width: 100%; min-width: 0; }
+    .two-column-layout {
+        flex-direction: column;
+        overflow-x: hidden;
+    }
+
+    .two-column-layout>div {
+        flex: 1 1 auto;
+        width: 100%;
+        min-width: 0;
+    }
 }
 
 /* .slider-pair-row is renamed to .slider-row and styled above */
@@ -1367,54 +1601,250 @@ input[type="range"]:focus::-moz-range-thumb {
 }
 */
 
-.helix-cards-container { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 1rem; }
-.helix-card { padding: 1.2rem; border: 1px solid var(--border-color); border-radius: 16px; display: flex; flex-direction: column; gap: 1rem; transition: box-shadow var(--transition-speed), transform var(--transition-speed); }
-.helix-card:hover { transform: translateY(-5px); box-shadow: 0 0 15px rgba(128, 137, 255, 0.2); }
-.helix-card-title { font-weight: 600; text-align: center; }
-.circular-plots-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; justify-items: center; }
-.circular-plot-label { text-align: center; font-size: 0.8rem; color: var(--text-secondary-color); }
-.linear-component { width: 100%; padding-top: 1rem; }
-.linear-bar-bg { height: 16px; width: 100%; background: rgba(0,0,0,0.3); border-radius: 8px; overflow: hidden; }
-.linear-bar-fg { height: 100%; border-radius: 8px; }
-.linear-bar-label { text-align: center; font-size: 0.9rem; margin-top: 0.5rem; color: var(--text-secondary-color); }
-
-.flowchart-list li { list-style: none; counter-increment: step-counter; margin-bottom: 1rem; padding-left: 2.5rem; position: relative; }
-.flowchart-list li::before { content: counter(step-counter); position: absolute; left: 0; top: 0; width: 1.8rem; height: 1.8rem; background: var(--accent-purple); color: white; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: 700; box-shadow: 0 0 10px var(--accent-purple); }
-.flowchart-list li strong { display: block; font-size: 1.1rem; }
-
-#helix-manipulation-canvas { width: 100% !important; height: 400px !important; background: transparent; border-radius: 12px; cursor: grab; }
-#helix-manipulation-canvas:active { cursor: grabbing; }
-
-.attention-viz, .mlp-viz { display: flex; flex-direction: column; align-items: center; gap: 1.5rem; padding: 2rem 0; position: relative; }
-.attention-row { display: flex; gap: 1rem; align-items: center; z-index: 2; }
-.viz-box { padding: 1rem 1.5rem; border-radius: 8px; border: 1px solid var(--border-color); background: var(--card-bg-color); text-align: center; font-weight: 600; transition: transform var(--transition-speed), box-shadow var(--transition-speed); }
-.viz-box:hover { transform: scale(1.05); box-shadow: 0 0 12px var(--glow-color); }
-.viz-box-small { padding: 0.5rem 1rem; font-size: 0.9rem; }
-.viz-arrow { font-size: 2rem; color: var(--text-secondary-color); }
-.viz-label { color: var(--text-secondary-color); font-size: 0.9rem; margin-top: -0.5rem; }
-
-.mlp-stages { display: grid; grid-template-columns: 1fr auto 1fr; gap: 1.5rem; align-items: center; width: 100%; }
-.mlp-stage-box { border: 1px solid var(--border-color); border-radius: 12px; padding: 1.5rem; display: flex; flex-direction: column; gap: 1rem; align-items: center; min-height: 220px; justify-content: space-between; }
-
-.chart-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 2rem; }
-.chart-container { position: relative; }
-.chart-container svg { overflow: visible; }
-.chart-title { text-align: center; margin-bottom: 1rem; font-weight: 600; }
-
-.helix-subspace-container { display: grid; grid-template-rows: 1fr 1fr auto; grid-template-columns: 1fr 1fr; gap: 1.5rem; height: 400px; }
-.helix-subspace-linear { grid-column: 1 / -1; }
-
-.precision-comparison { display: grid; grid-template-columns: 1fr 1fr; gap: 2rem; }
-.precision-box { padding: 1.5rem; border: 1px solid var(--border-color); border-radius: 16px; display: flex; flex-direction: column; gap: 1rem; align-items: center; }
-
-#tooltip {
-    position: fixed; display: none; padding: 0.5rem 0.75rem; background: rgba(13, 15, 38, 0.9);
-    border: 1px solid var(--border-color); border-radius: 6px; font-size: 0.9rem; pointer-events: none;
-    z-index: 10; backdrop-filter: blur(5px); white-space: pre; color: var(--text-color);
+.helix-cards-container {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+    gap: 1rem;
 }
 
-.fourier-bar, .error-bar { transition: transform 0.2s ease-out; }
-.fourier-bar:hover, .error-bar:hover { transform: scaleY(1.05); filter: brightness(1.2); }
+.helix-card {
+    padding: 1.2rem;
+    border: 1px solid var(--border-color);
+    border-radius: 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+    transition: box-shadow var(--transition-speed), transform var(--transition-speed);
+}
+
+.helix-card:hover {
+    box-shadow: 0 0 15px rgba(128, 137, 255, 0.2);
+}
+
+.helix-card-title {
+    font-weight: 600;
+    text-align: center;
+}
+
+.circular-plots-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 1rem;
+    justify-items: center;
+}
+
+.circular-plot-label {
+    text-align: center;
+    font-size: 0.8rem;
+    color: var(--text-secondary-color);
+}
+
+.linear-component {
+    width: 100%;
+    padding-top: 1rem;
+}
+
+.linear-bar-bg {
+    height: 16px;
+    width: 100%;
+    background: rgba(0, 0, 0, 0.3);
+    border-radius: 8px;
+    overflow: hidden;
+}
+
+.linear-bar-fg {
+    height: 100%;
+    border-radius: 8px;
+}
+
+.linear-bar-label {
+    text-align: center;
+    font-size: 0.9rem;
+    margin-top: 0.5rem;
+    color: var(--text-secondary-color);
+}
+
+.flowchart-list li {
+    list-style: none;
+    counter-increment: step-counter;
+    margin-bottom: 1rem;
+    padding-left: 2.5rem;
+    position: relative;
+}
+
+.flowchart-list li::before {
+    content: counter(step-counter);
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 1.8rem;
+    height: 1.8rem;
+    background: var(--accent-purple);
+    color: white;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: 700;
+    box-shadow: 0 0 10px var(--accent-purple);
+}
+
+.flowchart-list li strong {
+    display: block;
+    font-size: 1.1rem;
+}
+
+#helix-manipulation-canvas {
+    width: 100% !important;
+    height: 400px !important;
+    background: transparent;
+    border-radius: 12px;
+    cursor: grab;
+}
+
+#helix-manipulation-canvas:active {
+    cursor: grabbing;
+}
+
+.attention-viz,
+.mlp-viz {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 1.5rem;
+    padding: 2rem 0;
+    position: relative;
+}
+
+.attention-row {
+    display: flex;
+    gap: 1rem;
+    align-items: center;
+    z-index: 2;
+}
+
+.viz-box {
+    padding: 1rem 1.5rem;
+    border-radius: 8px;
+    border: 1px solid var(--border-color);
+    background: var(--card-bg-color);
+    text-align: center;
+    font-weight: 600;
+    transition: transform var(--transition-speed), box-shadow var(--transition-speed);
+}
+
+.viz-box:hover {
+    box-shadow: 0 0 12px var(--glow-color);
+}
+
+.viz-box-small {
+    padding: 0.5rem 1rem;
+    font-size: 0.9rem;
+}
+
+.viz-arrow {
+    font-size: 2rem;
+    color: var(--text-secondary-color);
+}
+
+.viz-label {
+    color: var(--text-secondary-color);
+    font-size: 0.9rem;
+    margin-top: -0.5rem;
+}
+
+.mlp-stages {
+    display: grid;
+    grid-template-columns: 1fr auto 1fr;
+    gap: 1.5rem;
+    align-items: center;
+    width: 100%;
+}
+
+.mlp-stage-box {
+    border: 1px solid var(--border-color);
+    border-radius: 12px;
+    padding: 1.5rem;
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+    align-items: center;
+    min-height: 220px;
+    justify-content: space-between;
+}
+
+.chart-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+    gap: 2rem;
+}
+
+.chart-container {
+    position: relative;
+}
+
+.chart-container svg {
+    overflow: visible;
+}
+
+.chart-title {
+    text-align: center;
+    margin-bottom: 1rem;
+    font-weight: 600;
+}
+
+.helix-subspace-container {
+    display: grid;
+    grid-template-rows: 1fr 1fr auto;
+    grid-template-columns: 1fr 1fr;
+    gap: 1.5rem;
+    height: 400px;
+}
+
+.helix-subspace-linear {
+    grid-column: 1 / -1;
+}
+
+.precision-comparison {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 2rem;
+}
+
+.precision-box {
+    padding: 1.5rem;
+    border: 1px solid var(--border-color);
+    border-radius: 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+    align-items: center;
+}
+
+#tooltip {
+    position: fixed;
+    display: none;
+    padding: 0.5rem 0.75rem;
+    background: rgba(13, 15, 38, 0.9);
+    border: 1px solid var(--border-color);
+    border-radius: 6px;
+    font-size: 0.9rem;
+    pointer-events: none;
+    z-index: 10;
+    backdrop-filter: blur(5px);
+    white-space: pre;
+    color: var(--text-color);
+}
+
+.fourier-bar,
+.error-bar {
+    transition: transform 0.2s ease-out;
+}
+
+.fourier-bar:hover,
+.error-bar:hover {
+    filter: brightness(1.2);
+}
 
 .hidden {
     display: none !important;
@@ -1422,10 +1852,12 @@ input[type="range"]:focus::-moz-range-thumb {
 
 .hidden-visually {
     position: absolute !important;
-    height: 1px; width: 1px;
+    height: 1px;
+    width: 1px;
     overflow: hidden;
     clip: rect(1px, 1px, 1px, 1px);
-    white-space: nowrap; /* For good measure */
+    white-space: nowrap;
+    /* For good measure */
 }
 
 /*
@@ -1450,7 +1882,7 @@ button.active {
     box-sizing: border-box;
 }
 
-#fullscreen_container > #w_plane_plotly_container {
+#fullscreen_container>#w_plane_plotly_container {
     width: 100%;
     height: 100%;
     display: block;
@@ -1501,15 +1933,17 @@ button {
 
 /* More compact buttons specifically for canvas headers */
 .canvas-header-controls button {
-    padding: 0.4rem 0.8rem; /* Reduced padding - Stays as is, not overridden by general button padding */
-    font-size: 0.85rem; /* Slightly smaller font - Stays as is */
+    padding: 0.4rem 0.8rem;
+    /* Reduced padding - Stays as is, not overridden by general button padding */
+    font-size: 0.85rem;
+    /* Slightly smaller font - Stays as is */
 }
 
 button:hover {
     background-color: color-mix(in srgb, var(--card-bg-color) 90%, white 10%);
     border-color: var(--accent-purple);
-    color: var(--text-color); /* Ensure text color remains readable */
-    transform: translateY(-2px);
+    color: var(--text-color);
+    /* Ensure text color remains readable */
     box-shadow: 0 3px 10px rgba(var(--bg-color-rgb), 0.3);
 }
 
@@ -1518,7 +1952,6 @@ button:active {
     background-color: var(--accent-purple-dark);
     border-color: var(--accent-purple-dark);
     color: #fff;
-    transform: translateY(-1px);
     box-shadow: 0 1px 5px rgba(var(--bg-color-rgb), 0.2);
     /* filter: brightness(0.95); Removed */
 }
@@ -1531,13 +1964,16 @@ button:active {
 }
 
 /* Specific style for persistently active function selection buttons */
-.function-button-grid > button.active {
-    background-color: var(--accent-purple-dark);
-    color: #fff;
-    border-color: var(--accent-purple-dark);
-    box-shadow: 0 0 8px var(--accent-purple-dark); /* Use var for color */
-    filter: brightness(1); /* Reset any generic active brightness - already present */
-    transform: translateY(0px); /* Ensure no press effect persists - already present */
+.function-button-grid>button.active {
+    background-color: rgba(255, 255, 255, 0.04);
+    color: var(--accent-purple);
+    border-color: var(--accent-purple);
+    box-shadow: 0 0 15px var(--glow-color);
+    /* Glassy glow using active theme glow */
+    filter: brightness(1);
+    /* Reset any generic active brightness - already present */
+    transform: translateY(0px);
+    /* Ensure no press effect persists - already present */
 }
 
 .icon-button {
@@ -1570,16 +2006,16 @@ button:active {
 }
 
 .canvas-icon-button:hover {
-    background-color: rgba(32, 36, 71, 0.88);
+    background-color: color-mix(in srgb, var(--card-bg-color) 80%, black);
     border-color: color-mix(in srgb, var(--accent-purple) 68%, var(--border-color));
-    box-shadow: 0 0 0 1px rgba(167, 139, 250, 0.12), 0 6px 16px rgba(0, 0, 0, 0.14);
+    box-shadow: 0 0 0 1px color-mix(in srgb, var(--accent-purple) 12%, transparent), 0 6px 16px rgba(0, 0, 0, 0.14);
 }
 
 .canvas-icon-button:active {
-    background-color: rgba(28, 32, 64, 0.95);
+    background-color: color-mix(in srgb, var(--card-bg-color) 90%, black);
     border-color: var(--accent-purple);
     color: var(--text-color);
-    box-shadow: 0 0 0 2px rgba(167, 139, 250, 0.16);
+    box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent-purple) 16%, transparent);
 }
 
 .top-controls-toggle-btn {
@@ -1601,11 +2037,12 @@ button:active {
 
 /* Generic active state for toggle buttons (e.g., for dependent settings) */
 button.toggle-active {
-    background-color: var(--accent-purple-dark);
-    color: #fff;
-    border-color: var(--accent-purple-dark);
-    box-shadow: 0 0 6px color-mix(in srgb, var(--accent-purple-dark) 70%, transparent);
-    transform: translateY(0px); /* Override hover effects for persistent active state */
+    background-color: rgba(255, 255, 255, 0.04);
+    color: var(--accent-purple);
+    border-color: var(--accent-purple);
+    box-shadow: 0 0 15px var(--glow-color);
+    transform: translateY(0px);
+    /* Override hover effects for persistent active state */
 }
 
 /* Basic Select Styling */
@@ -1613,12 +2050,16 @@ select {
     background-color: rgba(var(--bg-color-rgb), 0.3);
     color: var(--text-color);
     border: 1px solid var(--border-color);
-    padding: 0.5rem 2rem 0.5rem 0.75rem; /* Adjusted padding for arrow */
+    padding: 0.5rem 2rem 0.5rem 0.75rem;
+    /* Adjusted padding for arrow */
     border-radius: 6px;
     font-family: var(--font-family);
-    font-size: 0.85rem; /* Consistent with buttons */
+    font-size: 0.85rem;
+    /* Consistent with buttons */
     min-width: 60px;
-    appearance: none; -webkit-appearance: none; -moz-appearance: none;
+    appearance: none;
+    -webkit-appearance: none;
+    -moz-appearance: none;
     background-image: url('data:image/svg+xml;charset=US-ASCII,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%22292.4%22%20height%3D%22292.4%22%3E%3Cpath%20fill%3D%22%23B0B8E0%22%20d%3D%22M287%2069.4a17.6%2017.6%200%200%200-13-5.4H18.4c-5%200-9.3%201.8-12.9%205.4A17.6%2017.6%200%200%200%200%2082.2c0%205%201.8%209.3%205.4%2012.9l128%20127.9c3.6%203.6%207.8%205.4%2012.8%205.4s9.2-1.8%2012.8-5.4L287%2095c3.5-3.5%205.4-7.8%205.4-12.8%200-5-1.9-9.4-5.4-12.8z%22%2F%3E%3C%2Fsvg%3E');
     background-repeat: no-repeat;
     background-position: right 0.75rem center;
@@ -1628,8 +2069,10 @@ select {
 
 /* Apply to .canvas-header-controls select specifically */
 .canvas-header-controls select {
-    font-size: 0.8rem; /* This is more specific, so it will override the 0.85rem above */
-    padding-right: 1.8rem; /* Keep custom padding for smaller selects if needed */
+    font-size: 0.8rem;
+    /* This is more specific, so it will override the 0.85rem above */
+    padding-right: 1.8rem;
+    /* Keep custom padding for smaller selects if needed */
 }
 
 .canvas-shape-select,
@@ -1639,11 +2082,9 @@ select {
     padding: 0.6rem 2.5rem 0.6rem 1rem;
     border-radius: 999px;
     border: 1px solid color-mix(in srgb, var(--accent-purple) 34%, var(--border-color));
-    background:
-        linear-gradient(135deg, rgba(30, 24, 69, 0.94), rgba(12, 17, 39, 0.92)),
-        rgba(var(--bg-color-rgb), 0.65);
+    background: color-mix(in srgb, var(--card-bg-color) 90%, black);
     color: var(--text-color);
-    box-shadow: inset 0 1px 0 rgba(255,255,255,0.04);
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04);
     transition: border-color 0.2s ease, box-shadow 0.2s ease, background-color 0.2s ease;
 }
 
@@ -1651,7 +2092,7 @@ select {
 #input_shape_selector:hover {
     transform: none;
     border-color: color-mix(in srgb, var(--accent-purple) 62%, var(--border-color));
-    box-shadow: 0 0 0 1px rgba(167, 139, 250, 0.12);
+    box-shadow: 0 0 0 1px color-mix(in srgb, var(--accent-purple) 12%, transparent);
 }
 
 .canvas-shape-select:focus,
@@ -1659,11 +2100,11 @@ select {
     outline: none;
     transform: none;
     border-color: var(--accent-purple);
-    box-shadow: 0 0 0 3px rgba(167, 139, 250, 0.22), 0 10px 24px rgba(0, 0, 0, 0.16);
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent-purple) 22%, transparent), 0 10px 24px rgba(0, 0, 0, 0.16);
 }
 
 #input_shape_selector option {
-    background: rgb(19, 22, 48);
+    background: var(--bg-color);
     color: var(--text-color);
 }
 
@@ -1678,12 +2119,16 @@ select:focus {
     display: inline-block;
     margin-left: 0.5rem;
     padding: 0.25rem 0.5rem;
-    background-color: rgba(0,0,0,0.25);
+    background-color: rgba(0, 0, 0, 0.25);
     border-radius: 6px;
-    font-size: 0.8rem; /* Applied as per prompt */
-    color: var(--text-color); /* Applied as per prompt */
-    min-width: 40px; /* Already part of the unified .slider-value-output style */
-    text-align: center; /* Already part of the unified .slider-value-output style */
+    font-size: 0.8rem;
+    /* Applied as per prompt */
+    color: var(--text-color);
+    /* Applied as per prompt */
+    min-width: 40px;
+    /* Already part of the unified .slider-value-output style */
+    text-align: center;
+    /* Already part of the unified .slider-value-output style */
     /* No margin-left here, as it's handled by the parent label or specific positioning rules */
 }
 
@@ -1714,19 +2159,27 @@ select:focus {
     position: absolute;
     bottom: 10px;
     left: 10px;
-    background: rgba(var(--bg-color-rgb, 13, 15, 38), 0.85); /* Use the new RGB variable */
+    background: rgba(var(--bg-color-rgb, 13, 15, 38), 0.85);
+    /* Use the new RGB variable */
     color: var(--text-color);
     border: 1px solid var(--border-color);
-    border-radius: 8px; /* Consistent with other elements */
-    padding: 0.75rem 1rem; /* Decent padding */
+    border-radius: 8px;
+    /* Consistent with other elements */
+    padding: 0.75rem 1rem;
+    /* Decent padding */
     font-size: 0.85rem;
     line-height: 1.5;
     backdrop-filter: blur(8px);
-    -webkit-backdrop-filter: blur(8px); /* For Safari */
-    z-index: 100; /* Ensure it's above the canvas */
-    pointer-events: none; /* So it doesn't interfere with mouse events on canvas */
-    max-width: calc(100% - 20px); /* Prevent overflow from its container */
-    box-shadow: 0 4px 15px rgba(0,0,0,0.2); /* Subtle shadow */
+    -webkit-backdrop-filter: blur(8px);
+    /* For Safari */
+    z-index: 100;
+    /* Ensure it's above the canvas */
+    pointer-events: none;
+    /* So it doesn't interfere with mouse events on canvas */
+    max-width: calc(100% - 20px);
+    /* Prevent overflow from its container */
+    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2);
+    /* Subtle shadow */
 }
 
 .probe-info-overlay.hidden {
@@ -1736,9 +2189,11 @@ select:focus {
 .cauchy-info-overlay {
     position: absolute;
     bottom: 10px;
-    right: 10px; /* Typically on the other side */
+    right: 10px;
+    /* Typically on the other side */
     background: rgba(var(--bg-color-rgb, 13, 15, 38), 0.85);
-    color: var(--accent-yellow); /* Use an accent for highlight */
+    color: var(--accent-yellow);
+    /* Use an accent for highlight */
     border: 1px solid var(--accent-yellow);
     border-radius: 8px;
     padding: 0.75rem 1rem;
@@ -1748,9 +2203,10 @@ select:focus {
     -webkit-backdrop-filter: blur(8px);
     z-index: 100;
     pointer-events: none;
-    max-width: calc(100% - 70px); /* Avoid overlap with probe if both visible */
+    max-width: calc(100% - 70px);
+    /* Avoid overlap with probe if both visible */
     text-align: left;
-    box-shadow: 0 4px 15px rgba(0,0,0,0.2);
+    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2);
 }
 
 .cauchy-info-overlay.hidden {
@@ -1760,29 +2216,38 @@ select:focus {
 .slider-pair-row {
     display: flex;
     flex-direction: row;
-    gap: 2rem; /* Match the main input-controls gap */
-    align-items: flex-start; /* Align items to the start of the cross axis */
+    gap: 2rem;
+    /* Match the main input-controls gap */
+    align-items: flex-start;
+    /* Align items to the start of the cross axis */
 }
 
-.slider-pair-row > .control-group {
-    flex: 1; /* Each control group takes equal width */
-    min-width: 0; /* Allow shrinking in flex context */
+.slider-pair-row>.control-group {
+    flex: 1;
+    /* Each control group takes equal width */
+    min-width: 0;
+    /* Allow shrinking in flex context */
 }
 
 /* Custom Checkbox Styling */
 .control-group label input[type="checkbox"] {
-    opacity: 0; /* Hide the default checkbox */
+    opacity: 0;
+    /* Hide the default checkbox */
     position: absolute;
     width: 0;
     height: 0;
 }
 
 .control-group label {
-    position: relative; /* For positioning pseudo-elements if needed, and for clickability */
+    position: relative;
+    /* For positioning pseudo-elements if needed, and for clickability */
     cursor: pointer;
-    user-select: none; /* Prevent text selection on click */
-    display: flex; /* Use flex for alignment */
-    align-items: center; /* Vertically align custom box and text */
+    user-select: none;
+    /* Prevent text selection on click */
+    display: flex;
+    /* Use flex for alignment */
+    align-items: center;
+    /* Vertically align custom box and text */
     /* font-size: 1rem; font-weight: 500; (already from .control-group label, but ensure it applies well) */
 }
 
@@ -1793,12 +2258,16 @@ select:focus {
     height: 18px;
     background-color: rgba(var(--bg-color-rgb), 0.3);
     border: 1px solid var(--border-color);
-    box-shadow: none; /* Ensure no default box shadow */
+    box-shadow: none;
+    /* Ensure no default box shadow */
     border-radius: 4px;
-    margin-right: 0.5rem; /* Space between custom box and label text (was 0.25rem, prompt implies general .control-group label styling for color) */
+    margin-right: 0.5rem;
+    /* Space between custom box and label text (was 0.25rem, prompt implies general .control-group label styling for color) */
     transition: background-color 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease;
-    flex-shrink: 0; /* Prevent shrinking if label text is long */
-    position: relative; /* For the checkmark */
+    flex-shrink: 0;
+    /* Prevent shrinking if label text is long */
+    position: relative;
+    /* For the checkmark */
 }
 
 /* Checkmark style (using an ::after pseudo-element on the visual span) */
@@ -1809,35 +2278,46 @@ select:focus {
     top: 1px;
     width: 4px;
     height: 9px;
-    border: solid var(--text-color); /* Initial border color, changes to #fff when checked */
+    border: solid var(--text-color);
+    /* Initial border color, changes to #fff when checked */
     border-width: 0 2px 2px 0;
-    transform: rotate(45deg) scale(0.5); /* Initial state: small and rotated */
-    opacity: 0; /* Initial state: invisible */
-    transition: transform 0.2s ease-out, opacity 0.2s ease-out; /* Smooth transition for pop effect */
+    transform: rotate(45deg) scale(0.5);
+    /* Initial state: small and rotated */
+    opacity: 0;
+    /* Initial state: invisible */
+    transition: transform 0.2s ease-out, opacity 0.2s ease-out;
+    /* Smooth transition for pop effect */
 }
 
 /* When the real checkbox is checked, style the custom one */
-.control-group label input[type="checkbox"]:checked + .custom-checkbox-visual {
-    background-color: var(--accent-purple);
+.control-group label input[type="checkbox"]:checked+.custom-checkbox-visual {
+    background-color: color-mix(in srgb, var(--accent-purple) 12%, rgba(255, 255, 255, 0.04));
     border-color: var(--accent-purple);
+    box-shadow: 0 0 10px var(--glow-color);
 }
 
 /* Show the checkmark when checked and change its color */
-.control-group label input[type="checkbox"]:checked + .custom-checkbox-visual::after {
-    border-color: #fff; /* White checkmark on accent background */
-    transform: rotate(45deg) scale(1); /* Final state: full size */
-    opacity: 1; /* Final state: visible */
+.control-group label input[type="checkbox"]:checked+.custom-checkbox-visual::after {
+    border-color: var(--accent-purple);
+    /* Accent checkmark */
+    transform: rotate(45deg) scale(1);
+    /* Final state: full size */
+    opacity: 1;
+    /* Final state: visible */
 }
 
 /* Focus style for accessibility (applied to the custom visual when the hidden input has focus) */
-.control-group label input[type="checkbox"]:focus + .custom-checkbox-visual {
-    box-shadow: 0 0 0 3px var(--glow-color); /* Consistent glow */
-    border-color: var(--accent-purple); /* Optionally make border match glow on focus */
+.control-group label input[type="checkbox"]:focus+.custom-checkbox-visual {
+    box-shadow: 0 0 0 3px var(--glow-color);
+    /* Consistent glow */
+    border-color: var(--accent-purple);
+    /* Optionally make border match glow on focus */
 }
 
 /* Hover style on the custom box */
 .control-group label:hover .custom-checkbox-visual {
-    border-color: var(--accent-purple); /* Highlight on hover */
+    border-color: var(--accent-purple);
+    /* Highlight on hover */
     /* box-shadow: 0 0 0 2px rgba(var(--glow-color), 0.3); /* Optional subtle glow on hover */
 }
 
@@ -1856,68 +2336,94 @@ select:focus {
 #polynomial_coeffs_container {
     display: flex;
     flex-direction: column;
-    gap: 1.5rem; /* Space between each coefficient's row */
-    padding-top: 0.5rem; /* Add some space above the first coefficient */
+    gap: 1.5rem;
+    /* Space between each coefficient's row */
+    padding-top: 0.5rem;
+    /* Add some space above the first coefficient */
 }
 
 .polynomial-coeff-row {
     display: flex;
-    flex-direction: row; /* Re and Im parts side-by-side */
-    gap: 1.5rem;         /* Space between Re and Im control groups */
-    align-items: flex-start; /* Align to the top */
+    flex-direction: row;
+    /* Re and Im parts side-by-side */
+    gap: 1.5rem;
+    /* Space between Re and Im control groups */
+    align-items: flex-start;
+    /* Align to the top */
 }
 
-.polynomial-coeff-row > .control-group {
-    flex: 1; /* Each part (Re/Im) takes equal space */
-    min-width: 0; /* Allow shrinking in flex context */
+.polynomial-coeff-row>.control-group {
+    flex: 1;
+    /* Each part (Re/Im) takes equal space */
+    min-width: 0;
+    /* Allow shrinking in flex context */
     /* Styles for .control-group (gap, etc.) are already global */
 }
 
 /* Specific styles for polynomial controls for compactness */
 .polynomial-coeff-row .control-group label {
-    font-size: 0.85rem; /* Retains its specific size */
+    font-size: 0.85rem;
+    /* Retains its specific size */
     /* If output is NOT in label, space-between might not be ideal. */
     /* For poly, output is a sibling to label, so this won't push output to right. */
-    justify-content: flex-start; /* Align label text to the start */
-    color: var(--text-secondary-color); /* Ensure color is inherited or set */
+    justify-content: flex-start;
+    /* Align label text to the start */
+    color: var(--text-secondary-color);
+    /* Ensure color is inherited or set */
 }
 
 /* Style for the output that is a sibling of the label in polynomial controls */
 .polynomial-coeff-row .control-group .slider-value-output {
-    margin-left: 0; /* Override the auto margin */
-    margin-bottom: 0.25rem; /* Space it above the slider */
-    display: block; /* Make it block to sit on its own line */
-    text-align: left; /* Align text to the left */
-    padding: 0.1rem 0; /* Minimal padding */
-    background-color: transparent; /* No background for this specific output */
-    min-width: unset; /* Unset min-width */
+    margin-left: 0;
+    /* Override the auto margin */
+    margin-bottom: 0.25rem;
+    /* Space it above the slider */
+    display: block;
+    /* Make it block to sit on its own line */
+    text-align: left;
+    /* Align text to the left */
+    padding: 0.1rem 0;
+    /* Minimal padding */
+    background-color: transparent;
+    /* No background for this specific output */
+    min-width: unset;
+    /* Unset min-width */
 }
 
 .mobius-coeff-row {
     display: flex;
-    flex-direction: row; /* Re and Im parts side-by-side */
-    gap: 1.5rem;         /* Space between Re and Im control groups */
-    align-items: flex-start; /* Align to the top */
+    flex-direction: row;
+    /* Re and Im parts side-by-side */
+    gap: 1.5rem;
+    /* Space between Re and Im control groups */
+    align-items: flex-start;
+    /* Align to the top */
 }
 
-.mobius-coeff-row > .control-group {
-    flex: 1; /* Each part (Re/Im) takes equal space */
-    min-width: 0; /* Allow shrinking in flex context */
+.mobius-coeff-row>.control-group {
+    flex: 1;
+    /* Each part (Re/Im) takes equal space */
+    min-width: 0;
+    /* Allow shrinking in flex context */
 }
 
 /* Specific styles for Mobius controls for consistency with polynomial */
 .mobius-coeff-row .control-group label {
-    font-size: 0.85rem; /* Retains its specific size */
-    justify-content: flex-start; /* Align label text to the start */
-    color: var(--text-secondary-color); /* Ensure color is inherited or set */
+    font-size: 0.85rem;
+    /* Retains its specific size */
+    justify-content: flex-start;
+    /* Align label text to the start */
+    color: var(--text-secondary-color);
+    /* Ensure color is inherited or set */
 }
 
 /* This assumes the <output> is part of the <label> for Mobius, unlike polynomial */
 /* If output is part of label: .mobius-coeff-row .control-group label > output */
 /* If output is a sibling (like poly): .mobius-coeff-row .control-group .slider-value-output */
 /* The HTML structure used output inside label, so this should be fine: */
-.mobius-coeff-row .control-group label > output {
-    margin-left: 0.5rem; /* Space between "Re(a):" and "1.0" */
+.mobius-coeff-row .control-group label>output {
+    margin-left: 0.5rem;
+    /* Space between "Re(a):" and "1.0" */
     /* Other output styles are inherited or default */
 }
 
@@ -1932,7 +2438,8 @@ select:focus {
 }
 
 .mobius-coeff-row .control-group .slider-container {
-    gap: 0.5rem; /* More compact gap for slider, button, select */
+    gap: 0.5rem;
+    /* More compact gap for slider, button, select */
 }
 
 .mobius-coeff-row .control-group button {
@@ -1957,7 +2464,8 @@ select:focus {
 }
 
 .polynomial-coeff-row .control-group .slider-container {
-    gap: 0.5rem; /* More compact gap for slider, button, select */
+    gap: 0.5rem;
+    /* More compact gap for slider, button, select */
 }
 
 .polynomial-coeff-row .control-group button {
@@ -1974,7 +2482,8 @@ select:focus {
     background-color: rgba(var(--bg-color-rgb), 0.3);
     color: var(--text-color);
     border: 1px solid var(--border-color);
-    padding: 0.5rem; /* 8px */
+    padding: 0.5rem;
+    /* 8px */
     border-radius: 6px;
     width: 70px;
     box-sizing: border-box;
@@ -1989,6 +2498,7 @@ select:focus {
         flex-direction: column;
         max-height: none;
     }
+
     .controls-panel {
         height: auto;
         min-height: 220px;
@@ -1996,11 +2506,12 @@ select:focus {
 }
 
 /* Spacing for Sphere View Buttons */
-#sphere_view_controls_div > div:last-child {
+#sphere_view_controls_div>div:last-child {
     display: flex;
     flex-wrap: wrap;
     gap: 0.5rem;
-    margin-top: 0.5rem; /* Space below the label */
+    margin-top: 0.5rem;
+    /* Space below the label */
 }
 
 .small-number-input:focus {
@@ -2025,7 +2536,7 @@ select:focus {
     background:
         linear-gradient(145deg, rgba(38, 24, 76, 0.74), rgba(18, 16, 45, 0.88)),
         rgba(var(--bg-color-rgb), 0.4);
-    box-shadow: inset 0 1px 0 rgba(255,255,255,0.05), 0 10px 28px rgba(0, 0, 0, 0.22);
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.05), 0 10px 28px rgba(0, 0, 0, 0.22);
     display: flex;
     flex-direction: column;
     gap: 0.85rem;
@@ -2072,7 +2583,7 @@ select:focus {
     padding: 0.55rem 0.8rem;
     border-radius: 999px;
     border: 1px solid color-mix(in srgb, var(--accent-purple) 34%, transparent);
-    background: rgba(11, 14, 34, 0.45);
+    background: var(--card-bg-color);
     color: var(--text-color);
     font-size: 0.8rem;
     font-weight: 600;
@@ -2082,8 +2593,8 @@ select:focus {
 .taylor-series-card {
     padding: 0.95rem 1rem;
     border-radius: 14px;
-    border: 1px solid rgba(128, 137, 255, 0.16);
-    background: rgba(9, 13, 33, 0.24);
+    border: 1px solid var(--border-color);
+    background: var(--card-bg-color);
 }
 
 .taylor-series-card label {
@@ -2137,14 +2648,15 @@ select:focus {
 .taylor-series-preset-btn {
     padding: 0.45rem 0.7rem;
     border-radius: 999px;
-    background: rgba(255,255,255,0.03);
+    background: rgba(255, 255, 255, 0.03);
     border-color: rgba(128, 137, 255, 0.2);
     font-size: 0.78rem;
 }
 
 .taylor-series-preset-btn.toggle-active {
-    border-color: var(--accent-purple);
-    box-shadow: 0 0 0 1px rgba(255,255,255,0.05), 0 0 16px rgba(167, 139, 250, 0.22);
+    color: var(--accent-purple) !important;
+    border-color: var(--accent-purple) !important;
+    box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.05), 0 0 16px color-mix(in srgb, var(--accent-purple) 22%, transparent);
 }
 
 .taylor-series-input-row {
@@ -2200,8 +2712,8 @@ select:focus {
 }
 
 .algebraic-term-card {
-    background: linear-gradient(135deg, rgba(167, 139, 250, 0.05) 0%, rgba(9, 13, 33, 0.45) 100%);
-    border: 1px solid rgba(167, 139, 250, 0.18) !important;
+    background: color-mix(in srgb, var(--accent-purple) 5%, var(--card-bg-color));
+    border: 1px solid color-mix(in srgb, var(--accent-purple) 18%, transparent) !important;
     border-radius: 12px !important;
     padding: 12px !important;
     box-shadow: 0 4px 16px rgba(0, 0, 0, 0.25);
@@ -2213,8 +2725,8 @@ select:focus {
 }
 
 .algebraic-term-card:hover {
-    border-color: rgba(167, 139, 250, 0.35) !important;
-    box-shadow: 0 6px 20px rgba(167, 139, 250, 0.12);
+    border-color: color-mix(in srgb, var(--accent-purple) 35%, transparent) !important;
+    box-shadow: 0 6px 20px color-mix(in srgb, var(--accent-purple) 12%, transparent);
 }
 
 .algebraic-term-header {
@@ -2268,7 +2780,6 @@ select:focus {
 .algebraic-term-remove-btn:hover {
     background: rgba(255, 85, 85, 0.22);
     border-color: rgba(255, 85, 85, 0.45);
-    transform: scale(1.05);
 }
 
 .algebraic-coeff-grid {
@@ -2308,8 +2819,8 @@ select:focus {
     display: flex;
     align-items: center;
     gap: 6px;
-    background: rgba(7, 10, 24, 0.35);
-    border: 1px solid rgba(128, 137, 255, 0.1);
+    background: var(--card-bg-color);
+    border: 1px solid var(--border-color);
     border-radius: 6px;
     padding: 4px 6px;
 }
@@ -2338,19 +2849,19 @@ select:focus {
 }
 
 .algebraic-factor-card {
-    background: rgba(14, 18, 42, 0.35);
+    background: var(--card-bg-color);
     padding: 8px 10px;
     border-radius: 8px;
     display: flex;
     flex-direction: column;
     gap: 8px;
-    border: 1px solid rgba(255, 255, 255, 0.03);
+    border: 1px solid var(--border-color);
     transition: border-color 0.2s ease, background-color 0.2s ease;
 }
 
 .algebraic-factor-card:hover {
-    border-color: rgba(167, 139, 250, 0.15);
-    background: rgba(14, 18, 42, 0.55);
+    border-color: color-mix(in srgb, var(--accent-purple) 15%, transparent);
+    background: color-mix(in srgb, var(--card-bg-color) 80%, black);
 }
 
 .algebraic-factor-main-row {
@@ -2367,8 +2878,8 @@ select:focus {
 }
 
 .algebraic-factor-card select {
-    background-color: rgba(20, 25, 45, 0.8);
-    border: 1px solid rgba(167, 139, 250, 0.2);
+    background-color: var(--bg-color);
+    border: 1px solid color-mix(in srgb, var(--accent-purple) 20%, transparent);
     color: var(--text-color);
     padding: 3px 1.5rem 3px 8px !important;
     font-size: 0.72rem;
@@ -2429,18 +2940,19 @@ select:focus {
 .algebraic-checkbox-label .custom-checkbox-visual {
     width: 14px;
     height: 14px;
-    border: 1px solid rgba(167, 139, 250, 0.3);
+    border: 1px solid color-mix(in srgb, var(--accent-purple) 30%, transparent);
     border-radius: 3px;
-    background: rgba(20, 25, 45, 0.85);
+    background: var(--bg-color);
     position: relative;
     display: inline-block;
     flex-shrink: 0;
     transition: all 0.2s ease;
 }
 
-.algebraic-checkbox-label input[type="checkbox"]:checked + .custom-checkbox-visual {
-    background-color: var(--accent-purple);
+.algebraic-checkbox-label input[type="checkbox"]:checked+.custom-checkbox-visual {
+    background-color: color-mix(in srgb, var(--accent-purple) 12%, var(--bg-color));
     border-color: var(--accent-purple);
+    box-shadow: 0 0 10px var(--glow-color);
 }
 
 .algebraic-checkbox-label .custom-checkbox-visual::after {
@@ -2450,29 +2962,29 @@ select:focus {
     top: 1px;
     width: 3px;
     height: 7px;
-    border: solid #fff;
+    border: solid var(--accent-purple);
     border-width: 0 1.5px 1.5px 0;
     transform: rotate(45deg) scale(0.5);
     opacity: 0;
     transition: all 0.15s ease;
 }
 
-.algebraic-checkbox-label input[type="checkbox"]:checked + .custom-checkbox-visual::after {
+.algebraic-checkbox-label input[type="checkbox"]:checked+.custom-checkbox-visual::after {
     transform: rotate(45deg) scale(1);
     opacity: 1;
 }
 
 .algebraic-checkbox-label:hover .custom-checkbox-visual {
     border-color: var(--accent-purple);
-    box-shadow: 0 0 4px rgba(167, 139, 250, 0.25);
+    box-shadow: 0 0 4px color-mix(in srgb, var(--accent-purple) 25%, transparent);
 }
 
 #add_algebraic_term_btn {
     margin-top: 10px;
     width: 100%;
-    border: 1px dashed rgba(167, 139, 250, 0.35);
+    border: 1px dashed color-mix(in srgb, var(--accent-purple) 35%, transparent);
     color: var(--accent-purple);
-    background: rgba(167, 139, 250, 0.03);
+    background: color-mix(in srgb, var(--accent-purple) 3%, transparent);
     padding: 8px 12px;
     font-size: 0.8rem;
     font-weight: 600;
@@ -2488,9 +3000,9 @@ select:focus {
 #add_algebraic_term_btn:hover {
     border-style: solid;
     border-color: var(--accent-purple);
-    background: rgba(167, 139, 250, 0.08);
+    background: color-mix(in srgb, var(--accent-purple) 8%, transparent);
     transform: translateY(-1px);
-    box-shadow: 0 4px 12px rgba(167, 139, 250, 0.12);
+    box-shadow: 0 4px 12px color-mix(in srgb, var(--accent-purple) 12%, transparent);
 }
 
 /* Reusable Complex Points UI Chips & Buttons */
@@ -2504,8 +3016,8 @@ select:focus {
 .complex-points-chip {
     display: inline-flex;
     align-items: center;
-    background: rgba(167, 139, 250, 0.08);
-    border: 1px solid rgba(167, 139, 250, 0.22);
+    background: color-mix(in srgb, var(--accent-purple) 8%, transparent);
+    border: 1px solid color-mix(in srgb, var(--accent-purple) 22%, transparent);
     color: var(--text-color);
     padding: 0.3rem 0.6rem;
     border-radius: 999px;
@@ -2546,4 +3058,250 @@ select:focus {
 .complex-points-clear-btn:hover {
     background: rgba(255, 85, 85, 0.18);
     border-color: rgba(255, 85, 85, 0.4);
+}
+
+/* Theme Modal & Custom Pickers Styles */
+#theme_modal {
+    position: fixed;
+    inset: 0;
+    z-index: 2000;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    pointer-events: none;
+    opacity: 0;
+    transition: opacity 0.3s ease;
+}
+
+#theme_modal:not(.hidden) {
+    pointer-events: auto;
+    opacity: 1;
+}
+
+.theme-modal-backdrop {
+    position: absolute;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.7);
+    backdrop-filter: blur(8px);
+}
+
+.theme-modal-content {
+    position: relative;
+    width: 90%;
+    max-width: 750px;
+    background: var(--bg-color);
+    border: 1px solid var(--border-color);
+    border-radius: 16px;
+    padding: 2rem;
+    box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
+    z-index: 2010;
+    display: flex;
+    flex-direction: column;
+    gap: 1.5rem;
+    transform: scale(0.95);
+    transition: transform 0.3s ease;
+}
+
+#theme_modal:not(.hidden) .theme-modal-content {
+    transform: scale(1);
+}
+
+.theme-modal-close-btn {
+    position: absolute;
+    top: 1.5rem;
+    right: 1.5rem;
+    background: transparent;
+    border: none;
+    color: #a1a1aa;
+    cursor: pointer;
+    padding: 0.5rem;
+    border-radius: 8px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: color 0.2s, background-color 0.2s;
+}
+
+.theme-modal-close-btn:hover {
+    color: #ffffff;
+    background-color: rgba(255, 255, 255, 0.05);
+}
+
+.theme-modal-close-btn svg {
+    width: 20px;
+    height: 20px;
+}
+
+.theme-modal-header h2 {
+    font-size: 1.5rem;
+    font-weight: 600;
+    color: #ffffff;
+    margin-bottom: 0.25rem;
+    letter-spacing: -0.025em;
+    margin-top: 0;
+}
+
+.theme-modal-header p {
+    font-size: 0.875rem;
+    color: #a1a1aa;
+    margin: 0;
+}
+
+.theme-list-container {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 1rem;
+    max-height: 50vh;
+    overflow-y: auto;
+    padding-right: 0.5rem;
+}
+
+@media (min-width: 640px) {
+    .theme-list-container {
+        grid-template-columns: 1fr 1fr;
+    }
+}
+
+.theme-card {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    padding: 1rem;
+    border-radius: 12px;
+    border: 1px solid var(--border-color);
+    background: var(--card-bg-color);
+    text-align: left;
+    cursor: pointer;
+    transition: background-color 0.2s, border-color 0.2s;
+    width: 100%;
+    box-shadow: none;
+}
+
+.theme-card:hover {
+    background: color-mix(in srgb, var(--accent-purple) 8%, var(--card-bg-color));
+}
+
+.theme-card.active {
+    border-color: var(--accent-purple);
+    background: color-mix(in srgb, var(--accent-purple) 15%, var(--card-bg-color));
+}
+
+.theme-preview-pill {
+    display: flex;
+    gap: 0.35rem;
+    background: var(--bg-color);
+    padding: 0.5rem;
+    border-radius: 8px;
+    border: 1px solid var(--border-color);
+    flex-shrink: 0;
+    box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.2);
+}
+
+.theme-preview-dot {
+    width: 0.6rem;
+    height: 1.5rem;
+    border-radius: 9999px;
+}
+
+.theme-info h3 {
+    font-size: 0.875rem;
+    font-weight: 500;
+    color: #ffffff;
+    margin-bottom: 0.15rem;
+    margin-top: 0;
+}
+
+.theme-info p {
+    font-size: 0.75rem;
+    color: #a1a1aa;
+    line-height: 1.4;
+    margin: 0;
+}
+
+/* Domain coloring circle selectors */
+.domain-palette-selector-container {
+    grid-column: span 2;
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+    width: 100%;
+}
+
+.domain-palette-selector-label {
+    font-size: 11px;
+    color: var(--text-secondary-color);
+    letter-spacing: 0.05em;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.domain-palette-circles {
+    display: flex;
+    gap: 0.625rem;
+    overflow-x: auto;
+    padding-bottom: 0.5rem;
+    padding-top: 0.25rem;
+    scrollbar-width: thin;
+}
+
+.domain-palette-circle-btn {
+    flex-shrink: 0;
+    width: 2rem;
+    height: 2rem;
+    border-radius: 9999px;
+    border: 2px solid var(--border-color);
+    transition: all 0.3s ease;
+    cursor: pointer;
+    opacity: 0.6;
+}
+
+.domain-palette-circle-btn:hover {
+    opacity: 1;
+}
+
+.domain-palette-circle-btn.active {
+    border-color: var(--accent-purple);
+    opacity: 1;
+    box-shadow: 0 0 12px var(--glow-color);
+}
+
+/* Circle grid color pickers */
+.circle-color-picker-wrapper {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+}
+
+.circle-color-picker {
+    position: relative;
+    width: 1.5rem;
+    height: 1.5rem;
+    border-radius: 9999px;
+    border: 1px solid var(--border-color);
+    cursor: pointer;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+    transition: all 0.2s ease;
+    overflow: hidden;
+    flex-shrink: 0;
+}
+
+.circle-color-picker:hover {
+    border-color: var(--text-secondary-color);
+}
+
+.circle-color-picker input[type="color"] {
+    position: absolute;
+    top: -10px;
+    left: -10px;
+    width: 50px;
+    height: 50px;
+    cursor: pointer;
+    opacity: 0;
+}
+
+.circle-color-picker-label {
+    font-size: 11px;
+    color: var(--text-secondary-color);
+    letter-spacing: 0.05em;
 }

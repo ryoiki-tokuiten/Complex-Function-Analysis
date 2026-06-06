@@ -11,6 +11,7 @@ import {
     getVisibleBranchIndices,
     surfaceStageHasBranches
 } from '../analysis/riemann-surface.js';
+import { renderDomainPalettesUI, domainPalettes } from './theme-manager.js';
 
 const { controls } = context;
 
@@ -841,12 +842,16 @@ export function updateTitlesAndGlobalUI() {
     if (controls.riemannSphereDomainColoringOptions) {
         controls.riemannSphereDomainColoringOptions.classList.toggle('hidden', !state.domainColoringEnabled);
     }
+    const paletteCirclesContainer = document.getElementById('domain_palette_circles');
+    if (paletteCirclesContainer && typeof renderDomainPalettesUI === 'function') {
+        renderDomainPalettesUI(paletteCirclesContainer);
+    }
     [
         controls.domainPaletteSelect,
         controls.riemannSurfacePaletteSelect,
         controls.riemannSpherePaletteSelect
     ].filter(Boolean).forEach(selector => {
-        selector.value = state.domainPalette || 'calming';
+        selector.value = state.domainPalette || 'analytic-base';
     });
     if (controls.domainColoringKeyDiv) {
         controls.domainColoringKeyDiv.classList.toggle('hidden', !state.domainColoringEnabled);
@@ -905,41 +910,15 @@ export function updateTitlesAndGlobalUI() {
 export function updateDomainColoringKey() {
     if (!controls.domainColoringKeyDiv) return;
 
-    const palette = state.domainPalette || 'calming';
+    const paletteId = state.domainPalette || 'analytic-base';
+    const paletteObj = domainPalettes.find(p => p.id === paletteId) || domainPalettes[0];
+    
     let keyHtml = `<strong>Domain Coloring Key:</strong><br>`;
-
-    if (palette === 'classic') {
-        keyHtml += `
-            <span style="display:inline-block; margin-bottom: 4px;">- Hue (Color) maps to Argument (Angle):</span><br>
-            &nbsp;&nbsp;&nbsp;<span style="color:#00ffff; font-weight:bold;">Cyan</span>: Arg = 0° (Positive Real)<br>
-            &nbsp;&nbsp;&nbsp;<span style="color:#3b82f6; font-weight:bold;">Blue</span>: Arg = 90° (Positive Imaginary)<br>
-            &nbsp;&nbsp;&nbsp;<span style="color:#ef4444; font-weight:bold;">Red</span>: Arg = 180° (Negative Real)<br>
-            &nbsp;&nbsp;&nbsp;<span style="color:#22c55e; font-weight:bold;">Green</span>: Arg = -90° (Negative Imaginary)<br>
-        `;
-    } else if (palette === 'calming') {
-        keyHtml += `
-            <span style="display:inline-block; margin-bottom: 4px;">- Color maps to Argument (Angle):</span><br>
-            &nbsp;&nbsp;&nbsp;<span style="color:#ebdcd2; font-weight:bold; text-shadow: 0 0 2px rgba(0,0,0,0.5);">Cream</span>: Arg = 0° (Positive Real)<br>
-            &nbsp;&nbsp;&nbsp;<span style="color:#733c34; font-weight:bold;">Caramel</span>: Arg = 90° (Positive Imaginary)<br>
-            &nbsp;&nbsp;&nbsp;<span style="color:#d9c5c1; font-weight:bold; text-shadow: 0 0 2px rgba(0,0,0,0.5);">Mahogany</span>: Arg = 180° (Negative Real)<br>
-            &nbsp;&nbsp;&nbsp;<span style="color:#b96e5f; font-weight:bold;">Copper</span>: Arg = -90° (Negative Imaginary)<br>
-        `;
-    } else if (palette === 'purple') {
-        keyHtml += `
-            <span style="display:inline-block; margin-bottom: 4px;">- Color maps to Argument (Angle):</span><br>
-            &nbsp;&nbsp;&nbsp;<span style="color:#dcc8ff; font-weight:bold; text-shadow: 0 0 2px rgba(0,0,0,0.5);">Lavender</span>: Arg = 0° (Positive Real)<br>
-            &nbsp;&nbsp;&nbsp;<span style="color:#9e82ff; font-weight:bold;">Indigo</span>: Arg = 90° (Positive Imaginary)<br>
-            &nbsp;&nbsp;&nbsp;<span style="color:#c3b5db; font-weight:bold; text-shadow: 0 0 2px rgba(0,0,0,0.5);">Charcoal</span>: Arg = 180° (Negative Real)<br>
-            &nbsp;&nbsp;&nbsp;<span style="color:#6e46be; font-weight:bold;">Violet</span>: Arg = -90° (Negative Imaginary)<br>
-        `;
-    } else if (palette === 'green') {
-        keyHtml += `
-            <span style="display:inline-block; margin-bottom: 4px;">- Color maps to Argument (Angle):</span><br>
-            &nbsp;&nbsp;&nbsp;<span style="color:#c8f5dc; font-weight:bold; text-shadow: 0 0 2px rgba(0,0,0,0.5);">Mint</span>: Arg = 0° (Positive Real)<br>
-            &nbsp;&nbsp;&nbsp;<span style="color:#aff00a; font-weight:bold;">Lime</span>: Arg = 90° (Positive Imaginary)<br>
-            &nbsp;&nbsp;&nbsp;<span style="color:#9bbda7; font-weight:bold; text-shadow: 0 0 2px rgba(0,0,0,0.5);">Forest</span>: Arg = 180° (Negative Real)<br>
-            &nbsp;&nbsp;&nbsp;<span style="color:#0f785f; font-weight:bold;">Jade</span>: Arg = -90° (Negative Imaginary)<br>
-        `;
+    if (paletteObj && paletteObj.key) {
+        keyHtml += `<span style="display:inline-block; margin-bottom: 4px;">- Color maps to Argument (Angle):</span><br>`;
+        paletteObj.key.forEach(item => {
+            keyHtml += `&nbsp;&nbsp;&nbsp;<span style="color:${item.color}; font-weight:bold; text-shadow: 0 0 2px rgba(0,0,0,0.5);">${item.label}</span>: Arg = ${item.angle}<br>`;
+        });
     }
 
     keyHtml += `<span style="display:inline-block; margin-top: 4px;">- Lightness maps to Magnitude (Log-scaled, cyclic bands).</span>`;

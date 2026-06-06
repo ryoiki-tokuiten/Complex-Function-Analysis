@@ -111,7 +111,7 @@ export function generateCartesianGridPointSets(config) {
         const y = config.yRange[0] + (i / config.gridDensity) * (config.yRange[1] - config.yRange[0]);
         sets.push(createLineSet(
             generateLinePoints(config.xRange[0], config.xRange[1], y, sampleCount),
-            COLOR_Z_GRID_HORZ,
+            state.gridColor1 || COLOR_Z_GRID_HORZ,
             'grid-horizontal',
             LINE_WIDTH_NORMAL
         ));
@@ -121,7 +121,7 @@ export function generateCartesianGridPointSets(config) {
         const x = config.xRange[0] + (i / config.gridDensity) * (config.xRange[1] - config.xRange[0]);
         const color = (config.currentFunction === 'zeta' && !config.zetaContinuationEnabled && x <= ZETA_REFLECTION_POINT_RE)
             ? COLOR_Z_GRID_ZETA_UNDEFINED_SUM_REGION
-            : COLOR_Z_GRID_VERT;
+            : (state.gridColor2 || COLOR_Z_GRID_VERT);
         sets.push(createLineSet(
             generateVerticalLinePoints(x, config.yRange[0], config.yRange[1], sampleCount),
             color,
@@ -425,8 +425,8 @@ export function prepareInputShapePointSetsForMapping(pointSets, options = {}) {
             preparedSets.push(...splitPointSetAtRealBoundary(
                 pointSet,
                 ZETA_REFLECTION_POINT_RE,
-                COLOR_Z_GRID_HORZ_FUNCTIONAL_EQ,
-                COLOR_Z_GRID_HORZ
+                state.gridColor1 || COLOR_Z_GRID_HORZ_FUNCTIONAL_EQ,
+                state.gridColor1 || COLOR_Z_GRID_HORZ
             ));
             return;
         }
@@ -434,8 +434,8 @@ export function prepareInputShapePointSetsForMapping(pointSets, options = {}) {
         if (pointSet.role === 'grid-vertical') {
             const referencePoint = pointSet.points.find(Boolean);
             const color = referencePoint && referencePoint.re < ZETA_REFLECTION_POINT_RE
-                ? COLOR_Z_GRID_VERT_FUNCTIONAL_EQ
-                : COLOR_Z_GRID_VERT;
+                ? (state.gridColor2 || COLOR_Z_GRID_VERT_FUNCTIONAL_EQ)
+                : (state.gridColor2 || COLOR_Z_GRID_VERT);
             preparedSets.push(cloneLineSet(pointSet, { color }));
             return;
         }

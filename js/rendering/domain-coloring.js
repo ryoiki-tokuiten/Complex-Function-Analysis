@@ -2,6 +2,50 @@ import { state, context } from '../store/state.js';
 import { getMappedTransformProfile, evaluateMappedTransform } from '../math-utils.js';
 import { renderDomainColoringWithWebGL } from './webgl-domain-coloring.js';
 import { hslToRgb } from './canvas-primitives.js';
+import { domainPalettes } from '../ui/theme-manager.js';
+
+const parsedPalettesCache = {};
+
+function parsePaletteColors(colorsStr) {
+    return colorsStr.split(/,\s*(?![^(]*\))/).map(s => {
+        s = s.trim();
+        if (s.startsWith('hsl')) {
+            const match = s.match(/hsl\((\d+),\s*(\d+)%,\s*(\d+)%\)/);
+            if (match) {
+                const h = parseInt(match[1]) / 360;
+                const sat = parseInt(match[2]) / 100;
+                const l = parseInt(match[3]) / 100;
+                let r, g, b;
+                if (sat === 0) {
+                    r = g = b = l;
+                } else {
+                    const hue2rgb = (p, q, t) => {
+                        if (t < 0) t += 1;
+                        if (t > 1) t -= 1;
+                        if (t < 1/6) return p + (q - p) * 6 * t;
+                        if (t < 1/2) return q;
+                        if (t < 2/3) return p + (q - p) * (2/3 - t) * 6;
+                        return p;
+                    };
+                    const q = l < 0.5 ? l * (1 + sat) : l + sat - l * sat;
+                    const p = 2 * l - q;
+                    r = hue2rgb(p, q, h + 1/3);
+                    g = hue2rgb(p, q, h);
+                    b = hue2rgb(p, q, h - 1/3);
+                }
+                return [r, g, b];
+            }
+            return [0, 0, 0];
+        } else if (s.startsWith('#')) {
+            const hex = s.substring(1);
+            const r = parseInt(hex.slice(0, 2), 16) / 255;
+            const g = parseInt(hex.slice(2, 4), 16) / 255;
+            const b = parseInt(hex.slice(4, 6), 16) / 255;
+            return [r, g, b];
+        }
+        return [0, 0, 0];
+    });
+}
 
 export function getDomainColorPlaneKey(targetCtx) {
     if (targetCtx === context.zDomainColorCtx) return 'z';
@@ -68,47 +112,24 @@ export function getPaletteColor(paletteId, h) {
         return [rgb[0] / 255, rgb[1] / 255, rgb[2] / 255];
     }
 
-    let c0, c1, c2, c3;
-    if (paletteId === 'purple') {
-        c0 = [0.039, 0.020, 0.078];
-        c1 = [0.431, 0.275, 0.745];
-        c2 = [0.863, 0.784, 1.0];
-        c3 = [0.157, 0.078, 0.353];
-    } else if (paletteId === 'green') {
-        c0 = [0.020, 0.059, 0.039];
-        c1 = [0.059, 0.471, 0.373];
-        c2 = [0.784, 0.961, 0.863];
-        c3 = [0.686, 0.941, 0.039];
-    } else { // 'calming'
-        c0 = [0.137, 0.071, 0.071];
-        c1 = [0.725, 0.431, 0.373];
-        c2 = [0.922, 0.863, 0.824];
-        c3 = [0.451, 0.235, 0.204];
+    const palette = domainPalettes.find(p => p.id === paletteId) || domainPalettes[0];
+    if (!parsedPalettesCache[palette.id]) {
+        parsedPalettesCache[palette.id] = parsePaletteColors(palette.colors);
     }
-
-    let r, g, b;
-    if (h < 0.25) {
-        const t = h / 0.25;
-        r = c0[0] * (1 - t) + c1[0] * t;
-        g = c0[1] * (1 - t) + c1[1] * t;
-        b = c0[2] * (1 - t) + c1[2] * t;
-    } else if (h < 0.5) {
-        const t = (h - 0.25) / 0.25;
-        r = c1[0] * (1 - t) + c2[0] * t;
-        g = c1[1] * (1 - t) + c2[1] * t;
-        b = c1[2] * (1 - t) + c2[2] * t;
-    } else if (h < 0.75) {
-        const t = (h - 0.5) / 0.25;
-        r = c2[0] * (1 - t) + c3[0] * t;
-        g = c2[1] * (1 - t) + c3[1] * t;
-        b = c2[2] * (1 - t) + c3[2] * t;
-    } else {
-        const t = (h - 0.75) / 0.25;
-        r = c3[0] * (1 - t) + c0[0] * t;
-        g = c3[1] * (1 - t) + c0[1] * t;
-        b = c3[2] * (1 - t) + c0[2] * t;
-    }
-    return [r, g, b];
+    const stops = parsedPalettesCache[palette.id];
+    const n = stops.length;
+    const val = h * (n - 1);
+    const idx = Math.min(n - 2, Math.floor(val));
+    const t = val - idx;
+    
+    const cA = stops[idx];
+    const cB = stops[idx + 1];
+    
+    return [
+        cA[0] * (1 - t) + cB[0] * t,
+        cA[1] * (1 - t) + cB[1] * t,
+        cA[2] * (1 - t) + cB[2] * t
+    ];
 }
 
 export function applyLightnessAndSaturation(rgb, L, S) {

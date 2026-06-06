@@ -1096,16 +1096,25 @@
                 <div id="visualization-options-panel" class="controls-panel">
                     <div class="controls-panel-header">
                         <span class="controls-panel-name">Visualization</span>
-                        <button id="toggle_top_controls_btn" class="icon-button top-controls-toggle-btn" type="button"
-                            data-tooltip="Minimize top half panels" aria-label="Minimize top half panels">
-                            <span class="top-controls-toggle-icon top-controls-minimize-icon" aria-hidden="true">
-                                <i data-lucide="minimize-2"></i>
-                            </span>
-                            <span class="top-controls-toggle-icon top-controls-maximize-icon" aria-hidden="true">
-                                <i data-lucide="maximize-2"></i>
-                            </span>
-                            <span class="hidden-visually">Toggle top controls</span>
-                        </button>
+                        <div class="controls-panel-header-actions">
+                            <button id="theme_selector_btn" class="icon-button top-controls-toggle-btn" type="button"
+                                data-tooltip="Select application theme" aria-label="Select application theme">
+                                <span aria-hidden="true" style="display: flex; align-items: center; justify-content: center;">
+                                    <i data-lucide="palette"></i>
+                                </span>
+                                <span class="hidden-visually">Select theme</span>
+                            </button>
+                            <button id="toggle_top_controls_btn" class="icon-button top-controls-toggle-btn" type="button"
+                                data-tooltip="Minimize top half panels" aria-label="Minimize top half panels">
+                                <span class="top-controls-toggle-icon top-controls-minimize-icon" aria-hidden="true">
+                                    <i data-lucide="minimize-2"></i>
+                                </span>
+                                <span class="top-controls-toggle-icon top-controls-maximize-icon" aria-hidden="true">
+                                    <i data-lucide="maximize-2"></i>
+                                </span>
+                                <span class="hidden-visually">Toggle top controls</span>
+                            </button>
+                        </div>
                     </div>
                     <div class="controls-panel-divider"></div>
                     <div class="slider-row">
@@ -1311,16 +1320,6 @@
                                 <span class="viz-detail-copy">Drag to orbit, scroll to zoom, and double-click to reset.</span>
                             </div>
                             <div class="viz-settings-grid">
-                                <div class="control-group" style="grid-column: span 2;">
-                                    <label for="riemann_surface_palette_select">Color Palette</label>
-                                    <select id="riemann_surface_palette_select" class="control-select"
-                                        data-tooltip="Shared palette for Riemann surfaces and domain coloring">
-                                        <option value="calming" selected>Calming (Default)</option>
-                                        <option value="classic">Classic (Rainbow)</option>
-                                        <option value="purple">Purple / Violet</option>
-                                        <option value="green">Green / Jade / Lime</option>
-                                    </select>
-                                </div>
                                 <div class="control-group">
                                     <label for="riemann_surface_component_selector">Surface Height</label>
                                     <select id="riemann_surface_component_selector" class="control-select"
@@ -1389,16 +1388,14 @@
                         </div>
                         <div id="domain_coloring_options_div" class="dependent-settings-block hidden viz-detail-block">
                             <div class="viz-settings-grid">
-                                <div class="control-group" style="grid-column: span 2; margin-bottom: 4px;">
-                                    <label for="domain_palette_select" style="font-size:0.8rem; margin-bottom: 4px; display: block;">
-                                        Color Palette:
-                                    </label>
-                                    <select id="domain_palette_select" class="control-select" data-tooltip="Select domain coloring color scheme">
-                                        <option value="calming" selected>Calming (Default)</option>
-                                        <option value="classic">Classic (Rainbow)</option>
-                                        <option value="purple">Purple / Violet</option>
-                                        <option value="green">Green / Jade / Lime</option>
-                                    </select>
+                                <div class="domain-palette-selector-container">
+                                    <span class="domain-palette-selector-label">
+                                        <span>Domain Palette:</span>
+                                        <span id="active_domain_palette_name" style="color: var(--accent-purple); font-family: monospace; font-weight: bold;">Analytic Base</span>
+                                    </span>
+                                    <div class="domain-palette-circles" id="domain_palette_circles">
+                                        <!-- Circles generated dynamically -->
+                                    </div>
                                 </div>
                                 <div class="control-group">
                                     <label for="domain_brightness_slider" style="font-size:0.8rem;">
@@ -1449,26 +1446,6 @@
                         </div>
                         <div id="riemann_sphere_options_div"
                             class="dependent-settings-block hidden control-group-indent viz-detail-block viz-stacked-options">
-                            <div id="riemann_sphere_domain_coloring_options"
-                                class="riemann-sphere-coloring-options hidden">
-                                <div class="viz-detail-header">
-                                    <span class="viz-detail-title">Sphere Coloring</span>
-                                    <span class="viz-detail-copy">Color identifies the codomain coordinate w;
-                                        mapped curves show each output stage.</span>
-                                </div>
-                                <div class="viz-settings-grid">
-                                    <div class="control-group viz-control-span-2">
-                                        <label for="riemann_sphere_palette_select">Color Palette</label>
-                                        <select id="riemann_sphere_palette_select" class="control-select"
-                                            data-tooltip="Shared palette for Riemann spheres, surfaces, and domain coloring">
-                                            <option value="calming" selected>Calming (Default)</option>
-                                            <option value="classic">Classic (Rainbow)</option>
-                                            <option value="purple">Purple / Violet</option>
-                                            <option value="green">Green / Jade / Lime</option>
-                                        </select>
-                                    </div>
-                                </div>
-                            </div>
                             <div class="viz-toggle-grid viz-toggle-grid--duo viz-toggle-grid--compact">
                                 <label for="enable_plotly_3d_cb"
                                     class="control-label tooltip-label viz-toggle-card viz-toggle-card--compact">
@@ -1775,6 +1752,12 @@
         <section id="canvases_section">
             <div class="canvas-row two-column-layout">
                 <div id="z_plane_column" class="plane-column">
+                    <div class="collapsed-placeholder-content">
+                        <button class="expand-plane-btn" id="expand_z_btn" title="Expand z-plane" aria-label="Expand z-plane">
+                            <i data-lucide="chevron-right" aria-hidden="true"></i>
+                        </button>
+                        <div class="collapsed-vertical-title">z-plane (Input)</div>
+                    </div>
                     <div class="canvas-header-line">
                         <h2 class="section-title"><span id="z-plane-title">z-plane (Input:
                                 <code>z = a + ib</code>)</span></h2>
@@ -1795,6 +1778,12 @@
                                 <option value="image">Image Upload</option>
                                 <option value="video">Video Upload</option>
                             </select>
+                            <button id="collapse_z_btn" class="icon-button canvas-icon-button" type="button"
+                                data-tooltip="Collapse z-plane"
+                                aria-label="Collapse z-plane">
+                                <i data-lucide="chevron-left" aria-hidden="true"></i>
+                                <span class="hidden-visually">Collapse z-plane</span>
+                            </button>
                             <button id="toggle_fullscreen_z_btn" class="icon-button canvas-icon-button" type="button"
                                 data-tooltip="Toggle fullscreen view for z-plane"
                                 aria-label="Toggle fullscreen view for z-plane">
@@ -1829,11 +1818,23 @@
                     </div>
                 </div>
                 <div id="w_plane_column" class="plane-column">
+                    <div class="collapsed-placeholder-content">
+                        <button class="expand-plane-btn" id="expand_w_btn" title="Expand w-plane" aria-label="Expand w-plane">
+                            <i data-lucide="chevron-left" aria-hidden="true"></i>
+                        </button>
+                        <div class="collapsed-vertical-title">w-plane (Output)</div>
+                    </div>
                     <div class="canvas-header-line">
                         <h2 class="section-title"><span id="w-plane-title">w-plane (Output: <code
                                     id="w-plane-title-func">w = cos(z)</code>)</span></h2>
                         <div class="canvas-header-controls">
                             <div id="w_plane_analysis_info"></div>
+                            <button id="collapse_w_btn" class="icon-button canvas-icon-button" type="button"
+                                data-tooltip="Collapse w-plane"
+                                aria-label="Collapse w-plane">
+                                <i data-lucide="chevron-right" aria-hidden="true"></i>
+                                <span class="hidden-visually">Collapse w-plane</span>
+                            </button>
                             <button id="toggle_fullscreen_w_btn" class="icon-button canvas-icon-button" type="button"
                                 data-tooltip="Toggle fullscreen view for w-plane"
                                 aria-label="Toggle fullscreen view for w-plane">
@@ -1900,6 +1901,38 @@
     </script>
 
     <div id="tooltip"></div>
+    <div id="theme_modal" class="hidden">
+        <div class="theme-modal-backdrop" id="theme_modal_backdrop"></div>
+        <div class="theme-modal-content">
+            <button id="close_theme_modal_btn" class="theme-modal-close-btn" aria-label="Close theme modal">
+                <i data-lucide="x"></i>
+            </button>
+            <div class="theme-modal-header">
+                <h2>Themes</h2>
+                <p>Select application theme, accent colors, and styling.</p>
+            </div>
+            <div class="theme-list-container custom-scroll" id="theme_list_container">
+                <!-- Themes dynamically generated here -->
+            </div>
+            <div class="theme-modal-grid-colors" style="margin-top: 1.5rem; padding-top: 1rem; border-top: 1px solid var(--border-color);">
+                <h3 style="font-size: 0.95rem; font-weight: 600; margin-bottom: 0.75rem; color: var(--text-color);">Custom Grid Colors</h3>
+                <div class="grid-color-pickers-container" style="display: flex; gap: 1.5rem; align-items: center;">
+                    <div class="circle-color-picker-wrapper">
+                        <div class="circle-color-picker" id="grid_color_1_picker_wrapper" style="background-color: #FB923C;">
+                            <input type="color" id="grid_color_1_input" value="#FB923C">
+                        </div>
+                        <span class="circle-color-picker-label">Grid Line 1</span>
+                    </div>
+                    <div class="circle-color-picker-wrapper">
+                        <div class="circle-color-picker" id="grid_color_2_picker_wrapper" style="background-color: #C084FC;">
+                            <input type="color" id="grid_color_2_input" value="#C084FC">
+                        </div>
+                        <span class="circle-color-picker-label">Grid Line 2</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
     <div id="fullscreen_container" class="hidden">
 
     </div>

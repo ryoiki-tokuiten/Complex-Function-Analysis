@@ -19,6 +19,7 @@ import {
     getRiemannSurfaceCanvas,
     resetRiemannSurfaceViews
 } from '../rendering/webgl-riemann-surface.js';
+import { applyTheme, renderThemesList, renderDomainPalettesUI, domainPalettes } from './theme-manager.js';
 
 const { controls, polynomialCoeffUIElements } = context;
 
@@ -633,24 +634,77 @@ function bindDomainColoringControls() {
         requestDomainRedraw(true);
     });
 
-    const paletteSelectors = [
-        controls.domainPaletteSelect,
+    const otherSelectors = [
         controls.riemannSurfacePaletteSelect,
         controls.riemannSpherePaletteSelect
     ].filter(Boolean);
 
-    paletteSelectors.forEach(selector => {
+    // Dynamically populate options for Riemann surface & sphere dropdowns
+    otherSelectors.forEach(select => {
+        select.innerHTML = '';
+        domainPalettes.forEach(p => {
+            const opt = document.createElement('option');
+            opt.value = p.id;
+            opt.textContent = p.name;
+            select.appendChild(opt);
+        });
+        select.value = state.domainPalette;
+    });
+
+    const paletteCirclesContainer = document.getElementById('domain_palette_circles');
+    renderDomainPalettesUI(paletteCirclesContainer);
+
+    if (paletteCirclesContainer) {
+        paletteCirclesContainer.addEventListener('click', (e) => {
+            const btn = e.target.closest('.domain-palette-circle-btn');
+            if (!btn) return;
+            state.domainPalette = btn.dataset.paletteId;
+            
+            renderDomainPalettesUI(paletteCirclesContainer);
+            
+            otherSelectors.forEach(sel => {
+                sel.value = state.domainPalette;
+            });
+            
+            if (typeof updateDomainColoringKey === 'function') {
+                updateDomainColoringKey();
+            }
+            requestDomainRedraw(true);
+        });
+    }
+
+    otherSelectors.forEach(selector => {
         selector.addEventListener('change', (e) => {
             state.domainPalette = e.target.value;
-            paletteSelectors.forEach(otherSelector => {
+            otherSelectors.forEach(otherSelector => {
                 otherSelector.value = state.domainPalette;
             });
+            renderDomainPalettesUI(paletteCirclesContainer);
             if (typeof updateDomainColoringKey === 'function') {
                 updateDomainColoringKey();
             }
             requestDomainRedraw(true);
         });
     });
+
+    const gridColor1Input = document.getElementById('grid_color_1_input');
+    const gridColor2Input = document.getElementById('grid_color_2_input');
+    if (gridColor1Input) {
+        gridColor1Input.addEventListener('input', (e) => {
+            state.gridColor1 = e.target.value;
+            const wrapper = document.getElementById('grid_color_1_picker_wrapper');
+            if (wrapper) wrapper.style.backgroundColor = state.gridColor1;
+            requestRedrawAll();
+        });
+    }
+    if (gridColor2Input) {
+        gridColor2Input.addEventListener('input', (e) => {
+            state.gridColor2 = e.target.value;
+            const wrapper = document.getElementById('grid_color_2_picker_wrapper');
+            if (wrapper) wrapper.style.backgroundColor = state.gridColor2;
+            requestRedrawAll();
+        });
+    }
 
     ['domainBrightness', 'domainContrast', 'domainSaturation', 'domainLightnessCycles'].forEach(stateKey => {
         bindSlider(`${stateKey}Slider`, stateKey, parseFloat, () => {
@@ -1462,6 +1516,38 @@ function bindTopControlsToggle() {
     bindControlListener('toggleTopControlsCollapsedBtn', 'click', toggleTopControls);
 }
 
+function triggerPlaneLayoutRefresh() {
+    // Fire immediately so canvas sizes start adjusting, then again after transition ends
+    setupVisualParameters(false, false);
+    requestDomainRedraw(true);
+    setTimeout(() => {
+        setupVisualParameters(false, false);
+        requestDomainRedraw(true);
+    }, 340);
+}
+
+function bindCollapseControls() {
+    const zCol = controls.zCanvasCard;
+    const wCol = controls.wCanvasCard;
+
+    const collapseColumn = (col) => {
+        if (!col) return;
+        col.classList.add('plane-collapsed');
+        triggerPlaneLayoutRefresh();
+    };
+
+    const expandColumn = (col) => {
+        if (!col) return;
+        col.classList.remove('plane-collapsed');
+        triggerPlaneLayoutRefresh();
+    };
+
+    bindControlListener('collapseZBtn', 'click', () => collapseColumn(zCol));
+    bindControlListener('expandZBtn',   'click', () => expandColumn(zCol));
+    bindControlListener('collapseWBtn', 'click', () => collapseColumn(wCol));
+    bindControlListener('expandWBtn',   'click', () => expandColumn(wCol));
+}
+
 export function setupEventListeners() {
     zCanvas = context.zCanvas;
     wCanvas = context.wCanvas;
@@ -1493,6 +1579,7 @@ export function setupEventListeners() {
     bindParticleControls();
     bindFourierControls();
     bindLaplaceControls();
+    bindCollapseControls();
 
     bindSelector('inputShapeSelector', 'currentInputShape', (_event, value) => {
         if (value !== 'video' && state.videoIsPlaying && typeof pauseUploadedVideoPlayback === 'function') {
@@ -1628,8 +1715,45 @@ export function setupEventListeners() {
     bindTopControlsToggle();
     bindFullscreenControls();
     syncTopControlsCollapseState();
+    bindThemeControls();
     updateModePanels();
 };
+
+function bindThemeControls() {
+    const themeBtn = document.getElementById('theme_selector_btn');
+    const themeModal = document.getElementById('theme_modal');
+    const themeModalBackdrop = document.getElementById('theme_modal_backdrop');
+    const closeThemeModalBtn = document.getElementById('close_theme_modal_btn');
+    const themeListContainer = document.getElementById('theme_list_container');
+
+    applyTheme(state.themeId);
+
+    if (themeBtn && themeModal) {
+        themeBtn.addEventListener('click', () => {
+            renderThemesList(themeListContainer);
+            themeModal.classList.remove('hidden');
+        });
+    }
+
+    const closeThemeModal = () => {
+        if (themeModal) themeModal.classList.add('hidden');
+    };
+
+    if (themeModalBackdrop) themeModalBackdrop.addEventListener('click', closeThemeModal);
+    if (closeThemeModalBtn) closeThemeModalBtn.addEventListener('click', closeThemeModal);
+
+    if (themeListContainer) {
+        themeListContainer.addEventListener('click', (e) => {
+            const card = e.target.closest('.theme-card');
+            if (!card) return;
+            const themeId = card.dataset.themeId;
+            state.themeId = themeId;
+            applyTheme(themeId);
+            renderThemesList(themeListContainer);
+            requestDomainRedraw(true);
+        });
+    }
+}
 
 function attemptPlotlyResize(plotlyDiv, maxAttempts = 3, delay = 100, currentAttempt = 1) {
     if (!plotlyDiv) {

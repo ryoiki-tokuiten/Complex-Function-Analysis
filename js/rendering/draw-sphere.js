@@ -11,7 +11,16 @@ import { complexToSphere, rotate3D, projectSphereToCanvas2D } from '../utils/can
 import { isRasterInputShape } from '../utils/raster-media.js';
 import { generateCurrentInputShapePointSets, generateCurrentMappedInputShapePointSets } from './shape-generators.js';
 
-export function drawRiemannSphereBase(ctx,cSP){const{centerX:cX,centerY:cY,radius:r}=cSP;ctx.save();ctx.strokeStyle=COLOR_SPHERE_OUTLINE;ctx.lineWidth=1.5;ctx.beginPath();ctx.arc(cX,cY,r,0,2*Math.PI);ctx.stroke();ctx.restore();}
+export function drawRiemannSphereBase(ctx, cSP) {
+    const { centerX: cX, centerY: cY, radius: r } = cSP;
+    ctx.save();
+    ctx.strokeStyle = state.gridColor1 || COLOR_SPHERE_OUTLINE;
+    ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    ctx.arc(cX, cY, r, 0, 2 * Math.PI);
+    ctx.stroke();
+    ctx.restore();
+}
 
 export function drawSphereMappedPoint(ctx, cSP, value, col, radius = 6) {
     const spherePoint = complexToSphere(value.re, value.im);
@@ -132,9 +141,6 @@ export function drawMappedLineSetOnSphere(ctx, cSP, z_pts_src_arr, col, isWP, ma
 }
 
 export function getSpherePointSetColor(pointSet, isWP) {
-    if (!isWP) {
-        return COLOR_SPHERE_GRID;
-    }
     return pointSet.color || COLOR_SPHERE_GRID;
 }
 

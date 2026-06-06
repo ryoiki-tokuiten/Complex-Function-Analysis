@@ -50,10 +50,22 @@ function getSurfaceComponentId(component) {
 }
 
 function getPaletteId(palette) {
-    if (palette === 'classic') return 1;
-    if (palette === 'purple') return 2;
-    if (palette === 'green') return 3;
-    return 0;
+    const paletteMap = {
+        'analytic-base': 0,
+        'ocean-depth': 1,
+        'midnight-flare': 2,
+        'forest-moss': 3,
+        'arctic-frost': 4,
+        'nordic-twilight': 5,
+        'lavender-ash': 7,
+        'monochrome-topo': 8,
+        'rose-gold': 9,
+        'classic': 10,
+        'calming': 11,
+        'purple': 12,
+        'green': 13
+    };
+    return (paletteMap[palette] !== undefined) ? paletteMap[palette] : 0;
 }
 
 function buildAlgebraicBranchBody(appState) {
@@ -313,33 +325,133 @@ vec3 hslToRgbSurface(float h, float s, float l) {
   return l + s * (rgb - 0.5) * (1.0 - abs(2.0 * l - 1.0));
 }
 
+vec3 interpolate7(vec3 c0, vec3 c1, vec3 c2, vec3 c3, vec3 c4, vec3 c5, vec3 c6, float h) {
+  float val = h * 6.0;
+  if (val < 1.0) return mix(c0, c1, val);
+  else if (val < 2.0) return mix(c1, c2, val - 1.0);
+  else if (val < 3.0) return mix(c2, c3, val - 2.0);
+  else if (val < 4.0) return mix(c3, c4, val - 3.0);
+  else if (val < 5.0) return mix(c4, c5, val - 4.0);
+  else return mix(c5, c6, val - 5.0);
+}
+
 vec3 surfacePaletteColor(int paletteId, float h) {
-  if (paletteId == 1) return hslToRgbSurface(h, 1.0, 0.5);
-  vec3 c0;
-  vec3 c1;
-  vec3 c2;
-  vec3 c3;
-  if (paletteId == 2) {
-    c0 = vec3(0.039, 0.020, 0.078);
-    c1 = vec3(0.431, 0.275, 0.745);
-    c2 = vec3(0.863, 0.784, 1.0);
-    c3 = vec3(0.157, 0.078, 0.353);
+  if (paletteId == 10) return hslToRgbSurface(h, 1.0, 0.5);
+  vec3 c0, c1, c2, c3, c4, c5, c6;
+  if (paletteId == 0) {
+    c0 = vec3(0.68, 0.12, 0.12);
+    c1 = vec3(0.60, 0.60, 0.11);
+    c2 = vec3(0.11, 0.60, 0.11);
+    c3 = vec3(0.11, 0.60, 0.60);
+    c4 = vec3(0.135, 0.135, 0.765);
+    c5 = vec3(0.68, 0.12, 0.68);
+    c6 = vec3(0.68, 0.12, 0.12);
+  } else if (paletteId == 1) {
+    c0 = vec3(0.059, 0.090, 0.165);
+    c1 = vec3(0.012, 0.412, 0.631);
+    c2 = vec3(0.055, 0.647, 0.914);
+    c3 = vec3(0.220, 0.741, 0.973);
+    c4 = vec3(0.055, 0.647, 0.914);
+    c5 = vec3(0.012, 0.412, 0.631);
+    c6 = vec3(0.059, 0.090, 0.165);
+  } else if (paletteId == 2) {
+    c0 = vec3(0.118, 0.106, 0.294);
+    c1 = vec3(0.345, 0.110, 0.529);
+    c2 = vec3(0.576, 0.200, 0.918);
+    c3 = vec3(0.882, 0.114, 0.282);
+    c4 = vec3(0.576, 0.200, 0.918);
+    c5 = vec3(0.345, 0.110, 0.529);
+    c6 = vec3(0.118, 0.106, 0.294);
   } else if (paletteId == 3) {
-    c0 = vec3(0.020, 0.059, 0.039);
-    c1 = vec3(0.059, 0.471, 0.373);
-    c2 = vec3(0.784, 0.961, 0.863);
-    c3 = vec3(0.686, 0.941, 0.039);
+    c0 = vec3(0.024, 0.306, 0.231);
+    c1 = vec3(0.016, 0.471, 0.341);
+    c2 = vec3(0.063, 0.725, 0.506);
+    c3 = vec3(0.204, 0.827, 0.600);
+    c4 = vec3(0.063, 0.725, 0.506);
+    c5 = vec3(0.016, 0.471, 0.341);
+    c6 = vec3(0.024, 0.306, 0.231);
+  } else if (paletteId == 4) {
+    c0 = vec3(0.059, 0.090, 0.165);
+    c1 = vec3(0.118, 0.161, 0.231);
+    c2 = vec3(0.231, 0.510, 0.965);
+    c3 = vec3(0.576, 0.773, 0.992);
+    c4 = vec3(0.231, 0.510, 0.965);
+    c5 = vec3(0.118, 0.161, 0.231);
+    c6 = vec3(0.059, 0.090, 0.165);
+  } else if (paletteId == 5) {
+    c0 = vec3(0.180, 0.204, 0.251);
+    c1 = vec3(0.298, 0.337, 0.416);
+    c2 = vec3(0.369, 0.506, 0.675);
+    c3 = vec3(0.706, 0.557, 0.678);
+    c4 = vec3(0.369, 0.506, 0.675);
+    c5 = vec3(0.298, 0.337, 0.416);
+    c6 = vec3(0.180, 0.204, 0.251);
+  } else if (paletteId == 6) {
+    c0 = vec3(0.157, 0.157, 0.157);
+    c1 = vec3(0.314, 0.286, 0.271);
+    c2 = vec3(0.843, 0.600, 0.129);
+    c3 = vec3(0.694, 0.384, 0.525);
+    c4 = vec3(0.843, 0.600, 0.129);
+    c5 = vec3(0.314, 0.286, 0.271);
+    c6 = vec3(0.157, 0.157, 0.157);
+  } else if (paletteId == 7) {
+    c0 = vec3(0.102, 0.063, 0.145);
+    c1 = vec3(0.180, 0.137, 0.235);
+    c2 = vec3(0.494, 0.341, 0.761);
+    c3 = vec3(0.702, 0.616, 0.859);
+    c4 = vec3(0.494, 0.341, 0.761);
+    c5 = vec3(0.180, 0.137, 0.235);
+    c6 = vec3(0.102, 0.063, 0.145);
+  } else if (paletteId == 8) {
+    c0 = vec3(0.039, 0.039, 0.039);
+    c1 = vec3(0.149, 0.149, 0.149);
+    c2 = vec3(0.322, 0.322, 0.322);
+    c3 = vec3(0.451, 0.451, 0.451);
+    c4 = vec3(0.322, 0.322, 0.322);
+    c5 = vec3(0.149, 0.149, 0.149);
+    c6 = vec3(0.039, 0.039, 0.039);
+  } else if (paletteId == 9) {
+    c0 = vec3(0.110, 0.098, 0.090);
+    c1 = vec3(0.471, 0.208, 0.059);
+    c2 = vec3(0.882, 0.114, 0.282);
+    c3 = vec3(0.996, 0.643, 0.686);
+    c4 = vec3(0.882, 0.114, 0.282);
+    c5 = vec3(0.471, 0.208, 0.059);
+    c6 = vec3(0.110, 0.098, 0.090);
+  } else if (paletteId == 11) {
+    c0 = vec3(0.851, 0.773, 0.757);
+    c1 = vec3(0.769, 0.545, 0.502);
+    c2 = vec3(0.792, 0.576, 0.522);
+    c3 = vec3(0.922, 0.863, 0.824);
+    c4 = vec3(0.608, 0.443, 0.412);
+    c5 = vec3(0.584, 0.416, 0.388);
+    c6 = vec3(0.851, 0.773, 0.757);
+  } else if (paletteId == 12) {
+    c0 = vec3(0.765, 0.710, 0.859);
+    c1 = vec3(0.541, 0.420, 0.784);
+    c2 = vec3(0.576, 0.443, 0.831);
+    c3 = vec3(0.863, 0.784, 1.0);
+    c4 = vec3(0.702, 0.600, 1.0);
+    c5 = vec3(0.667, 0.576, 0.953);
+    c6 = vec3(0.765, 0.710, 0.859);
+  } else if (paletteId == 13) {
+    c0 = vec3(0.608, 0.741, 0.655);
+    c1 = vec3(0.243, 0.561, 0.467);
+    c2 = vec3(0.302, 0.635, 0.537);
+    c3 = vec3(0.784, 0.961, 0.863);
+    c4 = vec3(0.718, 0.949, 0.314);
+    c5 = vec3(0.659, 0.875, 0.243);
+    c6 = vec3(0.608, 0.741, 0.655);
   } else {
-    c0 = vec3(0.137, 0.071, 0.071);
-    c1 = vec3(0.725, 0.431, 0.373);
-    c2 = vec3(0.922, 0.863, 0.824);
-    c3 = vec3(0.451, 0.235, 0.204);
+    c0 = vec3(0.110, 0.098, 0.090);
+    c1 = vec3(0.471, 0.208, 0.059);
+    c2 = vec3(0.882, 0.114, 0.282);
+    c3 = vec3(0.996, 0.643, 0.686);
+    c4 = vec3(0.882, 0.114, 0.282);
+    c5 = vec3(0.471, 0.208, 0.059);
+    c6 = vec3(0.110, 0.098, 0.090);
   }
-  float segment = fract(h) * 4.0;
-  if (segment < 1.0) return mix(c0, c1, segment);
-  if (segment < 2.0) return mix(c1, c2, segment - 1.0);
-  if (segment < 3.0) return mix(c2, c3, segment - 2.0);
-  return mix(c3, c0, segment - 3.0);
+  return interpolate7(c0, c1, c2, c3, c4, c5, c6, fract(h));
 }
 
 float surfaceHeight(vec2 value) {

@@ -118,7 +118,10 @@ const rawState = {
     domainContrast: 1.0,
     domainSaturation: 1.0,
     domainLightnessCycles: 1.0,
-    domainPalette: 'calming',
+    domainPalette: 'analytic-base',
+    themeId: 'rose',
+    gridColor1: '#FB923C',
+    gridColor2: '#C084FC',
     radialDiscreteStepsEnabled: false,
     radialDiscreteStepsCount: 200, 
 

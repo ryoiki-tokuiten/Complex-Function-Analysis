@@ -151,11 +151,12 @@ function buildPlanarLayerCacheKey(isWPlane) {
         `sectorA2:${toCacheKeyNumber(state.sectorAngle2)}`,
         `sectorRMin:${toCacheKeyNumber(state.sectorRMin)}`,
         `sectorRMax:${toCacheKeyNumber(state.sectorRMax)}`,
-
+        `theme:${state.themeId}`,
+        `gridCol1:${state.gridColor1 || ''}`,
+        `gridCol2:${state.gridColor2 || ''}`,
         `imgSize:${toCacheKeyNumber(state.imageSize)}`,
         `imgOpacity:${toCacheKeyNumber(state.imageOpacity)}`,
         `imgVer:${state.imageContentVersion || 0}`,
-
         `vidFps:${state.videoProcessingFps || 0}`,
         `vidSize:${toCacheKeyNumber(state.videoSize)}`,
         `vidOpacity:${toCacheKeyNumber(state.videoOpacity)}`,

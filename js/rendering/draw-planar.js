@@ -82,7 +82,7 @@ export function drawPointSetCollectionOnPlane(ctx, planeParams, pointSets, optio
 
     if (mappedTransform && mappedTransform.isConstant) {
         const firstPointSet = pointSets.find(pointSet => pointSet && colorResolver(pointSet));
-        const color = firstPointSet ? colorResolver(firstPointSet) : COLOR_Z_GRID_HORZ;
+        const color = firstPointSet ? colorResolver(firstPointSet) : (state.gridColor1 || COLOR_Z_GRID_HORZ);
         drawConstantMappedPoint(ctx, planeParams, mappedTransform.constantValue, color);
         ctx.restore();
         return;
