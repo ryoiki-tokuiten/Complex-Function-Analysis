@@ -15,6 +15,10 @@ import { setNavigationModeEnabled, followNavigationViewports, resetNavigationVeh
 import { toggleAnimation } from './animation.js';
 import { initializePolynomialCoeffs, generatePolynomialCoeffSliders } from './polynomial-ui.js';
 import { updateLaplace3DSurface } from '../rendering/laplace-3d-surface.js';
+import {
+    getRiemannSurfaceCanvas,
+    resetRiemannSurfaceViews
+} from '../rendering/webgl-riemann-surface.js';
 
 const { controls, polynomialCoeffUIElements } = context;
 
@@ -87,7 +91,11 @@ const BASIC_SLIDER_BINDINGS = [
     { controlKey: 'laplaceDampingSlider', stateKey: 'laplaceDamping', parser: parseFloat },
     { controlKey: 'laplaceSigmaSlider', stateKey: 'laplaceSigma', parser: parseFloat },
     { controlKey: 'laplaceOmegaSlider', stateKey: 'laplaceOmega', parser: parseFloat },
-    { controlKey: 'laplaceClipHeightSlider', stateKey: 'laplaceClipHeight', parser: parseFloat }
+    { controlKey: 'laplaceClipHeightSlider', stateKey: 'laplaceClipHeight', parser: parseFloat },
+    { controlKey: 'riemannSurfaceSheetsSlider', stateKey: 'riemannSurfaceSheets', parser: parseInteger },
+    { controlKey: 'riemannSurfaceBranchCenterSlider', stateKey: 'riemannSurfaceBranchCenter', parser: parseInteger },
+    { controlKey: 'riemannSurfaceHeightScaleSlider', stateKey: 'riemannSurfaceHeightScale', parser: parseFloat },
+    { controlKey: 'riemannSurfaceHeightClipSlider', stateKey: 'riemannSurfaceHeightClip', parser: parseFloat }
 ];
 
 const BASIC_CHECKBOX_BINDINGS = [
@@ -111,7 +119,9 @@ const BASIC_CHECKBOX_BINDINGS = [
     { controlKey: 'laplaceAnimationLoopCb', stateKey: 'laplaceAnimationLoop' },
     { controlKey: 'enableParticleAnimationCb', stateKey: 'particleAnimationEnabled' },
     { controlKey: 'showVectorFieldPanelCb', stateKey: 'showVectorFieldPanelEnabled' },
-    { controlKey: 'enableDomainColoringCb', stateKey: 'domainColoringEnabled' }
+    { controlKey: 'enableDomainColoringCb', stateKey: 'domainColoringEnabled' },
+    { controlKey: 'enableRiemannSurfaceCb', stateKey: 'riemannSurfaceEnabled' },
+    { controlKey: 'riemannSurfaceWireframeCb', stateKey: 'riemannSurfaceWireframe' }
 ];
 
 const BASIC_SELECTOR_BINDINGS = [
@@ -119,7 +129,8 @@ const BASIC_SELECTOR_BINDINGS = [
     { controlKey: 'vectorFieldFunctionSelector', stateKey: 'vectorFieldFunction' },
     { controlKey: 'fourierFunctionSelector', stateKey: 'fourierFunction' },
     { controlKey: 'laplaceFunctionSelector', stateKey: 'laplaceFunction' },
-    { controlKey: 'laplaceVizModeSelector', stateKey: 'laplaceVizMode' }
+    { controlKey: 'laplaceVizModeSelector', stateKey: 'laplaceVizMode' },
+    { controlKey: 'riemannSurfaceComponentSelector', stateKey: 'riemannSurfaceComponent' }
 ];
 
 const SPHERE_VIEW_BUTTONS = {
@@ -638,6 +649,11 @@ function bindDomainColoringControls() {
 
 function bindViewControls() {
     bindCheckbox('enableSplitViewCb', 'splitViewEnabled', () => {
+        if (state.splitViewEnabled && state.riemannSurfaceEnabled) {
+            state.riemannSurfaceEnabled = false;
+            if (controls.enableRiemannSurfaceCb) controls.enableRiemannSurfaceCb.checked = false;
+            if (typeof updateChainingTitles === 'function') updateChainingTitles();
+        }
         requestDomainRedraw(true);
     });
 
@@ -652,6 +668,12 @@ function bindViewControls() {
     });
 
     bindCheckbox('enableRiemannSphereCb', 'riemannSphereViewEnabled', () => {
+        if (state.riemannSphereViewEnabled && state.riemannSurfaceEnabled) {
+            state.riemannSurfaceEnabled = false;
+            if (controls.enableRiemannSurfaceCb) controls.enableRiemannSurfaceCb.checked = false;
+            if (controls.riemannSurfaceOptionsDiv) controls.riemannSurfaceOptionsDiv.classList.add('hidden');
+            if (typeof updateChainingTitles === 'function') updateChainingTitles();
+        }
         if (controls.riemannSphereOptionsDiv) {
             controls.riemannSphereOptionsDiv.classList.toggle('hidden', !state.riemannSphereViewEnabled);
         }
@@ -666,6 +688,34 @@ function bindViewControls() {
             controls.plotly3DOptionsDiv.classList.toggle('hidden', !state.plotly3DEnabled);
         }
         requestRedrawAll();
+    });
+
+    bindCheckbox('enableRiemannSurfaceCb', 'riemannSurfaceEnabled', () => {
+        if (state.riemannSurfaceEnabled) {
+            state.riemannSphereViewEnabled = false;
+            state.splitViewEnabled = false;
+            state.plotly3DEnabled = false;
+            if (controls.enableRiemannSphereCb) controls.enableRiemannSphereCb.checked = false;
+            if (controls.enableSplitViewCb) controls.enableSplitViewCb.checked = false;
+            if (controls.enablePlotly3DCb) controls.enablePlotly3DCb.checked = false;
+            if (state.navigationModeEnabled && typeof setNavigationModeEnabled === 'function') {
+                setNavigationModeEnabled(false);
+            }
+        }
+        if (controls.riemannSurfaceOptionsDiv) {
+            controls.riemannSurfaceOptionsDiv.classList.toggle('hidden', !state.riemannSurfaceEnabled);
+        }
+        if (controls.riemannSphereOptionsDiv) {
+            controls.riemannSphereOptionsDiv.classList.add('hidden');
+        }
+        if (typeof updateChainingTitles === 'function') {
+            updateChainingTitles();
+        }
+        requestDomainRedraw(true);
+    });
+
+    bindControlListener('riemannSurfaceResetViewBtn', 'click', () => {
+        resetRiemannSurfaceViews();
     });
 
     bindCheckbox('toggleSphereAxesGridCb', 'showSphereAxesAndGrid');
@@ -1531,6 +1581,7 @@ export function setupEventListeners() {
             'enableStreamlineFlowCb',
             'enableRadialDiscreteStepsCb',
             'enableRiemannSphereCb',
+            'enableRiemannSurfaceCb',
             'enablePlotly3DCb',
             'enableTaylorSeriesCb',
             'enableTaylorSeriesCustomCenterCb',
@@ -1649,8 +1700,14 @@ function handleSphereMouseUp(planeType) {
 function handleFullScreenToggle(planeType) {
     const isZPlane = planeType === 'z';
     const plotlyContainer = controls.wPlanePlotlyContainer;
+    const surfaceCanvas = !isZPlane && state.riemannSurfaceEnabled
+        ? getRiemannSurfaceCanvas(wCanvas)
+        : null;
+    const isSurfaceCase = !isZPlane && !!surfaceCanvas;
     const isPlotlyCase = !isZPlane && state.plotly3DEnabled && state.riemannSphereViewEnabled && plotlyContainer;
-    const currentElement = isZPlane ? zCanvas : (isPlotlyCase ? plotlyContainer : wCanvas);
+    const currentElement = isZPlane
+        ? zCanvas
+        : (isSurfaceCase ? surfaceCanvas : (isPlotlyCase ? plotlyContainer : wCanvas));
 
     if (!currentElement) {
         console.error('Fullscreen target element not found for plane:', planeType);

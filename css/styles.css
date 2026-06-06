@@ -406,6 +406,10 @@ main {
         rgba(255, 255, 255, 0.02);
 }
 
+.viz-toggle-card--wide {
+    grid-column: 1 / -1;
+}
+
 .viz-toggle-card--compact {
     min-height: 74px;
     padding: 0.78rem 0.82rem;
@@ -1036,6 +1040,60 @@ canvas {
     flex-grow: 1; /* Allows canvas to fill its flex parent (the new div) */
     min-height: 0; /* Essential for scaling within a flex container */
     cursor: crosshair; /* Added default cursor */
+}
+
+.riemann-surface-canvas {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    z-index: 2;
+    cursor: grab;
+    touch-action: none;
+    background:
+        radial-gradient(circle at 50% 42%, rgba(51, 45, 91, 0.2), transparent 54%),
+        #080a12;
+}
+
+.riemann-surface-canvas.is-dragging {
+    cursor: grabbing;
+}
+
+.riemann-surface-hud {
+    position: absolute;
+    left: 12px;
+    bottom: 12px;
+    z-index: 4;
+    max-width: calc(100% - 24px);
+    padding: 6px 9px;
+    border: 1px solid rgba(167, 139, 250, 0.28);
+    border-radius: 8px;
+    background: rgba(8, 10, 18, 0.72);
+    color: rgba(224, 228, 255, 0.78);
+    font: 10px/1.35 'SF Mono', 'Roboto Mono', monospace;
+    letter-spacing: 0.02em;
+    pointer-events: none;
+    backdrop-filter: blur(8px);
+}
+
+.riemann-surface-actions {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.75rem;
+    margin-top: 0.7rem;
+}
+
+.riemann-surface-status {
+    color: color-mix(in srgb, var(--accent-purple) 58%, var(--text-secondary-color));
+    font-size: 0.72rem;
+    line-height: 1.35;
+}
+
+.riemann-surface-actions button {
+    flex-shrink: 0;
+    padding: 0.45rem 0.75rem;
+    font-size: 0.75rem;
 }
 
 
@@ -2469,4 +2527,3 @@ select:focus {
     background: rgba(255, 85, 85, 0.18);
     border-color: rgba(255, 85, 85, 0.4);
 }
-

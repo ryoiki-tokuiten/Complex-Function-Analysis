@@ -4,6 +4,7 @@ import { TAYLOR_CENTER_PRESETS, TAYLOR_CENTER_PRESET_GROUPS } from '../constants
 import { updatePlaneViewportRanges } from './canvas-utils.js';
 import { initializeWebGLLineSupport } from '../rendering/webgl-planar.js';
 import { initializeWebGLDomainColoringSupport } from '../rendering/webgl-domain-coloring.js';
+import { disposeRiemannSurface } from '../rendering/webgl-riemann-surface.js';
 
 const { controls, polynomialCoeffUIElements } = context;
 
@@ -116,6 +117,20 @@ const DOM_BINDINGS = [
     { key: 'neighborhoodSizeSlider', id: 'neighborhood_size_slider' },
     { key: 'neighborhoodSizeValueDisplay', id: 'neighborhood_size_value_display' },
     { key: 'enableRiemannSphereCb', id: 'enable_riemann_sphere_cb' },
+    { key: 'enableRiemannSurfaceCb', id: 'enable_riemann_surface_cb' },
+    { key: 'riemannSurfaceOptionsDiv', id: 'riemann_surface_options_div' },
+    { key: 'riemannSurfaceComponentSelector', id: 'riemann_surface_component_selector' },
+    { key: 'riemannSurfaceSheetsSlider', id: 'riemann_surface_sheets_slider' },
+    { key: 'riemannSurfaceSheetsValueDisplay', id: 'riemann_surface_sheets_value_display' },
+    { key: 'riemannSurfaceBranchCenterSlider', id: 'riemann_surface_branch_center_slider' },
+    { key: 'riemannSurfaceBranchCenterValueDisplay', id: 'riemann_surface_branch_center_value_display' },
+    { key: 'riemannSurfaceHeightScaleSlider', id: 'riemann_surface_height_scale_slider' },
+    { key: 'riemannSurfaceHeightScaleValueDisplay', id: 'riemann_surface_height_scale_value_display' },
+    { key: 'riemannSurfaceHeightClipSlider', id: 'riemann_surface_height_clip_slider' },
+    { key: 'riemannSurfaceHeightClipValueDisplay', id: 'riemann_surface_height_clip_value_display' },
+    { key: 'riemannSurfaceWireframeCb', id: 'riemann_surface_wireframe_cb' },
+    { key: 'riemannSurfaceResetViewBtn', id: 'riemann_surface_reset_view_btn' },
+    { key: 'riemannSurfaceStatus', id: 'riemann_surface_status' },
     { key: 'enableTaylorSeriesCb', id: 'enable_taylor_series_cb' },
     { key: 'taylorSeriesOptionsDetailDiv', id: 'taylor_series_options_detail_div' },
     { key: 'taylorSeriesCenterStatus', id: 'taylor_series_center_status' },
@@ -529,7 +544,8 @@ export function updateChainingTitles() {
     for (let i = 1; i < wCanvasList.length; i++) {
         const titleSpan = document.getElementById(`w-plane-title_${i}`);
         if (titleSpan) {
-            titleSpan.innerHTML = `w-plane (Chain ${i}: <code id="w-plane-title-func_${i}">${getChainingTitleHTML(i, state.chainingMode)}</code>)`;
+            const outputLabel = state.riemannSurfaceEnabled ? 'Riemann surface' : 'w-plane';
+            titleSpan.innerHTML = `${outputLabel} (Chain ${i}: <code id="w-plane-title-func_${i}">${getChainingTitleHTML(i, state.chainingMode)}</code>)`;
         }
     }
 }
@@ -560,8 +576,13 @@ export function updateChainingColumns(count) {
         const titleSpan = newCol.querySelector('#w-plane-title');
         if (titleSpan) {
             titleSpan.id = `w-plane-title_${i}`;
-            titleSpan.innerHTML = `w-plane (Chain ${i}: <code id="w-plane-title-func_${i}">${getChainingTitleHTML(i, state.chainingMode)}</code>)`;
+            const outputLabel = state.riemannSurfaceEnabled ? 'Riemann surface' : 'w-plane';
+            titleSpan.innerHTML = `${outputLabel} (Chain ${i}: <code id="w-plane-title-func_${i}">${getChainingTitleHTML(i, state.chainingMode)}</code>)`;
         }
+
+        newCol.querySelectorAll('.riemann-surface-canvas, .riemann-surface-hud').forEach(element => {
+            element.remove();
+        });
         
         const newCanvas = newCol.querySelector('#w_plane_canvas');
         if (newCanvas) {
@@ -620,6 +641,7 @@ export function updateChainingColumns(count) {
     while (wCanvasList.length > count) {
         const i = wCanvasList.length - 1;
         const colToRemove = document.getElementById(`w_plane_column_${i}`);
+        disposeRiemannSurface(wCanvasList[i]);
         if (colToRemove) {
             canvasesRow.removeChild(colToRemove);
         }

@@ -1272,7 +1272,7 @@
                         <div class="viz-feature-section-header">
                             <span class="viz-feature-section-title">Surface & Projection</span>
                         </div>
-                        <div class="viz-toggle-grid viz-toggle-grid--duo">
+                        <div class="viz-toggle-grid">
                             <label for="enable_domain_coloring_cb" class="control-label tooltip-label viz-toggle-card">
                                 <input type="checkbox" id="enable_domain_coloring_cb" class="control-checkbox"
                                     data-tooltip="Toggle domain coloring visualization (color indicates argument, lightness indicates magnitude)">
@@ -1292,6 +1292,90 @@
                                     <span class="viz-toggle-card-copy">Project the mapped output onto the sphere.</span>
                                 </span>
                             </label>
+                            <label for="enable_riemann_surface_cb"
+                                class="control-label tooltip-label viz-toggle-card viz-toggle-card--hero viz-toggle-card--wide">
+                                <input type="checkbox" id="enable_riemann_surface_cb" class="control-checkbox"
+                                    data-tooltip="Render the branch-aware Riemann surface of the current function on the GPU">
+                                <span class="custom-checkbox-visual"></span>
+                                <span class="viz-toggle-card-content">
+                                    <span class="viz-toggle-card-title">Riemann Surface</span>
+                                    <span class="viz-toggle-card-copy">Explore branch sheets as an interactive WebGL
+                                        surface.</span>
+                                </span>
+                            </label>
+                        </div>
+                        <div id="riemann_surface_options_div"
+                            class="dependent-settings-block hidden control-group-indent viz-detail-block">
+                            <div class="viz-detail-header">
+                                <span class="viz-detail-title">Branch Surface</span>
+                                <span class="viz-detail-copy">Drag to orbit, scroll to zoom, and double-click to reset.</span>
+                            </div>
+                            <div class="viz-settings-grid">
+                                <div class="control-group">
+                                    <label for="riemann_surface_component_selector">Surface Height</label>
+                                    <select id="riemann_surface_component_selector" class="control-select"
+                                        data-tooltip="Choose the component of w used as surface height">
+                                        <option value="imaginary" selected>Im(w)</option>
+                                        <option value="real">Re(w)</option>
+                                        <option value="magnitude">|w|</option>
+                                        <option value="phase">arg(w)</option>
+                                    </select>
+                                </div>
+                                <div class="control-group">
+                                    <label for="riemann_surface_sheets_slider">
+                                        Visible Sheets:
+                                        <output id="riemann_surface_sheets_value_display">5</output>
+                                    </label>
+                                    <div class="slider-container">
+                                        <input type="range" id="riemann_surface_sheets_slider" min="1" max="9"
+                                            step="2" value="5" data-tooltip="Number of branch sheets rendered at once">
+                                    </div>
+                                </div>
+                                <div class="control-group">
+                                    <label for="riemann_surface_branch_center_slider">
+                                        Branch Center k:
+                                        <output id="riemann_surface_branch_center_value_display">0</output>
+                                    </label>
+                                    <div class="slider-container">
+                                        <input type="range" id="riemann_surface_branch_center_slider" min="-20"
+                                            max="20" step="1" value="0"
+                                            data-tooltip="Move the visible window through the infinite branch family">
+                                    </div>
+                                </div>
+                                <div class="control-group">
+                                    <label for="riemann_surface_height_scale_slider">
+                                        Height Scale:
+                                        <output id="riemann_surface_height_scale_value_display">1.00</output>
+                                    </label>
+                                    <div class="slider-container">
+                                        <input type="range" id="riemann_surface_height_scale_slider" min="0.15"
+                                            max="2.5" step="0.05" value="1.0">
+                                    </div>
+                                </div>
+                                <div class="control-group">
+                                    <label for="riemann_surface_height_clip_slider">
+                                        Height Clip:
+                                        <output id="riemann_surface_height_clip_value_display">8.0</output>
+                                    </label>
+                                    <div class="slider-container">
+                                        <input type="range" id="riemann_surface_height_clip_slider" min="0.5"
+                                            max="40" step="0.5" value="8.0"
+                                            data-tooltip="Symmetric value range mapped into the surface height">
+                                    </div>
+                                </div>
+                                <div class="control-group">
+                                    <label for="riemann_surface_wireframe_cb" class="control-label tooltip-label">
+                                        <input type="checkbox" id="riemann_surface_wireframe_cb"
+                                            class="control-checkbox" checked>
+                                        <span class="custom-checkbox-visual"></span>
+                                        Surface Grid
+                                    </label>
+                                </div>
+                            </div>
+                            <div class="riemann-surface-actions">
+                                <span id="riemann_surface_status" class="riemann-surface-status">GPU surface ready</span>
+                                <button id="riemann_surface_reset_view_btn" type="button">Reset View</button>
+                            </div>
                         </div>
                         <div id="domain_coloring_options_div" class="dependent-settings-block hidden viz-detail-block">
                             <div class="viz-settings-grid">

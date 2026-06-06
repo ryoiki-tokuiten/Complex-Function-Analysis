@@ -6,6 +6,11 @@ import { syncLaplacePlayPauseButton, syncLaplaceWindingSyncButton } from './even
 import { syncVideoPlaybackUI } from '../utils/raster-media.js';
 import { findTaylorCenterPreset, formatTaylorNumericValue } from '../utils/dom-utils.js';
 import { syncNavigationControls } from '../navigation-plane.js';
+import {
+    getBranchWindowLabel,
+    getVisibleBranchIndices,
+    surfaceStageHasBranches
+} from '../analysis/riemann-surface.js';
 
 const { controls } = context;
 
@@ -248,6 +253,18 @@ export function updateSliderLabelsAndDisplay() {
     if (controls.plotlyGridDensityValueDisplay && controls.plotlyGridDensitySlider) { // New
         controls.plotlyGridDensityValueDisplay.textContent = state.plotlyGridDensity;
     }
+    if (controls.riemannSurfaceSheetsValueDisplay) {
+        controls.riemannSurfaceSheetsValueDisplay.textContent = state.riemannSurfaceSheets;
+    }
+    if (controls.riemannSurfaceBranchCenterValueDisplay) {
+        controls.riemannSurfaceBranchCenterValueDisplay.textContent = state.riemannSurfaceBranchCenter;
+    }
+    if (controls.riemannSurfaceHeightScaleValueDisplay) {
+        controls.riemannSurfaceHeightScaleValueDisplay.textContent = state.riemannSurfaceHeightScale.toFixed(2);
+    }
+    if (controls.riemannSurfaceHeightClipValueDisplay) {
+        controls.riemannSurfaceHeightClipValueDisplay.textContent = state.riemannSurfaceHeightClip.toFixed(1);
+    }
 
     // Fourier Transform display updates
     if (controls.fourierFrequencyValueDisplay && state.fourierFrequency !== undefined) {
@@ -431,6 +448,9 @@ export function updateTitlesAndGlobalUI() {
         if (controls.riemannSphereOptionsDiv) {
             controls.riemannSphereOptionsDiv.classList.add('hidden');
         }
+        if (controls.riemannSurfaceOptionsDiv) {
+            controls.riemannSurfaceOptionsDiv.classList.add('hidden');
+        }
         if (controls.sphereViewControlsDiv) {
             controls.sphereViewControlsDiv.classList.add('hidden');
         }
@@ -468,6 +488,9 @@ export function updateTitlesAndGlobalUI() {
         }
         if (controls.riemannSphereOptionsDiv) {
             controls.riemannSphereOptionsDiv.classList.add('hidden');
+        }
+        if (controls.riemannSurfaceOptionsDiv) {
+            controls.riemannSurfaceOptionsDiv.classList.add('hidden');
         }
         if (controls.sphereViewControlsDiv) {
             controls.sphereViewControlsDiv.classList.add('hidden');
@@ -720,7 +743,11 @@ export function updateTitlesAndGlobalUI() {
         zPlaneTitleText = 'z-plane (Navigation)';
     }
 
-    if (state.splitViewEnabled) {
+    if (state.riemannSurfaceEnabled) {
+        controls.zPlaneTitle.innerHTML = zPlaneTitleText;
+        controls.wPlaneTitle.innerHTML = `Riemann surface (Output: <code id="w-plane-title-func">w = ${fND}</code>)`;
+        if (controls.cauchy_integral_results_info) controls.cauchy_integral_results_info.classList.add('hidden');
+    } else if (state.splitViewEnabled) {
         if (state.domainColoringEnabled) {
             controls.zPlaneTitle.innerHTML = `z-plane (Output: Domain Coloring of <code id="z-plane-title-func">w = ${fND}</code>)`;
         } else if (state.vectorFieldEnabled || state.streamlineFlowEnabled) {
@@ -752,7 +779,34 @@ export function updateTitlesAndGlobalUI() {
 
     // Handle visibility of the main Riemann sphere options container
     if (controls.riemannSphereOptionsDiv) {
-        controls.riemannSphereOptionsDiv.classList.toggle('hidden', !state.riemannSphereViewEnabled);
+        controls.riemannSphereOptionsDiv.classList.toggle(
+            'hidden',
+            !state.riemannSphereViewEnabled || state.riemannSurfaceEnabled
+        );
+    }
+
+    if (controls.riemannSurfaceOptionsDiv) {
+        controls.riemannSurfaceOptionsDiv.classList.toggle('hidden', !state.riemannSurfaceEnabled);
+    }
+    if (controls.enableRiemannSurfaceCb) {
+        controls.enableRiemannSurfaceCb.checked = state.riemannSurfaceEnabled;
+    }
+    if (controls.riemannSurfaceComponentSelector) {
+        controls.riemannSurfaceComponentSelector.value = state.riemannSurfaceComponent;
+    }
+    if (controls.riemannSurfaceWireframeCb) {
+        controls.riemannSurfaceWireframeCb.checked = state.riemannSurfaceWireframe;
+    }
+    if (controls.riemannSurfaceStatus) {
+        const hasBranches = surfaceStageHasBranches(state, 1);
+        const indices = getVisibleBranchIndices(
+            state.riemannSurfaceSheets,
+            state.riemannSurfaceBranchCenter,
+            hasBranches
+        );
+        controls.riemannSurfaceStatus.textContent = hasBranches
+            ? `GPU branch window: ${getBranchWindowLabel(indices)}`
+            : 'GPU surface: this output is single-valued';
     }
 
     // Handle visibility of Plotly 3D specific options (nested)

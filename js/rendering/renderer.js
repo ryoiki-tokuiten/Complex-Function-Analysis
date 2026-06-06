@@ -16,6 +16,7 @@ import { drawWithWebGLRaster, drawWithWebGLCapture, drawPlanarTransformedShapeHy
 import { drawWindingVisualization, drawTimeDomainSignal } from './draw-fourier-winding.js';
 import { drawLaplaceWindingVisualization, drawLaplaceTimeDomain } from './draw-laplace-panels.js';
 import { renderPlotlyRiemannSphere } from './draw-plotly-sphere.js';
+import { hideRiemannSurface, renderRiemannSurface } from './webgl-riemann-surface.js';
 import { drawAxes, drawGridLines } from './canvas-primitives.js';
 import { drawTaylorAxes, drawZerosAndPolesMarkers, drawCriticalPointMarker, drawGeneralPointsMarkers } from './draw-primitives.js';
 import { drawPlanarTransformedShape, drawPlanarProbe, drawPlanarTransformedProbe, drawStreamlinesOnZPlane, updateAndDrawParticles, drawPlanarInputOverlays, drawPlanarTaylorApproximation, drawZPlaneVectorField } from './draw-planar.js';
@@ -647,6 +648,9 @@ function _renderSingleWPlaneMode(index, curFunc, isSpecialMode) {
 
     try {
         if (isSpecialMode) {
+            hideRiemannSurface(wCanvas);
+            if (wCanvas) wCanvas.classList.remove('hidden');
+            if (controls.wPlanePlotlyContainer) controls.wPlanePlotlyContainer.classList.add('hidden');
             if (state.fourierModeEnabled) {
                 drawPlaneLayer(wCtx, wPlaneParams, 'w', (layerCtx) => {
                     drawWindingVisualization(layerCtx, state.fourierTimeDomainSignal, wPlaneParams);
@@ -658,6 +662,18 @@ function _renderSingleWPlaneMode(index, curFunc, isSpecialMode) {
             }
             return;
         }
+
+    if (state.riemannSurfaceEnabled) {
+        if (controls.wPlanePlotlyContainer) controls.wPlanePlotlyContainer.classList.add('hidden');
+        if (renderRiemannSurface(wCanvas, index + 1)) {
+            if (wCanvas) wCanvas.classList.add('hidden');
+            return;
+        }
+        if (wCanvas) wCanvas.classList.remove('hidden');
+    } else {
+        hideRiemannSurface(wCanvas);
+    }
+
     const isRiemannW = state.riemannSphereViewEnabled || state.splitViewEnabled;
 
     if (state.plotly3DEnabled && isRiemannW) {
