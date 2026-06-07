@@ -1273,13 +1273,24 @@ function resetFullscreenShell(container) {
 
 function bindFullscreenControls() {
     bindControlListener('toggleFullscreenZBtn', 'click', () => handleFullScreenToggle('z'));
-    bindControlListener('toggleFullscreenWBtn', 'click', () => handleFullScreenToggle('w'));
+    bindControlListener('toggleFullscreenWBtn', 'click', () => handleFullScreenToggle('w', 0));
     bindControlListener('toggleFullscreenLaplace3DBtn', 'click', toggleLaplace3DFullscreen);
+
+    // Event delegation for dynamic chained w-plane fullscreen buttons
+    bindElementListener(document, 'click', event => {
+        const btn = event.target.closest('[id^="toggle_fullscreen_w_btn_"]');
+        if (btn) {
+            const index = parseInt(btn.id.replace('toggle_fullscreen_w_btn_', ''), 10);
+            if (!isNaN(index)) {
+                handleFullScreenToggle('w', index);
+            }
+        }
+    });
 
     bindElementListener(document, 'keydown', event => {
         if (event.key !== 'Escape') return;
         if (state.isZFullScreen) handleFullScreenToggle('z');
-        if (state.isWFullScreen) handleFullScreenToggle('w');
+        if (state.isWFullScreen) handleFullScreenToggle('w', state.fullscreenWIndex || 0);
         if (state.isLaplace3DFullScreen && controls.toggleFullscreenLaplace3DBtn) {
             controls.toggleFullscreenLaplace3DBtn.click();
         }
@@ -1514,11 +1525,7 @@ function handleSphereMouseMove(event, planeType) {
     if (!isSphereInteractionActive(planeType === 'z') || !params.dragging) return;
 
     params.rotY += (event.clientX - params.lastMouseX) * SPHERE_SENSITIVITY;
-    params.rotX = clamp(
-        params.rotX + (event.clientY - params.lastMouseY) * SPHERE_SENSITIVITY,
-        -Math.PI / 2 + 0.01,
-        Math.PI / 2 - 0.01
-    );
+    params.rotX += (event.clientY - params.lastMouseY) * SPHERE_SENSITIVITY;
     params.lastMouseX = event.clientX;
     params.lastMouseY = event.clientY;
     requestDomainRedraw(true);
@@ -1532,28 +1539,40 @@ function handleSphereMouseUp(planeType) {
     if (canvasFor(planeType)) canvasFor(planeType).style.cursor = 'crosshair';
 }
 
-function fullscreenTarget(planeType) {
+function fullscreenTarget(planeType, index = 0) {
     const isZ = planeType === 'z';
-    const plotly = controls.wPlanePlotlyContainer;
-    const surface = !isZ && state.riemannSurfaceEnabled ? getRiemannSurfaceCanvas(wCanvas) : null;
-    const isPlotly = !isZ && state.plotly3DEnabled && state.riemannSphereViewEnabled && plotly;
+    if (isZ) {
+        return {
+            isZ: true,
+            isPlotly: false,
+            element: zCanvas,
+            card: controls.zCanvasCard
+        };
+    }
+
+    const canvas = (context.wCanvasList && context.wCanvasList[index]) || wCanvas;
+    const card = index === 0 ? controls.wCanvasCard : document.getElementById(`w_plane_column_${index}`);
+    const plotly = (context.wPlanePlotlyContainersList && context.wPlanePlotlyContainersList[index]) || controls.wPlanePlotlyContainer;
+    const surface = state.riemannSurfaceEnabled ? getRiemannSurfaceCanvas(canvas) : null;
+    const isPlotly = state.plotly3DEnabled && state.riemannSphereViewEnabled && plotly;
 
     return {
-        isZ,
+        isZ: false,
         isPlotly,
-        element: isZ ? zCanvas : (surface || (isPlotly ? plotly : wCanvas)),
-        card: isZ ? controls.zCanvasCard : controls.wCanvasCard
+        element: surface || (isPlotly ? plotly : canvas),
+        card,
+        canvas
     };
 }
 
-function saveFullscreenOrigin(isZ, element) {
-    const prefix = isZ ? 'Z' : 'W';
+function saveFullscreenOrigin(isZ, element, index = 0) {
+    const prefix = isZ ? 'Z' : `W_${index}`;
     state[`original${prefix}Parent`] = element.parentElement;
     state[`original${prefix}Style`] = { width: element.style.width, height: element.style.height };
 }
 
-function restoreFullscreenOrigin(isZ, element, card) {
-    const prefix = isZ ? 'Z' : 'W';
+function restoreFullscreenOrigin(isZ, element, card, index = 0) {
+    const prefix = isZ ? 'Z' : `W_${index}`;
     const parent = state[`original${prefix}Parent`];
     const style = state[`original${prefix}Style`];
 
@@ -1568,49 +1587,53 @@ function restoreFullscreenOrigin(isZ, element, card) {
     if (fallback) fallback.appendChild(element);
 }
 
-function setPlaneFullscreen(isZ, value) {
-    if (isZ) state.isZFullScreen = value;
-    else state.isWFullScreen = value;
+function setPlaneFullscreen(isZ, value, index = 0) {
+    if (isZ) {
+        state.isZFullScreen = value;
+    } else {
+        state.isWFullScreen = value;
+        state.fullscreenWIndex = value ? index : 0;
+    }
 }
 
 function isPlaneFullscreen(isZ) {
     return isZ ? state.isZFullScreen : state.isWFullScreen;
 }
 
-function handleFullScreenToggle(planeType) {
-    const target = fullscreenTarget(planeType);
+function handleFullScreenToggle(planeType, index = 0) {
+    const target = fullscreenTarget(planeType, index);
     const shell = controls.fullscreenContainer;
 
     if (!target.element || !shell) {
-        console.error('Fullscreen target element not found for plane:', planeType);
+        console.error('Fullscreen target element not found for plane:', planeType, 'index:', index);
         return;
     }
 
-    setPlaneFullscreen(target.isZ, !isPlaneFullscreen(target.isZ));
+    setPlaneFullscreen(target.isZ, !isPlaneFullscreen(target.isZ), index);
     const entering = isPlaneFullscreen(target.isZ);
 
     if (entering) {
-        saveFullscreenOrigin(target.isZ, target.element);
+        saveFullscreenOrigin(target.isZ, target.element, index);
         setStyles(shell, fullscreenStyles('var(--color-background-dark)'));
-        attachCloseButton(shell, () => handleFullScreenToggle(planeType));
+        attachCloseButton(shell, () => handleFullScreenToggle(planeType, index));
         shell.appendChild(target.element);
         document.body.appendChild(shell);
         shell.classList.remove('hidden');
         if (target.card) target.card.classList.add('hidden-visually');
         setStyles(target.element, { width: '100%', height: '100%' });
 
-        if (target.isPlotly && wCanvas) wCanvas.classList.add('hidden');
-        if (!target.isZ && controls.laplaceWindingSyncBtn) {
+        if (target.isPlotly && target.canvas) target.canvas.classList.add('hidden');
+        if (!target.isZ && controls.laplaceWindingSyncBtn && index === 0) {
             shell.appendChild(controls.laplaceWindingSyncBtn);
             setStyles(controls.laplaceWindingSyncBtn, { top: '50px', right: '20px' });
         }
     } else {
-        restoreFullscreenOrigin(target.isZ, target.element, target.card);
+        restoreFullscreenOrigin(target.isZ, target.element, target.card, index);
         resetFullscreenShell(shell);
         if (target.card) target.card.classList.remove('hidden-visually');
-        if (target.isPlotly && wCanvas) wCanvas.classList.remove('hidden');
+        if (target.isPlotly && target.canvas) target.canvas.classList.remove('hidden');
 
-        if (!target.isZ && controls.laplaceWindingSyncBtn && state.originalWParent) {
+        if (!target.isZ && controls.laplaceWindingSyncBtn && state.originalWParent && index === 0) {
             state.originalWParent.appendChild(controls.laplaceWindingSyncBtn);
             setStyles(controls.laplaceWindingSyncBtn, { top: '8px', right: '8px' });
         }

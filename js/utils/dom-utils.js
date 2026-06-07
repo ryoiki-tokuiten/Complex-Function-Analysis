@@ -463,7 +463,8 @@ export function setupVisualParameters(updateZFromSlider = true, updateWFromSlide
 
     if (wCanvasList && wCanvasList.length > 0) {
         for (let i = 0; i < wCanvasList.length; i++) {
-            setupCanvasBaseParams(wPlaneParamsList[i], wCanvasList[i], sphereViewWParamsList[i], wIsFullscreen);
+            const isThisWFullscreen = wIsFullscreen && (state.fullscreenWIndex === i);
+            setupCanvasBaseParams(wPlaneParamsList[i], wCanvasList[i], sphereViewWParamsList[i], isThisWFullscreen);
         }
     } else {
         setupCanvasBaseParams(wPlaneParams, wCanvas, sphereViewParams.w, wIsFullscreen);
@@ -609,12 +610,14 @@ export function updateChainingColumns(count) {
             newPlotly.id = `w_plane_plotly_container_${i}`;
         }
 
-        // Hide fullscreen toggle for recursive planes and make IDs unique
+        // Make fullscreen toggle IDs unique for event delegation
         const fsBtn = newCol.querySelector('#toggle_fullscreen_w_btn');
         if (fsBtn) {
             fsBtn.id = `toggle_fullscreen_w_btn_${i}`;
-            fsBtn.style.display = 'none';
         }
+
+        // Hide collapse/expand buttons — not relevant for chained panels
+        newCol.querySelectorAll('[id^="collapse_w"], [id^="expand_w"]').forEach(el => el.style.display = 'none');
         
         const probeInfo = newCol.querySelector('#w_plane_probe_info');
         if (probeInfo) probeInfo.id = `w_plane_probe_info_${i}`;

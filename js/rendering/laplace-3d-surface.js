@@ -55,11 +55,11 @@ export function drawLaplace3DSurface(containerId) {
             if (point) {
                 let zValue;
                 if (vizMode === 'magnitude') {
-                    zValue = Math.min(point.magnitude, clipHeight);
+                    zValue = Math.min(point.magnitude, clipHeight * 100);
                 } else if (vizMode === 'phase') {
                     zValue = point.phase;
                 } else { // combined
-                    zValue = Math.min(point.magnitude, clipHeight);
+                    zValue = Math.min(point.magnitude, clipHeight * 100);
                 }
                 row.push(zValue);
             } else {
@@ -265,7 +265,7 @@ export function drawLaplaceMagnitudePlot(ctx, planeParams) {
 
         for (let i = 0; i < sliceData.length; i++) {
             const pt = sliceData[i];
-            const mag = Math.min(pt.magnitude, clipHeight);
+            const mag = Math.min(pt.magnitude, clipHeight * 100);
             const canvasPos = mapToCanvasCoords(pt.sigma, mag, planeParams);
 
             // Gradient color based on magnitude

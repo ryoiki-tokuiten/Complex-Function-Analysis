@@ -223,7 +223,7 @@ export function buildPlotlySphereMesh(
     runtimeState = state,
     resolution = getPlotlySphereResolution(runtimeState)
 ) {
-    const n = Math.max(24, Math.min(240, Math.floor(resolution)));
+    const n = Math.max(24, Math.min(2048, Math.floor(resolution)));
     const x = [];
     const y = [];
     const z = [];
@@ -403,7 +403,7 @@ export function getPlotlyDynamicGridTraces() {
 
     
     const minEffectiveDensity = 4;  
-    const maxEffectiveDensity = 40; 
+    const maxEffectiveDensity = 400;
 
     let effectiveGridDensity = Math.round(baseGridDensity * scaledDynamicFactor);
     effectiveGridDensity = Math.max(minEffectiveDensity, Math.min(maxEffectiveDensity, effectiveGridDensity));

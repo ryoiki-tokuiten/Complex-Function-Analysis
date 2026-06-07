@@ -20,15 +20,15 @@ const LIMITS = Object.freeze({
   minStage: 1,
   maxStage: 25,
   minResolution: 42,
-  maxResolution: 140,
-  resolutionBase: 42,
-  resolutionScale: 2,
-  minDistance: 1.8,
-  maxDistance: 8,
-  maxPixelRatio: 2,
+  maxResolution: 254,
+  resolutionBase: 128,
+  resolutionScale: 6,
+  minDistance: 0.001,
+  maxDistance: 100,
+  maxPixelRatio: 4,
   branchCutPixels: 0.8,
-  minBranchCutWidth: 0.002,
-  minHeightClip: 1.0e-4
+  minBranchCutWidth: 1.0e-7,
+  minHeightClip: 1.0e-7
 });
 
 const CHAIN_MODE_IDS = Object.freeze({
@@ -1085,7 +1085,7 @@ function installInteraction(renderer) {
       const dy = event.clientY - renderer.lastPointerY;
 
       renderer.camera.rotY += dx * 0.008;
-      renderer.camera.rotX = clamp(renderer.camera.rotX + dy * 0.008, -1.52, 1.52);
+      renderer.camera.rotX += dy * 0.008;
       renderer.lastPointerX = event.clientX;
       renderer.lastPointerY = event.clientY;
       redraw();
