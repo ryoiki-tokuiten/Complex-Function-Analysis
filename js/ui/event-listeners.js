@@ -15,124 +15,139 @@ import { setNavigationModeEnabled, followNavigationViewports, resetNavigationVeh
 import { toggleAnimation } from './animation.js';
 import { initializePolynomialCoeffs, generatePolynomialCoeffSliders } from './polynomial-ui.js';
 import { updateLaplace3DSurface } from '../rendering/laplace-3d-surface.js';
-import {
-    getRiemannSurfaceCanvas,
-    resetRiemannSurfaceViews
-} from '../rendering/webgl-riemann-surface.js';
+import { getRiemannSurfaceCanvas, resetRiemannSurfaceViews } from '../rendering/webgl-riemann-surface.js';
 import { applyTheme, renderThemesList, renderDomainPalettesUI, domainPalettes } from './theme-manager.js';
 
-const { controls, polynomialCoeffUIElements } = context;
+const { controls = {} } = context;
 
-let zCanvas, wCanvas;
+let zCanvas;
+let wCanvas;
+let uiEventListenersBound = false;
+let cpuHighQualityTimeout = null;
+
+const COMPLEX_PARTS = ['re', 'im'];
+const MOBIUS_PARAMS = ['A', 'B', 'C', 'D'];
 
 const DOMAIN_DIRTY_STATE_KEYS = new Set([
-    'a0',
-    'b0',
-    'circleR',
-    'ellipseA',
-    'ellipseB',
-    'hyperbolaA',
-    'hyperbolaB',
-    'stripY1',
-    'stripY2',
-    'sectorAngle1',
-    'sectorAngle2',
-    'sectorRMin',
-    'sectorRMax',
-    'imageSize',
-    'imageOpacity',
-    'videoSize',
-    'videoOpacity',
-    'vectorFieldScale',
-    'zPlaneZoom',
-    'wPlaneZoom',
-    'fractionalPowerN'
+    'a0', 'b0', 'circleR', 'ellipseA', 'ellipseB', 'hyperbolaA', 'hyperbolaB',
+    'stripY1', 'stripY2', 'sectorAngle1', 'sectorAngle2', 'sectorRMin', 'sectorRMax',
+    'imageSize', 'imageOpacity', 'videoSize', 'videoOpacity', 'vectorFieldScale',
+    'zPlaneZoom', 'wPlaneZoom', 'fractionalPowerN'
 ]);
 
 const BASIC_SLIDER_BINDINGS = [
-    { controlKey: 'stripY1Slider', stateKey: 'stripY1', parser: parseFloat },
-    { controlKey: 'stripY2Slider', stateKey: 'stripY2', parser: parseFloat },
-    { controlKey: 'sectorAngle1Slider', stateKey: 'sectorAngle1', parser: parseFloat },
-    { controlKey: 'sectorAngle2Slider', stateKey: 'sectorAngle2', parser: parseFloat },
-    { controlKey: 'sectorRMinSlider', stateKey: 'sectorRMin', parser: parseFloat },
-    { controlKey: 'sectorRMaxSlider', stateKey: 'sectorRMax', parser: parseFloat },
-    { controlKey: 'gridDensitySlider', stateKey: 'gridDensity', parser: parseInteger },
-    { controlKey: 'neighborhoodSizeSlider', stateKey: 'probeNeighborhoodSize', parser: parseFloat },
-    { controlKey: 'vectorFieldScaleSlider', stateKey: 'vectorFieldScale', parser: parseFloat },
-    { controlKey: 'vectorArrowThicknessSlider', stateKey: 'vectorArrowThickness', parser: parseFloat },
-    { controlKey: 'vectorArrowHeadSizeSlider', stateKey: 'vectorArrowHeadSize', parser: parseFloat },
-    { controlKey: 'streamlineStepSizeSlider', stateKey: 'streamlineStepSize', parser: parseFloat },
-    { controlKey: 'streamlineMaxLengthSlider', stateKey: 'streamlineMaxLength', parser: parseInteger },
-    { controlKey: 'streamlineThicknessSlider', stateKey: 'streamlineThickness', parser: parseFloat },
-    { controlKey: 'streamlineSeedDensityFactorSlider', stateKey: 'streamlineSeedDensityFactor', parser: parseFloat },
-    { controlKey: 'radialDiscreteStepsCountSlider', stateKey: 'radialDiscreteStepsCount', parser: parseInteger },
-    { controlKey: 'plotlyGridDensitySlider', stateKey: 'plotlyGridDensity', parser: parseInteger },
-    { controlKey: 'plotlySphereOpacitySlider', stateKey: 'plotlySphereOpacity', parser: parseFloat },
-    { controlKey: 'taylorSeriesOrderSlider', stateKey: 'taylorSeriesOrder', parser: parseInteger },
-    { controlKey: 'particleDensitySlider', stateKey: 'particleDensity', parser: parseInteger },
-    { controlKey: 'particleSpeedSlider', stateKey: 'particleSpeed', parser: parseFloat },
-    { controlKey: 'particleMaxLifetimeSlider', stateKey: 'particleMaxLifetime', parser: parseInteger },
-    { controlKey: 'imageResolutionSlider', stateKey: 'imageResolution', parser: parseInteger },
-    { controlKey: 'imageSizeSlider', stateKey: 'imageSize', parser: parseFloat },
-    { controlKey: 'imageOpacitySlider', stateKey: 'imageOpacity', parser: parseFloat },
-    { controlKey: 'videoResolutionSlider', stateKey: 'videoResolution', parser: parseInteger },
-    { controlKey: 'videoFpsSlider', stateKey: 'videoProcessingFps', parser: parseInteger },
-    { controlKey: 'videoSizeSlider', stateKey: 'videoSize', parser: parseFloat },
-    { controlKey: 'videoOpacitySlider', stateKey: 'videoOpacity', parser: parseFloat },
-    { controlKey: 'zPlaneZoomSlider', stateKey: 'zPlaneZoom', parser: parseFloat },
-    { controlKey: 'wPlaneZoomSlider', stateKey: 'wPlaneZoom', parser: parseFloat },
-    { controlKey: 'laplaceAnimationSpeedSlider', stateKey: 'laplaceAnimationSpeed', parser: parseFloat },
-    { controlKey: 'fourierFrequencySlider', stateKey: 'fourierFrequency', parser: parseFloat },
-    { controlKey: 'fourierAmplitudeSlider', stateKey: 'fourierAmplitude', parser: parseFloat },
-    { controlKey: 'fourierTimeWindowSlider', stateKey: 'fourierTimeWindow', parser: parseFloat },
-    { controlKey: 'fourierSamplesSlider', stateKey: 'fourierSamples', parser: parseInteger },
-    { controlKey: 'fourierWindingFrequencySlider', stateKey: 'fourierWindingFrequency', parser: parseFloat },
-    { controlKey: 'fourierWindingTimeSlider', stateKey: 'fourierWindingTime', parser: parseFloat },
-    { controlKey: 'laplaceFrequencySlider', stateKey: 'laplaceFrequency', parser: parseFloat },
-    { controlKey: 'laplaceDampingSlider', stateKey: 'laplaceDamping', parser: parseFloat },
-    { controlKey: 'laplaceSigmaSlider', stateKey: 'laplaceSigma', parser: parseFloat },
-    { controlKey: 'laplaceOmegaSlider', stateKey: 'laplaceOmega', parser: parseFloat },
-    { controlKey: 'laplaceClipHeightSlider', stateKey: 'laplaceClipHeight', parser: parseFloat },
-    { controlKey: 'riemannSurfaceSheetsSlider', stateKey: 'riemannSurfaceSheets', parser: parseInteger },
-    { controlKey: 'riemannSurfaceBranchCenterSlider', stateKey: 'riemannSurfaceBranchCenter', parser: parseInteger },
-    { controlKey: 'riemannSurfaceHeightScaleSlider', stateKey: 'riemannSurfaceHeightScale', parser: parseFloat },
-    { controlKey: 'riemannSurfaceHeightClipSlider', stateKey: 'riemannSurfaceHeightClip', parser: parseFloat }
-];
+    ['stripY1Slider', 'stripY1'], ['stripY2Slider', 'stripY2'],
+    ['sectorAngle1Slider', 'sectorAngle1'], ['sectorAngle2Slider', 'sectorAngle2'],
+    ['sectorRMinSlider', 'sectorRMin'], ['sectorRMaxSlider', 'sectorRMax'],
+    ['gridDensitySlider', 'gridDensity', parseInteger],
+    ['neighborhoodSizeSlider', 'probeNeighborhoodSize'],
+    ['vectorFieldScaleSlider', 'vectorFieldScale'],
+    ['vectorArrowThicknessSlider', 'vectorArrowThickness'],
+    ['vectorArrowHeadSizeSlider', 'vectorArrowHeadSize'],
+    ['streamlineStepSizeSlider', 'streamlineStepSize'],
+    ['streamlineMaxLengthSlider', 'streamlineMaxLength', parseInteger],
+    ['streamlineThicknessSlider', 'streamlineThickness'],
+    ['streamlineSeedDensityFactorSlider', 'streamlineSeedDensityFactor'],
+    ['radialDiscreteStepsCountSlider', 'radialDiscreteStepsCount', parseInteger],
+    ['plotlyGridDensitySlider', 'plotlyGridDensity', parseInteger],
+    ['plotlySphereOpacitySlider', 'plotlySphereOpacity'],
+    ['taylorSeriesOrderSlider', 'taylorSeriesOrder', parseInteger],
+    ['particleDensitySlider', 'particleDensity', parseInteger],
+    ['particleSpeedSlider', 'particleSpeed'],
+    ['particleMaxLifetimeSlider', 'particleMaxLifetime', parseInteger],
+    ['imageResolutionSlider', 'imageResolution', parseInteger],
+    ['imageSizeSlider', 'imageSize'],
+    ['imageOpacitySlider', 'imageOpacity'],
+    ['videoResolutionSlider', 'videoResolution', parseInteger],
+    ['videoFpsSlider', 'videoProcessingFps', parseInteger],
+    ['videoSizeSlider', 'videoSize'],
+    ['videoOpacitySlider', 'videoOpacity'],
+    ['zPlaneZoomSlider', 'zPlaneZoom'],
+    ['wPlaneZoomSlider', 'wPlaneZoom'],
+    ['laplaceAnimationSpeedSlider', 'laplaceAnimationSpeed'],
+    ['fourierFrequencySlider', 'fourierFrequency'],
+    ['fourierAmplitudeSlider', 'fourierAmplitude'],
+    ['fourierTimeWindowSlider', 'fourierTimeWindow'],
+    ['fourierSamplesSlider', 'fourierSamples', parseInteger],
+    ['fourierWindingFrequencySlider', 'fourierWindingFrequency'],
+    ['fourierWindingTimeSlider', 'fourierWindingTime'],
+    ['laplaceFrequencySlider', 'laplaceFrequency'],
+    ['laplaceDampingSlider', 'laplaceDamping'],
+    ['laplaceSigmaSlider', 'laplaceSigma'],
+    ['laplaceOmegaSlider', 'laplaceOmega'],
+    ['laplaceClipHeightSlider', 'laplaceClipHeight'],
+    ['riemannSurfaceSheetsSlider', 'riemannSurfaceSheets', parseInteger],
+    ['riemannSurfaceBranchCenterSlider', 'riemannSurfaceBranchCenter', parseInteger],
+    ['riemannSurfaceHeightScaleSlider', 'riemannSurfaceHeightScale'],
+    ['riemannSurfaceHeightClipSlider', 'riemannSurfaceHeightClip']
+].map(([controlKey, stateKey, parser = parseFloat]) => ({ controlKey, stateKey, parser }));
 
 const BASIC_CHECKBOX_BINDINGS = [
-    { controlKey: 'showZerosPolesCb', stateKey: 'showZerosPoles' },
-    { controlKey: 'showCriticalPointsCb', stateKey: 'showCriticalPoints' },
-    { controlKey: 'enableCauchyIntegralModeCb', stateKey: 'cauchyIntegralModeEnabled' },
-    { controlKey: 'enableSplitViewCb', stateKey: 'splitViewEnabled' },
-    { controlKey: 'enableVectorFieldCb', stateKey: 'vectorFieldEnabled' },
-    { controlKey: 'enableStreamlineFlowCb', stateKey: 'streamlineFlowEnabled' },
-    { controlKey: 'enableRadialDiscreteStepsCb', stateKey: 'radialDiscreteStepsEnabled' },
-    { controlKey: 'enableRiemannSphereCb', stateKey: 'riemannSphereViewEnabled' },
-    { controlKey: 'enablePlotly3DCb', stateKey: 'plotly3DEnabled' },
-    { controlKey: 'toggleSphereAxesGridCb', stateKey: 'showSphereAxesAndGrid' },
-    { controlKey: 'togglePlotlySphereGridCb', stateKey: 'showPlotlySphereGrid' },
-    { controlKey: 'enableTaylorSeriesCb', stateKey: 'taylorSeriesEnabled' },
-    { controlKey: 'enableTaylorSeriesCustomCenterCb', stateKey: 'taylorSeriesCustomCenterEnabled' },
-    { controlKey: 'enableGeneralPointsCb', stateKey: 'generalPointsEnabled' },
-    { controlKey: 'laplaceShowROCCb', stateKey: 'laplaceShowROC' },
-    { controlKey: 'laplaceShowPolesZerosCb', stateKey: 'laplaceShowPolesZeros' },
-    { controlKey: 'laplaceShowFourierLineCb', stateKey: 'laplaceShowFourierLine' },
-    { controlKey: 'laplaceAnimationLoopCb', stateKey: 'laplaceAnimationLoop' },
-    { controlKey: 'enableParticleAnimationCb', stateKey: 'particleAnimationEnabled' },
-    { controlKey: 'showVectorFieldPanelCb', stateKey: 'showVectorFieldPanelEnabled' },
-    { controlKey: 'enableDomainColoringCb', stateKey: 'domainColoringEnabled' },
-    { controlKey: 'enableRiemannSurfaceCb', stateKey: 'riemannSurfaceEnabled' },
-    { controlKey: 'riemannSurfaceWireframeCb', stateKey: 'riemannSurfaceWireframe' }
-];
+    ['showZerosPolesCb', 'showZerosPoles'],
+    ['showCriticalPointsCb', 'showCriticalPoints'],
+    ['enableCauchyIntegralModeCb', 'cauchyIntegralModeEnabled'],
+    ['enableSplitViewCb', 'splitViewEnabled'],
+    ['enableVectorFieldCb', 'vectorFieldEnabled'],
+    ['enableStreamlineFlowCb', 'streamlineFlowEnabled'],
+    ['enableRadialDiscreteStepsCb', 'radialDiscreteStepsEnabled'],
+    ['enableRiemannSphereCb', 'riemannSphereViewEnabled'],
+    ['enablePlotly3DCb', 'plotly3DEnabled'],
+    ['toggleSphereAxesGridCb', 'showSphereAxesAndGrid'],
+    ['togglePlotlySphereGridCb', 'showPlotlySphereGrid'],
+    ['enableTaylorSeriesCb', 'taylorSeriesEnabled'],
+    ['enableTaylorSeriesCustomCenterCb', 'taylorSeriesCustomCenterEnabled'],
+    ['enableGeneralPointsCb', 'generalPointsEnabled'],
+    ['laplaceShowROCCb', 'laplaceShowROC'],
+    ['laplaceShowPolesZerosCb', 'laplaceShowPolesZeros'],
+    ['laplaceShowFourierLineCb', 'laplaceShowFourierLine'],
+    ['laplaceAnimationLoopCb', 'laplaceAnimationLoop'],
+    ['enableParticleAnimationCb', 'particleAnimationEnabled'],
+    ['showVectorFieldPanelCb', 'showVectorFieldPanelEnabled'],
+    ['enableDomainColoringCb', 'domainColoringEnabled'],
+    ['enableRiemannSurfaceCb', 'riemannSurfaceEnabled'],
+    ['riemannSurfaceWireframeCb', 'riemannSurfaceWireframe']
+].map(([controlKey, stateKey]) => ({ controlKey, stateKey }));
 
 const BASIC_SELECTOR_BINDINGS = [
-    { controlKey: 'inputShapeSelector', stateKey: 'currentInputShape' },
-    { controlKey: 'vectorFieldFunctionSelector', stateKey: 'vectorFieldFunction' },
-    { controlKey: 'fourierFunctionSelector', stateKey: 'fourierFunction' },
-    { controlKey: 'laplaceFunctionSelector', stateKey: 'laplaceFunction' },
-    { controlKey: 'laplaceVizModeSelector', stateKey: 'laplaceVizMode' },
-    { controlKey: 'riemannSurfaceComponentSelector', stateKey: 'riemannSurfaceComponent' }
-];
+    ['inputShapeSelector', 'currentInputShape'],
+    ['vectorFieldFunctionSelector', 'vectorFieldFunction'],
+    ['fourierFunctionSelector', 'fourierFunction'],
+    ['laplaceFunctionSelector', 'laplaceFunction'],
+    ['laplaceVizModeSelector', 'laplaceVizMode'],
+    ['riemannSurfaceComponentSelector', 'riemannSurfaceComponent']
+].map(([controlKey, stateKey]) => ({ controlKey, stateKey }));
+
+const SPECIAL_SLIDERS = new Set([
+    'vectorFieldScaleSlider', 'vectorArrowThicknessSlider', 'vectorArrowHeadSizeSlider',
+    'streamlineStepSizeSlider', 'streamlineMaxLengthSlider', 'streamlineThicknessSlider',
+    'streamlineSeedDensityFactorSlider', 'particleDensitySlider', 'particleSpeedSlider',
+    'particleMaxLifetimeSlider', 'imageResolutionSlider', 'imageSizeSlider', 'imageOpacitySlider',
+    'videoResolutionSlider', 'videoFpsSlider', 'videoSizeSlider', 'videoOpacitySlider',
+    'zPlaneZoomSlider', 'wPlaneZoomSlider', 'taylorSeriesOrderSlider',
+    'radialDiscreteStepsCountSlider', 'laplaceAnimationSpeedSlider',
+    'fourierFrequencySlider', 'fourierAmplitudeSlider', 'fourierTimeWindowSlider',
+    'fourierSamplesSlider', 'fourierWindingFrequencySlider', 'fourierWindingTimeSlider',
+    'laplaceFrequencySlider', 'laplaceDampingSlider', 'laplaceSigmaSlider',
+    'laplaceOmegaSlider', 'laplaceClipHeightSlider'
+]);
+
+const SPECIAL_CHECKBOXES = new Set([
+    'enableSplitViewCb', 'enableVectorFieldCb', 'enableStreamlineFlowCb',
+    'enableRadialDiscreteStepsCb', 'enableRiemannSphereCb', 'enableRiemannSurfaceCb',
+    'enablePlotly3DCb', 'enableTaylorSeriesCb', 'enableTaylorSeriesCustomCenterCb',
+    'enableGeneralPointsCb', 'laplaceShowROCCb', 'laplaceShowPolesZerosCb',
+    'laplaceShowFourierLineCb', 'laplaceAnimationLoopCb', 'enableParticleAnimationCb',
+    'showVectorFieldPanelCb', 'enableDomainColoringCb', 'toggleSphereAxesGridCb',
+    'togglePlotlySphereGridCb'
+]);
+
+const SPECIAL_SELECTORS = new Set([
+    'inputShapeSelector',
+    'vectorFieldFunctionSelector',
+    'fourierFunctionSelector',
+    'laplaceFunctionSelector',
+    'laplaceVizModeSelector'
+]);
 
 const SPHERE_VIEW_BUTTONS = {
     sphereViewNorthBtn: { rotX: -Math.PI / 2 + 0.01, rotY: 0 },
@@ -143,49 +158,177 @@ const SPHERE_VIEW_BUTTONS = {
     sphereViewResetBtn: { rotX: SPHERE_INITIAL_ROT_X, rotY: SPHERE_INITIAL_ROT_Y }
 };
 
-// Taylor and General points UI instances are stored on context to share with ui-updates
-let uiEventListenersBound = false;
+const ALGEBRAIC_FUNCTION_OPTIONS = [
+    ['none', 'None'], ['cos', 'cos(z)'], ['sin', 'sin(z)'], ['tan', 'tan(z)'],
+    ['sec', 'sec(z)'], ['exp', 'e^z'], ['ln', 'ln(z)'], ['sinh', 'sinh(z)'],
+    ['cosh', 'cosh(z)'], ['tanh', 'tanh(z)'], ['power', 'z^n'], ['reciprocal', '1/z'],
+    ['mobius', 'Möbius'], ['zeta', 'ζ(z)'], ['polynomial', 'Polynomial'],
+    ['poincare', 'Poincare Disk']
+].map(([value, label]) => ({ value, label }));
+
+const ALGEBRAIC_SYMBOLS = new Map([
+    ['power', 'z^n'],
+    ['zeta', 'ζ'],
+    ['polynomial', 'P'],
+    ['mobius', 'Möbius'],
+    ['poincare', 'Poincare']
+]);
+
+const BINDERS = [
+    bindBaseParameterControls,
+    bindAlgebraicChainingControls,
+    bindMobiusControls,
+    bindFunctionButtons,
+    bindImageControls,
+    bindVideoControls,
+    bindPolynomialControls,
+    bindDomainColoringControls,
+    bindViewControls,
+    bindNavigationControls,
+    bindVectorFieldControls,
+    bindTaylorControls,
+    bindGeneralPointsControls,
+    bindRadialAndZetaControls,
+    bindParticleControls,
+    bindFourierControls,
+    bindLaplaceControls,
+    bindCollapseControls,
+    bindChainingControls,
+    bindSimpleControlRemainder,
+    bindCanvasInteractions,
+    bindTopControlsToggle,
+    bindFullscreenControls,
+    bindThemeControls
+];
 
 function parseInteger(value) {
     return parseInt(value, 10);
 }
 
-function parseControlValue(control, parser = parseFloat, fallback = 0) {
-    if (!control) {
-        return fallback;
-    }
+function call(fn, ...args) {
+    return typeof fn === 'function' ? fn(...args) : undefined;
+}
 
-    const parsed = parser(control.value);
-    return Number.isNaN(parsed) ? fallback : parsed;
+function $(id) {
+    return document.getElementById(id);
+}
+
+function clamp(value, min, max) {
+    return Math.max(min, Math.min(max, value));
+}
+
+function frame(callback) {
+    return typeof requestAnimationFrame === 'function'
+        ? requestAnimationFrame(callback)
+        : setTimeout(callback, 0);
+}
+
+function laterFrame(callback, delay = 0) {
+    frame(() => setTimeout(callback, delay));
+}
+
+function toArray(value) {
+    return Array.isArray(value) ? value : [];
+}
+
+function setStyles(element, styles) {
+    if (element) Object.assign(element.style, styles);
+}
+
+function clearStyles(element, keys) {
+    if (!element) return;
+    keys.forEach(key => {
+        element.style[key] = '';
+    });
+}
+
+function hidden(element, shouldHide) {
+    if (element) element.classList.toggle('hidden', Boolean(shouldHide));
+}
+
+function display(element, visible, value = 'block') {
+    if (element) element.style.display = visible ? value : 'none';
+}
+
+function checked(controlKey, value) {
+    if (controls[controlKey]) controls[controlKey].checked = Boolean(value);
+}
+
+function closest(target, selector) {
+    return target && typeof target.closest === 'function' ? target.closest(selector) : null;
+}
+
+function h(tag, props = {}, children = []) {
+    const node = document.createElement(tag);
+    const { className, text, type, attrs, dataset } = props;
+
+    if (className) node.className = className;
+    if (type) node.type = type;
+    if (text !== undefined) node.textContent = text;
+
+    Object.entries(attrs || {}).forEach(([key, value]) => node.setAttribute(key, value));
+    Object.entries(dataset || {}).forEach(([key, value]) => {
+        node.dataset[key] = value;
+    });
+
+    toArray(children).forEach(child => {
+        node.appendChild(typeof child === 'string' ? document.createTextNode(child) : child);
+    });
+
+    return node;
+}
+
+function select(options, value, onChange) {
+    const node = h('select');
+
+    options.forEach(option => {
+        const item = h('option', { text: option.label });
+        item.value = option.value;
+        item.selected = option.value === value;
+        node.appendChild(item);
+    });
+
+    node.addEventListener('change', onChange);
+    return node;
+}
+
+function parseControlValue(control, parser = parseFloat, fallback = 0) {
+    if (!control) return fallback;
+    const value = parser(control.value);
+    return typeof value === 'number' && Number.isNaN(value) ? fallback : value;
+}
+
+function bindElementListener(element, eventName, handler, options) {
+    if (!element) return;
+
+    element.addEventListener(eventName, event => {
+        try {
+            handler(event, element);
+        } catch (error) {
+            console.error(`Error in ${element.id || element.nodeName || 'element'} ${eventName} listener:`, error);
+        }
+    }, options);
+}
+
+function bindControlListener(controlKey, eventName, handler, options) {
+    bindElementListener(controls[controlKey], eventName, handler, options);
 }
 
 function readSliderState(controlKey, stateKey, parser = parseFloat) {
     const control = controls[controlKey];
-    if (!control) {
-        return state[stateKey];
-    }
-
-    state[stateKey] = parseControlValue(control, parser, state[stateKey]);
+    if (control) state[stateKey] = parseControlValue(control, parser, state[stateKey]);
     return state[stateKey];
 }
 
 function readCheckboxState(controlKey, stateKey) {
     const control = controls[controlKey];
-    if (!control) {
-        return state[stateKey];
-    }
-
-    state[stateKey] = control.checked;
+    if (control) state[stateKey] = control.checked;
     return state[stateKey];
 }
 
 function readSelectorState(controlKey, stateKey) {
     const control = controls[controlKey];
-    if (!control) {
-        return state[stateKey];
-    }
-
-    state[stateKey] = control.value;
+    if (control) state[stateKey] = control.value;
     return state[stateKey];
 }
 
@@ -195,56 +338,12 @@ function shouldMarkDomainDirty(controlKey, stateKey) {
         controlKey.startsWith('domain');
 }
 
-let cpuHighQualityTimeout = null;
-
-export function requestDomainRedraw(markDomainDirty = false) {
-    if (markDomainDirty) {
-        context.domainColoringDirty = true;
-    }
-
-    if (cpuHighQualityTimeout) {
-        clearTimeout(cpuHighQualityTimeout);
-        cpuHighQualityTimeout = null;
-    }
-
-    if (state.domainColoringEnabled && !state.isHighQualityCpuRender) {
-        cpuHighQualityTimeout = setTimeout(() => {
-            state.isHighQualityCpuRender = true;
-            context.domainColoringDirty = true;
-            requestRedrawAll();
-            requestAnimationFrame(() => {
-                state.isHighQualityCpuRender = false;
-            });
-        }, 120);
-    }
-
-    requestRedrawAll();
-}
-
-function bindElementListener(element, eventName, handler) {
-    if (!element) {
-        return;
-    }
-
-    element.addEventListener(eventName, event => {
-        try {
-            handler(event, element);
-        } catch (error) {
-            console.error(`Error in ${element.id || 'element'} ${eventName} listener:`, error);
-        }
-    });
-}
-
-function bindControlListener(controlKey, eventName, handler) {
-    bindElementListener(controls[controlKey], eventName, handler);
-}
-
 function bindSlider(controlKey, stateKey, parser = parseFloat, customCallback = null) {
-    bindControlListener(controlKey, 'input', (_event, slider) => {
+    bindControlListener(controlKey, 'input', (event, slider) => {
         state[stateKey] = parseControlValue(slider, parser, state[stateKey]);
 
         if (customCallback) {
-            customCallback(state[stateKey], slider);
+            customCallback(state[stateKey], slider, event);
             return;
         }
 
@@ -278,101 +377,109 @@ function bindSelector(controlKey, stateKey, customCallback = null) {
     });
 }
 
-export function syncLaplacePlayPauseButton() {
-    if (!controls.laplacePlayPauseBtn) {
-        return;
+function bindSimpleControlRemainder() {
+    BASIC_SLIDER_BINDINGS
+        .filter(({ controlKey }) => !SPECIAL_SLIDERS.has(controlKey))
+        .forEach(({ controlKey, stateKey, parser }) => bindSlider(controlKey, stateKey, parser));
+
+    BASIC_CHECKBOX_BINDINGS
+        .filter(({ controlKey }) => !SPECIAL_CHECKBOXES.has(controlKey))
+        .forEach(({ controlKey, stateKey }) => bindCheckbox(controlKey, stateKey));
+
+    BASIC_SELECTOR_BINDINGS
+        .filter(({ controlKey }) => !SPECIAL_SELECTORS.has(controlKey))
+        .forEach(({ controlKey, stateKey }) => bindSelector(controlKey, stateKey));
+}
+
+export function requestDomainRedraw(markDomainDirty = false) {
+    if (markDomainDirty) context.domainColoringDirty = true;
+
+    if (cpuHighQualityTimeout) {
+        clearTimeout(cpuHighQualityTimeout);
+        cpuHighQualityTimeout = null;
     }
 
-    controls.laplacePlayPauseBtn.innerHTML = state.laplaceAnimationPlaying ? '⏸ Pause' : '▶ Play';
+    if (state.domainColoringEnabled && !state.isHighQualityCpuRender) {
+        cpuHighQualityTimeout = setTimeout(() => {
+            state.isHighQualityCpuRender = true;
+            context.domainColoringDirty = true;
+            requestRedrawAll();
+            frame(() => {
+                state.isHighQualityCpuRender = false;
+            });
+        }, 120);
+    }
+
+    requestRedrawAll();
+}
+
+export function syncLaplacePlayPauseButton() {
+    if (controls.laplacePlayPauseBtn) {
+        controls.laplacePlayPauseBtn.innerHTML = state.laplaceAnimationPlaying ? '⏸ Pause' : '▶ Play';
+    }
 }
 
 export function syncLaplaceWindingSyncButton() {
-    if (!controls.laplaceWindingSyncBtn) {
-        return;
-    }
+    const button = controls.laplaceWindingSyncBtn;
+    if (!button) return;
 
-    controls.laplaceWindingSyncBtn.textContent = state.laplaceWindingSyncZoom ? 'Sync Zoom: On' : 'Sync Zoom: Off';
-    controls.laplaceWindingSyncBtn.style.color = state.laplaceWindingSyncZoom
-        ? 'rgba(150, 200, 255, 0.9)'
-        : 'rgba(180, 180, 180, 0.6)';
-    controls.laplaceWindingSyncBtn.style.borderColor = state.laplaceWindingSyncZoom
-        ? 'rgba(80, 120, 180, 0.5)'
-        : 'rgba(80, 80, 80, 0.4)';
+    const enabled = Boolean(state.laplaceWindingSyncZoom);
+    button.textContent = enabled ? 'Sync Zoom: On' : 'Sync Zoom: Off';
+    button.style.color = enabled ? 'rgba(150, 200, 255, 0.9)' : 'rgba(180, 180, 180, 0.6)';
+    button.style.borderColor = enabled ? 'rgba(80, 120, 180, 0.5)' : 'rgba(80, 80, 80, 0.4)';
 }
 
 export function setActiveFunctionButton(activeKey) {
-    Object.entries(controls.funcButtons).forEach(([key, button]) => {
-        if (!button) {
-            return;
-        }
-
-        const isActive = key === activeKey;
-        button.classList.toggle('active', isActive);
-        button.classList.toggle('btn-primary', isActive);
-        button.classList.toggle('btn-outline-secondary', !isActive);
+    Object.entries(controls.funcButtons || {}).forEach(([key, button]) => {
+        if (!button) return;
+        const active = key === activeKey;
+        button.classList.toggle('active', active);
+        button.classList.toggle('btn-primary', active);
+        button.classList.toggle('btn-outline-secondary', !active);
     });
 }
 
 function updateModePanels() {
-    if (controls.fourierSpecificControlsDiv) {
-        controls.fourierSpecificControlsDiv.classList.toggle('hidden', !state.fourierModeEnabled);
-    }
-    if (controls.laplaceSpecificControlsDiv) {
-        controls.laplaceSpecificControlsDiv.classList.toggle('hidden', !state.laplaceModeEnabled);
-    }
-    if (controls.laplaceWindingSyncBtn) {
-        controls.laplaceWindingSyncBtn.style.display = state.laplaceModeEnabled ? 'block' : 'none';
-    }
-
+    hidden(controls.fourierSpecificControlsDiv, !state.fourierModeEnabled);
+    hidden(controls.laplaceSpecificControlsDiv, !state.laplaceModeEnabled);
+    display(controls.laplaceWindingSyncBtn, state.laplaceModeEnabled);
     syncLaplacePlayPauseButton();
     syncLaplaceWindingSyncButton();
+}
+
+function disableAlgebraicChaining() {
+    if (!state.algebraicChainingEnabled) return;
+
+    state.algebraicChainingEnabled = false;
+    checked('enableAlgebraicChainingCb', false);
+    display(controls.algebraicChainingControlsContainer, false);
 }
 
 function activateFunctionMode(key) {
     const enteringFourier = key === 'fourier';
     const enteringLaplace = key === 'laplace';
 
-    if (state.laplaceModeEnabled && !enteringLaplace && typeof stopLaplaceAnimation === 'function') {
-        stopLaplaceAnimation();
-    }
-    if ((enteringFourier || enteringLaplace) && state.currentInputShape === 'video' && typeof pauseUploadedVideoPlayback === 'function') {
-        pauseUploadedVideoPlayback();
-    }
+    if (state.laplaceModeEnabled && !enteringLaplace) call(stopLaplaceAnimation);
+    if ((enteringFourier || enteringLaplace) && state.currentInputShape === 'video') call(pauseUploadedVideoPlayback);
 
-    if (state.algebraicChainingEnabled) {
-        state.algebraicChainingEnabled = false;
-        if (controls.enableAlgebraicChainingCb) {
-            controls.enableAlgebraicChainingCb.checked = false;
-        }
-        if (controls.algebraicChainingControlsContainer) {
-            controls.algebraicChainingControlsContainer.style.display = 'none';
-        }
-    }
+    disableAlgebraicChaining();
 
     state.currentFunction = key;
     state.fourierModeEnabled = enteringFourier;
     state.laplaceModeEnabled = enteringLaplace;
 
-    if ((enteringFourier || enteringLaplace) && state.navigationModeEnabled && typeof setNavigationModeEnabled === 'function') {
-        setNavigationModeEnabled(false);
-    }
-
-    if (enteringFourier && typeof updateFourierTransform === 'function') {
-        updateFourierTransform();
-    }
+    if ((enteringFourier || enteringLaplace) && state.navigationModeEnabled) call(setNavigationModeEnabled, false);
+    if (enteringFourier) call(updateFourierTransform);
 
     if (enteringLaplace) {
-        state.laplaceTopVP = null;
-        state.lapaceBotVP = null;
-        state.laplaceDragging = null;
-        state.laplaceNeedViewportReset = true;
-
-        if (typeof updateLaplaceTransform === 'function') {
-            updateLaplaceTransform();
-        }
-        if (typeof showFullLaplaceSpiral === 'function') {
-            showFullLaplaceSpiral();
-        }
+        Object.assign(state, {
+            laplaceTopVP: null,
+            lapaceBotVP: null,
+            laplaceDragging: null,
+            laplaceNeedViewportReset: true
+        });
+        call(updateLaplaceTransform);
+        call(showFullLaplaceSpiral);
     }
 
     updateModePanels();
@@ -381,6 +488,8 @@ function activateFunctionMode(key) {
 }
 
 function readImageFile(file, callback) {
+    if (!file) return;
+
     const reader = new FileReader();
     reader.onload = event => {
         const img = new Image();
@@ -391,409 +500,258 @@ function readImageFile(file, callback) {
 }
 
 function processUploadedImage(img) {
-    if (processUploadedImageSource(img)) {
-        requestDomainRedraw(true);
-    }
+    if (processUploadedImageSource(img)) requestDomainRedraw(true);
 }
 
 function reprocessUploadedImage() {
-    if (state.uploadedImage) {
-        processUploadedImage(state.uploadedImage);
-    }
+    if (state.uploadedImage) processUploadedImage(state.uploadedImage);
 }
 
 function reprocessUploadedVideo() {
-    if (!state.uploadedVideo) {
-        return;
-    }
-
+    if (!state.uploadedVideo) return;
     processUploadedVideoFrame(true);
     requestDomainRedraw(true);
 }
 
-function initializeMobiusState() {
-    ['A', 'B', 'C', 'D'].forEach(param => {
-        const nextValue = state[`mobius${param}`] || { re: 0, im: 0 };
-        ['re', 'im'].forEach(part => {
-            const controlKey = `mobius${param}_${part}_slider`;
-            const slider = controls[controlKey];
-            if (slider) {
-                nextValue[part] = parseControlValue(slider, parseFloat, nextValue[part]);
-            }
-        });
-        state[`mobius${param}`] = nextValue;
-    });
+function complexState(key) {
+    return state[key] || (state[key] = { re: 0, im: 0 });
 }
 
-function initializeCustomTaylorCenter() {
-    if (context.taylorCenterUI) {
-        context.taylorCenterUI.setPoints([state.taylorSeriesCustomCenter], false);
-    }
+function initializeMobiusState() {
+    MOBIUS_PARAMS.forEach(param => {
+        const value = complexState(`mobius${param}`);
+        COMPLEX_PARTS.forEach(part => {
+            const slider = controls[`mobius${param}_${part}_slider`];
+            if (slider) value[part] = parseControlValue(slider, parseFloat, value[part]);
+        });
+    });
 }
 
 function syncTaylorCustomCenterInputs() {
-    if (context.taylorCenterUI) {
-        context.taylorCenterUI.setPoints([state.taylorSeriesCustomCenter], false);
-    }
+    if (context.taylorCenterUI) context.taylorCenterUI.setPoints([state.taylorSeriesCustomCenter], false);
 }
 
 function setTaylorCustomCenter(re, im, shouldRedraw = true) {
-    state.taylorSeriesCustomCenter.re = re;
-    state.taylorSeriesCustomCenter.im = im;
+    Object.assign(state.taylorSeriesCustomCenter, { re, im });
     syncTaylorCustomCenterInputs();
-
-    if (typeof syncTaylorSeriesCenterStatus === 'function') {
-        syncTaylorSeriesCenterStatus();
-    }
-
-    if (shouldRedraw) {
-        requestRedrawAll();
-    }
+    call(syncTaylorSeriesCenterStatus);
+    if (shouldRedraw) requestRedrawAll();
 }
 
 function initializeScalarBindings() {
-    sliderParamKeys.forEach(key => {
-        readSliderState(`${key}Slider`, key, parseFloat);
-    });
-
-    BASIC_SLIDER_BINDINGS.forEach(({ controlKey, stateKey, parser }) => {
-        readSliderState(controlKey, stateKey, parser);
-    });
-
-    BASIC_CHECKBOX_BINDINGS.forEach(({ controlKey, stateKey }) => {
-        readCheckboxState(controlKey, stateKey);
-    });
-
-    BASIC_SELECTOR_BINDINGS.forEach(({ controlKey, stateKey }) => {
-        readSelectorState(controlKey, stateKey);
-    });
-
+    sliderParamKeys.forEach(key => readSliderState(`${key}Slider`, key));
+    BASIC_SLIDER_BINDINGS.forEach(({ controlKey, stateKey, parser }) => readSliderState(controlKey, stateKey, parser));
+    BASIC_CHECKBOX_BINDINGS.forEach(({ controlKey, stateKey }) => readCheckboxState(controlKey, stateKey));
+    BASIC_SELECTOR_BINDINGS.forEach(({ controlKey, stateKey }) => readSelectorState(controlKey, stateKey));
     initializeMobiusState();
-    initializeCustomTaylorCenter();
-    if (typeof initializeNavigationStateFromControls === 'function') {
-        initializeNavigationStateFromControls();
-    }
+    syncTaylorCustomCenterInputs();
+    call(initializeNavigationStateFromControls);
 }
 
 export function initializeStateFromControls() {
     initializeScalarBindings();
     updateModePanels();
     setActiveFunctionButton(state.currentFunction);
-    if (typeof syncVideoPlaybackUI === 'function') {
-        syncVideoPlaybackUI();
-    }
+    call(syncVideoPlaybackUI);
+}
+
+function bindAnimatedSlider(slider, updateState, playButton, speedSelector) {
+    if (!slider || !playButton || !speedSelector) return;
+    bindElementListener(playButton, 'click', () => toggleAnimation(slider, updateState, playButton, speedSelector));
 }
 
 function bindBaseParameterControls() {
     sliderParamKeys.forEach(key => {
-        bindSlider(`${key}Slider`, key, parseFloat);
-
-        const playButton = controls[`play_${key}Btn`];
-        const speedSelector = controls[`speed_${key}Selector`];
-        const slider = controls[`${key}Slider`];
-
-        if (!slider || !playButton || !speedSelector) {
-            return;
-        }
-
-        bindElementListener(playButton, 'click', () => {
-            toggleAnimation(
-                slider,
-                value => {
-                    state[key] = value;
-                },
-                playButton,
-                speedSelector
-            );
-        });
+        bindSlider(`${key}Slider`, key);
+        bindAnimatedSlider(
+            controls[`${key}Slider`],
+            value => {
+                state[key] = value;
+            },
+            controls[`play_${key}Btn`],
+            controls[`speed_${key}Selector`]
+        );
     });
 }
 
 function bindMobiusControls() {
-    ['A', 'B', 'C', 'D'].forEach(param => {
-        ['re', 'im'].forEach(part => {
-            const sliderKey = `mobius${param}_${part}_slider`;
-            const playButtonKey = `play_mobius${param}_${part}_btn`;
-            const speedSelectorKey = `speed_mobius${param}_${part}_selector`;
+    MOBIUS_PARAMS.forEach(param => COMPLEX_PARTS.forEach(part => {
+        const stateKey = `mobius${param}`;
+        const sliderKey = `mobius${param}_${part}_slider`;
 
-            bindControlListener(sliderKey, 'input', (_event, slider) => {
-                const value = parseControlValue(slider, parseFloat, 0);
-                if (!state[`mobius${param}`]) {
-                    state[`mobius${param}`] = { re: 0, im: 0 };
-                }
-
-                state[`mobius${param}`][part] = value;
-                requestDomainRedraw(true);
-            });
-
-            const slider = controls[sliderKey];
-            const playButton = controls[playButtonKey];
-            const speedSelector = controls[speedSelectorKey];
-
-            if (!slider || !playButton || !speedSelector) {
-                return;
-            }
-
-            bindElementListener(playButton, 'click', () => {
-                toggleAnimation(
-                    slider,
-                    value => {
-                        if (!state[`mobius${param}`]) {
-                            state[`mobius${param}`] = { re: 0, im: 0 };
-                        }
-
-                        state[`mobius${param}`][part] = value;
-                    },
-                    playButton,
-                    speedSelector
-                );
-            });
+        bindControlListener(sliderKey, 'input', (_event, slider) => {
+            complexState(stateKey)[part] = parseControlValue(slider, parseFloat, 0);
+            requestDomainRedraw(true);
         });
-    });
+
+        bindAnimatedSlider(
+            controls[sliderKey],
+            value => {
+                complexState(stateKey)[part] = value;
+            },
+            controls[`play_mobius${param}_${part}_btn`],
+            controls[`speed_mobius${param}_${part}_selector`]
+        );
+    }));
 }
 
 function bindFunctionButtons() {
-    Object.entries(controls.funcButtons).forEach(([key, button]) => {
-        bindElementListener(button, 'click', () => {
-            activateFunctionMode(key);
-        });
+    Object.entries(controls.funcButtons || {}).forEach(([key, button]) => {
+        bindElementListener(button, 'click', () => activateFunctionMode(key));
     });
+}
+
+function firstFile(event) {
+    return event.target.files && event.target.files[0];
 }
 
 function bindImageControls() {
     bindControlListener('imageUploadInput', 'change', event => {
-        const [file] = event.target.files || [];
-        if (!file) {
-            return;
-        }
-
-        readImageFile(file, processUploadedImage);
+        const file = firstFile(event);
+        if (file) readImageFile(file, processUploadedImage);
     });
 
     bindSlider('imageResolutionSlider', 'imageResolution', parseInteger, () => {
         reprocessUploadedImage();
         requestRedrawAll();
     });
-
-    bindSlider('imageSizeSlider', 'imageSize', parseFloat, () => {
-        requestDomainRedraw(true);
-    });
-
-    bindSlider('imageOpacitySlider', 'imageOpacity', parseFloat, () => {
-        requestDomainRedraw(true);
-    });
+    bindSlider('imageSizeSlider', 'imageSize', parseFloat, () => requestDomainRedraw(true));
+    bindSlider('imageOpacitySlider', 'imageOpacity', parseFloat, () => requestDomainRedraw(true));
 }
 
 function bindVideoControls() {
     bindControlListener('videoUploadInput', 'change', event => {
-        const [file] = event.target.files || [];
-        if (!file) {
-            return;
-        }
-
-        loadUploadedVideoFile(file);
+        const file = firstFile(event);
+        if (file) loadUploadedVideoFile(file);
     });
 
-    bindControlListener('videoPlayPauseBtn', 'click', () => {
-        toggleUploadedVideoPlayback();
-    });
+    bindControlListener('videoPlayPauseBtn', 'click', () => toggleUploadedVideoPlayback());
 
     bindSlider('videoResolutionSlider', 'videoResolution', parseInteger, () => {
         reprocessUploadedVideo();
         requestRedrawAll();
     });
-
     bindSlider('videoFpsSlider', 'videoProcessingFps', parseInteger, () => {
         syncVideoPlaybackUI();
-        if (state.videoIsPlaying && state.currentInputShape === 'video') {
-            startVideoProcessingLoop();
-        }
+        if (state.videoIsPlaying && state.currentInputShape === 'video') startVideoProcessingLoop();
         requestRedrawAll();
     });
+    bindSlider('videoSizeSlider', 'videoSize', parseFloat, () => requestDomainRedraw(true));
+    bindSlider('videoOpacitySlider', 'videoOpacity', parseFloat, () => requestDomainRedraw(true));
+}
 
-    bindSlider('videoSizeSlider', 'videoSize', parseFloat, () => {
-        requestDomainRedraw(true);
+function syncPalette(selectors, container) {
+    selectors.forEach(selector => {
+        selector.value = state.domainPalette;
     });
-
-    bindSlider('videoOpacitySlider', 'videoOpacity', parseFloat, () => {
-        requestDomainRedraw(true);
-    });
+    renderDomainPalettesUI(container);
+    call(updateDomainColoringKey);
+    requestDomainRedraw(true);
 }
 
 function bindDomainColoringControls() {
     bindCheckbox('enableDomainColoringCb', 'domainColoringEnabled', () => {
-        if (controls.domainColoringOptionsDiv) {
-            controls.domainColoringOptionsDiv.classList.toggle('hidden', !state.domainColoringEnabled);
-        }
-        if (controls.domainColoringKeyDiv) {
-            controls.domainColoringKeyDiv.classList.toggle('hidden', !state.domainColoringEnabled);
-        }
-        if (controls.riemannSphereDomainColoringOptions) {
-            controls.riemannSphereDomainColoringOptions.classList.toggle('hidden', !state.domainColoringEnabled);
-        }
+        hidden(controls.domainColoringOptionsDiv, !state.domainColoringEnabled);
+        hidden(controls.domainColoringKeyDiv, !state.domainColoringEnabled);
+        hidden(controls.riemannSphereDomainColoringOptions, !state.domainColoringEnabled);
         requestDomainRedraw(true);
     });
 
-    const otherSelectors = [
-        controls.riemannSurfacePaletteSelect,
-        controls.riemannSpherePaletteSelect
-    ].filter(Boolean);
+    const selectors = [controls.riemannSurfacePaletteSelect, controls.riemannSpherePaletteSelect].filter(Boolean);
+    const paletteContainer = $('domain_palette_circles');
 
-    // Dynamically populate options for Riemann surface & sphere dropdowns
-    otherSelectors.forEach(select => {
-        select.innerHTML = '';
-        domainPalettes.forEach(p => {
-            const opt = document.createElement('option');
-            opt.value = p.id;
-            opt.textContent = p.name;
-            select.appendChild(opt);
+    selectors.forEach(selector => {
+        selector.innerHTML = '';
+        domainPalettes.forEach(palette => {
+            const option = h('option', { text: palette.name });
+            option.value = palette.id;
+            selector.appendChild(option);
         });
-        select.value = state.domainPalette;
-    });
-
-    const paletteCirclesContainer = document.getElementById('domain_palette_circles');
-    renderDomainPalettesUI(paletteCirclesContainer);
-
-    if (paletteCirclesContainer) {
-        paletteCirclesContainer.addEventListener('click', (e) => {
-            const btn = e.target.closest('.domain-palette-circle-btn');
-            if (!btn) return;
-            state.domainPalette = btn.dataset.paletteId;
-            
-            renderDomainPalettesUI(paletteCirclesContainer);
-            
-            otherSelectors.forEach(sel => {
-                sel.value = state.domainPalette;
-            });
-            
-            if (typeof updateDomainColoringKey === 'function') {
-                updateDomainColoringKey();
-            }
-            requestDomainRedraw(true);
-        });
-    }
-
-    otherSelectors.forEach(selector => {
-        selector.addEventListener('change', (e) => {
-            state.domainPalette = e.target.value;
-            otherSelectors.forEach(otherSelector => {
-                otherSelector.value = state.domainPalette;
-            });
-            renderDomainPalettesUI(paletteCirclesContainer);
-            if (typeof updateDomainColoringKey === 'function') {
-                updateDomainColoringKey();
-            }
-            requestDomainRedraw(true);
+        selector.value = state.domainPalette;
+        bindElementListener(selector, 'change', event => {
+            state.domainPalette = event.target.value;
+            syncPalette(selectors, paletteContainer);
         });
     });
 
-    const gridColor1Input = document.getElementById('grid_color_1_input');
-    const gridColor2Input = document.getElementById('grid_color_2_input');
-    if (gridColor1Input) {
-        gridColor1Input.addEventListener('input', (e) => {
-            state.gridColor1 = e.target.value;
-            const wrapper = document.getElementById('grid_color_1_picker_wrapper');
-            if (wrapper) wrapper.style.backgroundColor = state.gridColor1;
+    renderDomainPalettesUI(paletteContainer);
+    bindElementListener(paletteContainer, 'click', event => {
+        const button = closest(event.target, '.domain-palette-circle-btn');
+        if (!button) return;
+        state.domainPalette = button.dataset.paletteId;
+        syncPalette(selectors, paletteContainer);
+    });
+
+    [
+        ['grid_color_1_input', 'grid_color_1_picker_wrapper', 'gridColor1'],
+        ['grid_color_2_input', 'grid_color_2_picker_wrapper', 'gridColor2']
+    ].forEach(([inputId, wrapperId, stateKey]) => {
+        bindElementListener($(inputId), 'input', event => {
+            state[stateKey] = event.target.value;
+            setStyles($(wrapperId), { backgroundColor: state[stateKey] });
             requestRedrawAll();
         });
-    }
-    if (gridColor2Input) {
-        gridColor2Input.addEventListener('input', (e) => {
-            state.gridColor2 = e.target.value;
-            const wrapper = document.getElementById('grid_color_2_picker_wrapper');
-            if (wrapper) wrapper.style.backgroundColor = state.gridColor2;
-            requestRedrawAll();
-        });
-    }
-
-    ['domainBrightness', 'domainContrast', 'domainSaturation', 'domainLightnessCycles'].forEach(stateKey => {
-        bindSlider(`${stateKey}Slider`, stateKey, parseFloat, () => {
-            requestDomainRedraw(true);
-        });
     });
+
+    ['domainBrightness', 'domainContrast', 'domainSaturation', 'domainLightnessCycles']
+        .forEach(key => bindSlider(`${key}Slider`, key, parseFloat, () => requestDomainRedraw(true)));
+}
+
+function disableRiemannSurface() {
+    state.riemannSurfaceEnabled = false;
+    checked('enableRiemannSurfaceCb', false);
+    hidden(controls.riemannSurfaceOptionsDiv, true);
 }
 
 function bindViewControls() {
     bindCheckbox('enableSplitViewCb', 'splitViewEnabled', () => {
-        if (state.splitViewEnabled && state.riemannSurfaceEnabled) {
-            state.riemannSurfaceEnabled = false;
-            if (controls.enableRiemannSurfaceCb) controls.enableRiemannSurfaceCb.checked = false;
-        }
-        if (typeof updateChainingTitles === 'function') updateChainingTitles();
+        if (state.splitViewEnabled && state.riemannSurfaceEnabled) disableRiemannSurface();
+        call(updateChainingTitles);
         requestDomainRedraw(true);
     });
 
-    bindSlider('zPlaneZoomSlider', 'zPlaneZoom', parseFloat, () => {
-        setupVisualParameters(true, false);
+    [
+        ['zPlaneZoomSlider', 'zPlaneZoom', [true, false]],
+        ['wPlaneZoomSlider', 'wPlaneZoom', [false, true]]
+    ].forEach(([controlKey, stateKey, args]) => bindSlider(controlKey, stateKey, parseFloat, () => {
+        setupVisualParameters(...args);
         requestDomainRedraw(true);
-    });
-
-    bindSlider('wPlaneZoomSlider', 'wPlaneZoom', parseFloat, () => {
-        setupVisualParameters(false, true);
-        requestDomainRedraw(true);
-    });
+    }));
 
     bindCheckbox('enableRiemannSphereCb', 'riemannSphereViewEnabled', () => {
-        if (state.riemannSphereViewEnabled && state.riemannSurfaceEnabled) {
-            state.riemannSurfaceEnabled = false;
-            if (controls.enableRiemannSurfaceCb) controls.enableRiemannSurfaceCb.checked = false;
-            if (controls.riemannSurfaceOptionsDiv) controls.riemannSurfaceOptionsDiv.classList.add('hidden');
-        }
-        if (controls.riemannSphereOptionsDiv) {
-            controls.riemannSphereOptionsDiv.classList.toggle('hidden', !state.riemannSphereViewEnabled);
-        }
-        if (!state.riemannSphereViewEnabled && controls.plotly3DOptionsDiv) {
-            controls.plotly3DOptionsDiv.classList.add('hidden');
-        }
-        if (typeof updateChainingTitles === 'function') updateChainingTitles();
+        if (state.riemannSphereViewEnabled && state.riemannSurfaceEnabled) disableRiemannSurface();
+        hidden(controls.riemannSphereOptionsDiv, !state.riemannSphereViewEnabled);
+        if (!state.riemannSphereViewEnabled) hidden(controls.plotly3DOptionsDiv, true);
+        call(updateChainingTitles);
         requestDomainRedraw(true);
     });
 
     bindCheckbox('enablePlotly3DCb', 'plotly3DEnabled', () => {
-        if (controls.plotly3DOptionsDiv) {
-            controls.plotly3DOptionsDiv.classList.toggle('hidden', !state.plotly3DEnabled);
-        }
-        if (typeof updateChainingTitles === 'function') updateChainingTitles();
+        hidden(controls.plotly3DOptionsDiv, !state.plotly3DEnabled);
+        call(updateChainingTitles);
         requestRedrawAll();
     });
 
     bindCheckbox('enableRiemannSurfaceCb', 'riemannSurfaceEnabled', () => {
         if (state.riemannSurfaceEnabled) {
-            state.riemannSphereViewEnabled = false;
-            state.splitViewEnabled = false;
-            state.plotly3DEnabled = false;
-            if (controls.enableRiemannSphereCb) controls.enableRiemannSphereCb.checked = false;
-            if (controls.enableSplitViewCb) controls.enableSplitViewCb.checked = false;
-            if (controls.enablePlotly3DCb) controls.enablePlotly3DCb.checked = false;
-            if (state.navigationModeEnabled && typeof setNavigationModeEnabled === 'function') {
-                setNavigationModeEnabled(false);
-            }
+            Object.assign(state, { riemannSphereViewEnabled: false, splitViewEnabled: false, plotly3DEnabled: false });
+            ['enableRiemannSphereCb', 'enableSplitViewCb', 'enablePlotly3DCb'].forEach(key => checked(key, false));
+            if (state.navigationModeEnabled) call(setNavigationModeEnabled, false);
         }
-        if (controls.riemannSurfaceOptionsDiv) {
-            controls.riemannSurfaceOptionsDiv.classList.toggle('hidden', !state.riemannSurfaceEnabled);
-        }
-        if (controls.riemannSphereOptionsDiv) {
-            controls.riemannSphereOptionsDiv.classList.add('hidden');
-        }
-        if (typeof updateChainingTitles === 'function') {
-            updateChainingTitles();
-        }
+
+        hidden(controls.riemannSurfaceOptionsDiv, !state.riemannSurfaceEnabled);
+        hidden(controls.riemannSphereOptionsDiv, true);
+        call(updateChainingTitles);
         requestDomainRedraw(true);
     });
 
-    bindControlListener('riemannSurfaceResetViewBtn', 'click', () => {
-        resetRiemannSurfaceViews();
-    });
-
+    bindControlListener('riemannSurfaceResetViewBtn', 'click', () => resetRiemannSurfaceViews());
     bindCheckbox('toggleSphereAxesGridCb', 'showSphereAxesAndGrid');
     bindCheckbox('togglePlotlySphereGridCb', 'showPlotlySphereGrid');
 
     Object.entries(SPHERE_VIEW_BUTTONS).forEach(([controlKey, rotation]) => {
         bindControlListener(controlKey, 'click', () => {
-            sphereViewParams.z.rotX = rotation.rotX;
-            sphereViewParams.z.rotY = rotation.rotY;
-            sphereViewParams.w.rotX = rotation.rotX;
-            sphereViewParams.w.rotY = rotation.rotY;
+            [sphereViewParams.z, sphereViewParams.w].forEach(params => Object.assign(params, rotation));
             requestDomainRedraw(true);
         });
     });
@@ -801,24 +759,17 @@ function bindViewControls() {
 
 function bindNavigationControls() {
     bindControlListener('enableNavigationModeCb', 'change', (_event, checkbox) => {
-        if (typeof setNavigationModeEnabled === 'function') {
-            setNavigationModeEnabled(checkbox.checked);
-        } else {
-            state.navigationModeEnabled = checkbox.checked;
-        }
+        if (typeof setNavigationModeEnabled === 'function') setNavigationModeEnabled(checkbox.checked);
+        else state.navigationModeEnabled = checkbox.checked;
         requestDomainRedraw(true);
     });
 
     bindSlider('navigationSizeSlider', 'navigationSize', parseFloat, () => {
-        const viewportShifted = typeof followNavigationViewports === 'function' ? followNavigationViewports() : false;
-        requestDomainRedraw(Boolean(viewportShifted && state.domainColoringEnabled));
+        const shifted = typeof followNavigationViewports === 'function' ? followNavigationViewports() : false;
+        requestDomainRedraw(Boolean(shifted && state.domainColoringEnabled));
     });
-    bindSlider('navigationOpacitySlider', 'navigationOpacity', parseFloat, () => {
-        requestDomainRedraw(false);
-    });
-    bindSlider('navigationSpeedSlider', 'navigationSpeed', parseFloat, () => {
-        requestDomainRedraw(false);
-    });
+    bindSlider('navigationOpacitySlider', 'navigationOpacity', parseFloat, () => requestDomainRedraw(false));
+    bindSlider('navigationSpeedSlider', 'navigationSpeed', parseFloat, () => requestDomainRedraw(false));
     bindSlider('navigationTrailLengthSlider', 'navigationTrailLength', parseInteger, () => {
         if (state.navigationTrail.length > state.navigationTrailLength) {
             state.navigationTrail.splice(0, state.navigationTrail.length - state.navigationTrailLength);
@@ -826,87 +777,54 @@ function bindNavigationControls() {
         requestDomainRedraw(false);
     });
 
-    bindControlListener('navigationResetBtn', 'click', () => {
-        if (typeof resetNavigationVehicle === 'function') {
-            resetNavigationVehicle();
-        }
-    });
-
-    bindElementListener(document, 'keydown', event => {
-        if (typeof setNavigationKey === 'function') {
-            setNavigationKey(event, true);
-        }
-    });
-
-    bindElementListener(document, 'keyup', event => {
-        if (typeof setNavigationKey === 'function') {
-            setNavigationKey(event, false);
-        }
-    });
-
+    bindControlListener('navigationResetBtn', 'click', () => call(resetNavigationVehicle));
+    bindElementListener(document, 'keydown', event => call(setNavigationKey, event, true));
+    bindElementListener(document, 'keyup', event => call(setNavigationKey, event, false));
     bindElementListener(window, 'blur', () => {
         state.navigationKeys = {};
-        if (typeof stopNavigationLoop === 'function') {
-            stopNavigationLoop();
-        }
+        call(stopNavigationLoop);
     });
 }
 
 function bindVectorFieldControls() {
     bindCheckbox('enableVectorFieldCb', 'vectorFieldEnabled', () => {
-        if (controls.vectorFieldOptionsDiv) {
-            controls.vectorFieldOptionsDiv.classList.toggle('hidden', !state.vectorFieldEnabled);
-        }
+        hidden(controls.vectorFieldOptionsDiv, !state.vectorFieldEnabled);
         requestDomainRedraw(true);
     });
 
-    bindSelector('vectorFieldFunctionSelector', 'vectorFieldFunction', () => {
-        requestRedrawAll();
-    });
+    bindSelector('vectorFieldFunctionSelector', 'vectorFieldFunction', () => requestRedrawAll());
 
     [
-        { controlKey: 'vectorFieldScaleSlider', stateKey: 'vectorFieldScale', parser: parseFloat },
-        { controlKey: 'vectorArrowThicknessSlider', stateKey: 'vectorArrowThickness', parser: parseFloat },
-        { controlKey: 'vectorArrowHeadSizeSlider', stateKey: 'vectorArrowHeadSize', parser: parseFloat },
-        { controlKey: 'streamlineStepSizeSlider', stateKey: 'streamlineStepSize', parser: parseFloat },
-        { controlKey: 'streamlineMaxLengthSlider', stateKey: 'streamlineMaxLength', parser: parseInteger },
-        { controlKey: 'streamlineThicknessSlider', stateKey: 'streamlineThickness', parser: parseFloat },
-        { controlKey: 'streamlineSeedDensityFactorSlider', stateKey: 'streamlineSeedDensityFactor', parser: parseFloat }
-    ].forEach(({ controlKey, stateKey, parser }) => {
-        bindSlider(controlKey, stateKey, parser);
-    });
+        ['vectorFieldScaleSlider', 'vectorFieldScale'],
+        ['vectorArrowThicknessSlider', 'vectorArrowThickness'],
+        ['vectorArrowHeadSizeSlider', 'vectorArrowHeadSize'],
+        ['streamlineStepSizeSlider', 'streamlineStepSize'],
+        ['streamlineMaxLengthSlider', 'streamlineMaxLength', parseInteger],
+        ['streamlineThicknessSlider', 'streamlineThickness'],
+        ['streamlineSeedDensityFactorSlider', 'streamlineSeedDensityFactor']
+    ].forEach(([controlKey, stateKey, parser = parseFloat]) => bindSlider(controlKey, stateKey, parser));
 
     bindCheckbox('enableStreamlineFlowCb', 'streamlineFlowEnabled');
-
     bindControlListener('clearManualSeedsBtn', 'click', () => {
         state.manualSeedPoints = [];
         requestRedrawAll();
     });
-
     bindCheckbox('showVectorFieldPanelCb', 'showVectorFieldPanelEnabled', () => {
-        if (controls.vectorFlowOptionsContent) {
-            controls.vectorFlowOptionsContent.classList.toggle('hidden', !state.showVectorFieldPanelEnabled);
-        }
+        hidden(controls.vectorFlowOptionsContent, !state.showVectorFieldPanelEnabled);
     });
 }
 
 function bindTaylorControls() {
     bindCheckbox('enableTaylorSeriesCb', 'taylorSeriesEnabled', () => {
-        if (controls.taylorSeriesOptionsDetailDiv) {
-            controls.taylorSeriesOptionsDetailDiv.classList.toggle('hidden', !state.taylorSeriesEnabled);
-        }
+        hidden(controls.taylorSeriesOptionsDetailDiv, !state.taylorSeriesEnabled);
         requestRedrawAll();
     });
 
     bindSlider('taylorSeriesOrderSlider', 'taylorSeriesOrder', parseInteger);
 
     bindCheckbox('enableTaylorSeriesCustomCenterCb', 'taylorSeriesCustomCenterEnabled', () => {
-        if (controls.taylorSeriesCustomCenterInputsDiv) {
-            controls.taylorSeriesCustomCenterInputsDiv.classList.toggle('hidden', !state.taylorSeriesCustomCenterEnabled);
-        }
-        if (typeof syncTaylorSeriesCenterStatus === 'function') {
-            syncTaylorSeriesCenterStatus();
-        }
+        hidden(controls.taylorSeriesCustomCenterInputsDiv, !state.taylorSeriesCustomCenterEnabled);
+        call(syncTaylorSeriesCenterStatus);
         requestRedrawAll();
     });
 
@@ -915,9 +833,9 @@ function bindTaylorControls() {
             multiple: false,
             presets: TAYLOR_CENTER_PRESET_GROUPS,
             initialPoints: [state.taylorSeriesCustomCenter],
-            onChange: (points) => {
-                const pt = points[0] || { re: 0, im: 0 };
-                setTaylorCustomCenter(pt.re, pt.im, true);
+            onChange: points => {
+                const point = points[0] || { re: 0, im: 0 };
+                setTaylorCustomCenter(point.re, point.im, true);
             }
         });
     }
@@ -925,9 +843,7 @@ function bindTaylorControls() {
 
 function bindGeneralPointsControls() {
     bindCheckbox('enableGeneralPointsCb', 'generalPointsEnabled', () => {
-        if (controls.generalPointsControlsContainer) {
-            controls.generalPointsControlsContainer.classList.toggle('hidden', !state.generalPointsEnabled);
-        }
+        hidden(controls.generalPointsControlsContainer, !state.generalPointsEnabled);
         requestRedrawAll();
     });
 
@@ -936,7 +852,7 @@ function bindGeneralPointsControls() {
             multiple: true,
             presets: TAYLOR_CENTER_PRESET_GROUPS,
             initialPoints: state.generalPointsList,
-            onChange: (points) => {
+            onChange: points => {
                 state.generalPointsList = points;
                 requestRedrawAll();
             }
@@ -955,7 +871,6 @@ function bindPolynomialControls() {
 function bindRadialAndZetaControls() {
     bindCheckbox('enableRadialDiscreteStepsCb', 'radialDiscreteStepsEnabled');
     bindSlider('radialDiscreteStepsCountSlider', 'radialDiscreteStepsCount', parseInteger);
-
     bindControlListener('toggleZetaContinuationBtn', 'click', () => {
         state.zetaContinuationEnabled = !state.zetaContinuationEnabled;
         requestDomainRedraw(true);
@@ -964,12 +879,8 @@ function bindRadialAndZetaControls() {
 
 function bindParticleControls() {
     bindCheckbox('enableParticleAnimationCb', 'particleAnimationEnabled', () => {
-        if (controls.particleAnimationDetailsDiv) {
-            controls.particleAnimationDetailsDiv.classList.toggle('hidden', !state.particleAnimationEnabled);
-        }
-        if (!state.particleAnimationEnabled) {
-            state.particles = [];
-        }
+        hidden(controls.particleAnimationDetailsDiv, !state.particleAnimationEnabled);
+        if (!state.particleAnimationEnabled) state.particles = [];
         requestRedrawAll();
     });
 
@@ -977,8 +888,7 @@ function bindParticleControls() {
         state.particles = [];
         requestRedrawAll();
     });
-
-    bindSlider('particleSpeedSlider', 'particleSpeed', parseFloat);
+    bindSlider('particleSpeedSlider', 'particleSpeed');
     bindSlider('particleMaxLifetimeSlider', 'particleMaxLifetime', parseInteger);
 }
 
@@ -988,15 +898,18 @@ function bindFourierControls() {
         requestRedrawAll();
     });
 
-    ['fourierFrequency', 'fourierAmplitude', 'fourierTimeWindow', 'fourierSamples'].forEach(stateKey => {
-        bindSlider(`${stateKey}Slider`, stateKey, stateKey === 'fourierSamples' ? parseInteger : parseFloat, () => {
-            updateFourierTransform();
-            requestRedrawAll();
-        });
-    });
+    [
+        ['fourierFrequency', parseFloat],
+        ['fourierAmplitude', parseFloat],
+        ['fourierTimeWindow', parseFloat],
+        ['fourierSamples', parseInteger]
+    ].forEach(([key, parser]) => bindSlider(`${key}Slider`, key, parser, () => {
+        updateFourierTransform();
+        requestRedrawAll();
+    }));
 
-    bindSlider('fourierWindingFrequencySlider', 'fourierWindingFrequency', parseFloat);
-    bindSlider('fourierWindingTimeSlider', 'fourierWindingTime', parseFloat);
+    bindSlider('fourierWindingFrequencySlider', 'fourierWindingFrequency');
+    bindSlider('fourierWindingTimeSlider', 'fourierWindingTime');
 }
 
 function bindLaplaceControls() {
@@ -1005,64 +918,50 @@ function bindLaplaceControls() {
         requestRedrawAll();
     });
 
-    ['laplaceFrequency', 'laplaceDamping'].forEach(stateKey => {
-        bindSlider(`${stateKey}Slider`, stateKey, parseFloat, () => {
-            updateLaplaceTransform();
-            requestRedrawAll();
-        });
-    });
+    ['laplaceFrequency', 'laplaceDamping'].forEach(key => bindSlider(`${key}Slider`, key, parseFloat, () => {
+        updateLaplaceTransform();
+        requestRedrawAll();
+    }));
 
-    ['laplaceSigma', 'laplaceOmega'].forEach(stateKey => {
-        bindSlider(`${stateKey}Slider`, stateKey, parseFloat, () => {
-            updateLaplaceEvaluationPoint();
-            requestRedrawAll();
-        });
-    });
+    ['laplaceSigma', 'laplaceOmega'].forEach(key => bindSlider(`${key}Slider`, key, parseFloat, () => {
+        updateLaplaceEvaluationPoint();
+        requestRedrawAll();
+    }));
 
     bindSelector('laplaceVizModeSelector', 'laplaceVizMode', () => {
         updateLaplace3DSurface();
         requestRedrawAll();
     });
-
     bindSlider('laplaceClipHeightSlider', 'laplaceClipHeight', parseFloat, () => {
         updateLaplace3DSurface();
         requestRedrawAll();
     });
 
-    bindCheckbox('laplaceShowROCCb', 'laplaceShowROC');
-    bindCheckbox('laplaceShowPolesZerosCb', 'laplaceShowPolesZeros');
-    bindCheckbox('laplaceShowFourierLineCb', 'laplaceShowFourierLine');
+    [
+        ['laplaceShowROCCb', 'laplaceShowROC'],
+        ['laplaceShowPolesZerosCb', 'laplaceShowPolesZeros'],
+        ['laplaceShowFourierLineCb', 'laplaceShowFourierLine'],
+        ['laplaceAnimationLoopCb', 'laplaceAnimationLoop']
+    ].forEach(([controlKey, stateKey]) => bindCheckbox(controlKey, stateKey));
+
     bindSlider('laplaceAnimationSpeedSlider', 'laplaceAnimationSpeed', parseFloat, () => {
         if (controls.laplaceAnimationSpeedDisplay) {
             controls.laplaceAnimationSpeedDisplay.textContent = state.laplaceAnimationSpeed.toFixed(1);
         }
         syncLaplacePlayPauseButton();
     });
-    bindCheckbox('laplaceAnimationLoopCb', 'laplaceAnimationLoop');
 
-    bindControlListener('laplacePlayPauseBtn', 'click', () => {
-        if (typeof toggleLaplaceAnimation === 'function') {
-            toggleLaplaceAnimation();
-        }
-        requestAnimationFrame(syncLaplacePlayPauseButton);
-    });
-    bindControlListener('laplaceResetBtn', 'click', () => {
-        if (typeof resetLaplaceAnimation === 'function') {
-            resetLaplaceAnimation();
-        }
-        requestAnimationFrame(syncLaplacePlayPauseButton);
-    });
-    bindControlListener('laplaceShowFullBtn', 'click', () => {
-        if (typeof showFullLaplaceSpiral === 'function') {
-            showFullLaplaceSpiral();
-        }
-        requestAnimationFrame(syncLaplacePlayPauseButton);
-    });
+    [
+        ['laplacePlayPauseBtn', toggleLaplaceAnimation],
+        ['laplaceResetBtn', resetLaplaceAnimation],
+        ['laplaceShowFullBtn', showFullLaplaceSpiral]
+    ].forEach(([controlKey, fn]) => bindControlListener(controlKey, 'click', () => {
+        call(fn);
+        frame(syncLaplacePlayPauseButton);
+    }));
 
     bindControlListener('laplaceFindPolesZerosBtn', 'click', () => {
-        if (!state.laplaceModeEnabled) {
-            return;
-        }
+        if (!state.laplaceModeEnabled) return;
 
         const result = findPolesZeros(state.laplaceFunction || 'damped_sine', {
             frequency: state.laplaceFrequency || 2.0,
@@ -1076,10 +975,7 @@ function bindLaplaceControls() {
     });
 
     bindControlListener('laplaceStabilityAnalysisBtn', 'click', () => {
-        if (!state.laplaceModeEnabled || !state.laplacePoles) {
-            return;
-        }
-
+        if (!state.laplaceModeEnabled || !state.laplacePoles) return;
         state.laplaceStability = analyzeStability(state.laplacePoles);
         requestRedrawAll();
     });
@@ -1090,10 +986,10 @@ function bindLaplaceControls() {
     });
 }
 
-function getCanvasInteractionContext(planeType) {
+function canvasContext(planeType) {
     return planeType === 'z'
-        ? { canvas: zCanvas, planeParams: zPlaneParams, panState: state.panStateZ, isZCanvas: true }
-        : { canvas: wCanvas, planeParams: wPlaneParams, panState: state.panStateW, isZCanvas: false };
+        ? { planeType, canvas: zCanvas, params: zPlaneParams, pan: state.panStateZ, isZ: true }
+        : { planeType, canvas: wCanvas, params: wPlaneParams, pan: state.panStateW, isZ: false };
 }
 
 function isSphereInteractionActive(isZCanvas) {
@@ -1102,13 +998,9 @@ function isSphereInteractionActive(isZCanvas) {
         : state.riemannSphereViewEnabled || state.splitViewEnabled;
 }
 
-function getCanvasMousePosition(canvas, event) {
+function mouse(canvas, event) {
     const rect = canvas.getBoundingClientRect();
-    return {
-        rect,
-        x: event.clientX - rect.left,
-        y: event.clientY - rect.top
-    };
+    return { x: event.clientX - rect.left, y: event.clientY - rect.top, rect };
 }
 
 function updateLaplaceViewportRanges(viewport) {
@@ -1122,21 +1014,14 @@ function updateLaplaceViewportRanges(viewport) {
 }
 
 function getLaplaceViewportAtY(mouseY) {
-    if (!state.laplaceTopVP || !state.lapaceBotVP) {
-        return null;
-    }
-
-    const isTop = mouseY < state.laplaceTopVP.height;
-    return {
-        panel: isTop ? 'top' : 'bot',
-        viewport: isTop ? state.laplaceTopVP : state.lapaceBotVP
-    };
+    if (!state.laplaceTopVP || !state.lapaceBotVP) return null;
+    const top = mouseY < state.laplaceTopVP.height;
+    return { panel: top ? 'top' : 'bot', viewport: top ? state.laplaceTopVP : state.lapaceBotVP };
 }
 
 function zoomLaplaceViewport(viewport, mouseX, mouseY, factor, centered = false) {
     const anchorX = centered ? viewport.width / 2 : mouseX;
     const anchorY = centered ? viewport.offsetY + viewport.height / 2 : mouseY;
-
     const worldX = (anchorX - viewport.origin.x) / viewport.scale.x;
     const worldY = (viewport.origin.y - anchorY) / viewport.scale.y;
 
@@ -1144,333 +1029,289 @@ function zoomLaplaceViewport(viewport, mouseX, mouseY, factor, centered = false)
     viewport.scale.y *= factor;
     viewport.origin.x = anchorX - worldX * viewport.scale.x;
     viewport.origin.y = anchorY + worldY * viewport.scale.y;
-
     updateLaplaceViewportRanges(viewport);
 }
 
+function panPlane(ctx, pos) {
+    ctx.params.origin.x = ctx.pan.panStartOrigin.x + (pos.x - ctx.pan.panStart.x);
+    ctx.params.origin.y = ctx.pan.panStartOrigin.y + (pos.y - ctx.pan.panStart.y);
+    updatePlaneViewportRanges(ctx.params);
+    requestDomainRedraw(true);
+}
+
+function updateProbe(ctx, pos, active = true) {
+    if (!ctx.isZ) return;
+    if (!active) {
+        state.probeActive = false;
+        return;
+    }
+
+    const world = mapCanvasToWorldCoords(pos.x, pos.y, ctx.params);
+    state.probeZ = { re: world.x, im: world.y };
+    state.probeActive = true;
+}
+
+function startPan(ctx, pos) {
+    ctx.pan.isPanning = true;
+    ctx.pan.panStart.x = pos.x;
+    ctx.pan.panStart.y = pos.y;
+    ctx.pan.panStartOrigin.x = ctx.params.origin.x;
+    ctx.pan.panStartOrigin.y = ctx.params.origin.y;
+    ctx.canvas.style.cursor = 'grabbing';
+    updateProbe(ctx, pos, false);
+    requestRedrawAll();
+}
+
+function handleCanvasMove(ctx, event) {
+    if (isSphereInteractionActive(ctx.isZ)) return;
+
+    const pos = mouse(ctx.canvas, event);
+
+    if (!ctx.isZ && state.laplaceModeEnabled && state.laplaceDragging) {
+        const viewport = state.laplaceDragging.panel === 'top' ? state.laplaceTopVP : state.lapaceBotVP;
+        if (!viewport) return;
+
+        viewport.origin.x = state.laplaceDragging.startOrigin.x + (pos.x - state.laplaceDragging.startX);
+        viewport.origin.y = state.laplaceDragging.startOrigin.y + (pos.y - state.laplaceDragging.startY);
+        updateLaplaceViewportRanges(viewport);
+        requestRedrawAll();
+        return;
+    }
+
+    if (ctx.pan.isPanning) {
+        panPlane(ctx, pos);
+        return;
+    }
+
+    if (ctx.isZ && state.navigationModeEnabled) {
+        state.probeActive = false;
+        return;
+    }
+
+    if (ctx.isZ && !state.panStateZ.isPanning && !state.panStateW.isPanning) {
+        updateProbe(ctx, pos, true);
+        requestRedrawAll();
+    }
+}
+
+function tryStartLaplaceDrag(ctx, pos) {
+    if (ctx.isZ || !state.laplaceModeEnabled || !state.laplaceTopVP || !state.lapaceBotVP) return false;
+
+    const target = getLaplaceViewportAtY(pos.y);
+    if (!target) return false;
+
+    state.laplaceDragging = {
+        panel: target.panel,
+        startX: pos.x,
+        startY: pos.y,
+        startOrigin: { x: target.viewport.origin.x, y: target.viewport.origin.y }
+    };
+    ctx.canvas.style.cursor = 'grabbing';
+    return true;
+}
+
+function tryAddManualSeed(ctx, event, pos) {
+    if (!ctx.isZ || event.button !== 0 || !event.shiftKey || !state.streamlineFlowEnabled) return false;
+
+    const world = mapCanvasToWorldCoords(pos.x, pos.y, ctx.params);
+    state.manualSeedPoints.push({ re: world.x, im: world.y });
+    requestRedrawAll();
+    event.stopPropagation();
+    return true;
+}
+
+function handleCanvasDown(ctx, event) {
+    if (isSphereInteractionActive(ctx.isZ)) return;
+
+    const pos = mouse(ctx.canvas, event);
+    if (event.button === 0 && tryStartLaplaceDrag(ctx, pos)) return;
+    if (tryAddManualSeed(ctx, event, pos) || event.button !== 0) return;
+    startPan(ctx, pos);
+}
+
+function handleCanvasUp(ctx, event) {
+    if (isSphereInteractionActive(ctx.isZ)) return;
+
+    if (!ctx.isZ && state.laplaceDragging) {
+        state.laplaceDragging = null;
+        ctx.canvas.style.cursor = 'crosshair';
+        return;
+    }
+
+    if (event.button !== 0 || !ctx.pan.isPanning) return;
+
+    ctx.pan.isPanning = false;
+    ctx.canvas.style.cursor = 'crosshair';
+
+    if (!ctx.isZ) return;
+
+    if (state.navigationModeEnabled) {
+        updateProbe(ctx, null, false);
+        requestRedrawAll();
+        return;
+    }
+
+    const pos = mouse(ctx.canvas, event);
+    updateProbe(ctx, pos, pos.x >= 0 && pos.x <= ctx.canvas.width && pos.y >= 0 && pos.y <= ctx.canvas.height);
+    requestRedrawAll();
+}
+
+function handleCanvasLeave(ctx) {
+    if (isSphereInteractionActive(ctx.isZ)) return;
+
+    if (!ctx.isZ && state.laplaceDragging) {
+        state.laplaceDragging = null;
+        ctx.canvas.style.cursor = 'crosshair';
+    }
+
+    if (ctx.pan.isPanning) {
+        ctx.pan.isPanning = false;
+        ctx.canvas.style.cursor = 'crosshair';
+        context.domainColoringDirty = true;
+    }
+
+    updateProbe(ctx, null, false);
+    requestRedrawAll();
+}
+
+function zoomPlaneAt(ctx, pos, factor) {
+    const zoomKey = ctx.isZ ? 'zPlaneZoom' : 'wPlaneZoom';
+    const oldZoom = state[zoomKey] || 1;
+    const nextZoom = clamp(oldZoom * factor, MIN_STATE_ZOOM_LEVEL, MAX_STATE_ZOOM_LEVEL);
+    const applied = nextZoom / oldZoom;
+    const world = mapCanvasToWorldCoords(pos.x, pos.y, ctx.params);
+
+    state[zoomKey] = nextZoom;
+    ctx.params.scale.x *= applied;
+    ctx.params.scale.y *= applied;
+    ctx.params.origin.x = pos.x - world.x * ctx.params.scale.x;
+    ctx.params.origin.y = pos.y + world.y * ctx.params.scale.y;
+
+    updatePlaneViewportRanges(ctx.params);
+    requestDomainRedraw(true);
+}
+
+function handleCanvasWheel(ctx, event) {
+    if (isSphereInteractionActive(ctx.isZ)) return;
+
+    event.preventDefault();
+    const pos = mouse(ctx.canvas, event);
+    const factor = event.deltaY < 0 ? ZOOM_IN_FACTOR : ZOOM_OUT_FACTOR;
+
+    if (!ctx.isZ && state.laplaceModeEnabled && state.laplaceTopVP && state.lapaceBotVP) {
+        const target = getLaplaceViewportAtY(pos.y);
+        if (!target) return;
+
+        zoomLaplaceViewport(target.viewport, pos.x, pos.y, factor, false);
+
+        if (state.laplaceWindingSyncZoom) {
+            zoomLaplaceViewport(target.panel === 'top' ? state.lapaceBotVP : state.laplaceTopVP, pos.x, pos.y, factor, true);
+        }
+
+        requestRedrawAll();
+        return;
+    }
+
+    zoomPlaneAt(ctx, pos, factor);
+}
+
 function bindCanvasInteractions() {
-    ['z', 'w'].forEach(planeType => {
-        const { canvas, planeParams, panState, isZCanvas } = getCanvasInteractionContext(planeType);
+    ['z', 'w'].map(canvasContext).forEach(ctx => {
+        [
+            ['mousemove', event => handleCanvasMove(ctx, event)],
+            ['mousedown', event => handleCanvasDown(ctx, event)],
+            ['mouseup', event => handleCanvasUp(ctx, event)],
+            ['mouseleave', () => handleCanvasLeave(ctx)],
+            ['wheel', event => handleCanvasWheel(ctx, event)]
+        ].forEach(([eventName, handler]) => bindElementListener(ctx.canvas, eventName, handler));
 
-        bindElementListener(canvas, 'mousemove', event => {
-            if (isSphereInteractionActive(isZCanvas)) {
-                return;
-            }
-
-            const { x, y } = getCanvasMousePosition(canvas, event);
-
-            if (!isZCanvas && state.laplaceModeEnabled && state.laplaceDragging) {
-                const viewport = state.laplaceDragging.panel === 'top' ? state.laplaceTopVP : state.lapaceBotVP;
-                if (viewport) {
-                    viewport.origin.x = state.laplaceDragging.startOrigin.x + (x - state.laplaceDragging.startX);
-                    viewport.origin.y = state.laplaceDragging.startOrigin.y + (y - state.laplaceDragging.startY);
-                    updateLaplaceViewportRanges(viewport);
-                    requestRedrawAll();
-                }
-                return;
-            }
-
-            if (panState.isPanning) {
-                planeParams.origin.x = panState.panStartOrigin.x + (x - panState.panStart.x);
-                planeParams.origin.y = panState.panStartOrigin.y + (y - panState.panStart.y);
-                updatePlaneViewportRanges(planeParams);
-                requestDomainRedraw(true);
-                return;
-            }
-
-            if (isZCanvas && state.navigationModeEnabled) {
-                state.probeActive = false;
-                return;
-            }
-
-            if (isZCanvas && !state.panStateZ.isPanning && !state.panStateW.isPanning) {
-                const worldCoords = mapCanvasToWorldCoords(x, y, planeParams);
-                state.probeZ = { re: worldCoords.x, im: worldCoords.y };
-                state.probeActive = true;
-                requestRedrawAll();
-            }
-        });
-
-        bindElementListener(canvas, 'mousedown', event => {
-            if (isSphereInteractionActive(isZCanvas)) {
-                return;
-            }
-
-            const { x, y } = getCanvasMousePosition(canvas, event);
-
-            if (!isZCanvas && state.laplaceModeEnabled && state.laplaceTopVP && state.lapaceBotVP && event.button === 0) {
-                const target = getLaplaceViewportAtY(y);
-                if (target) {
-                    state.laplaceDragging = {
-                        panel: target.panel,
-                        startX: x,
-                        startY: y,
-                        startOrigin: { x: target.viewport.origin.x, y: target.viewport.origin.y }
-                    };
-                    canvas.style.cursor = 'grabbing';
-                    return;
-                }
-            }
-
-            if (isZCanvas && event.button === 0 && event.shiftKey && state.streamlineFlowEnabled) {
-                const worldCoords = mapCanvasToWorldCoords(x, y, planeParams);
-                state.manualSeedPoints.push({ re: worldCoords.x, im: worldCoords.y });
-                requestRedrawAll();
-                event.stopPropagation();
-                return;
-            }
-
-            if (event.button !== 0) {
-                return;
-            }
-
-            panState.isPanning = true;
-            panState.panStart.x = x;
-            panState.panStart.y = y;
-            panState.panStartOrigin.x = planeParams.origin.x;
-            panState.panStartOrigin.y = planeParams.origin.y;
-            canvas.style.cursor = 'grabbing';
-
-            if (isZCanvas) {
-                state.probeActive = false;
-            }
-
-            requestRedrawAll();
-        });
-
-        bindElementListener(canvas, 'mouseup', event => {
-            if (isSphereInteractionActive(isZCanvas)) {
-                return;
-            }
-
-            if (!isZCanvas && state.laplaceDragging) {
-                state.laplaceDragging = null;
-                canvas.style.cursor = 'crosshair';
-                return;
-            }
-
-            if (event.button !== 0 || !panState.isPanning) {
-                return;
-            }
-
-            panState.isPanning = false;
-            canvas.style.cursor = 'crosshair';
-
-            if (!isZCanvas) {
-                return;
-            }
-
-            if (state.navigationModeEnabled) {
-                state.probeActive = false;
-                requestRedrawAll();
-                return;
-            }
-
-            const { x, y } = getCanvasMousePosition(canvas, event);
-            if (x >= 0 && x <= canvas.width && y >= 0 && y <= canvas.height) {
-                const worldCoords = mapCanvasToWorldCoords(x, y, planeParams);
-                state.probeZ = { re: worldCoords.x, im: worldCoords.y };
-                state.probeActive = true;
-            } else {
-                state.probeActive = false;
-            }
-
-            requestRedrawAll();
-        });
-
-        bindElementListener(canvas, 'mouseleave', () => {
-            if (isSphereInteractionActive(isZCanvas)) {
-                return;
-            }
-
-            if (!isZCanvas && state.laplaceDragging) {
-                state.laplaceDragging = null;
-                canvas.style.cursor = 'crosshair';
-            }
-
-            if (panState.isPanning) {
-                panState.isPanning = false;
-                canvas.style.cursor = 'crosshair';
-                 context.domainColoringDirty = true;
-            }
-
-            if (isZCanvas) {
-                state.probeActive = false;
-            }
-
-            requestRedrawAll();
-        });
-
-        bindElementListener(canvas, 'wheel', event => {
-            if (isSphereInteractionActive(isZCanvas)) {
-                return;
-            }
-
-            event.preventDefault();
-            const { x, y } = getCanvasMousePosition(canvas, event);
-            const zoomFactor = event.deltaY < 0 ? ZOOM_IN_FACTOR : ZOOM_OUT_FACTOR;
-
-            if (!isZCanvas && state.laplaceModeEnabled && state.laplaceTopVP && state.lapaceBotVP) {
-                const target = getLaplaceViewportAtY(y);
-                if (!target) {
-                    return;
-                }
-
-                zoomLaplaceViewport(target.viewport, x, y, zoomFactor, false);
-                if (state.laplaceWindingSyncZoom) {
-                    const otherViewport = target.panel === 'top' ? state.lapaceBotVP : state.laplaceTopVP;
-                    zoomLaplaceViewport(otherViewport, x, y, zoomFactor, true);
-                }
-
-                requestRedrawAll();
-                return;
-            }
-
-            const worldMouseBefore = mapCanvasToWorldCoords(x, y, planeParams);
-            const zoomStateKey = isZCanvas ? 'zPlaneZoom' : 'wPlaneZoom';
-            const unclampedZoom = state[zoomStateKey] * zoomFactor;
-            const clampedZoom = Math.max(MIN_STATE_ZOOM_LEVEL, Math.min(MAX_STATE_ZOOM_LEVEL, unclampedZoom));
-            const actualZoomApplied = clampedZoom / state[zoomStateKey];
-
-            state[zoomStateKey] = clampedZoom;
-            planeParams.scale.x *= actualZoomApplied;
-            planeParams.scale.y *= actualZoomApplied;
-            planeParams.origin.x = x - worldMouseBefore.x * planeParams.scale.x;
-            planeParams.origin.y = y + worldMouseBefore.y * planeParams.scale.y;
-
-            updatePlaneViewportRanges(planeParams);
-            requestDomainRedraw(true);
-        });
-    });
-
-    bindElementListener(zCanvas, 'mousedown', event => {
-        handleSphereMouseDown(event, 'z');
-    });
-    bindElementListener(zCanvas, 'mousemove', event => {
-        handleSphereMouseMove(event, 'z');
-    });
-    bindElementListener(zCanvas, 'mouseup', () => {
-        handleSphereMouseUp('z');
-    });
-    bindElementListener(zCanvas, 'mouseleave', () => {
-        handleSphereMouseUp('z');
-    });
-
-    bindElementListener(wCanvas, 'mousedown', event => {
-        handleSphereMouseDown(event, 'w');
-    });
-    bindElementListener(wCanvas, 'mousemove', event => {
-        handleSphereMouseMove(event, 'w');
-    });
-    bindElementListener(wCanvas, 'mouseup', () => {
-        handleSphereMouseUp('w');
-    });
-    bindElementListener(wCanvas, 'mouseleave', () => {
-        handleSphereMouseUp('w');
+        [
+            ['mousedown', event => handleSphereMouseDown(event, ctx.planeType)],
+            ['mousemove', event => handleSphereMouseMove(event, ctx.planeType)],
+            ['mouseup', () => handleSphereMouseUp(ctx.planeType)],
+            ['mouseleave', () => handleSphereMouseUp(ctx.planeType)]
+        ].forEach(([eventName, handler]) => bindElementListener(ctx.canvas, eventName, handler));
     });
 }
 
+function fullscreenStyles(backgroundColor) {
+    return {
+        position: 'fixed',
+        top: '0',
+        left: '0',
+        width: '100vw',
+        height: '100vh',
+        zIndex: '1000',
+        backgroundColor
+    };
+}
+
+function attachCloseButton(container, handler) {
+    if (!controls.closeFullscreenBtn || !container) return;
+    controls.closeFullscreenBtn.onclick = handler;
+    container.appendChild(controls.closeFullscreenBtn);
+    controls.closeFullscreenBtn.classList.remove('hidden');
+}
+
+function detachCloseButton(container) {
+    if (!controls.closeFullscreenBtn) return;
+    if (controls.closeFullscreenBtn.parentElement === container) container.removeChild(controls.closeFullscreenBtn);
+    controls.closeFullscreenBtn.classList.add('hidden');
+}
+
+function removeFromBody(element) {
+    if (element && element.parentElement === document.body) document.body.removeChild(element);
+}
+
+function resetFullscreenShell(container) {
+    if (!container) return;
+    container.classList.add('hidden');
+    removeFromBody(container);
+    detachCloseButton(container);
+    clearStyles(container, ['position', 'top', 'left', 'width', 'height', 'zIndex', 'backgroundColor']);
+}
+
 function bindFullscreenControls() {
-    bindControlListener('toggleFullscreenZBtn', 'click', () => {
-        handleFullScreenToggle('z');
-    });
-
-    bindControlListener('toggleFullscreenWBtn', 'click', () => {
-        handleFullScreenToggle('w');
-    });
-
-    bindControlListener('toggleFullscreenLaplace3DBtn', 'click', () => {
-        const container3d = controls.laplace3DContainer;
-        const column3d = controls.laplace3DColumn;
-        const fullscreenContainer = controls.fullscreenContainer;
-
-        if (!container3d || !fullscreenContainer) {
-            return;
-        }
-
-        state.isLaplace3DFullScreen = !state.isLaplace3DFullScreen;
-
-        if (state.isLaplace3DFullScreen) {
-            state.originalLaplace3DParent = container3d.parentElement;
-
-            fullscreenContainer.style.position = 'fixed';
-            fullscreenContainer.style.top = '0';
-            fullscreenContainer.style.left = '0';
-            fullscreenContainer.style.width = '100vw';
-            fullscreenContainer.style.height = '100vh';
-            fullscreenContainer.style.zIndex = '1000';
-            fullscreenContainer.style.backgroundColor = '#000';
-
-            controls.closeFullscreenBtn.onclick = () => {
-                controls.toggleFullscreenLaplace3DBtn.click();
-            };
-            fullscreenContainer.appendChild(controls.closeFullscreenBtn);
-            controls.closeFullscreenBtn.classList.remove('hidden');
-
-            container3d.style.width = '100%';
-            container3d.style.height = '100%';
-            fullscreenContainer.appendChild(container3d);
-            document.body.appendChild(fullscreenContainer);
-            fullscreenContainer.classList.remove('hidden');
-
-            if (column3d) {
-                column3d.classList.add('hidden-visually');
-            }
-        } else {
-            if (state.originalLaplace3DParent) {
-                state.originalLaplace3DParent.appendChild(container3d);
-            }
-
-            container3d.style.width = '100%';
-            container3d.style.height = '100%';
-            fullscreenContainer.classList.add('hidden');
-
-            if (fullscreenContainer.parentElement === document.body) {
-                document.body.removeChild(fullscreenContainer);
-            }
-            if (controls.closeFullscreenBtn.parentElement === fullscreenContainer) {
-                fullscreenContainer.removeChild(controls.closeFullscreenBtn);
-                controls.closeFullscreenBtn.classList.add('hidden');
-            }
-            if (column3d) {
-                column3d.classList.remove('hidden-visually');
-            }
-
-            fullscreenContainer.style.position = '';
-            fullscreenContainer.style.top = '';
-            fullscreenContainer.style.left = '';
-            fullscreenContainer.style.width = '';
-            fullscreenContainer.style.height = '';
-            fullscreenContainer.style.zIndex = '';
-            fullscreenContainer.style.backgroundColor = '';
-        }
-
-        requestAnimationFrame(() => {
-            setTimeout(() => {
-                try {
-                    Plotly.Plots.resize(container3d);
-                } catch (error) {
-                    console.error('Error resizing Laplace 3D Plotly surface:', error);
-                }
-            }, state.isLaplace3DFullScreen ? 150 : 100);
-        });
-    });
+    bindControlListener('toggleFullscreenZBtn', 'click', () => handleFullScreenToggle('z'));
+    bindControlListener('toggleFullscreenWBtn', 'click', () => handleFullScreenToggle('w'));
+    bindControlListener('toggleFullscreenLaplace3DBtn', 'click', toggleLaplace3DFullscreen);
 
     bindElementListener(document, 'keydown', event => {
-        if (event.key !== 'Escape') {
-            return;
-        }
-
-        if (state.isZFullScreen) {
-            handleFullScreenToggle('z');
-        }
-        if (state.isWFullScreen) {
-            handleFullScreenToggle('w');
-        }
+        if (event.key !== 'Escape') return;
+        if (state.isZFullScreen) handleFullScreenToggle('z');
+        if (state.isWFullScreen) handleFullScreenToggle('w');
         if (state.isLaplace3DFullScreen && controls.toggleFullscreenLaplace3DBtn) {
             controls.toggleFullscreenLaplace3DBtn.click();
         }
     });
+}
+
+function toggleLaplace3DFullscreen() {
+    const container3d = controls.laplace3DContainer;
+    const column3d = controls.laplace3DColumn;
+    const shell = controls.fullscreenContainer;
+
+    if (!container3d || !shell) return;
+
+    state.isLaplace3DFullScreen = !state.isLaplace3DFullScreen;
+
+    if (state.isLaplace3DFullScreen) {
+        state.originalLaplace3DParent = container3d.parentElement;
+        setStyles(shell, fullscreenStyles('#000'));
+        attachCloseButton(shell, () => controls.toggleFullscreenLaplace3DBtn.click());
+        setStyles(container3d, { width: '100%', height: '100%' });
+        shell.appendChild(container3d);
+        document.body.appendChild(shell);
+        shell.classList.remove('hidden');
+        if (column3d) column3d.classList.add('hidden-visually');
+    } else {
+        if (state.originalLaplace3DParent) state.originalLaplace3DParent.appendChild(container3d);
+        setStyles(container3d, { width: '100%', height: '100%' });
+        resetFullscreenShell(shell);
+        if (column3d) column3d.classList.remove('hidden-visually');
+    }
+
+    laterFrame(() => resizePlotly(container3d, 'Laplace 3D Plotly surface'), state.isLaplace3DFullScreen ? 150 : 100);
 }
 
 function syncTopControlsCollapseState() {
@@ -1478,297 +1319,167 @@ function syncTopControlsCollapseState() {
         return;
     }
 
-    controls.controlsOptionsSection.classList.toggle('is-collapsed', state.topControlsCollapsed);
+    const collapsed = Boolean(state.topControlsCollapsed);
+    const expandedText = 'Minimize top half panels';
+    const collapsedText = 'Expand top half panels';
 
-    const isCollapsed = state.topControlsCollapsed;
-    const expandedTooltipText = 'Minimize top half panels';
-    const collapsedTooltipText = 'Expand top half panels';
+    controls.controlsOptionsSection.classList.toggle('is-collapsed', collapsed);
+    controls.topControlsCollapsedBar.classList.toggle('hidden', !collapsed);
 
-    controls.topControlsCollapsedBar.classList.toggle('hidden', !isCollapsed);
-
-    controls.toggleTopControlsBtn.dataset.tooltip = expandedTooltipText;
-    controls.toggleTopControlsBtn.title = expandedTooltipText;
-    controls.toggleTopControlsBtn.setAttribute('aria-label', expandedTooltipText);
-
-    controls.toggleTopControlsCollapsedBtn.dataset.tooltip = collapsedTooltipText;
-    controls.toggleTopControlsCollapsedBtn.title = collapsedTooltipText;
-    controls.toggleTopControlsCollapsedBtn.setAttribute('aria-label', collapsedTooltipText);
+    [
+        [controls.toggleTopControlsBtn, expandedText],
+        [controls.toggleTopControlsCollapsedBtn, collapsedText]
+    ].forEach(([button, text]) => {
+        button.dataset.tooltip = text;
+        button.title = text;
+        button.setAttribute('aria-label', text);
+    });
 }
 
 function refreshCanvasLayoutAfterTopControlsToggle() {
-    const resizeAndRedraw = () => {
+    const refresh = () => {
         setupVisualParameters(false, false);
         requestDomainRedraw(true);
     };
-
-    requestAnimationFrame(resizeAndRedraw);
-    setTimeout(resizeAndRedraw, 280);
+    frame(refresh);
+    setTimeout(refresh, 280);
 }
 
 function bindTopControlsToggle() {
-    const toggleTopControls = () => {
+    const toggle = () => {
         state.topControlsCollapsed = !state.topControlsCollapsed;
         syncTopControlsCollapseState();
         refreshCanvasLayoutAfterTopControlsToggle();
     };
 
-    bindControlListener('toggleTopControlsBtn', 'click', toggleTopControls);
-    bindControlListener('toggleTopControlsCollapsedBtn', 'click', toggleTopControls);
+    bindControlListener('toggleTopControlsBtn', 'click', toggle);
+    bindControlListener('toggleTopControlsCollapsedBtn', 'click', toggle);
 }
 
 function triggerPlaneLayoutRefresh() {
-    // Fire immediately so canvas sizes start adjusting, then again after transition ends
-    setupVisualParameters(false, false);
-    requestDomainRedraw(true);
-    setTimeout(() => {
+    const refresh = () => {
         setupVisualParameters(false, false);
         requestDomainRedraw(true);
-    }, 340);
+    };
+    refresh();
+    setTimeout(refresh, 340);
 }
 
 function bindCollapseControls() {
-    const zCol = controls.zCanvasCard;
-    const wCol = controls.wCanvasCard;
-
-    const collapseColumn = (col) => {
-        if (!col) return;
-        col.classList.add('plane-collapsed');
-        triggerPlaneLayoutRefresh();
-    };
-
-    const expandColumn = (col) => {
-        if (!col) return;
-        col.classList.remove('plane-collapsed');
-        triggerPlaneLayoutRefresh();
-    };
-
-    bindControlListener('collapseZBtn', 'click', () => collapseColumn(zCol));
-    bindControlListener('expandZBtn',   'click', () => expandColumn(zCol));
-    bindControlListener('collapseWBtn', 'click', () => collapseColumn(wCol));
-    bindControlListener('expandWBtn',   'click', () => expandColumn(wCol));
+    [
+        ['collapseZBtn', 'expandZBtn', controls.zCanvasCard],
+        ['collapseWBtn', 'expandWBtn', controls.wCanvasCard]
+    ].forEach(([collapseKey, expandKey, column]) => {
+        bindControlListener(collapseKey, 'click', () => {
+            if (!column) return;
+            column.classList.add('plane-collapsed');
+            triggerPlaneLayoutRefresh();
+        });
+        bindControlListener(expandKey, 'click', () => {
+            if (!column) return;
+            column.classList.remove('plane-collapsed');
+            triggerPlaneLayoutRefresh();
+        });
+    });
 }
 
 export function setupEventListeners() {
     zCanvas = context.zCanvas;
     wCanvas = context.wCanvas;
 
-    if (uiEventListenersBound) {
-        return;
-    }
-
+    if (uiEventListenersBound) return;
     uiEventListenersBound = true;
 
-    eventBus.on('state:laplaceAnimationPlaying', () => {
-        syncLaplacePlayPauseButton();
-    });
+    eventBus.on('state:laplaceAnimationPlaying', () => syncLaplacePlayPauseButton());
+    BINDERS.forEach(fn => fn());
 
-    bindBaseParameterControls();
-    bindAlgebraicChainingControls();
-    bindMobiusControls();
-    bindFunctionButtons();
-    bindImageControls();
-    bindVideoControls();
-    bindPolynomialControls();
-    bindDomainColoringControls();
-    bindViewControls();
-    bindNavigationControls();
-    bindVectorFieldControls();
-    bindTaylorControls();
-    bindGeneralPointsControls();
-    bindRadialAndZetaControls();
-    bindParticleControls();
-    bindFourierControls();
-    bindLaplaceControls();
-    bindCollapseControls();
+    syncTopControlsCollapseState();
+    updateModePanels();
+}
 
+function bindChainingControls() {
     bindSelector('inputShapeSelector', 'currentInputShape', (_event, value) => {
-        if (value !== 'video' && state.videoIsPlaying && typeof pauseUploadedVideoPlayback === 'function') {
-            pauseUploadedVideoPlayback();
-        } else if (value === 'video' && state.uploadedVideo && state.videoIsPlaying && typeof startVideoProcessingLoop === 'function') {
-            startVideoProcessingLoop();
+        if (value !== 'video' && state.videoIsPlaying) {
+            call(pauseUploadedVideoPlayback);
+        } else if (value === 'video' && state.uploadedVideo && state.videoIsPlaying) {
+            call(startVideoProcessingLoop);
         }
         requestDomainRedraw(true);
     });
 
-    bindSlider('chainCountSlider', 'chainCount', parseInt, (val) => {
-        if (controls.chainCountValueDisplay) controls.chainCountValueDisplay.textContent = val;
-        if (typeof updateChainingColumns === 'function') {
-            updateChainingColumns(state.chainingEnabled ? val : 1);
-        }
+    bindSlider('chainCountSlider', 'chainCount', parseInteger, value => {
+        if (controls.chainCountValueDisplay) controls.chainCountValueDisplay.textContent = value;
+        call(updateChainingColumns, state.chainingEnabled ? value : 1);
         requestRedrawAll();
     });
 
-    if (controls.enableChainingCb) {
-        controls.enableChainingCb.addEventListener('change', (e) => {
-            state.chainingEnabled = e.target.checked;
-            // Output and algebraic chaining can be active simultaneously
-            if (controls.chainingControlsContainer) {
-                controls.chainingControlsContainer.style.display = state.chainingEnabled ? 'block' : 'none';
-            }
-            if (typeof updateChainingColumns === 'function') {
-                updateChainingColumns(state.chainingEnabled ? state.chainCount : 1);
-            }
-            updateTitlesAndGlobalUI();
-            syncParameterControlsPanelVisibility();
-            requestRedrawAll();
-        });
-    }
+    bindElementListener(controls.enableChainingCb, 'change', event => {
+        state.chainingEnabled = event.target.checked;
+        display(controls.chainingControlsContainer, state.chainingEnabled);
+        call(updateChainingColumns, state.chainingEnabled ? state.chainCount : 1);
+        updateTitlesAndGlobalUI();
+        syncParameterControlsPanelVisibility();
+        requestRedrawAll();
+    });
 
-    if (controls.chainModeSelector) {
-        controls.chainModeSelector.addEventListener('change', (e) => {
-            state.chainingMode = e.target.value;
-            if (typeof updateChainingTitles === 'function') {
-                updateChainingTitles();
-            }
-            requestRedrawAll();
-        });
-    }
+    bindElementListener(controls.chainModeSelector, 'change', event => {
+        state.chainingMode = event.target.value;
+        call(updateChainingTitles);
+        requestRedrawAll();
+    });
 
-    if (controls.gridViewBtn) {
-        controls.gridViewBtn.addEventListener('click', () => {
-            const row = document.querySelector('.canvas-row.two-column-layout');
-            if (!row) return;
-            const isActive = row.classList.toggle('chaining-grid-view');
-            controls.gridViewBtn.textContent = isActive ? '⊟ Exit Grid View' : '⊞ Grid View';
-            window.dispatchEvent(new Event('resize'));
-        });
-    }
-
-    BASIC_SLIDER_BINDINGS
-        .filter(({ controlKey }) => !new Set([
-            'vectorFieldScaleSlider',
-            'vectorArrowThicknessSlider',
-            'vectorArrowHeadSizeSlider',
-            'streamlineStepSizeSlider',
-            'streamlineMaxLengthSlider',
-            'streamlineThicknessSlider',
-            'streamlineSeedDensityFactorSlider',
-            'particleDensitySlider',
-            'particleSpeedSlider',
-            'particleMaxLifetimeSlider',
-            'imageResolutionSlider',
-            'imageSizeSlider',
-            'imageOpacitySlider',
-            'videoResolutionSlider',
-            'videoFpsSlider',
-            'videoSizeSlider',
-            'videoOpacitySlider',
-            'zPlaneZoomSlider',
-            'wPlaneZoomSlider',
-            'taylorSeriesOrderSlider',
-            'radialDiscreteStepsCountSlider',
-            'laplaceAnimationSpeedSlider',
-            'fourierFrequencySlider',
-            'fourierAmplitudeSlider',
-            'fourierTimeWindowSlider',
-            'fourierSamplesSlider',
-            'fourierWindingFrequencySlider',
-            'fourierWindingTimeSlider',
-            'laplaceFrequencySlider',
-            'laplaceDampingSlider',
-            'laplaceSigmaSlider',
-            'laplaceOmegaSlider',
-            'laplaceClipHeightSlider'
-        ]).has(controlKey))
-        .forEach(({ controlKey, stateKey, parser }) => {
-            bindSlider(controlKey, stateKey, parser);
-        });
-
-    BASIC_CHECKBOX_BINDINGS
-        .filter(({ controlKey }) => !new Set([
-            'enableSplitViewCb',
-            'enableVectorFieldCb',
-            'enableStreamlineFlowCb',
-            'enableRadialDiscreteStepsCb',
-            'enableRiemannSphereCb',
-            'enableRiemannSurfaceCb',
-            'enablePlotly3DCb',
-            'enableTaylorSeriesCb',
-            'enableTaylorSeriesCustomCenterCb',
-            'laplaceShowROCCb',
-            'laplaceShowPolesZerosCb',
-            'laplaceShowFourierLineCb',
-            'laplaceAnimationLoopCb',
-            'enableParticleAnimationCb',
-            'showVectorFieldPanelCb',
-            'enableDomainColoringCb',
-            'toggleSphereAxesGridCb',
-            'togglePlotlySphereGridCb'
-        ]).has(controlKey))
-        .forEach(({ controlKey, stateKey }) => {
-            bindCheckbox(controlKey, stateKey);
-        });
-
-    BASIC_SELECTOR_BINDINGS
-        .filter(({ controlKey }) => !new Set([
-            'inputShapeSelector',
-            'vectorFieldFunctionSelector',
-            'fourierFunctionSelector',
-            'laplaceFunctionSelector',
-            'laplaceVizModeSelector'
-        ]).has(controlKey))
-        .forEach(({ controlKey, stateKey }) => {
-            bindSelector(controlKey, stateKey);
-        });
-
-    bindCanvasInteractions();
-    bindTopControlsToggle();
-    bindFullscreenControls();
-    syncTopControlsCollapseState();
-    bindThemeControls();
-    updateModePanels();
-};
+    bindElementListener(controls.gridViewBtn, 'click', () => {
+        const row = document.querySelector('.canvas-row.two-column-layout');
+        if (!row) return;
+        const active = row.classList.toggle('chaining-grid-view');
+        controls.gridViewBtn.textContent = active ? '⊟ Exit Grid View' : '⊞ Grid View';
+        window.dispatchEvent(new Event('resize'));
+    });
+}
 
 function bindThemeControls() {
-    const themeBtn = document.getElementById('theme_selector_btn');
-    const themeModal = document.getElementById('theme_modal');
-    const themeModalBackdrop = document.getElementById('theme_modal_backdrop');
-    const closeThemeModalBtn = document.getElementById('close_theme_modal_btn');
-    const themeListContainer = document.getElementById('theme_list_container');
+    const themeBtn = $('theme_selector_btn');
+    const themeModal = $('theme_modal');
+    const themeModalBackdrop = $('theme_modal_backdrop');
+    const closeThemeModalBtn = $('close_theme_modal_btn');
+    const themeListContainer = $('theme_list_container');
+    const close = () => hidden(themeModal, true);
 
     applyTheme(state.themeId);
 
-    if (themeBtn && themeModal) {
-        themeBtn.addEventListener('click', () => {
-            renderThemesList(themeListContainer);
-            themeModal.classList.remove('hidden');
-        });
-    }
+    bindElementListener(themeBtn, 'click', () => {
+        renderThemesList(themeListContainer);
+        hidden(themeModal, false);
+    });
+    bindElementListener(themeModalBackdrop, 'click', close);
+    bindElementListener(closeThemeModalBtn, 'click', close);
+    bindElementListener(themeListContainer, 'click', event => {
+        const card = closest(event.target, '.theme-card');
+        if (!card) return;
+        state.themeId = card.dataset.themeId;
+        applyTheme(state.themeId);
+        renderThemesList(themeListContainer);
+        requestDomainRedraw(true);
+    });
+}
 
-    const closeThemeModal = () => {
-        if (themeModal) themeModal.classList.add('hidden');
-    };
+function resizePlotly(plotlyDiv, label = 'Plotly surface') {
+    if (!plotlyDiv || !globalThis.Plotly?.Plots?.resize) return false;
 
-    if (themeModalBackdrop) themeModalBackdrop.addEventListener('click', closeThemeModal);
-    if (closeThemeModalBtn) closeThemeModalBtn.addEventListener('click', closeThemeModal);
-
-    if (themeListContainer) {
-        themeListContainer.addEventListener('click', (e) => {
-            const card = e.target.closest('.theme-card');
-            if (!card) return;
-            const themeId = card.dataset.themeId;
-            state.themeId = themeId;
-            applyTheme(themeId);
-            renderThemesList(themeListContainer);
-            requestDomainRedraw(true);
-        });
+    try {
+        globalThis.Plotly.Plots.resize(plotlyDiv);
+        return true;
+    } catch (error) {
+        console.error(`Error resizing ${label}:`, error);
+        return false;
     }
 }
 
 function attemptPlotlyResize(plotlyDiv, maxAttempts = 3, delay = 100, currentAttempt = 1) {
-    if (!plotlyDiv) {
-        return;
-    }
+    if (!plotlyDiv) return;
 
-    const width = plotlyDiv.offsetWidth;
-    const height = plotlyDiv.offsetHeight;
-
-    if (width > 0 && height > 0) {
-        try {
-            Plotly.Plots.resize(plotlyDiv);
-        } catch (error) {
-            console.error(`Error during Plotly.Plots.resize (attempt ${currentAttempt}):`, error);
-        }
+    if (plotlyDiv.offsetWidth > 0 && plotlyDiv.offsetHeight > 0) {
+        resizePlotly(plotlyDiv, `Plotly container ${plotlyDiv.id || ''}`);
         return;
     }
 
@@ -1777,591 +1488,422 @@ function attemptPlotlyResize(plotlyDiv, maxAttempts = 3, delay = 100, currentAtt
         return;
     }
 
-    setTimeout(() => {
-        attemptPlotlyResize(plotlyDiv, maxAttempts, delay, currentAttempt + 1);
-    }, delay);
+    setTimeout(() => attemptPlotlyResize(plotlyDiv, maxAttempts, delay, currentAttempt + 1), delay);
+}
+
+function sphereParams(planeType) {
+    return planeType === 'z' ? sphereViewParams.z : sphereViewParams.w;
+}
+
+function canvasFor(planeType) {
+    return planeType === 'z' ? zCanvas : wCanvas;
 }
 
 function handleSphereMouseDown(event, planeType) {
-    const sphereParams = planeType === 'z' ? sphereViewParams.z : sphereViewParams.w;
-    const isActiveSphere = planeType === 'z'
-        ? state.riemannSphereViewEnabled && !state.splitViewEnabled
-        : state.riemannSphereViewEnabled || state.splitViewEnabled;
+    const params = sphereParams(planeType);
+    if (!isSphereInteractionActive(planeType === 'z')) return;
 
-    if (!isActiveSphere) {
-        return;
-    }
-
-    sphereParams.dragging = true;
-    sphereParams.lastMouseX = event.clientX;
-    sphereParams.lastMouseY = event.clientY;
-    (planeType === 'z' ? zCanvas : wCanvas).style.cursor = 'grabbing';
+    params.dragging = true;
+    params.lastMouseX = event.clientX;
+    params.lastMouseY = event.clientY;
+    if (canvasFor(planeType)) canvasFor(planeType).style.cursor = 'grabbing';
 }
 
 function handleSphereMouseMove(event, planeType) {
-    const sphereParams = planeType === 'z' ? sphereViewParams.z : sphereViewParams.w;
-    const isActiveSphere = planeType === 'z'
-        ? state.riemannSphereViewEnabled && !state.splitViewEnabled
-        : state.riemannSphereViewEnabled || state.splitViewEnabled;
+    const params = sphereParams(planeType);
+    if (!isSphereInteractionActive(planeType === 'z') || !params.dragging) return;
 
-    if (!isActiveSphere || !sphereParams.dragging) {
-        return;
-    }
-
-    const dx = event.clientX - sphereParams.lastMouseX;
-    const dy = event.clientY - sphereParams.lastMouseY;
-
-    sphereParams.rotY += dx * SPHERE_SENSITIVITY;
-    sphereParams.rotX += dy * SPHERE_SENSITIVITY;
-    sphereParams.rotX = Math.max(-Math.PI / 2 + 0.01, Math.min(Math.PI / 2 - 0.01, sphereParams.rotX));
-    sphereParams.lastMouseX = event.clientX;
-    sphereParams.lastMouseY = event.clientY;
-
+    params.rotY += (event.clientX - params.lastMouseX) * SPHERE_SENSITIVITY;
+    params.rotX = clamp(
+        params.rotX + (event.clientY - params.lastMouseY) * SPHERE_SENSITIVITY,
+        -Math.PI / 2 + 0.01,
+        Math.PI / 2 - 0.01
+    );
+    params.lastMouseX = event.clientX;
+    params.lastMouseY = event.clientY;
     requestDomainRedraw(true);
 }
 
 function handleSphereMouseUp(planeType) {
-    const sphereParams = planeType === 'z' ? sphereViewParams.z : sphereViewParams.w;
-    const isActiveSphere = planeType === 'z'
-        ? state.riemannSphereViewEnabled && !state.splitViewEnabled
-        : state.riemannSphereViewEnabled || state.splitViewEnabled;
+    const params = sphereParams(planeType);
+    if (!isSphereInteractionActive(planeType === 'z') && !params.dragging) return;
 
-    if (!isActiveSphere && !sphereParams.dragging) {
+    params.dragging = false;
+    if (canvasFor(planeType)) canvasFor(planeType).style.cursor = 'crosshair';
+}
+
+function fullscreenTarget(planeType) {
+    const isZ = planeType === 'z';
+    const plotly = controls.wPlanePlotlyContainer;
+    const surface = !isZ && state.riemannSurfaceEnabled ? getRiemannSurfaceCanvas(wCanvas) : null;
+    const isPlotly = !isZ && state.plotly3DEnabled && state.riemannSphereViewEnabled && plotly;
+
+    return {
+        isZ,
+        isPlotly,
+        element: isZ ? zCanvas : (surface || (isPlotly ? plotly : wCanvas)),
+        card: isZ ? controls.zCanvasCard : controls.wCanvasCard
+    };
+}
+
+function saveFullscreenOrigin(isZ, element) {
+    const prefix = isZ ? 'Z' : 'W';
+    state[`original${prefix}Parent`] = element.parentElement;
+    state[`original${prefix}Style`] = { width: element.style.width, height: element.style.height };
+}
+
+function restoreFullscreenOrigin(isZ, element, card) {
+    const prefix = isZ ? 'Z' : 'W';
+    const parent = state[`original${prefix}Parent`];
+    const style = state[`original${prefix}Style`];
+
+    if (parent) {
+        parent.appendChild(element);
+        element.style.width = style?.width || '';
+        element.style.height = style?.height || '';
         return;
     }
 
-    sphereParams.dragging = false;
-    (planeType === 'z' ? zCanvas : wCanvas).style.cursor = 'crosshair';
+    const fallback = card && card.querySelector('div');
+    if (fallback) fallback.appendChild(element);
+}
+
+function setPlaneFullscreen(isZ, value) {
+    if (isZ) state.isZFullScreen = value;
+    else state.isWFullScreen = value;
+}
+
+function isPlaneFullscreen(isZ) {
+    return isZ ? state.isZFullScreen : state.isWFullScreen;
 }
 
 function handleFullScreenToggle(planeType) {
-    const isZPlane = planeType === 'z';
-    const plotlyContainer = controls.wPlanePlotlyContainer;
-    const surfaceCanvas = !isZPlane && state.riemannSurfaceEnabled
-        ? getRiemannSurfaceCanvas(wCanvas)
-        : null;
-    const isSurfaceCase = !isZPlane && !!surfaceCanvas;
-    const isPlotlyCase = !isZPlane && state.plotly3DEnabled && state.riemannSphereViewEnabled && plotlyContainer;
-    const currentElement = isZPlane
-        ? zCanvas
-        : (isSurfaceCase ? surfaceCanvas : (isPlotlyCase ? plotlyContainer : wCanvas));
+    const target = fullscreenTarget(planeType);
+    const shell = controls.fullscreenContainer;
 
-    if (!currentElement) {
+    if (!target.element || !shell) {
         console.error('Fullscreen target element not found for plane:', planeType);
         return;
     }
 
-    const canvasCard = isZPlane ? controls.zCanvasCard : controls.wCanvasCard;
-    const fullscreenContainer = controls.fullscreenContainer;
+    setPlaneFullscreen(target.isZ, !isPlaneFullscreen(target.isZ));
+    const entering = isPlaneFullscreen(target.isZ);
 
-    if (isZPlane) {
-        state.isZFullScreen = !state.isZFullScreen;
-    } else {
-        state.isWFullScreen = !state.isWFullScreen;
-    }
+    if (entering) {
+        saveFullscreenOrigin(target.isZ, target.element);
+        setStyles(shell, fullscreenStyles('var(--color-background-dark)'));
+        attachCloseButton(shell, () => handleFullScreenToggle(planeType));
+        shell.appendChild(target.element);
+        document.body.appendChild(shell);
+        shell.classList.remove('hidden');
+        if (target.card) target.card.classList.add('hidden-visually');
+        setStyles(target.element, { width: '100%', height: '100%' });
 
-    const isNowFullScreen = isZPlane ? state.isZFullScreen : state.isWFullScreen;
-
-    if (isNowFullScreen) {
-        if (isZPlane) {
-            state.originalZParent = currentElement.parentElement;
-            state.originalZStyle = { width: currentElement.style.width, height: currentElement.style.height };
-        } else {
-            state.originalWParent = currentElement.parentElement;
-            state.originalWStyle = { width: currentElement.style.width, height: currentElement.style.height };
-        }
-
-        fullscreenContainer.style.position = 'fixed';
-        fullscreenContainer.style.top = '0';
-        fullscreenContainer.style.left = '0';
-        fullscreenContainer.style.width = '100vw';
-        fullscreenContainer.style.height = '100vh';
-        fullscreenContainer.style.zIndex = '1000';
-        fullscreenContainer.style.backgroundColor = 'var(--color-background-dark)';
-
-        controls.closeFullscreenBtn.onclick = () => {
-            handleFullScreenToggle(planeType);
-        };
-        fullscreenContainer.appendChild(controls.closeFullscreenBtn);
-        controls.closeFullscreenBtn.classList.remove('hidden');
-
-        fullscreenContainer.appendChild(currentElement);
-        document.body.appendChild(fullscreenContainer);
-        fullscreenContainer.classList.remove('hidden');
-
-        if (canvasCard) {
-            canvasCard.classList.add('hidden-visually');
-        }
-
-        currentElement.style.width = '100%';
-        currentElement.style.height = '100%';
-
-        if (isPlotlyCase && wCanvas) {
-            wCanvas.classList.add('hidden');
-        }
-
-        if (!isZPlane && controls.laplaceWindingSyncBtn) {
-            fullscreenContainer.appendChild(controls.laplaceWindingSyncBtn);
-            controls.laplaceWindingSyncBtn.style.top = '50px';
-            controls.laplaceWindingSyncBtn.style.right = '20px';
+        if (target.isPlotly && wCanvas) wCanvas.classList.add('hidden');
+        if (!target.isZ && controls.laplaceWindingSyncBtn) {
+            shell.appendChild(controls.laplaceWindingSyncBtn);
+            setStyles(controls.laplaceWindingSyncBtn, { top: '50px', right: '20px' });
         }
     } else {
-        const originalParent = isZPlane ? state.originalZParent : state.originalWParent;
-        const originalStyle = isZPlane ? state.originalZStyle : state.originalWStyle;
+        restoreFullscreenOrigin(target.isZ, target.element, target.card);
+        resetFullscreenShell(shell);
+        if (target.card) target.card.classList.remove('hidden-visually');
+        if (target.isPlotly && wCanvas) wCanvas.classList.remove('hidden');
 
-        if (originalParent) {
-            originalParent.appendChild(currentElement);
-            currentElement.style.width = originalStyle && originalStyle.width ? originalStyle.width : '';
-            currentElement.style.height = originalStyle && originalStyle.height ? originalStyle.height : '';
-        } else if (canvasCard && canvasCard.querySelector('div')) {
-            canvasCard.querySelector('div').appendChild(currentElement);
-        }
-
-        fullscreenContainer.classList.add('hidden');
-        if (fullscreenContainer.parentElement === document.body) {
-            document.body.removeChild(fullscreenContainer);
-        }
-        if (controls.closeFullscreenBtn.parentElement === fullscreenContainer) {
-            fullscreenContainer.removeChild(controls.closeFullscreenBtn);
-            controls.closeFullscreenBtn.classList.add('hidden');
-        }
-        if (canvasCard) {
-            canvasCard.classList.remove('hidden-visually');
-        }
-
-        if (!isZPlane && controls.laplaceWindingSyncBtn && state.originalWParent) {
+        if (!target.isZ && controls.laplaceWindingSyncBtn && state.originalWParent) {
             state.originalWParent.appendChild(controls.laplaceWindingSyncBtn);
-            controls.laplaceWindingSyncBtn.style.top = '8px';
-            controls.laplaceWindingSyncBtn.style.right = '8px';
+            setStyles(controls.laplaceWindingSyncBtn, { top: '8px', right: '8px' });
         }
-
-        fullscreenContainer.style.position = '';
-        fullscreenContainer.style.top = '';
-        fullscreenContainer.style.left = '';
-        fullscreenContainer.style.width = '';
-        fullscreenContainer.style.height = '';
-        fullscreenContainer.style.zIndex = '';
-        fullscreenContainer.style.backgroundColor = '';
     }
 
     setupVisualParameters(true, true);
 
-    if (isPlotlyCase) {
-        requestAnimationFrame(() => {
-            setTimeout(() => {
-                if (isNowFullScreen) {
-                    currentElement.classList.remove('hidden');
-                    currentElement.style.width = '100%';
-                    currentElement.style.height = '100%';
-                    attemptPlotlyResize(currentElement, 5, 150);
-                } else {
-                    attemptPlotlyResize(currentElement, 3, 100);
-                }
-            }, isNowFullScreen ? 100 : 50);
-        });
+    if (target.isPlotly) {
+        laterFrame(() => {
+            if (entering) {
+                target.element.classList.remove('hidden');
+                setStyles(target.element, { width: '100%', height: '100%' });
+                attemptPlotlyResize(target.element, 5, 150);
+            } else {
+                attemptPlotlyResize(target.element, 3, 100);
+            }
+        }, entering ? 100 : 50);
     }
 
     requestDomainRedraw(true);
 }
 
 function bindAlgebraicChainingControls() {
-    if (controls.enableAlgebraicChainingCb) {
-        controls.enableAlgebraicChainingCb.addEventListener('change', (e) => {
-            state.algebraicChainingEnabled = e.target.checked;
-            
-            // Output and algebraic chaining can be active simultaneously
-            
-            if (controls.algebraicChainingControlsContainer) {
-                controls.algebraicChainingControlsContainer.style.display = state.algebraicChainingEnabled ? 'block' : 'none';
-            }
-            if (state.algebraicChainingEnabled) {
-                state.currentFunction = 'algebraic_chaining';
-                if (typeof setActiveFunctionButton === 'function') {
-                    setActiveFunctionButton('algebraic_chaining');
-                }
-                renderAlgebraicChainingTerms();
-            } else {
-                state.currentFunction = 'cos';
-                if (typeof setActiveFunctionButton === 'function') {
-                    setActiveFunctionButton('cos');
-                }
-            }
-            updateTitlesAndGlobalUI();
-            syncParameterControlsPanelVisibility();
-            requestDomainRedraw(true);
-        });
+    bindElementListener(controls.enableAlgebraicChainingCb, 'change', event => {
+        state.algebraicChainingEnabled = event.target.checked;
+        display(controls.algebraicChainingControlsContainer, state.algebraicChainingEnabled);
+
+        state.currentFunction = state.algebraicChainingEnabled ? 'algebraic_chaining' : 'cos';
+        setActiveFunctionButton(state.currentFunction);
+
+        if (state.algebraicChainingEnabled) renderAlgebraicChainingTerms();
+
+        updateTitlesAndGlobalUI();
+        syncParameterControlsPanelVisibility();
+        requestDomainRedraw(true);
+    });
+
+    bindElementListener(controls.addAlgebraicTermBtn, 'click', () => {
+        algebraicTerms().push(createAlgebraicTerm());
+        renderAlgebraicChainingTerms();
+        updateTitlesAndGlobalUI();
+        syncParameterControlsPanelVisibility();
+        requestDomainRedraw(true);
+    });
+}
+
+function createAlgebraicFactor(func = 'cos') {
+    return { func, chainedFunc: 'none', power: 1.0, reciprocal: false, log: false, exp: false };
+}
+
+function createAlgebraicTerm() {
+    return { coeff: { re: 1.0, im: 0.0 }, factors: [createAlgebraicFactor()] };
+}
+
+function normalizeAlgebraicFactor(factor) {
+    const normalized = factor && typeof factor === 'object' ? factor : createAlgebraicFactor();
+    normalized.func ??= 'cos';
+    normalized.chainedFunc ??= 'none';
+    normalized.power ??= 1.0;
+    normalized.reciprocal = Boolean(normalized.reciprocal);
+    normalized.log = Boolean(normalized.log);
+    normalized.exp = Boolean(normalized.exp);
+    return normalized;
+}
+
+function normalizeAlgebraicTerm(term) {
+    const normalized = term && typeof term === 'object' ? term : createAlgebraicTerm();
+    normalized.coeff ||= { re: 1.0, im: 0.0 };
+    normalized.coeff.re = Number(normalized.coeff.re) || 0;
+    normalized.coeff.im = Number(normalized.coeff.im) || 0;
+    normalized.factors = toArray(normalized.factors).map(normalizeAlgebraicFactor);
+    if (normalized.factors.length === 0) normalized.factors = [createAlgebraicFactor()];
+    return normalized;
+}
+
+function algebraicTerms() {
+    if (!Array.isArray(state.algebraicChainingTerms) || state.algebraicChainingTerms.length === 0) {
+        state.algebraicChainingTerms = [createAlgebraicTerm()];
     }
 
-    if (controls.addAlgebraicTermBtn) {
-        controls.addAlgebraicTermBtn.addEventListener('click', () => {
-            state.algebraicChainingTerms.push({
-                coeff: { re: 1.0, im: 0.0 },
-                factors: [
-                    { func: 'cos', chainedFunc: 'none', power: 1.0, reciprocal: false, log: false, exp: false }
-                ]
-            });
+    state.algebraicChainingTerms = state.algebraicChainingTerms.map(normalizeAlgebraicTerm);
+    return state.algebraicChainingTerms;
+}
+
+function nearZero(value) {
+    return Math.abs(value) < 1e-9;
+}
+
+function coefficientText(term) {
+    const re = Number(term.coeff.re) || 0;
+    const im = Number(term.coeff.im) || 0;
+    const hasFactors = toArray(term.factors).some(factor => factor.func && factor.func !== 'none');
+
+    if (nearZero(re) && nearZero(im)) return '0';
+    if (nearZero(im)) {
+        if (hasFactors && nearZero(re - 1)) return '';
+        if (hasFactors && nearZero(re + 1)) return '-';
+        return re.toFixed(1);
+    }
+
+    const reText = nearZero(re) ? '' : re.toFixed(1);
+    const sign = im >= 0 ? '+' : '-';
+    const imMagnitude = Math.abs(im);
+    const imText = nearZero(imMagnitude - 1) ? 'i' : `${imMagnitude.toFixed(1)}i`;
+
+    return reText === '' ? (im >= 0 ? imText : `-${imText}`) : `(${reText}${sign}${imText})`;
+}
+
+function algebraicSymbol(func) {
+    return ALGEBRAIC_SYMBOLS.get(func) || func;
+}
+
+function factorText(factor) {
+    let text = factor.chainedFunc && factor.chainedFunc !== 'none'
+        ? `${algebraicSymbol(factor.func)}(${algebraicSymbol(factor.chainedFunc)}(z))`
+        : `${algebraicSymbol(factor.func)}(z)`;
+
+    if (factor.power !== undefined && factor.power !== 1) text = `(${text})^${Number(factor.power).toFixed(1)}`;
+    if (factor.reciprocal) text = `1/(${text})`;
+    if (factor.log) text = `ln(${text})`;
+    if (factor.exp) text = `e^(${text})`;
+    return text;
+}
+
+function termPreview(term) {
+    const coeff = coefficientText(term);
+    if (coeff === '0') return '0';
+
+    const factors = toArray(term.factors)
+        .filter(factor => factor.func && factor.func !== 'none')
+        .map(factorText);
+
+    if (factors.length === 0) return coeff === '' ? '1' : coeff;
+
+    const product = factors.join('·');
+    if (coeff === '') return product;
+    if (coeff === '-') return `-${product}`;
+    return `${coeff}·${product}`;
+}
+
+function algebraicRange(label, value, onInput) {
+    const valueNode = h('span', { className: 'algebraic-slider-value', text: Number(value).toFixed(1) });
+    const slider = h('input', { type: 'range' });
+
+    Object.assign(slider, { min: '-5', max: '5', step: '0.1', value });
+    slider.addEventListener('input', event => {
+        const next = parseFloat(event.target.value);
+        valueNode.textContent = next.toFixed(1);
+        onInput(next);
+    });
+
+    return h('div', { className: 'algebraic-slider-row' }, [
+        h('label', { className: 'algebraic-slider-label' }, [label, valueNode]),
+        h('div', { className: 'algebraic-slider-container' }, [slider])
+    ]);
+}
+
+function refreshAlgebraicFormula(preview, term) {
+    if (preview) preview.textContent = termPreview(term);
+    updateTitlesAndGlobalUI();
+    requestDomainRedraw(true);
+}
+
+function trimFactors(factors) {
+    const stop = factors.findIndex(factor => factor.func === 'none');
+    return stop < 0 ? factors : factors.slice(0, stop + 1);
+}
+
+function setFactorFunction(term, index, func) {
+    if (index < term.factors.length) term.factors[index].func = func;
+    else term.factors.push(createAlgebraicFactor(func));
+
+    term.factors = trimFactors(term.factors);
+}
+
+function renderAlgebraicHeader(term, termIndex) {
+    const header = h('div', { className: 'algebraic-term-header' }, [
+        h('div', { className: 'algebraic-term-title-wrapper' }, [
+            h('span', { className: 'algebraic-term-title', text: `Term ${termIndex + 1}` }),
+            h('div', { className: 'algebraic-term-formula', text: termPreview(term) })
+        ])
+    ]);
+
+    if (algebraicTerms().length > 1) {
+        const remove = h('button', { type: 'button', className: 'algebraic-term-remove-btn', text: '✕ Remove' });
+        remove.addEventListener('click', () => {
+            state.algebraicChainingTerms.splice(termIndex, 1);
             renderAlgebraicChainingTerms();
             updateTitlesAndGlobalUI();
             syncParameterControlsPanelVisibility();
             requestDomainRedraw(true);
         });
+        header.appendChild(remove);
     }
+
+    return header;
+}
+
+function renderCoefficientControls(term, preview) {
+    return h('div', { className: 'algebraic-coeff-grid' }, [
+        algebraicRange('Re coeff ', term.coeff.re, value => {
+            term.coeff.re = value;
+            refreshAlgebraicFormula(preview, term);
+        }),
+        algebraicRange('Im coeff ', term.coeff.im, value => {
+            term.coeff.im = value;
+            refreshAlgebraicFormula(preview, term);
+        })
+    ]);
+}
+
+function visibleFactors(term) {
+    const factors = term.factors.slice();
+    if (factors.length < 5 && (factors.length === 0 || factors.at(-1).func !== 'none')) {
+        factors.push(createAlgebraicFactor('none'));
+    }
+    return factors;
+}
+
+function modifierCheckbox(factor, key, label, onChange) {
+    const checkbox = h('input', { type: 'checkbox' });
+    checkbox.checked = Boolean(factor[key]);
+    checkbox.addEventListener('change', event => {
+        factor[key] = event.target.checked;
+        onChange();
+    });
+
+    return h('label', { className: 'algebraic-checkbox-label' }, [
+        checkbox,
+        h('span', { className: 'custom-checkbox-visual' }),
+        label
+    ]);
+}
+
+function renderFactorDetails(term, factor, preview) {
+    return h('div', { className: 'algebraic-factor-details' }, [
+        h('div', { className: 'algebraic-factor-detail-row' }, [
+            h('span', { className: 'algebraic-factor-label', text: 'Chain f(g(z))' }),
+            select(ALGEBRAIC_FUNCTION_OPTIONS, factor.chainedFunc, event => {
+                factor.chainedFunc = event.target.value;
+                refreshAlgebraicFormula(preview, term);
+                syncParameterControlsPanelVisibility();
+            })
+        ]),
+        algebraicRange('Power ', factor.power === undefined ? 1.0 : factor.power, value => {
+            factor.power = value;
+            refreshAlgebraicFormula(preview, term);
+        }),
+        h('div', { className: 'algebraic-checkbox-row' }, [
+            modifierCheckbox(factor, 'reciprocal', '1/f', () => refreshAlgebraicFormula(preview, term)),
+            modifierCheckbox(factor, 'log', 'ln(f)', () => refreshAlgebraicFormula(preview, term)),
+            modifierCheckbox(factor, 'exp', 'e^f', () => refreshAlgebraicFormula(preview, term))
+        ])
+    ]);
+}
+
+function renderFactor(term, factor, index, preview) {
+    const card = h('div', { className: 'algebraic-factor-card' }, [
+        h('div', { className: 'algebraic-factor-main-row' }, [
+            h('span', { className: 'algebraic-factor-label', text: `Factor ${index + 1}` }),
+            select(ALGEBRAIC_FUNCTION_OPTIONS, factor.func, event => {
+                setFactorFunction(term, index, event.target.value);
+                renderAlgebraicChainingTerms();
+                updateTitlesAndGlobalUI();
+                syncParameterControlsPanelVisibility();
+                requestDomainRedraw(true);
+            })
+        ])
+    ]);
+
+    if (factor.func !== 'none') card.appendChild(renderFactorDetails(term, factor, preview));
+    return card;
+}
+
+function renderFactors(term, preview) {
+    return h('div', { className: 'algebraic-factors-container' }, [
+        h('div', { className: 'algebraic-factors-title', text: 'Factors' }),
+        ...visibleFactors(term).map((factor, index) => renderFactor(term, factor, index, preview))
+    ]);
 }
 
 function renderAlgebraicChainingTerms() {
     if (!controls.algebraicTermsList) return;
-    
+
     controls.algebraicTermsList.innerHTML = '';
-    
-    function getTermPreview(term) {
-        const re = term.coeff.re;
-        const im = term.coeff.im;
-        
-        if (Math.abs(re) < 1e-9 && Math.abs(im) < 1e-9) {
-            return '0';
-        }
-        
-        let coeffStr = '';
-        if (Math.abs(im) < 1e-9) {
-            if (Math.abs(re - 1) < 1e-9 && (term.factors && term.factors.length > 0 && term.factors[0].func !== 'none')) {
-                coeffStr = '';
-            } else if (Math.abs(re + 1) < 1e-9 && (term.factors && term.factors.length > 0 && term.factors[0].func !== 'none')) {
-                coeffStr = '-';
-            } else {
-                coeffStr = re.toFixed(1);
-            }
-        } else {
-            const reStr = Math.abs(re) < 1e-9 ? '' : re.toFixed(1);
-            const sign = im >= 0 ? '+' : '-';
-            const imStr = Math.abs(Math.abs(im) - 1) < 1e-9 ? 'i' : `${Math.abs(im).toFixed(1)}i`;
-            if (reStr === '') {
-                coeffStr = im >= 0 ? imStr : `-${imStr}`;
-            } else {
-                coeffStr = `(${reStr}${sign}${imStr})`;
-            }
-        }
+    algebraicTerms().forEach((term, index) => {
+        const header = renderAlgebraicHeader(term, index);
+        const preview = header.querySelector('.algebraic-term-formula');
 
-        const activeFactors = (term.factors || []).filter(f => f.func && f.func !== 'none');
-        if (activeFactors.length === 0) {
-            return coeffStr === '' ? '1' : coeffStr;
-        }
-
-        const factorsStr = activeFactors.map(f => {
-            let base = f.func;
-            if (base === 'power') base = 'z^n';
-            if (base === 'zeta') base = 'ζ';
-            if (base === 'polynomial') base = 'P';
-            if (base === 'mobius') base = 'Möbius';
-            if (base === 'poincare') base = 'Poincare';
-            
-            if (f.chainedFunc && f.chainedFunc !== 'none') {
-                let inner = f.chainedFunc;
-                if (inner === 'power') inner = 'z^n';
-                if (inner === 'zeta') inner = 'ζ';
-                if (inner === 'polynomial') inner = 'P';
-                if (inner === 'mobius') inner = 'Möbius';
-                if (inner === 'poincare') inner = 'Poincare';
-                base = `${base}(${inner}(z))`;
-            } else {
-                base = `${base}(z)`;
-            }
-            if (f.power !== undefined && f.power !== 1) {
-                base = `(${base})^${f.power.toFixed(1)}`;
-            }
-            if (f.reciprocal) base = `1/(${base})`;
-            if (f.log) base = `ln(${base})`;
-            if (f.exp) base = `e^(${base})`;
-            return base;
-        }).join('·');
-
-        if (coeffStr === '') return factorsStr;
-        if (coeffStr === '-') return `-${factorsStr}`;
-        return `${coeffStr}·${factorsStr}`;
-    }
-
-    state.algebraicChainingTerms.forEach((term, tIdx) => {
-        const termCard = document.createElement('div');
-        termCard.className = 'algebraic-term-card';
-        
-        const header = document.createElement('div');
-        header.className = 'algebraic-term-header';
-        
-        const titleWrapper = document.createElement('div');
-        titleWrapper.className = 'algebraic-term-title-wrapper';
-        
-        const title = document.createElement('span');
-        title.className = 'algebraic-term-title';
-        title.textContent = `Term ${tIdx + 1}`;
-        titleWrapper.appendChild(title);
-        
-        const formulaPreview = document.createElement('div');
-        formulaPreview.className = 'algebraic-term-formula';
-        formulaPreview.textContent = getTermPreview(term);
-        titleWrapper.appendChild(formulaPreview);
-        
-        header.appendChild(titleWrapper);
-        
-        if (state.algebraicChainingTerms.length > 1) {
-            const removeBtn = document.createElement('button');
-            removeBtn.type = 'button';
-            removeBtn.className = 'algebraic-term-remove-btn';
-            removeBtn.textContent = '✕ Remove';
-            removeBtn.addEventListener('click', () => {
-                state.algebraicChainingTerms.splice(tIdx, 1);
-                renderAlgebraicChainingTerms();
-                updateTitlesAndGlobalUI();
-                syncParameterControlsPanelVisibility();
-                requestDomainRedraw(true);
-            });
-            header.appendChild(removeBtn);
-        }
-        termCard.appendChild(header);
-        
-        const coeffGrid = document.createElement('div');
-        coeffGrid.className = 'algebraic-coeff-grid';
-        
-        // Real Coefficient Slider
-        const reDiv = document.createElement('div');
-        reDiv.className = 'algebraic-slider-row';
-        const reLabel = document.createElement('label');
-        reLabel.className = 'algebraic-slider-label';
-        reLabel.innerHTML = `Re coeff <span class="algebraic-slider-value">${term.coeff.re.toFixed(1)}</span>`;
-        
-        const reSliderContainer = document.createElement('div');
-        reSliderContainer.className = 'algebraic-slider-container';
-        
-        const reSlider = document.createElement('input');
-        reSlider.type = 'range';
-        reSlider.min = '-5';
-        reSlider.max = '5';
-        reSlider.step = '0.1';
-        reSlider.value = term.coeff.re;
-        
-        reSlider.addEventListener('input', (e) => {
-            term.coeff.re = parseFloat(e.target.value);
-            reLabel.querySelector('.algebraic-slider-value').textContent = term.coeff.re.toFixed(1);
-            formulaPreview.textContent = getTermPreview(term);
-            updateTitlesAndGlobalUI();
-            requestDomainRedraw(true);
-        });
-        
-        reSliderContainer.appendChild(reSlider);
-        reDiv.appendChild(reLabel);
-        reDiv.appendChild(reSliderContainer);
-        coeffGrid.appendChild(reDiv);
-        
-        // Imaginary Coefficient Slider
-        const imDiv = document.createElement('div');
-        imDiv.className = 'algebraic-slider-row';
-        const imLabel = document.createElement('label');
-        imLabel.className = 'algebraic-slider-label';
-        imLabel.innerHTML = `Im coeff <span class="algebraic-slider-value">${term.coeff.im.toFixed(1)}</span>`;
-        
-        const imSliderContainer = document.createElement('div');
-        imSliderContainer.className = 'algebraic-slider-container';
-        
-        const imSlider = document.createElement('input');
-        imSlider.type = 'range';
-        imSlider.min = '-5';
-        imSlider.max = '5';
-        imSlider.step = '0.1';
-        imSlider.value = term.coeff.im;
-        
-        imSlider.addEventListener('input', (e) => {
-            term.coeff.im = parseFloat(e.target.value);
-            imLabel.querySelector('.algebraic-slider-value').textContent = term.coeff.im.toFixed(1);
-            formulaPreview.textContent = getTermPreview(term);
-            updateTitlesAndGlobalUI();
-            requestDomainRedraw(true);
-        });
-        
-        imSliderContainer.appendChild(imSlider);
-        imDiv.appendChild(imLabel);
-        imDiv.appendChild(imSliderContainer);
-        coeffGrid.appendChild(imDiv);
-        
-        termCard.appendChild(coeffGrid);
-        
-        const factorsContainer = document.createElement('div');
-        factorsContainer.className = 'algebraic-factors-container';
-        
-        const factorsTitle = document.createElement('div');
-        factorsTitle.className = 'algebraic-factors-title';
-        factorsTitle.textContent = 'Factors';
-        factorsContainer.appendChild(factorsTitle);
-        
-        const visibleFactors = [...term.factors];
-        if (visibleFactors.length < 5 && (visibleFactors.length === 0 || visibleFactors[visibleFactors.length - 1].func !== 'none')) {
-            visibleFactors.push({ func: 'none', chainedFunc: 'none', power: 1.0, reciprocal: false, log: false, exp: false });
-        }
-        
-        const funcOptions = [
-            { value: 'none', label: 'None' },
-            { value: 'cos', label: 'cos(z)' },
-            { value: 'sin', label: 'sin(z)' },
-            { value: 'tan', label: 'tan(z)' },
-            { value: 'sec', label: 'sec(z)' },
-            { value: 'exp', label: 'e^z' },
-            { value: 'ln', label: 'ln(z)' },
-            { value: 'sinh', label: 'sinh(z)' },
-            { value: 'cosh', label: 'cosh(z)' },
-            { value: 'tanh', label: 'tanh(z)' },
-            { value: 'power', label: 'z^n' },
-            { value: 'reciprocal', label: '1/z' },
-            { value: 'mobius', label: 'Möbius' },
-            { value: 'zeta', label: 'ζ(z)' },
-            { value: 'polynomial', label: 'Polynomial' },
-            { value: 'poincare', label: 'Poincare Disk' }
-        ];
-        
-        visibleFactors.forEach((factor, fIdx) => {
-            const factorDiv = document.createElement('div');
-            factorDiv.className = 'algebraic-factor-card';
-            
-            const row = document.createElement('div');
-            row.className = 'algebraic-factor-main-row';
-            
-            const label = document.createElement('span');
-            label.className = 'algebraic-factor-label';
-            label.textContent = `Factor ${fIdx + 1}`;
-            row.appendChild(label);
-            
-            const select = document.createElement('select');
-            funcOptions.forEach(opt => {
-                const o = document.createElement('option');
-                o.value = opt.value;
-                o.textContent = opt.label;
-                if (factor.func === opt.value) o.selected = true;
-                select.appendChild(o);
-            });
-            
-            select.addEventListener('change', (e) => {
-                const val = e.target.value;
-                if (fIdx < term.factors.length) {
-                    term.factors[fIdx].func = val;
-                } else {
-                    term.factors.push({ func: val, chainedFunc: 'none', power: 1.0, reciprocal: false, log: false, exp: false });
-                }
-                
-                let cleanedFactors = [];
-                for (let f of term.factors) {
-                    cleanedFactors.push(f);
-                    if (f.func === 'none') {
-                        break;
-                    }
-                }
-                term.factors = cleanedFactors;
-                
-                renderAlgebraicChainingTerms();
-                updateTitlesAndGlobalUI();
-                syncParameterControlsPanelVisibility();
-                requestDomainRedraw(true);
-            });
-            row.appendChild(select);
-            factorDiv.appendChild(row);
-            
-            if (factor.func !== 'none') {
-                const manipDiv = document.createElement('div');
-                manipDiv.className = 'algebraic-factor-details';
-                
-                // Chain Select Row
-                const chainRow = document.createElement('div');
-                chainRow.className = 'algebraic-factor-detail-row';
-                
-                const chainLabel = document.createElement('span');
-                chainLabel.className = 'algebraic-factor-label';
-                chainLabel.textContent = 'Chain f(g(z))';
-                chainRow.appendChild(chainLabel);
-                
-                const chainSelect = document.createElement('select');
-                funcOptions.forEach(opt => {
-                    const o = document.createElement('option');
-                    o.value = opt.value;
-                    o.textContent = opt.label;
-                    if (factor.chainedFunc === opt.value) o.selected = true;
-                    chainSelect.appendChild(o);
-                });
-                
-                chainSelect.addEventListener('change', (e) => {
-                    factor.chainedFunc = e.target.value;
-                    formulaPreview.textContent = getTermPreview(term);
-                    updateTitlesAndGlobalUI();
-                    syncParameterControlsPanelVisibility();
-                    requestDomainRedraw(true);
-                });
-                chainRow.appendChild(chainSelect);
-                manipDiv.appendChild(chainRow);
-                
-                // Power Slider Row
-                const powerRow = document.createElement('div');
-                powerRow.className = 'algebraic-slider-row';
-                
-                const powerLabel = document.createElement('label');
-                powerLabel.className = 'algebraic-slider-label';
-                powerLabel.innerHTML = `Power <span class="algebraic-slider-value">${(factor.power || 1.0).toFixed(1)}</span>`;
-                
-                const powerSliderContainer = document.createElement('div');
-                powerSliderContainer.className = 'algebraic-slider-container';
-                
-                const powerSlider = document.createElement('input');
-                powerSlider.type = 'range';
-                powerSlider.min = '-5';
-                powerSlider.max = '5';
-                powerSlider.step = '0.1';
-                powerSlider.value = factor.power !== undefined ? factor.power : 1.0;
-                
-                powerSlider.addEventListener('input', (e) => {
-                    factor.power = parseFloat(e.target.value);
-                    powerLabel.querySelector('.algebraic-slider-value').textContent = factor.power.toFixed(1);
-                    formulaPreview.textContent = getTermPreview(term);
-                    updateTitlesAndGlobalUI();
-                    requestDomainRedraw(true);
-                });
-                
-                powerSliderContainer.appendChild(powerSlider);
-                powerRow.appendChild(powerLabel);
-                powerRow.appendChild(powerSliderContainer);
-                manipDiv.appendChild(powerRow);
-                
-                // Modifier Checkboxes
-                const checkboxContainer = document.createElement('div');
-                checkboxContainer.className = 'algebraic-checkbox-row';
-                
-                const addCheck = (key, labelText) => {
-                    const cbLabel = document.createElement('label');
-                    cbLabel.className = 'algebraic-checkbox-label';
-                    
-                    const cb = document.createElement('input');
-                    cb.type = 'checkbox';
-                    cb.checked = !!factor[key];
-                    cb.addEventListener('change', (e) => {
-                        factor[key] = e.target.checked;
-                        formulaPreview.textContent = getTermPreview(term);
-                        updateTitlesAndGlobalUI();
-                        requestDomainRedraw(true);
-                    });
-                    
-                    const customVisual = document.createElement('span');
-                    customVisual.className = 'custom-checkbox-visual';
-                    
-                    cbLabel.appendChild(cb);
-                    cbLabel.appendChild(customVisual);
-                    cbLabel.appendChild(document.createTextNode(labelText));
-                    checkboxContainer.appendChild(cbLabel);
-                };
-                
-                addCheck('reciprocal', '1/f');
-                addCheck('log', 'ln(f)');
-                addCheck('exp', 'e^f');
-                
-                manipDiv.appendChild(checkboxContainer);
-                factorDiv.appendChild(manipDiv);
-            }
-            
-            factorsContainer.appendChild(factorDiv);
-        });
-        
-        termCard.appendChild(factorsContainer);
-        controls.algebraicTermsList.appendChild(termCard);
+        controls.algebraicTermsList.appendChild(h('div', { className: 'algebraic-term-card' }, [
+            header,
+            renderCoefficientControls(term, preview),
+            renderFactors(term, preview)
+        ]));
     });
 }

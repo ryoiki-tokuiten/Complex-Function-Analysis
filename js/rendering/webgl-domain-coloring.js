@@ -18,561 +18,969 @@ import {
 
 const { webglDomainColorSupport } = context;
 
-export function getWebGLDomainColorRenderScale() {
-    const baseScale = Number.isFinite(WEBGL_DOMAIN_COLOR_SUPERSAMPLE)
-        ? WEBGL_DOMAIN_COLOR_SUPERSAMPLE
-        : 1.75;
-    const stressScale = Number.isFinite(WEBGL_DOMAIN_COLOR_STRESS_SCALE)
-        ? WEBGL_DOMAIN_COLOR_STRESS_SCALE
-        : 2.5;
+const CFG = Object.freeze({
+    defaultSupersample: 1.75,
+    defaultStressScale: 2.5,
+    maxRenderScale: 3,
+    maxDprBoost: 1.35,
+    dprScaleFactor: 0.92,
+    maxSafeZoom: 100000,
+    polyCoeffCount: 11,
+    maxChainStepsGlsl: 30
+});
 
-    let scale = baseScale;
-    if (state && state.webglGpuStressMode) {
-        scale = Math.max(scale, stressScale);
-    }
+const EMPTY_OPTIONS = Object.freeze({});
+const PLANES = Object.freeze(['z', 'w']);
+const PLANE_KEYS = new Set(PLANES);
 
-    const dpr = (typeof window !== 'undefined' && Number.isFinite(window.devicePixelRatio))
-        ? window.devicePixelRatio
-        : 1;
-    const dprBoost = Math.min(1.35, Math.max(1, dpr * 0.92));
-    return Math.max(1, Math.min(3, scale * dprBoost));
+const QUAD_VERTICES = new Float32Array([
+    -1, -1,
+     1, -1,
+    -1,  1,
+     1,  1
+]);
+
+const WEBGL_CONTEXT_ATTRIBUTES = Object.freeze({
+    antialias: false,
+    alpha: true,
+    premultipliedAlpha: true,
+    preserveDrawingBuffer: false,
+    powerPreference: 'high-performance'
+});
+
+const DOMAIN_PALETTE_IDS = Object.freeze({
+    'analytic-base': 0,
+    'ocean-depth': 1,
+    'midnight-flare': 2,
+    'forest-moss': 3,
+    'arctic-frost': 4,
+    'nordic-twilight': 5,
+    'lavender-ash': 7,
+    'monochrome-topo': 8,
+    'rose-gold': 9,
+    classic: 10,
+    calming: 11,
+    purple: 12,
+    green: 13
+});
+
+const CHAIN_MODE_IDS = Object.freeze({
+    recursion: 1,
+    power: 2,
+    sqrt: 3,
+    ln: 4,
+    exp: 5,
+    reciprocal: 6
+});
+
+const DOMAIN_FLOAT_UNIFORMS = Object.freeze([
+    ['uDomainBrightness', 'domainBrightness', 1],
+    ['uDomainContrast', 'domainContrast', 1],
+    ['uDomainSaturation', 'domainSaturation', 1],
+    ['uDomainLightnessCycles', 'domainLightnessCycles', 1]
+]);
+
+const UNIFORM_ALIASES = Object.freeze({
+    uResolution: 'u_resolution',
+    uViewBounds: 'u_viewBounds',
+    uDomainBrightness: 'u_domainBrightness',
+    uDomainContrast: 'u_domainContrast',
+    uDomainSaturation: 'u_domainSaturation',
+    uDomainLightnessCycles: 'u_domainLightnessCycles',
+    uDomainPalette: 'u_domainPalette',
+    uUseSphere: 'u_useSphere',
+    uSphereCenter: 'u_sphereCenter',
+    uSphereRadius: 'u_sphereRadius',
+    uRotX: 'u_rotX',
+    uRotY: 'u_rotY',
+    uLightDir: 'u_lightDir',
+    uSphereLighting: 'u_sphereLighting',
+    uIsWPlaneColoring: 'u_isWPlaneColoring',
+    uFunctionId: 'u_functionId',
+    uMobiusA: 'u_mobiusA',
+    uMobiusB: 'u_mobiusB',
+    uMobiusC: 'u_mobiusC',
+    uMobiusD: 'u_mobiusD',
+    uPolyDegree: 'u_polyDegree',
+    uZetaCont: 'u_zetaContinuationEnabled',
+    uZetaRefl: 'u_zetaReflectionBoundary',
+    uFracPower: 'u_fracPower',
+    uChainCount: 'u_chainCount',
+    uChainMode: 'u_chainMode'
+});
+
+const PALETTES = Object.freeze([
+    [0, [[0.68, 0.12, 0.12], [0.60, 0.60, 0.11], [0.11, 0.60, 0.11], [0.11, 0.60, 0.60], [0.135, 0.135, 0.765], [0.68, 0.12, 0.68], [0.68, 0.12, 0.12]]],
+    [1, [[0.059, 0.090, 0.165], [0.012, 0.412, 0.631], [0.055, 0.647, 0.914], [0.220, 0.741, 0.973], [0.055, 0.647, 0.914], [0.012, 0.412, 0.631], [0.059, 0.090, 0.165]]],
+    [2, [[0.118, 0.106, 0.294], [0.345, 0.110, 0.529], [0.576, 0.200, 0.918], [0.882, 0.114, 0.282], [0.576, 0.200, 0.918], [0.345, 0.110, 0.529], [0.118, 0.106, 0.294]]],
+    [3, [[0.024, 0.306, 0.231], [0.016, 0.471, 0.341], [0.063, 0.725, 0.506], [0.204, 0.827, 0.600], [0.063, 0.725, 0.506], [0.016, 0.471, 0.341], [0.024, 0.306, 0.231]]],
+    [4, [[0.059, 0.090, 0.165], [0.118, 0.161, 0.231], [0.231, 0.510, 0.965], [0.576, 0.773, 0.992], [0.231, 0.510, 0.965], [0.118, 0.161, 0.231], [0.059, 0.090, 0.165]]],
+    [5, [[0.180, 0.204, 0.251], [0.298, 0.337, 0.416], [0.369, 0.506, 0.675], [0.706, 0.557, 0.678], [0.369, 0.506, 0.675], [0.298, 0.337, 0.416], [0.180, 0.204, 0.251]]],
+    [6, [[0.157, 0.157, 0.157], [0.314, 0.286, 0.271], [0.843, 0.600, 0.129], [0.694, 0.384, 0.525], [0.843, 0.600, 0.129], [0.314, 0.286, 0.271], [0.157, 0.157, 0.157]]],
+    [7, [[0.102, 0.063, 0.145], [0.180, 0.137, 0.235], [0.494, 0.341, 0.761], [0.702, 0.616, 0.859], [0.494, 0.341, 0.761], [0.180, 0.137, 0.235], [0.102, 0.063, 0.145]]],
+    [8, [[0.039, 0.039, 0.039], [0.149, 0.149, 0.149], [0.322, 0.322, 0.322], [0.451, 0.451, 0.451], [0.322, 0.322, 0.322], [0.149, 0.149, 0.149], [0.039, 0.039, 0.039]]],
+    [9, [[0.110, 0.098, 0.090], [0.471, 0.208, 0.059], [0.882, 0.114, 0.282], [0.996, 0.643, 0.686], [0.882, 0.114, 0.282], [0.471, 0.208, 0.059], [0.110, 0.098, 0.090]]],
+    [11, [[0.851, 0.773, 0.757], [0.769, 0.545, 0.502], [0.792, 0.576, 0.522], [0.922, 0.863, 0.824], [0.608, 0.443, 0.412], [0.584, 0.416, 0.388], [0.851, 0.773, 0.757]]],
+    [12, [[0.765, 0.710, 0.859], [0.541, 0.420, 0.784], [0.576, 0.443, 0.831], [0.863, 0.784, 1.0], [0.702, 0.600, 1.0], [0.667, 0.576, 0.953], [0.765, 0.710, 0.859]]],
+    [13, [[0.608, 0.741, 0.655], [0.243, 0.561, 0.467], [0.302, 0.635, 0.537], [0.784, 0.961, 0.863], [0.718, 0.949, 0.314], [0.659, 0.875, 0.243], [0.608, 0.741, 0.655]]]
+]);
+
+const FALLBACK_PALETTE = Object.freeze([
+    [0.110, 0.098, 0.090],
+    [0.471, 0.208, 0.059],
+    [0.882, 0.114, 0.282],
+    [0.996, 0.643, 0.686],
+    [0.882, 0.114, 0.282],
+    [0.471, 0.208, 0.059],
+    [0.110, 0.098, 0.090]
+]);
+
+const VERTEX_SOURCE = lines(
+    'attribute vec2 a_position;',
+    'varying vec2 v_uv;',
+    'void main() {',
+    '  v_uv = (a_position + 1.0) * 0.5;',
+    '  gl_Position = vec4(a_position, 0.0, 1.0);',
+    '}'
+);
+
+const FRAGMENT_UNIFORMS = lines(
+    'precision highp float;',
+    'varying vec2 v_uv;',
+    '',
+    'uniform vec2 u_resolution;',
+    'uniform vec4 u_viewBounds;',
+    'uniform float u_domainBrightness;',
+    'uniform float u_domainContrast;',
+    'uniform float u_domainSaturation;',
+    'uniform float u_domainLightnessCycles;',
+    'uniform int u_domainPalette;',
+    '',
+    'uniform float u_useSphere;',
+    'uniform vec2 u_sphereCenter;',
+    'uniform float u_sphereRadius;',
+    'uniform float u_rotX;',
+    'uniform float u_rotY;',
+    'uniform vec3 u_lightDir;',
+    'uniform vec4 u_sphereLighting;',
+    '',
+    'uniform float u_isWPlaneColoring;',
+    'uniform float u_functionId;',
+    'uniform vec2 u_mobiusA;',
+    'uniform vec2 u_mobiusB;',
+    'uniform vec2 u_mobiusC;',
+    'uniform vec2 u_mobiusD;',
+    'uniform int u_polyDegree;',
+    `uniform vec2 u_polyCoeffs[${CFG.polyCoeffCount}];`,
+    'uniform float u_zetaContinuationEnabled;',
+    'uniform float u_zetaReflectionBoundary;',
+    'uniform float u_fracPower;',
+    'uniform int u_chainCount;',
+    'uniform int u_chainMode;'
+);
+
+const FRAGMENT_HELPERS = `
+vec2 domainComplexSqrt(vec2 z) {
+  float r = length(z);
+  if (r < 1.0e-20) return vec2(0.0);
+  float angle = atan(z.y, z.x) * 0.5;
+  float sr = sqrt(r);
+  return vec2(sr * cos(angle), sr * sin(angle));
 }
 
-export function createWebGLDomainColorRenderer() {
-    const canvas = document.createElement('canvas');
-    const gl = canvas.getContext('webgl', {
-        antialias: false,
-        alpha: true,
-        premultipliedAlpha: true,
-        preserveDrawingBuffer: false,
-        powerPreference: 'high-performance'
-    });
-    if (!gl) return null;
+vec3 inverseRotate3DCompat(vec3 p, float rotX, float rotY) {
+  float cY = cos(-rotY);
+  float sY = sin(-rotY);
+  float cX = cos(-rotX);
+  float sX = sin(-rotX);
+  float x1 = p.x;
+  float y1 = p.y * cX - p.z * sX;
+  float z1 = p.y * sX + p.z * cX;
+  return vec3(x1 * cY + z1 * sY, y1, -x1 * sY + z1 * cY);
+}
 
-    const vertexSource = [
-        'attribute vec2 a_position;',
-        'varying vec2 v_uv;',
-        'void main() {',
-        '  v_uv = (a_position + 1.0) * 0.5;',
-        '  gl_Position = vec4(a_position, 0.0, 1.0);',
+vec3 safeNormalize3(vec3 value, vec3 fallbackValue) {
+  float mag = length(value);
+  return mag > 1.0e-7 ? value / mag : fallbackValue;
+}
+
+vec3 hslToRgb(vec3 hsl) {
+  float h = fract(hsl.x);
+  float s = clamp(hsl.y, 0.0, 1.0);
+  float l = clamp(hsl.z, 0.0, 1.0);
+  float c = (1.0 - abs(2.0 * l - 1.0)) * s;
+  vec3 rgb = clamp(abs(mod(h * 6.0 + vec3(0.0, 4.0, 2.0), 6.0) - 3.0) - 1.0, 0.0, 1.0);
+  return l + (rgb - 0.5) * c;
+}
+
+vec3 interpolate7(vec3 c0, vec3 c1, vec3 c2, vec3 c3, vec3 c4, vec3 c5, vec3 c6, float h) {
+  float val = fract(h) * 6.0;
+  if (val < 1.0) return mix(c0, c1, val);
+  if (val < 2.0) return mix(c1, c2, val - 1.0);
+  if (val < 3.0) return mix(c2, c3, val - 2.0);
+  if (val < 4.0) return mix(c3, c4, val - 3.0);
+  if (val < 5.0) return mix(c4, c5, val - 4.0);
+  return mix(c5, c6, val - 5.0);
+}
+
+vec3 getPaletteColor(int paletteId, float h) {
+  if (paletteId == 10) return hslToRgb(vec3(h, 1.0, 0.5));
+
+  vec3 c0;
+  vec3 c1;
+  vec3 c2;
+  vec3 c3;
+  vec3 c4;
+  vec3 c5;
+  vec3 c6;
+  loadPalette(paletteId, c0, c1, c2, c3, c4, c5, c6);
+  return interpolate7(c0, c1, c2, c3, c4, c5, c6, h);
+}
+
+vec3 applyLightnessAndSaturation(vec3 rgb, float lightness, float saturation) {
+  vec3 lit = lightness < 0.5
+    ? rgb * (lightness / 0.5)
+    : mix(rgb, vec3(1.0), (lightness - 0.5) / 0.5);
+
+  float gray = dot(lit, vec3(0.299, 0.587, 0.114));
+  return mix(vec3(gray), lit, saturation);
+}
+
+vec4 invalidDomainColor() {
+  return vec4(0.0, 0.0, 0.0, u_useSphere > 0.5 ? 0.0 : 1.0);
+}
+
+bool mapDomainValue(vec2 inputValue, out vec2 outputValue) {
+  return evaluateMappedValueBase(
+    inputValue,
+    u_isWPlaneColoring,
+    u_functionId,
+    u_mobiusA,
+    u_mobiusB,
+    u_mobiusC,
+    u_mobiusD,
+    u_polyDegree,
+    u_polyCoeffs,
+    u_zetaContinuationEnabled,
+    u_zetaReflectionBoundary,
+    u_fracPower,
+    outputValue
+  );
+}
+
+void projectPlanarPixel(vec2 pixel, vec2 resolutionSafe, out vec2 zInput) {
+  vec2 unit = pixel / resolutionSafe;
+  zInput = vec2(
+    mix(u_viewBounds.x, u_viewBounds.y, unit.x),
+    mix(u_viewBounds.w, u_viewBounds.z, unit.y)
+  );
+}
+
+bool projectSpherePixel(vec2 pixel, out vec2 zInput, out float brightnessFactor) {
+  brightnessFactor = 1.0;
+  if (u_sphereRadius <= 0.0) return false;
+
+  float nx = (pixel.x - u_sphereCenter.x) / u_sphereRadius;
+  float ny = -(pixel.y - u_sphereCenter.y) / u_sphereRadius;
+  float radialSq = nx * nx + ny * ny;
+  if (radialSq > 1.0) return false;
+
+  float pz = sqrt(max(0.0, 1.0 - radialSq));
+  vec3 normalCam = vec3(nx, ny, pz);
+  vec3 pointOnSphere = inverseRotate3DCompat(normalCam, u_rotX, u_rotY);
+
+  float den = 1.0 - pointOnSphere.z;
+  if (abs(den) < 1.0e-6) return false;
+
+  zInput = vec2(pointOnSphere.x / den, pointOnSphere.y / den);
+
+  vec3 lightDir = safeNormalize3(u_lightDir, vec3(0.0, 0.0, 1.0));
+  float nDotL = dot(normalCam, lightDir);
+  float diffuseFactor = max(0.0, nDotL);
+  float specularFactor = 0.0;
+
+  if (nDotL > 0.0) {
+    vec3 reflected = 2.0 * nDotL * normalCam - lightDir;
+    specularFactor = pow(max(0.0, reflected.z), max(1.0, u_sphereLighting.w));
+  }
+
+  float lightIntensity =
+    u_sphereLighting.x +
+    u_sphereLighting.y * diffuseFactor +
+    u_sphereLighting.z * specularFactor;
+
+  brightnessFactor = clamp(lightIntensity, 0.1, 1.75);
+  return true;
+}
+
+bool projectPixelToDomain(vec2 pixel, vec2 resolutionSafe, out vec2 zInput, out float brightnessFactor) {
+  brightnessFactor = 1.0;
+  if (u_useSphere > 0.5) return projectSpherePixel(pixel, zInput, brightnessFactor);
+  projectPlanarPixel(pixel, resolutionSafe, zInput);
+  return true;
+}
+
+bool applyChainStep(int chainMode, vec2 baseValue, inout vec2 mappedValue) {
+  if (chainMode == 1) {
+    vec2 nextValue = vec2(0.0);
+    bool ok = mapDomainValue(mappedValue, nextValue);
+    mappedValue = nextValue;
+    return ok;
+  }
+
+  if (chainMode == 2) {
+    mappedValue = complexMul(mappedValue, baseValue);
+    return true;
+  }
+
+  if (chainMode == 3) {
+    mappedValue = domainComplexSqrt(mappedValue);
+    return true;
+  }
+
+  if (chainMode == 4) {
+    mappedValue = complexLn(mappedValue);
+    return true;
+  }
+
+  if (chainMode == 5) {
+    mappedValue = complexExp(mappedValue);
+    return true;
+  }
+
+  if (chainMode == 6) {
+    mappedValue = dot(mappedValue, mappedValue) < 1.0e-20
+      ? vec2(0.0)
+      : complexDiv(vec2(1.0, 0.0), mappedValue);
+    return true;
+  }
+
+  return true;
+}
+
+bool applyConfiguredChain(inout vec2 mappedValue) {
+  if (u_isWPlaneColoring >= 0.5 || u_chainCount <= 1) return true;
+
+  vec2 baseValue = mappedValue;
+  for (int i = 1; i < ${CFG.maxChainStepsGlsl}; i++) {
+    if (i >= u_chainCount) break;
+    if (!applyChainStep(u_chainMode, baseValue, mappedValue)) return false;
+    if (!isFiniteVec2Compat(mappedValue)) return false;
+  }
+
+  return true;
+}
+
+vec4 domainColorForValue(vec2 value, float brightnessFactor) {
+  float phase = atan(value.y, value.x);
+  float modValue = length(value);
+  if (!isFiniteFloatCompat(modValue)) return vec4(0.0);
+
+  float logMod = log(1.0 + modValue);
+  float lightnessAngle = (logMod / LOG_TWO) * u_domainLightnessCycles * TWO_PI;
+  float lightnessBase = 0.5 + sin(lightnessAngle) * 0.25;
+  float lightnessContrasted = 0.5 + (lightnessBase - 0.5) * u_domainContrast;
+  float lightnessFinal = clamp(lightnessContrasted * u_domainBrightness * brightnessFactor, 0.05, 0.95);
+  float saturationFinal = clamp(u_domainSaturation, 0.0, 1.0);
+  float hue = fract((phase + PI) / TWO_PI);
+
+  vec3 baseColor = getPaletteColor(u_domainPalette, hue);
+  return vec4(applyLightnessAndSaturation(baseColor, lightnessFinal, saturationFinal), 1.0);
+}
+`;
+
+const FRAGMENT_MAIN = `
+void main() {
+  vec2 resolutionSafe = max(u_resolution, vec2(1.0, 1.0));
+  vec2 pixel = vec2(v_uv.x * resolutionSafe.x, (1.0 - v_uv.y) * resolutionSafe.y);
+
+  vec2 zInput = vec2(0.0);
+  float brightnessFactor = 1.0;
+
+  if (!projectPixelToDomain(pixel, resolutionSafe, zInput, brightnessFactor)) {
+    gl_FragColor = vec4(0.0);
+    return;
+  }
+
+  vec2 mappedValue = vec2(0.0);
+  if (!mapDomainValue(zInput, mappedValue) || !isFiniteVec2Compat(mappedValue)) {
+    gl_FragColor = invalidDomainColor();
+    return;
+  }
+
+  if (!applyConfiguredChain(mappedValue)) {
+    gl_FragColor = invalidDomainColor();
+    return;
+  }
+
+  gl_FragColor = domainColorForValue(mappedValue, brightnessFactor);
+}
+`;
+
+const SUPPORT_DEFAULTS = Object.freeze({
+    available: false,
+    reason: 'disabled-or-unavailable',
+    warnedRuntimeFallback: false
+});
+
+const LIGHTING_UNIFORM_VALUES = Object.freeze([
+    SPHERE_TEXTURE_AMBIENT_INTENSITY,
+    SPHERE_TEXTURE_DIFFUSE_INTENSITY,
+    SPHERE_TEXTURE_SPECULAR_INTENSITY,
+    SPHERE_TEXTURE_SHININESS_FACTOR
+]);
+
+const HAS_OWN = Function.call.bind(Object.prototype.hasOwnProperty);
+
+function lines(...parts) {
+    return parts.join('\n');
+}
+
+function clamp(value, min, max) {
+    return Math.max(min, Math.min(max, value));
+}
+
+function finite(value, fallback) {
+    return Number.isFinite(value) ? value : fallback;
+}
+
+function finiteNumber(value, fallback) {
+    const number = Number(value);
+    return Number.isFinite(number) ? number : fallback;
+}
+
+function stateNumber(key, fallback) {
+    return finite(state?.[key], fallback);
+}
+
+function enumId(table, key, fallback) {
+    return HAS_OWN(table, key) ? table[key] : fallback;
+}
+
+function positivePixelSize(value) {
+    const number = Number(value);
+    return Number.isFinite(number) && number > 0 ? Math.max(1, Math.round(number)) : 0;
+}
+
+function uniformInt(value, fallback) {
+    const number = Number(value);
+    return Number.isFinite(number) ? Math.trunc(number) : fallback;
+}
+
+function finiteRange(candidate) {
+    if (!Array.isArray(candidate) || candidate.length < 2) return null;
+
+    const start = Number(candidate[0]);
+    const end = Number(candidate[1]);
+    return Number.isFinite(start) && Number.isFinite(end) ? [start, end] : null;
+}
+
+function chooseRange(primary, fallback) {
+    return finiteRange(primary) || finiteRange(fallback);
+}
+
+function recordFromPlanes(factory) {
+    return Object.fromEntries(PLANES.map((plane) => [plane, factory(plane)]));
+}
+
+function firstTruthyPlaneValue(record) {
+    return PLANES.map((plane) => record?.[plane]).find(Boolean) || null;
+}
+
+function ensureRecord(owner, key) {
+    if (!owner[key] || typeof owner[key] !== 'object') owner[key] = {};
+    return owner[key];
+}
+
+function assignPlaneRecord(target, source) {
+    for (const plane of PLANES) target[plane] = source?.[plane] || null;
+    return target;
+}
+
+function glslFloat(value) {
+    const number = Number.isFinite(value) ? value : 0;
+    return Number.isInteger(number) ? `${number}.0` : String(number);
+}
+
+function glslVec3(rgb) {
+    return `vec3(${rgb.map(glslFloat).join(', ')})`;
+}
+
+function glslPaletteWrites(stops, indent) {
+    return stops.map((rgb, index) => `${indent}c${index} = ${glslVec3(rgb)};`).join('\n');
+}
+
+function glslPaletteBranch([paletteId, stops], index) {
+    return lines(
+        `  ${index ? 'else if' : 'if'} (paletteId == ${paletteId}) {`,
+        glslPaletteWrites(stops, '    '),
+        '    return;',
+        '  }'
+    );
+}
+
+function createPaletteLoaderSource() {
+    return lines(
+        'void loadPalette(int paletteId, out vec3 c0, out vec3 c1, out vec3 c2, out vec3 c3, out vec3 c4, out vec3 c5, out vec3 c6) {',
+        PALETTES.map(glslPaletteBranch).join('\n'),
+        glslPaletteWrites(FALLBACK_PALETTE, '  '),
         '}'
-    ].join('\n');
+    );
+}
 
-    const fragmentSource = [
-        'precision highp float;',
-        'varying vec2 v_uv;',
-        '',
-        'uniform vec2 u_resolution;',
-        'uniform vec4 u_viewBounds;',
-        'uniform float u_domainBrightness;',
-        'uniform float u_domainContrast;',
-        'uniform float u_domainSaturation;',
-        'uniform float u_domainLightnessCycles;',
-        'uniform int u_domainPalette;',
-        '',
-        'uniform float u_useSphere;',
-        'uniform vec2 u_sphereCenter;',
-        'uniform float u_sphereRadius;',
-        'uniform float u_rotX;',
-        'uniform float u_rotY;',
-        'uniform vec3 u_lightDir;',
-        'uniform vec4 u_sphereLighting;',
-        '',
-        'uniform float u_isWPlaneColoring;',
-        'uniform float u_functionId;',
-        'uniform vec2 u_mobiusA;',
-        'uniform vec2 u_mobiusB;',
-        'uniform vec2 u_mobiusC;',
-        'uniform vec2 u_mobiusD;',
-        'uniform int u_polyDegree;',
-        'uniform vec2 u_polyCoeffs[11];',
-        'uniform float u_zetaContinuationEnabled;',
-        'uniform float u_zetaReflectionBoundary;',
-        'uniform float u_fracPower;',
-        'uniform int u_chainCount;',
-        'uniform int u_chainMode;',
+function createFragmentSource() {
+    return lines(
+        FRAGMENT_UNIFORMS,
         '',
         getGLSLComplexMathLibrary(state),
         '',
-        'vec2 complexSqrt(vec2 z) {',
-        '  float r = length(z);',
-        '  if (r < 1.0e-20) return vec2(0.0);',
-        '  float angle = atan(z.y, z.x) * 0.5;',
-        '  float sr = sqrt(r);',
-        '  return vec2(sr * cos(angle), sr * sin(angle));',
-        '}',
+        createPaletteLoaderSource(),
         '',
-        'vec3 inverseRotate3DCompat(vec3 p, float rotX, float rotY) {',
-        '  float cY = cos(-rotY);',
-        '  float sY = sin(-rotY);',
-        '  float cX = cos(-rotX);',
-        '  float sX = sin(-rotX);',
-        '  float x1 = p.x;',
-        '  float y1 = p.y * cX - p.z * sX;',
-        '  float z1 = p.y * sX + p.z * cX;',
-        '  return vec3(x1 * cY + z1 * sY, y1, -x1 * sY + z1 * cY);',
-        '}',
+        FRAGMENT_HELPERS,
         '',
-        'vec3 hslToRgb(vec3 hsl) {',
-        '  float h = fract(hsl.x);',
-        '  float s = clamp(hsl.y, 0.0, 1.0);',
-        '  float l = clamp(hsl.z, 0.0, 1.0);',
-        '',
-        '  float c = (1.0 - abs(2.0 * l - 1.0)) * s;',
-        '  float hp = h * 6.0;',
-        '  float x = c * (1.0 - abs(mod(hp, 2.0) - 1.0));',
-        '  vec3 rgb1;',
-        '',
-        '  if (hp < 1.0) rgb1 = vec3(c, x, 0.0);',
-        '  else if (hp < 2.0) rgb1 = vec3(x, c, 0.0);',
-        '  else if (hp < 3.0) rgb1 = vec3(0.0, c, x);',
-        '  else if (hp < 4.0) rgb1 = vec3(0.0, x, c);',
-        '  else if (hp < 5.0) rgb1 = vec3(x, 0.0, c);',
-        '  else rgb1 = vec3(c, 0.0, x);',
-        '',
-        '  float m = l - 0.5 * c;',
-        '  return rgb1 + vec3(m);',
-        '}',
-        '',
-        'vec3 interpolate7(vec3 c0, vec3 c1, vec3 c2, vec3 c3, vec3 c4, vec3 c5, vec3 c6, float h) {',
-        '  float val = h * 6.0;',
-        '  if (val < 1.0) return mix(c0, c1, val);',
-        '  else if (val < 2.0) return mix(c1, c2, val - 1.0);',
-        '  else if (val < 3.0) return mix(c2, c3, val - 2.0);',
-        '  else if (val < 4.0) return mix(c3, c4, val - 3.0);',
-        '  else if (val < 5.0) return mix(c4, c5, val - 4.0);',
-        '  else return mix(c5, c6, val - 5.0);',
-        '}',
-        '',
-        'vec3 getPaletteColor(int paletteId, float h) {',
-        '  if (paletteId == 10) {',
-        '    return hslToRgb(vec3(h, 1.0, 0.5));',
-        '  }',
-        '',
-        '  vec3 c0, c1, c2, c3, c4, c5, c6;',
-        '  if (paletteId == 0) {',
-        '    c0 = vec3(0.68, 0.12, 0.12);',
-        '    c1 = vec3(0.60, 0.60, 0.11);',
-        '    c2 = vec3(0.11, 0.60, 0.11);',
-        '    c3 = vec3(0.11, 0.60, 0.60);',
-        '    c4 = vec3(0.135, 0.135, 0.765);',
-        '    c5 = vec3(0.68, 0.12, 0.68);',
-        '    c6 = vec3(0.68, 0.12, 0.12);',
-        '  } else if (paletteId == 1) {',
-        '    c0 = vec3(0.059, 0.090, 0.165);',
-        '    c1 = vec3(0.012, 0.412, 0.631);',
-        '    c2 = vec3(0.055, 0.647, 0.914);',
-        '    c3 = vec3(0.220, 0.741, 0.973);',
-        '    c4 = vec3(0.055, 0.647, 0.914);',
-        '    c5 = vec3(0.012, 0.412, 0.631);',
-        '    c6 = vec3(0.059, 0.090, 0.165);',
-        '  } else if (paletteId == 2) {',
-        '    c0 = vec3(0.118, 0.106, 0.294);',
-        '    c1 = vec3(0.345, 0.110, 0.529);',
-        '    c2 = vec3(0.576, 0.200, 0.918);',
-        '    c3 = vec3(0.882, 0.114, 0.282);',
-        '    c4 = vec3(0.576, 0.200, 0.918);',
-        '    c5 = vec3(0.345, 0.110, 0.529);',
-        '    c6 = vec3(0.118, 0.106, 0.294);',
-        '  } else if (paletteId == 3) {',
-        '    c0 = vec3(0.024, 0.306, 0.231);',
-        '    c1 = vec3(0.016, 0.471, 0.341);',
-        '    c2 = vec3(0.063, 0.725, 0.506);',
-        '    c3 = vec3(0.204, 0.827, 0.600);',
-        '    c4 = vec3(0.063, 0.725, 0.506);',
-        '    c5 = vec3(0.016, 0.471, 0.341);',
-        '    c6 = vec3(0.024, 0.306, 0.231);',
-        '  } else if (paletteId == 4) {',
-        '    c0 = vec3(0.059, 0.090, 0.165);',
-        '    c1 = vec3(0.118, 0.161, 0.231);',
-        '    c2 = vec3(0.231, 0.510, 0.965);',
-        '    c3 = vec3(0.576, 0.773, 0.992);',
-        '    c4 = vec3(0.231, 0.510, 0.965);',
-        '    c5 = vec3(0.118, 0.161, 0.231);',
-        '    c6 = vec3(0.059, 0.090, 0.165);',
-        '  } else if (paletteId == 5) {',
-        '    c0 = vec3(0.180, 0.204, 0.251);',
-        '    c1 = vec3(0.298, 0.337, 0.416);',
-        '    c2 = vec3(0.369, 0.506, 0.675);',
-        '    c3 = vec3(0.706, 0.557, 0.678);',
-        '    c4 = vec3(0.369, 0.506, 0.675);',
-        '    c5 = vec3(0.298, 0.337, 0.416);',
-        '    c6 = vec3(0.180, 0.204, 0.251);',
-        '  } else if (paletteId == 6) {',
-        '    c0 = vec3(0.157, 0.157, 0.157);',
-        '    c1 = vec3(0.314, 0.286, 0.271);',
-        '    c2 = vec3(0.843, 0.600, 0.129);',
-        '    c3 = vec3(0.694, 0.384, 0.525);',
-        '    c4 = vec3(0.843, 0.600, 0.129);',
-        '    c5 = vec3(0.314, 0.286, 0.271);',
-        '    c6 = vec3(0.157, 0.157, 0.157);',
-        '  } else if (paletteId == 7) {',
-        '    c0 = vec3(0.102, 0.063, 0.145);',
-        '    c1 = vec3(0.180, 0.137, 0.235);',
-        '    c2 = vec3(0.494, 0.341, 0.761);',
-        '    c3 = vec3(0.702, 0.616, 0.859);',
-        '    c4 = vec3(0.494, 0.341, 0.761);',
-        '    c5 = vec3(0.180, 0.137, 0.235);',
-        '    c6 = vec3(0.102, 0.063, 0.145);',
-        '  } else if (paletteId == 8) {',
-        '    c0 = vec3(0.039, 0.039, 0.039);',
-        '    c1 = vec3(0.149, 0.149, 0.149);',
-        '    c2 = vec3(0.322, 0.322, 0.322);',
-        '    c3 = vec3(0.451, 0.451, 0.451);',
-        '    c4 = vec3(0.322, 0.322, 0.322);',
-        '    c5 = vec3(0.149, 0.149, 0.149);',
-        '    c6 = vec3(0.039, 0.039, 0.039);',
-        '  } else if (paletteId == 9) {',
-        '    c0 = vec3(0.110, 0.098, 0.090);',
-        '    c1 = vec3(0.471, 0.208, 0.059);',
-        '    c2 = vec3(0.882, 0.114, 0.282);',
-        '    c3 = vec3(0.996, 0.643, 0.686);',
-        '    c4 = vec3(0.882, 0.114, 0.282);',
-        '    c5 = vec3(0.471, 0.208, 0.059);',
-        '    c6 = vec3(0.110, 0.098, 0.090);',
-        '  } else if (paletteId == 11) {',
-        '    c0 = vec3(0.851, 0.773, 0.757);',
-        '    c1 = vec3(0.769, 0.545, 0.502);',
-        '    c2 = vec3(0.792, 0.576, 0.522);',
-        '    c3 = vec3(0.922, 0.863, 0.824);',
-        '    c4 = vec3(0.608, 0.443, 0.412);',
-        '    c5 = vec3(0.584, 0.416, 0.388);',
-        '    c6 = vec3(0.851, 0.773, 0.757);',
-        '  } else if (paletteId == 12) {',
-        '    c0 = vec3(0.765, 0.710, 0.859);',
-        '    c1 = vec3(0.541, 0.420, 0.784);',
-        '    c2 = vec3(0.576, 0.443, 0.831);',
-        '    c3 = vec3(0.863, 0.784, 1.0);',
-        '    c4 = vec3(0.702, 0.600, 1.0);',
-        '    c5 = vec3(0.667, 0.576, 0.953);',
-        '    c6 = vec3(0.765, 0.710, 0.859);',
-        '  } else if (paletteId == 13) {',
-        '    c0 = vec3(0.608, 0.741, 0.655);',
-        '    c1 = vec3(0.243, 0.561, 0.467);',
-        '    c2 = vec3(0.302, 0.635, 0.537);',
-        '    c3 = vec3(0.784, 0.961, 0.863);',
-        '    c4 = vec3(0.718, 0.949, 0.314);',
-        '    c5 = vec3(0.659, 0.875, 0.243);',
-        '    c6 = vec3(0.608, 0.741, 0.655);',
-        '  } else {',
-        '    c0 = vec3(0.110, 0.098, 0.090);',
-        '    c1 = vec3(0.471, 0.208, 0.059);',
-        '    c2 = vec3(0.882, 0.114, 0.282);',
-        '    c3 = vec3(0.996, 0.643, 0.686);',
-        '    c4 = vec3(0.882, 0.114, 0.282);',
-        '    c5 = vec3(0.471, 0.208, 0.059);',
-        '    c6 = vec3(0.110, 0.098, 0.090);',
-        '  }',
-        '  return interpolate7(c0, c1, c2, c3, c4, c5, c6, h);',
-        '}',
-        '',
-        'vec3 applyLightnessAndSaturation(vec3 rgb, float L, float S) {',
-        '  vec3 col = rgb;',
-        '  if (L < 0.5) {',
-        '    col *= (L / 0.5);',
-        '  } else {',
-        '    col = mix(col, vec3(1.0), (L - 0.5) / 0.5);',
-        '  }',
-        '',
-        '  float gray = 0.299 * col.r + 0.587 * col.g + 0.114 * col.b;',
-        '  return mix(vec3(gray), col, S);',
-        '}',
-        '',
-        'vec4 domainColorForValue(vec2 value, float brightnessFactor) {',
-        '  float phase = atan(value.y, value.x);',
-        '  float modValue = length(value);',
-        '  if (!isFiniteFloatCompat(modValue)) return vec4(0.0);',
-        '',
-        '  float logMod = log(1.0 + modValue);',
-        '  float lightnessAngle = (logMod / LOG_TWO) * u_domainLightnessCycles * TWO_PI;',
-        '  float lBase = 0.5 + sin(lightnessAngle) * 0.25;',
-        '  if (logMod < -10.0) lBase = 0.0;',
-        '',
-        '  float lContrasted = 0.5 + (lBase - 0.5) * u_domainContrast;',
-        '  float lFinal = clamp(lContrasted * u_domainBrightness * brightnessFactor, 0.05, 0.95);',
-        '  float sFinal = clamp(u_domainSaturation, 0.0, 1.0);',
-        '  float h = fract((phase + PI) / TWO_PI);',
-        '',
-        '  vec3 baseColor = getPaletteColor(u_domainPalette, h);',
-        '  vec3 rgb = applyLightnessAndSaturation(baseColor, lFinal, sFinal);',
-        '  return vec4(rgb, 1.0);',
-        '}',
-        '',
-        'void main() {',
-        '  vec2 resolutionSafe = max(u_resolution, vec2(1.0, 1.0));',
-        '  vec2 pixel = vec2(v_uv.x * resolutionSafe.x, (1.0 - v_uv.y) * resolutionSafe.y);',
-        '',
-        '  vec2 zInput;',
-        '  float brightnessFactor = 1.0;',
-        '',
-        '  if (u_useSphere > 0.5) {',
-        '    if (u_sphereRadius <= 0.0) {',
-        '      gl_FragColor = vec4(0.0);',
-        '      return;',
-        '    }',
-        '',
-        '    float nx = (pixel.x - u_sphereCenter.x) / u_sphereRadius;',
-        '    float ny = -(pixel.y - u_sphereCenter.y) / u_sphereRadius;',
-        '    float radialSq = nx * nx + ny * ny;',
-        '    if (radialSq > 1.0) {',
-        '      gl_FragColor = vec4(0.0);',
-        '      return;',
-        '    }',
-        '',
-        '    float pz = sqrt(max(0.0, 1.0 - radialSq));',
-        '    vec3 normalCam = vec3(nx, ny, pz);',
-        '    vec3 pointOnSphere = inverseRotate3DCompat(normalCam, u_rotX, u_rotY);',
-        '',
-        '    float den = 1.0 - pointOnSphere.z;',
-        '    if (abs(den) < 1.0e-6) {',
-        '      gl_FragColor = vec4(0.0);',
-        '      return;',
-        '    }',
-        '',
-        '    zInput = vec2(pointOnSphere.x / den, pointOnSphere.y / den);',
-        '',
-        '    vec3 lightDir = normalize(u_lightDir);',
-        '    float nDotL = dot(normalCam, lightDir);',
-        '    float diffuseFactor = max(0.0, nDotL);',
-        '    float specularFactor = 0.0;',
-        '    if (nDotL > 0.0) {',
-        '      vec3 reflected = 2.0 * nDotL * normalCam - lightDir;',
-        '      specularFactor = pow(max(0.0, reflected.z), max(1.0, u_sphereLighting.w));',
-        '    }',
-        '',
-        '    float lightIntensity = u_sphereLighting.x +',
-        '      u_sphereLighting.y * diffuseFactor +',
-        '      u_sphereLighting.z * specularFactor;',
-        '    brightnessFactor = clamp(lightIntensity, 0.1, 1.75);',
-        '  } else {',
-        '    float unitX = pixel.x / resolutionSafe.x;',
-        '    float unitY = pixel.y / resolutionSafe.y;',
-        '    zInput = vec2(',
-        '      mix(u_viewBounds.x, u_viewBounds.y, unitX),',
-        '      mix(u_viewBounds.w, u_viewBounds.z, unitY)',
-        '    );',
-        '  }',
-        '',
-        '  vec2 mappedValue = vec2(0.0);',
-        '  bool ok = evaluateMappedValueBase(zInput, u_isWPlaneColoring, u_functionId, u_mobiusA, u_mobiusB, u_mobiusC, u_mobiusD, u_polyDegree, u_polyCoeffs, u_zetaContinuationEnabled, u_zetaReflectionBoundary, u_fracPower, mappedValue);',
-        '  if (!ok || !isFiniteVec2Compat(mappedValue)) {',
-        '    float invalidAlpha = (u_useSphere > 0.5) ? 0.0 : 1.0;',
-        '    gl_FragColor = vec4(0.0, 0.0, 0.0, invalidAlpha);',
-        '    return;',
-        '  }',
-        '',
-        '  if (u_isWPlaneColoring < 0.5 && u_chainCount > 1) {',
-        '    vec2 baseVal = mappedValue;',
-        '    for (int i = 1; i < 30; i++) {',
-        '      if (i >= u_chainCount) break;',
-        '      if (u_chainMode == 1) {',
-        '        vec2 tempMapped = vec2(0.0);',
-        '        ok = evaluateMappedValueBase(mappedValue, u_isWPlaneColoring, u_functionId, u_mobiusA, u_mobiusB, u_mobiusC, u_mobiusD, u_polyDegree, u_polyCoeffs, u_zetaContinuationEnabled, u_zetaReflectionBoundary, u_fracPower, tempMapped);',
-        '        mappedValue = tempMapped;',
-        '      } else if (u_chainMode == 2) {',
-        '        mappedValue = complexMul(mappedValue, baseVal);',
-        '      } else if (u_chainMode == 3) {',
-        '        mappedValue = complexSqrt(mappedValue);',
-        '      } else if (u_chainMode == 4) {',
-        '        mappedValue = complexLn(mappedValue);',
-        '      } else if (u_chainMode == 5) {',
-        '        mappedValue = complexExp(mappedValue);',
-        '      } else if (u_chainMode == 6) {',
-        '        if (dot(mappedValue, mappedValue) < 1.0e-20) {',
-        '          mappedValue = vec2(0.0);',
-        '        } else {',
-        '          mappedValue = complexDiv(vec2(1.0, 0.0), mappedValue);',
-        '        }',
-        '      }',
-        '      if (!ok || !isFiniteVec2Compat(mappedValue)) {',
-        '        float invalidAlpha = (u_useSphere > 0.5) ? 0.0 : 1.0;',
-        '        gl_FragColor = vec4(0.0, 0.0, 0.0, invalidAlpha);',
-        '        return;',
-        '      }',
-        '    }',
-        '  }',
-        '',
-        '  gl_FragColor = domainColorForValue(mappedValue, brightnessFactor);',
-        '}'
-    ].join('\n');
+        FRAGMENT_MAIN
+    );
+}
 
-    const program = createWebGLProgramShared(gl, vertexSource, fragmentSource);
-    if (!program) return null;
+function createCanvasAndWebGLContext() {
+    if (typeof document === 'undefined' || typeof document.createElement !== 'function') return null;
 
-    const quadBuffer = gl.createBuffer();
-    if (!quadBuffer) {
-        gl.deleteProgram(program);
-        return null;
+    const canvas = document.createElement('canvas');
+    const gl = canvas.getContext('webgl', WEBGL_CONTEXT_ATTRIBUTES);
+    return gl ? { canvas, gl } : null;
+}
+
+function createQuadBuffer(gl) {
+    const buffer = gl.createBuffer();
+    if (!buffer) return null;
+
+    gl.bindBuffer(gl.ARRAY_BUFFER, buffer);
+    gl.bufferData(gl.ARRAY_BUFFER, QUAD_VERTICES, gl.STATIC_DRAW);
+    return buffer;
+}
+
+function deleteRenderer(renderer) {
+    const gl = renderer?.gl;
+    if (!gl) return;
+
+    if (renderer.quadBuffer) gl.deleteBuffer(renderer.quadBuffer);
+    if (renderer.program) gl.deleteProgram(renderer.program);
+}
+
+function deletePlaneRenderers(renderers) {
+    for (const plane of PLANES) deleteRenderer(renderers?.[plane]);
+}
+
+function collectUniformLocations(gl, program) {
+    const locations = {};
+
+    for (const [publicName, shaderName] of Object.entries(UNIFORM_ALIASES)) {
+        const location = gl.getUniformLocation(program, shaderName);
+        if (location === null) return null;
+        locations[publicName] = location;
     }
 
-    gl.bindBuffer(gl.ARRAY_BUFFER, quadBuffer);
-    gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([
-        -1, -1,
-         1, -1,
-        -1,  1,
-         1,  1
-    ]), gl.STATIC_DRAW);
+    locations.uPolyCoeffs = Array.from(
+        { length: CFG.polyCoeffCount },
+        (_unused, index) => gl.getUniformLocation(program, `u_polyCoeffs[${index}]`)
+    );
 
-    const aPosition = gl.getAttribLocation(program, 'a_position');
-    const uResolution = gl.getUniformLocation(program, 'u_resolution');
-    const uViewBounds = gl.getUniformLocation(program, 'u_viewBounds');
-    const uDomainBrightness = gl.getUniformLocation(program, 'u_domainBrightness');
-    const uDomainContrast = gl.getUniformLocation(program, 'u_domainContrast');
-    const uDomainSaturation = gl.getUniformLocation(program, 'u_domainSaturation');
-    const uDomainLightnessCycles = gl.getUniformLocation(program, 'u_domainLightnessCycles');
-    const uDomainPalette = gl.getUniformLocation(program, 'u_domainPalette');
-    const uUseSphere = gl.getUniformLocation(program, 'u_useSphere');
-    const uSphereCenter = gl.getUniformLocation(program, 'u_sphereCenter');
-    const uSphereRadius = gl.getUniformLocation(program, 'u_sphereRadius');
-    const uRotX = gl.getUniformLocation(program, 'u_rotX');
-    const uRotY = gl.getUniformLocation(program, 'u_rotY');
-    const uLightDir = gl.getUniformLocation(program, 'u_lightDir');
-    const uSphereLighting = gl.getUniformLocation(program, 'u_sphereLighting');
-    const uIsWPlaneColoring = gl.getUniformLocation(program, 'u_isWPlaneColoring');
-    const uFunctionId = gl.getUniformLocation(program, 'u_functionId');
-    const uMobiusA = gl.getUniformLocation(program, 'u_mobiusA');
-    const uMobiusB = gl.getUniformLocation(program, 'u_mobiusB');
-    const uMobiusC = gl.getUniformLocation(program, 'u_mobiusC');
-    const uMobiusD = gl.getUniformLocation(program, 'u_mobiusD');
-    const uPolyDegree = gl.getUniformLocation(program, 'u_polyDegree');
-    const uZetaContinuationEnabled = gl.getUniformLocation(program, 'u_zetaContinuationEnabled');
-    const uZetaReflectionBoundary = gl.getUniformLocation(program, 'u_zetaReflectionBoundary');
-    const uFracPower = gl.getUniformLocation(program, 'u_fracPower');
-    const uChainCount = gl.getUniformLocation(program, 'u_chainCount');
-    const uChainMode = gl.getUniformLocation(program, 'u_chainMode');
+    return locations;
+}
 
-    if (
-        aPosition < 0 ||
-        !uResolution || !uViewBounds ||
-        !uDomainBrightness || !uDomainContrast || !uDomainSaturation || !uDomainLightnessCycles || !uDomainPalette ||
-        !uUseSphere || !uSphereCenter || !uSphereRadius || !uRotX || !uRotY ||
-        !uLightDir || !uSphereLighting || !uIsWPlaneColoring || !uFunctionId ||
-        !uMobiusA || !uMobiusB || !uMobiusC || !uMobiusD || !uPolyDegree ||
-        !uZetaContinuationEnabled || !uZetaReflectionBoundary
-    ) {
-        gl.deleteBuffer(quadBuffer);
-        gl.deleteProgram(program);
-        return null;
-    }
-
-    const uPolyCoeffs = [];
-    for (let i = 0; i <= 10; i++) {
-        uPolyCoeffs.push(gl.getUniformLocation(program, `u_polyCoeffs[${i}]`));
-    }
-
+function buildRenderer(canvas, gl, program, quadBuffer, aPosition, uniforms) {
     return {
         canvas,
         gl,
         program,
         quadBuffer,
         aPosition,
-        uResolution,
-        uViewBounds,
-        uDomainBrightness,
-        uDomainContrast,
-        uDomainSaturation,
-        uDomainLightnessCycles,
-        uDomainPalette,
-        uUseSphere,
-        uSphereCenter,
-        uSphereRadius,
-        uRotX,
-        uRotY,
-        uLightDir,
-        uSphereLighting,
-        uIsWPlaneColoring,
-        uFunctionId,
-        uMobiusA,
-        uMobiusB,
-        uMobiusC,
-        uMobiusD,
-        uPolyDegree,
-        uPolyCoeffs,
-        uZetaCont: uZetaContinuationEnabled,
-        uZetaRefl: uZetaReflectionBoundary,
-        uFracPower,
-        uChainCount,
-        uChainMode
+        ...uniforms
     };
 }
 
+function liveContext(gl) {
+    return !!gl && (typeof gl.isContextLost !== 'function' || !gl.isContextLost());
+}
+
+function canvas2DTarget(targetCtx) {
+    return !!targetCtx
+        && typeof targetCtx.save === 'function'
+        && typeof targetCtx.restore === 'function'
+        && typeof targetCtx.setTransform === 'function'
+        && typeof targetCtx.clearRect === 'function'
+        && typeof targetCtx.drawImage === 'function';
+}
+
+function resetSupportObject(support) {
+    const renderers = ensureRecord(support, 'renderers');
+
+    deletePlaneRenderers(renderers);
+    Object.assign(support, SUPPORT_DEFAULTS);
+
+    assignPlaneRecord(renderers, null);
+    assignPlaneRecord(ensureRecord(support, 'diagnostics'), null);
+
+    if (support.warnedFunctionFallbacks?.clear) support.warnedFunctionFallbacks.clear();
+}
+
+function installSupportRenderers(support, renderers, diagnostics) {
+    assignPlaneRecord(ensureRecord(support, 'renderers'), renderers);
+    assignPlaneRecord(ensureRecord(support, 'diagnostics'), diagnostics);
+
+    support.available = true;
+    support.reason = renderers.z && renderers.w ? 'ready' : 'partial-ready';
+}
+
+function backendLabel(diagnostics) {
+    const diag = firstTruthyPlaneValue(diagnostics);
+    if (!diag) return null;
+
+    return {
+        software: !!diag.softwareBackend,
+        vendor: diag.unmaskedVendor || diag.vendor || 'unknown vendor',
+        renderer: diag.unmaskedRenderer || diag.renderer || 'unknown renderer'
+    };
+}
+
+function announceBackend(diagnostics) {
+    const label = backendLabel(diagnostics);
+
+    if (!label) {
+        console.info('GPU domain coloring enabled.');
+        return;
+    }
+
+    const message = `GPU domain coloring ${label.software ? 'is running on a software WebGL backend' : 'enabled on'} ${label.vendor} | ${label.renderer}.`;
+    (label.software ? console.warn : console.info)(message);
+}
+
+function createCacheStringifier() {
+    const seen = new WeakSet();
+
+    return (_key, value) => {
+        if (typeof value === 'bigint') return `${value}n`;
+        if (typeof value === 'function') return `[Function:${value.name || 'anonymous'}]`;
+
+        if (value && typeof value === 'object') {
+            if (seen.has(value)) return '[Circular]';
+            seen.add(value);
+        }
+
+        return value;
+    };
+}
+
+function serializeAlgebraicTermsForProgramCache() {
+    try {
+        return JSON.stringify(state?.algebraicChainingTerms || [], createCacheStringifier());
+    } catch (error) {
+        return `unserializable:${error?.message || String(error)}`;
+    }
+}
+
+function refreshAlgebraicRendererIfNeeded() {
+    if (state?.currentFunction !== 'algebraic_chaining') return true;
+    if (!webglDomainColorSupport) return false;
+
+    const hash = serializeAlgebraicTermsForProgramCache();
+    if (webglDomainColorSupport.lastAlgHash === hash) return true;
+
+    webglDomainColorSupport.lastAlgHash = hash;
+    initializeWebGLDomainColoringSupport();
+    return !!webglDomainColorSupport.available;
+}
+
+function targetSize(planeParams) {
+    const width = positivePixelSize(planeParams?.width);
+    const height = positivePixelSize(planeParams?.height);
+    return width && height ? { width, height } : null;
+}
+
+function viewBounds(planeParams) {
+    const xRange = chooseRange(planeParams?.currentVisXRange, planeParams?.xRange);
+    const yRange = chooseRange(planeParams?.currentVisYRange, planeParams?.yRange);
+    return xRange && yRange ? { xRange, yRange } : null;
+}
+
+function renderOptions(options) {
+    return options && typeof options === 'object' ? options : EMPTY_OPTIONS;
+}
+
+function resolveRenderJob(targetCtx, planeParams, options) {
+    if (!canvas2DTarget(targetCtx)) return null;
+
+    const opts = renderOptions(options);
+    const planeKey = inferDomainColorPlaneKey(targetCtx, opts.planeKey);
+    const renderer = getWebGLDomainColorRenderer(planeKey);
+    if (!renderer || !liveContext(renderer.gl)) return null;
+
+    const size = targetSize(planeParams);
+    const bounds = viewBounds(planeParams);
+    if (!size || !bounds) return null;
+
+    return {
+        targetCtx,
+        renderer,
+        targetWidth: size.width,
+        targetHeight: size.height,
+        xRange: bounds.xRange,
+        yRange: bounds.yRange,
+        isWPlaneColoring: !!opts.isWPlaneColoring,
+        sphereParams: opts.sphereParams || null
+    };
+}
+
+function renderMetrics(targetWidth, targetHeight) {
+    const scale = getWebGLDomainColorRenderScale();
+    const internalWidth = Math.max(1, Math.round(targetWidth * scale));
+    const internalHeight = Math.max(1, Math.round(targetHeight * scale));
+    const scaleX = internalWidth / targetWidth;
+    const scaleY = internalHeight / targetHeight;
+
+    return {
+        internalWidth,
+        internalHeight,
+        scaleX,
+        scaleY,
+        uniformScale: Math.min(scaleX, scaleY)
+    };
+}
+
+function precisionSafe(isWPlaneColoring) {
+    const zoom = Number(isWPlaneColoring ? state?.wPlaneZoom : state?.zPlaneZoom);
+    return !Number.isFinite(zoom) || zoom <= CFG.maxSafeZoom;
+}
+
+function bindPipeline(gl, renderer) {
+    gl.viewport(0, 0, renderer.canvas.width, renderer.canvas.height);
+    gl.useProgram(renderer.program);
+    gl.bindBuffer(gl.ARRAY_BUFFER, renderer.quadBuffer);
+    gl.enableVertexAttribArray(renderer.aPosition);
+    gl.vertexAttribPointer(renderer.aPosition, 2, gl.FLOAT, false, 0, 0);
+}
+
+function resolveSphere(sphereParams, job, metrics) {
+    if (!sphereParams) {
+        return {
+            enabled: false,
+            centerX: metrics.internalWidth * 0.5,
+            centerY: metrics.internalHeight * 0.5,
+            radius: 0,
+            rotX: 0,
+            rotY: 0
+        };
+    }
+
+    const centerX = finite(sphereParams.centerX, job.targetWidth * 0.5);
+    const centerY = finite(sphereParams.centerY, job.targetHeight * 0.5);
+    const radius = finite(sphereParams.radius, 0);
+
+    return {
+        enabled: true,
+        centerX: centerX * metrics.scaleX,
+        centerY: centerY * metrics.scaleY,
+        radius: Math.max(0, radius) * metrics.uniformScale,
+        rotX: finite(sphereParams.rotX, 0),
+        rotY: finite(sphereParams.rotY, 0)
+    };
+}
+
+function uploadFrameUniforms(gl, renderer, job) {
+    gl.uniform2f(renderer.uResolution, renderer.canvas.width, renderer.canvas.height);
+    gl.uniform4f(renderer.uViewBounds, job.xRange[0], job.xRange[1], job.yRange[0], job.yRange[1]);
+}
+
+function uploadDomainStyleUniforms(gl, renderer) {
+    for (const [uniformKey, stateKey, fallback] of DOMAIN_FLOAT_UNIFORMS) {
+        gl.uniform1f(renderer[uniformKey], stateNumber(stateKey, fallback));
+    }
+
+    gl.uniform1i(renderer.uDomainPalette, enumId(DOMAIN_PALETTE_IDS, state?.domainPalette, 0));
+}
+
+function uploadSphereUniforms(gl, renderer, job, metrics) {
+    const sphere = resolveSphere(job.sphereParams, job, metrics);
+
+    gl.uniform1f(renderer.uUseSphere, sphere.enabled ? 1 : 0);
+    gl.uniform2f(renderer.uSphereCenter, sphere.centerX, sphere.centerY);
+    gl.uniform1f(renderer.uSphereRadius, sphere.radius);
+    gl.uniform1f(renderer.uRotX, sphere.rotX);
+    gl.uniform1f(renderer.uRotY, sphere.rotY);
+}
+
+function uploadLightingUniforms(gl, renderer) {
+    const { x, y, z } = getNormalizedSphereLightDirection();
+
+    gl.uniform3f(renderer.uLightDir, x, y, z);
+    gl.uniform4f(
+        renderer.uSphereLighting,
+        finiteNumber(LIGHTING_UNIFORM_VALUES[0], 0),
+        finiteNumber(LIGHTING_UNIFORM_VALUES[1], 0),
+        finiteNumber(LIGHTING_UNIFORM_VALUES[2], 0),
+        finiteNumber(LIGHTING_UNIFORM_VALUES[3], 1)
+    );
+}
+
+function uploadChainingUniforms(gl, renderer) {
+    const enabled = !!state?.chainingEnabled;
+    const chainCount = enabled ? Math.max(1, uniformInt(state.chainCount, 1)) : 1;
+    const chainMode = enabled ? enumId(CHAIN_MODE_IDS, state.chainingMode, 1) : 0;
+
+    gl.uniform1i(renderer.uChainCount, chainCount);
+    gl.uniform1i(renderer.uChainMode, chainMode);
+}
+
+function uploadRenderUniforms(gl, renderer, job, metrics) {
+    uploadFrameUniforms(gl, renderer, job);
+    uploadDomainStyleUniforms(gl, renderer);
+    uploadSphereUniforms(gl, renderer, job, metrics);
+    uploadLightingUniforms(gl, renderer);
+    gl.uniform1f(renderer.uIsWPlaneColoring, job.isWPlaneColoring ? 1 : 0);
+    setComplexFunctionUniformsShared(gl, renderer, state);
+    uploadChainingUniforms(gl, renderer);
+}
+
+function draw(gl) {
+    gl.disable(gl.DEPTH_TEST);
+    gl.disable(gl.BLEND);
+    gl.clearColor(0, 0, 0, 0);
+    gl.clear(gl.COLOR_BUFFER_BIT);
+    gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
+}
+
+function copyToTarget(renderer, job) {
+    const ctx = job.targetCtx;
+
+    ctx.save();
+    try {
+        ctx.setTransform(1, 0, 0, 1, 0, 0);
+        ctx.clearRect(0, 0, job.targetWidth, job.targetHeight);
+        ctx.drawImage(
+            renderer.canvas,
+            0, 0, renderer.canvas.width, renderer.canvas.height,
+            0, 0, job.targetWidth, job.targetHeight
+        );
+    } finally {
+        ctx.restore();
+    }
+}
+
+function executeRenderJob(job) {
+    const metrics = renderMetrics(job.targetWidth, job.targetHeight);
+    const { renderer } = job;
+    const { gl } = renderer;
+
+    resizeWebGLDomainColorRenderer(renderer, metrics.internalWidth, metrics.internalHeight);
+    bindPipeline(gl, renderer);
+    uploadRenderUniforms(gl, renderer, job, metrics);
+    draw(gl);
+    copyToTarget(renderer, job);
+
+    return true;
+}
+
+function domainRenderersAvailable(renderers) {
+    return PLANES.some((plane) => !!renderers[plane]);
+}
+
+function currentFunctionSupported(functionName, isWPlaneColoring) {
+    if (isWebGLDomainColoringFunctionSupported(functionName, isWPlaneColoring)) return true;
+
+    warnWebGLDomainFunctionFallback(functionName);
+    return false;
+}
+
+export function getWebGLDomainColorRenderScale() {
+    const baseScale = finite(WEBGL_DOMAIN_COLOR_SUPERSAMPLE, CFG.defaultSupersample);
+    const stressScale = finite(WEBGL_DOMAIN_COLOR_STRESS_SCALE, CFG.defaultStressScale);
+    const requestedScale = state?.webglGpuStressMode ? Math.max(baseScale, stressScale) : baseScale;
+    const dpr = finite(typeof window === 'undefined' ? 1 : window.devicePixelRatio, 1);
+    const dprBoost = clamp(dpr * CFG.dprScaleFactor, 1, CFG.maxDprBoost);
+
+    return clamp(requestedScale * dprBoost, 1, CFG.maxRenderScale);
+}
+
+export function createWebGLDomainColorRenderer() {
+    const contextBundle = createCanvasAndWebGLContext();
+    if (!contextBundle) return null;
+
+    const { canvas, gl } = contextBundle;
+    const program = createWebGLProgramShared(gl, VERTEX_SOURCE, createFragmentSource());
+    if (!program) return null;
+
+    const quadBuffer = createQuadBuffer(gl);
+    if (!quadBuffer) {
+        gl.deleteProgram(program);
+        return null;
+    }
+
+    const aPosition = gl.getAttribLocation(program, 'a_position');
+    const uniforms = collectUniformLocations(gl, program);
+    if (aPosition < 0 || !uniforms) {
+        gl.deleteBuffer(quadBuffer);
+        gl.deleteProgram(program);
+        return null;
+    }
+
+    return buildRenderer(canvas, gl, program, quadBuffer, aPosition, uniforms);
+}
+
 export function isWebGLDomainColoringFunctionSupported(functionName, isWPlaneColoring = false) {
-    if (isWPlaneColoring) return true;
-    return getWebGLDomainColorFunctionIdShared(functionName) !== 0;
+    return !!isWPlaneColoring || getWebGLDomainColorFunctionIdShared(functionName) !== 0;
 }
 
 export function resizeWebGLDomainColorRenderer(renderer, width, height) {
-    if (!renderer || !renderer.canvas || width <= 0 || height <= 0) return;
-    if (renderer.canvas.width !== width || renderer.canvas.height !== height) {
-        renderer.canvas.width = width;
-        renderer.canvas.height = height;
+    if (!renderer?.canvas) return;
+
+    const nextWidth = positivePixelSize(width);
+    const nextHeight = positivePixelSize(height);
+    if (!nextWidth || !nextHeight) return;
+
+    if (renderer.canvas.width !== nextWidth || renderer.canvas.height !== nextHeight) {
+        renderer.canvas.width = nextWidth;
+        renderer.canvas.height = nextHeight;
     }
 }
 
 export function getNormalizedSphereLightDirection() {
-    const lx = SPHERE_LIGHT_DIRECTION_CAMERA.x;
-    const ly = SPHERE_LIGHT_DIRECTION_CAMERA.y;
-    const lz = SPHERE_LIGHT_DIRECTION_CAMERA.z;
-    const mag = Math.hypot(lx, ly, lz);
-    if (!Number.isFinite(mag) || mag < 1e-9) {
-        return { x: 0, y: 0, z: 1 };
-    }
-    return { x: lx / mag, y: ly / mag, z: lz / mag };
+    const lx = finiteNumber(SPHERE_LIGHT_DIRECTION_CAMERA?.x, 0);
+    const ly = finiteNumber(SPHERE_LIGHT_DIRECTION_CAMERA?.y, 0);
+    const lz = finiteNumber(SPHERE_LIGHT_DIRECTION_CAMERA?.z, 1);
+    const magnitude = Math.hypot(lx, ly, lz);
+
+    return Number.isFinite(magnitude) && magnitude >= 1e-9
+        ? { x: lx / magnitude, y: ly / magnitude, z: lz / magnitude }
+        : { x: 0, y: 0, z: 1 };
 }
 
-
-
 export function initializeWebGLDomainColoringSupport() {
-    webglDomainColorSupport.available = false;
-    webglDomainColorSupport.reason = 'disabled-or-unavailable';
-    webglDomainColorSupport.renderers.z = null;
-    webglDomainColorSupport.renderers.w = null;
-    webglDomainColorSupport.diagnostics.z = null;
-    webglDomainColorSupport.diagnostics.w = null;
-    webglDomainColorSupport.warnedRuntimeFallback = false;
-    if (webglDomainColorSupport.warnedFunctionFallbacks && webglDomainColorSupport.warnedFunctionFallbacks.clear) {
-        webglDomainColorSupport.warnedFunctionFallbacks.clear();
-    }
+    if (!webglDomainColorSupport) return;
 
-    if (!state || !state.webglDomainColoringEnabled) {
+    resetSupportObject(webglDomainColorSupport);
+
+    if (!state?.webglDomainColoringEnabled) {
         webglDomainColorSupport.reason = 'disabled';
         return;
     }
 
-    const rendererZ = createWebGLDomainColorRenderer();
-    const rendererW = createWebGLDomainColorRenderer();
-    if (!rendererZ && !rendererW) {
+    const renderers = recordFromPlanes(createWebGLDomainColorRenderer);
+    if (!domainRenderersAvailable(renderers)) {
         webglDomainColorSupport.reason = 'context-or-program-init-failed';
         console.info('GPU domain coloring unavailable, using CPU fallback.');
         return;
     }
 
-    webglDomainColorSupport.diagnostics.z = rendererZ ? getWebGLBackendInfoShared(rendererZ.gl) : null;
-    webglDomainColorSupport.diagnostics.w = rendererW ? getWebGLBackendInfoShared(rendererW.gl) : null;
+    const diagnostics = recordFromPlanes((plane) => (
+        renderers[plane] ? getWebGLBackendInfoShared(renderers[plane].gl) : null
+    ));
 
-    webglDomainColorSupport.renderers.z = rendererZ;
-    webglDomainColorSupport.renderers.w = rendererW;
-    webglDomainColorSupport.available = true;
-    webglDomainColorSupport.reason = (!rendererZ || !rendererW) ? 'partial-ready' : 'ready';
-    const diag = webglDomainColorSupport.diagnostics.z || webglDomainColorSupport.diagnostics.w;
-    if (diag) {
-        const rendererLabel = diag.unmaskedRenderer || diag.renderer || 'unknown renderer';
-        const vendorLabel = diag.unmaskedVendor || diag.vendor || 'unknown vendor';
-        if (diag.softwareBackend) {
-            console.warn(`GPU domain coloring is running on a software WebGL backend (${vendorLabel} | ${rendererLabel}).`);
-        } else {
-            console.info(`GPU domain coloring enabled on ${vendorLabel} | ${rendererLabel}.`);
-        }
-    } else {
-        console.info('GPU domain coloring enabled.');
-    }
+    installSupportRenderers(webglDomainColorSupport, renderers, diagnostics);
+    announceBackend(diagnostics);
 }
 
 export function getWebGLDomainColorRenderer(planeKey) {
-    if (!webglDomainColorSupport || !webglDomainColorSupport.renderers) return null;
-    if (planeKey === 'z') return webglDomainColorSupport.renderers.z;
-    if (planeKey === 'w') return webglDomainColorSupport.renderers.w;
-    return null;
+    return PLANE_KEYS.has(planeKey) ? webglDomainColorSupport?.renderers?.[planeKey] || null : null;
 }
 
 export function inferDomainColorPlaneKey(targetCtx, planeKeyHint) {
@@ -583,170 +991,31 @@ export function inferDomainColorPlaneKey(targetCtx, planeKeyHint) {
 }
 
 export function warnWebGLDomainFunctionFallback(functionName) {
-    if (!webglDomainColorSupport || !webglDomainColorSupport.warnedFunctionFallbacks) return;
-    if (webglDomainColorSupport.warnedFunctionFallbacks.has(functionName)) return;
-    webglDomainColorSupport.warnedFunctionFallbacks.add(functionName);
+    const warned = webglDomainColorSupport?.warnedFunctionFallbacks;
+    if (!warned?.has || !warned?.add || warned.has(functionName)) return;
+
+    warned.add(functionName);
     console.info(`GPU domain coloring not available for "${functionName}", using CPU fallback.`);
 }
 
 export function renderDomainColoringWithWebGL(targetCtx, planeParams, options = null) {
-    if (!targetCtx || !planeParams || !webglDomainColorSupport || !webglDomainColorSupport.available) return false;
-    if (!state || !state.webglDomainColoringEnabled) return false;
+    if (!targetCtx || !planeParams || !webglDomainColorSupport?.available) return false;
+    if (!state?.webglDomainColoringEnabled) return false;
+    if (!refreshAlgebraicRendererIfNeeded()) return false;
 
-    const currentAlgHash = JSON.stringify(state.algebraicChainingTerms || []);
-    if (state.currentFunction === 'algebraic_chaining' && webglDomainColorSupport.lastAlgHash !== currentAlgHash) {
-        webglDomainColorSupport.lastAlgHash = currentAlgHash;
-        initializeWebGLDomainColoringSupport();
-        if (!webglDomainColorSupport.available) return false;
-    }
+    const job = resolveRenderJob(targetCtx, planeParams, options);
+    if (!job) return false;
+    if (!precisionSafe(job.isWPlaneColoring)) return false;
+    if (!currentFunctionSupported(state.currentFunction, job.isWPlaneColoring)) return false;
 
-    const opts = options && typeof options === 'object' ? options : {};
-    const planeKey = inferDomainColorPlaneKey(targetCtx, opts.planeKey);
-    const renderer = getWebGLDomainColorRenderer(planeKey);
-    if (!renderer || !renderer.gl) return false;
-
-    const isWPlaneColoring = !!opts.isWPlaneColoring;
-
-    // WebGL uses 32-bit floats, which break down past ~100,000x zoom when off-origin.
-    // Fall back to CPU 64-bit float rendering for deep Mandelbrot/Newton fractal zooming.
-    const currentZoom = isWPlaneColoring ? state.wPlaneZoom : state.zPlaneZoom;
-    if (currentZoom > 100000) {
-        return false;
-    }
-
-    const functionName = state.currentFunction;
-    if (!isWebGLDomainColoringFunctionSupported(functionName, isWPlaneColoring)) {
-        warnWebGLDomainFunctionFallback(functionName);
-        return false;
-    }
-
-    const targetWidth = Math.max(1, Math.round(planeParams.width || 0));
-    const targetHeight = Math.max(1, Math.round(planeParams.height || 0));
-    if (targetWidth <= 0 || targetHeight <= 0) return false;
-
-    const xRange = planeParams.currentVisXRange || planeParams.xRange;
-    const yRange = planeParams.currentVisYRange || planeParams.yRange;
-    if (!Array.isArray(xRange) || !Array.isArray(yRange) || xRange.length < 2 || yRange.length < 2) {
-        return false;
-    }
-
-    const sphereParams = opts.sphereParams || null;
-    const renderScale = getWebGLDomainColorRenderScale();
-    const internalWidth = Math.max(1, Math.round(targetWidth * renderScale));
-    const internalHeight = Math.max(1, Math.round(targetHeight * renderScale));
-    const scaleX = internalWidth / targetWidth;
-    const scaleY = internalHeight / targetHeight;
-    const uniformScale = Math.min(scaleX, scaleY);
-
-    resizeWebGLDomainColorRenderer(renderer, internalWidth, internalHeight);
-    const gl = renderer.gl;
-
-    gl.viewport(0, 0, renderer.canvas.width, renderer.canvas.height);
-    gl.useProgram(renderer.program);
-
-    gl.bindBuffer(gl.ARRAY_BUFFER, renderer.quadBuffer);
-    gl.enableVertexAttribArray(renderer.aPosition);
-    gl.vertexAttribPointer(renderer.aPosition, 2, gl.FLOAT, false, 0, 0);
-
-    gl.uniform2f(renderer.uResolution, renderer.canvas.width, renderer.canvas.height);
-    gl.uniform4f(renderer.uViewBounds, xRange[0], xRange[1], yRange[0], yRange[1]);
-
-    const brightness = Number.isFinite(state.domainBrightness) ? state.domainBrightness : 1;
-    const contrast = Number.isFinite(state.domainContrast) ? state.domainContrast : 1;
-    const saturation = Number.isFinite(state.domainSaturation) ? state.domainSaturation : 1;
-    const lightnessCycles = Number.isFinite(state.domainLightnessCycles) ? state.domainLightnessCycles : 1;
-    gl.uniform1f(renderer.uDomainBrightness, brightness);
-    gl.uniform1f(renderer.uDomainContrast, contrast);
-    gl.uniform1f(renderer.uDomainSaturation, saturation);
-    gl.uniform1f(renderer.uDomainLightnessCycles, lightnessCycles);
-
-    const paletteMap = {
-        'analytic-base': 0,
-        'ocean-depth': 1,
-        'midnight-flare': 2,
-        'forest-moss': 3,
-        'arctic-frost': 4,
-        'nordic-twilight': 5,
-        'lavender-ash': 7,
-        'monochrome-topo': 8,
-        'rose-gold': 9,
-        'classic': 10,
-        'calming': 11,
-        'purple': 12,
-        'green': 13
-    };
-    const paletteInt = (paletteMap[state.domainPalette] !== undefined) ? paletteMap[state.domainPalette] : 0;
-    gl.uniform1i(renderer.uDomainPalette, paletteInt);
-
-    const useSphere = !!sphereParams;
-    gl.uniform1f(renderer.uUseSphere, useSphere ? 1 : 0);
-    if (useSphere) {
-        const sphereCenterXBase = Number.isFinite(sphereParams.centerX) ? sphereParams.centerX : (targetWidth * 0.5);
-        const sphereCenterYBase = Number.isFinite(sphereParams.centerY) ? sphereParams.centerY : (targetHeight * 0.5);
-        const sphereRadiusBase = Number.isFinite(sphereParams.radius) ? Math.max(0, sphereParams.radius) : 0;
-        const sphereCenterX = sphereCenterXBase * scaleX;
-        const sphereCenterY = sphereCenterYBase * scaleY;
-        const sphereRadius = sphereRadiusBase * uniformScale;
-        const rotX = Number.isFinite(sphereParams.rotX) ? sphereParams.rotX : 0;
-        const rotY = Number.isFinite(sphereParams.rotY) ? sphereParams.rotY : 0;
-        gl.uniform2f(renderer.uSphereCenter, sphereCenterX, sphereCenterY);
-        gl.uniform1f(renderer.uSphereRadius, sphereRadius);
-        gl.uniform1f(renderer.uRotX, rotX);
-        gl.uniform1f(renderer.uRotY, rotY);
-    } else {
-        gl.uniform2f(renderer.uSphereCenter, internalWidth * 0.5, internalHeight * 0.5);
-        gl.uniform1f(renderer.uSphereRadius, 0);
-        gl.uniform1f(renderer.uRotX, 0);
-        gl.uniform1f(renderer.uRotY, 0);
-    }
-
-    const lightDir = getNormalizedSphereLightDirection();
-    gl.uniform3f(renderer.uLightDir, lightDir.x, lightDir.y, lightDir.z);
-    gl.uniform4f(
-        renderer.uSphereLighting,
-        SPHERE_TEXTURE_AMBIENT_INTENSITY,
-        SPHERE_TEXTURE_DIFFUSE_INTENSITY,
-        SPHERE_TEXTURE_SPECULAR_INTENSITY,
-        SPHERE_TEXTURE_SHININESS_FACTOR
-    );
-
-    gl.uniform1f(renderer.uIsWPlaneColoring, isWPlaneColoring ? 1 : 0);
-    setComplexFunctionUniformsShared(gl, renderer, state);
-
-    const chainCount = state.chainingEnabled ? state.chainCount : 1;
-    const chainModeMap = {recursion:1,power:2,sqrt:3,ln:4,exp:5,reciprocal:6};
-    const chainMode = state.chainingEnabled ? (chainModeMap[state.chainingMode] || 1) : 0;
-    gl.uniform1i(renderer.uChainCount, chainCount);
-    gl.uniform1i(renderer.uChainMode, chainMode);
-
-    gl.disable(gl.DEPTH_TEST);
-    gl.disable(gl.BLEND);
-    gl.clearColor(0, 0, 0, 0);
-    gl.clear(gl.COLOR_BUFFER_BIT);
-    gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
-
-    targetCtx.save();
-    targetCtx.setTransform(1, 0, 0, 1, 0, 0);
-    targetCtx.clearRect(0, 0, targetWidth, targetHeight);
-    targetCtx.drawImage(
-        renderer.canvas,
-        0, 0, renderer.canvas.width, renderer.canvas.height,
-        0, 0, targetWidth, targetHeight
-    );
-    targetCtx.restore();
-
-    return true;
+    return executeRenderJob(job);
 }
 
 export function getGPUBackendStatus() {
     const lineDiag = context.webglSupport || null;
     const domainDiag = context.webglDomainColorSupport || null;
-    const currentFunctionName = (typeof state !== 'undefined' && state && state.currentFunction)
-        ? state.currentFunction
-        : null;
-    const currentFunctionGpuDomainSupported = currentFunctionName
-        ? isWebGLDomainColoringFunctionSupported(currentFunctionName, false)
-        : null;
+    const currentFunctionName = state?.currentFunction || null;
+
     return {
         lineRendering: lineDiag ? {
             available: !!lineDiag.available,
@@ -758,8 +1027,10 @@ export function getGPUBackendStatus() {
             reason: domainDiag.reason,
             diagnostics: domainDiag.diagnostics || null,
             currentFunction: currentFunctionName,
-            currentFunctionSupported: currentFunctionGpuDomainSupported,
-            zetaContinuationEnabled: !!(state && state.zetaContinuationEnabled)
+            currentFunctionSupported: currentFunctionName
+                ? isWebGLDomainColoringFunctionSupported(currentFunctionName, false)
+                : null,
+            zetaContinuationEnabled: !!state?.zetaContinuationEnabled
         } : null
     };
 }
