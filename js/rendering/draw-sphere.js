@@ -13,9 +13,11 @@ import { generateCurrentInputShapePointSets, generateCurrentMappedInputShapePoin
 
 export function drawRiemannSphereBase(ctx, cSP) {
     const { centerX: cX, centerY: cY, radius: r } = cSP;
+
     ctx.save();
     ctx.strokeStyle = state.gridColor1 || COLOR_SPHERE_OUTLINE;
     ctx.lineWidth = 1.5;
+    ctx.globalAlpha = 1.0;
     ctx.beginPath();
     ctx.arc(cX, cY, r, 0, 2 * Math.PI);
     ctx.stroke();
@@ -198,8 +200,9 @@ export function drawSphereProbeAndNeighborhood(ctx, cSP, sourceProbeZ, neighborh
     const p3d_center = complexToSphere(centerToDisplayOnSphere.re, centerToDisplayOnSphere.im);
     const p3d_rot_center = rotate3D(p3d_center, cSP.rotX, cSP.rotY);
     const p2d_canvas_center = projectSphereToCanvas2D(p3d_rot_center, cSP.centerX, cSP.centerY, cSP.radius);
+    const centerVisible = p2d_canvas_center.isVisible;
 
-    if (p2d_canvas_center.isVisible) {
+    if (centerVisible) {
         ctx.save();
         ctx.fillStyle = COLOR_PROBE_MARKER;
         ctx.beginPath();

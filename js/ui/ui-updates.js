@@ -12,6 +12,7 @@ import {
     surfaceStageHasBranches
 } from '../analysis/riemann-surface.js';
 import { renderDomainPalettesUI, domainPalettes } from './theme-manager.js';
+import { startRiemannTransformationAnimation, stopRiemannTransformationAnimation, syncRiemannTransformationPlayPauseButton, initThreeJSRenderers, buildThreeJSMeshes, syncRiemannSliders, disposeThreeJSRenderers } from '../rendering/riemann-transformation-animation.js';
 
 const { controls = {} } = context;
 
@@ -1056,6 +1057,13 @@ function syncPrimaryPlaneTitles() {
         return;
     }
 
+    if (state.riemannSphereViewEnabled && state.riemannTransformationEnabled && !state.splitViewEnabled) {
+        setHtml('zPlaneTitle', 'z-sphere (Input: Transforming Flat Grid to Sphere)');
+        setHtml('wPlaneTitle', 'w-sphere (Output: Transforming Mapped Grid to Sphere)');
+        setHidden('cauchy_integral_results_info', true);
+        return;
+    }
+
     if (state.riemannSphereViewEnabled) {
         setHtml(
             'zPlaneTitle',
@@ -1243,6 +1251,7 @@ export function updateTitlesAndGlobalUI() {
 
         syncPrimaryPlaneTitles();
         syncVisualizationOptionControls();
+        syncRiemannTransformationUI();
     });
 }
 
@@ -1268,4 +1277,31 @@ export function updateDomainColoringKey() {
 
     lines.push('<span style="display:inline-block; margin-top: 4px;">- Lightness maps to Magnitude (Log-scaled, cyclic bands).</span>');
     keyDiv.innerHTML = lines.join('');
+}
+
+export function syncRiemannTransformationUI() {
+    const showOverlay = state.riemannSphereViewEnabled && state.riemannTransformationEnabled && !state.splitViewEnabled;
+    
+    // Z plane UI
+    const overlayZ = document.getElementById('z_plane_transformation_overlay');
+    const containerZ = document.getElementById('z_plane_threejs_container');
+    if (overlayZ) overlayZ.classList.toggle('hidden', !showOverlay);
+    if (containerZ) containerZ.classList.toggle('hidden', !showOverlay);
+
+    // W plane UI
+    const overlayW = document.getElementById('w_plane_transformation_overlay');
+    const containerW = document.getElementById('w_plane_threejs_container');
+    if (overlayW) overlayW.classList.toggle('hidden', !showOverlay);
+    if (containerW) containerW.classList.toggle('hidden', !showOverlay);
+    
+    if (showOverlay) {
+        initThreeJSRenderers();
+        buildThreeJSMeshes();
+        startRiemannTransformationAnimation();
+        syncRiemannTransformationPlayPauseButton();
+        syncRiemannSliders();
+    } else {
+        stopRiemannTransformationAnimation();
+        disposeThreeJSRenderers();
+    }
 }

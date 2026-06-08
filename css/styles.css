@@ -3305,3 +3305,76 @@ select:focus {
     color: var(--text-secondary-color);
     letter-spacing: 0.05em;
 }
+
+/* --- Bottom Animation UI (Three.js Riemann Sphere) --- */
+.ui-layer {
+    position: absolute;
+    bottom: 20px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: rgba(20, 18, 35, 0.7);
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+    padding: 15px 25px;
+    border-radius: 16px;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 12px;
+    width: 380px;
+    max-width: 90%;
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+    transition: opacity 0.3s ease;
+    z-index: 100;
+}
+
+.ui-layer.hidden {
+    display: none !important;
+}
+
+.ui-layer h1 { margin: 0; font-size: 1.0rem; font-weight: 500; letter-spacing: 0.5px; text-transform: uppercase; color: #e2e8f0; }
+
+.ui-layer .controls { display: flex; align-items: center; width: 100%; gap: 15px; }
+
+.play-btn {
+    background: transparent; border: 2px solid #a78bfa; color: #a78bfa;
+    border-radius: 50%; width: 36px; height: 36px; display: flex;
+    justify-content: center; align-items: center; cursor: pointer;
+    transition: all 0.2s ease; outline: none; flex-shrink: 0; padding: 0;
+}
+.play-btn:hover { background: #a78bfa; color: #0b0914; }
+.play-btn svg { width: 14px; height: 14px; fill: currentColor; margin-left: 2px; }
+.play-btn.playing svg { margin-left: 0; }
+
+.slider-container { flex-grow: 1; display: flex; align-items: center; }
+
+.slider-container input[type=range] { -webkit-appearance: none; width: 100%; background: transparent; }
+.slider-container input[type=range]::-webkit-slider-thumb {
+    -webkit-appearance: none; height: 16px; width: 16px; border-radius: 50%;
+    background: #fcd34d; cursor: pointer; margin-top: -6px;
+    box-shadow: 0 0 10px rgba(252, 211, 77, 0.5);
+}
+.slider-container input[type=range]::-webkit-slider-runnable-track {
+    width: 100%; height: 4px; cursor: pointer; background: rgba(255, 255, 255, 0.2); border-radius: 2px;
+}
+
+.labels { display: flex; justify-content: space-between; width: 100%; font-size: 0.75rem; color: #94a3b8; text-transform: uppercase; letter-spacing: 1px; }
+
+.threejs-container {
+    cursor: grab;
+}
+.threejs-container:active {
+    cursor: grabbing;
+}
+
+/* Trio Grid layout */
+.viz-toggle-grid--trio {
+    grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
+}
+
+@media (max-width: 960px) {
+    .viz-toggle-grid--trio {
+        grid-template-columns: 1fr !important;
+    }
+}

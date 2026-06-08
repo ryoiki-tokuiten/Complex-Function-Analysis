@@ -1446,7 +1446,7 @@
                         </div>
                         <div id="riemann_sphere_options_div"
                             class="dependent-settings-block hidden control-group-indent viz-detail-block viz-stacked-options">
-                            <div class="viz-toggle-grid viz-toggle-grid--duo viz-toggle-grid--compact">
+                            <div class="viz-toggle-grid viz-toggle-grid--trio viz-toggle-grid--compact">
                                 <label for="enable_plotly_3d_cb"
                                     class="control-label tooltip-label viz-toggle-card viz-toggle-card--compact">
                                     <input type="checkbox" id="enable_plotly_3d_cb" class="control-checkbox"
@@ -1466,6 +1466,16 @@
                                     <span class="viz-toggle-card-content">
                                         <span class="viz-toggle-card-title">Split View</span>
                                         <span class="viz-toggle-card-copy">Keep the z-plane beside the w-sphere.</span>
+                                    </span>
+                                </label>
+                                <label for="enable_riemann_transformation_cb"
+                                    class="control-label tooltip-label viz-toggle-card viz-toggle-card--compact">
+                                    <input type="checkbox" id="enable_riemann_transformation_cb" class="control-checkbox"
+                                        data-tooltip="Show animation of the planar grid wrapping into the Riemann Sphere">
+                                    <span class="custom-checkbox-visual"></span>
+                                    <span class="viz-toggle-card-content">
+                                        <span class="viz-toggle-card-title">Show Transformation</span>
+                                        <span class="viz-toggle-card-copy">Animate grid wrapping into the sphere.</span>
                                     </span>
                                 </label>
                             </div>
@@ -1792,9 +1802,29 @@
                             </button>
                         </div>
                     </div>
-                    <div style="position:relative;">
+                    <div id="z_plane_canvas_wrapper" style="position:relative; width: 100%; height: 100%; display: flex; flex: 1;">
                         <canvas id="z_plane_canvas"></canvas>
                         <div id="z_plane_probe_info" class="probe-info-overlay hidden"></div>
+                        
+                        <!-- Three.js Transformation Overlays -->
+                        <div id="z_plane_threejs_container" class="threejs-container hidden" style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; z-index: 10; border-radius: inherit; overflow: hidden;"></div>
+                        
+                        <div id="z_plane_transformation_overlay" class="ui-layer hidden">
+                            <h1>Stereographic Projection</h1>
+                            <div class="controls">
+                                <button id="z_transformation_play_pause_btn" class="play-btn">
+                                    <svg viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>
+                                </button>
+                                <div class="slider-container">
+                                    <input type="range" id="z_transformation_progress_slider" min="0" max="1" step="0.001" value="0">
+                                </div>
+                            </div>
+                            <div class="labels">
+                                <span>Plane (z)</span>
+                                <span>Riemann Sphere</span>
+                            </div>
+                        </div>
+
                         <div id="domain_coloring_key" class="domain-coloring-key hidden"></div>
                         <div id="navigation_keyhint_overlay" class="navigation-keyhint-overlay hidden">
                             <div class="navigation-keyhint-grid">
@@ -1843,10 +1873,29 @@
                             </button>
                         </div>
                     </div>
-                    <div style="position: relative;">
+                    <div id="w_plane_canvas_wrapper" style="position: relative; width: 100%; height: 100%; display: flex; flex: 1;">
                         <canvas id="w_plane_canvas"></canvas>
                         <div id="w_plane_plotly_container" class="hidden" style="width: 100%; height: 100%;"></div>
                         <div id="w_plane_probe_info" class="probe-info-overlay hidden"></div>
+                        
+                        <!-- Three.js Transformation Overlays -->
+                        <div id="w_plane_threejs_container" class="threejs-container hidden" style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; z-index: 10; border-radius: inherit; overflow: hidden;"></div>
+                        
+                        <div id="w_plane_transformation_overlay" class="ui-layer hidden">
+                            <h1>Stereographic Projection</h1>
+                            <div class="controls">
+                                <button id="w_transformation_play_pause_btn" class="play-btn">
+                                    <svg viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>
+                                </button>
+                                <div class="slider-container">
+                                    <input type="range" id="w_transformation_progress_slider" min="0" max="1" step="0.001" value="0">
+                                </div>
+                            </div>
+                            <div class="labels">
+                                <span>Plane (w)</span>
+                                <span>Riemann Sphere</span>
+                            </div>
+                        </div>
                         <div id="cauchy_integral_results_info" class="cauchy-info-overlay hidden"
                             style="font-size: 0.8rem; line-height:1.3;"></div>
                         <button id="laplace_winding_sync_btn" title="Sync zoom between spiral and vector panels" style="

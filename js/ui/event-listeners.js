@@ -2,15 +2,16 @@ import { state, context, zPlaneParams, wPlaneParams, sphereViewParams, sliderPar
 import { eventBus } from '../store/events.js';
 import { setupVisualParameters, updateChainingColumns, updateChainingTitles } from '../utils/dom-utils.js';
 import { processUploadedImageSource, loadUploadedVideoFile, toggleUploadedVideoPlayback, pauseUploadedVideoPlayback, startVideoProcessingLoop, syncVideoPlaybackUI, processUploadedVideoFrame } from '../utils/raster-media.js';
-import { updatePlaneViewportRanges, mapCanvasToWorldCoords } from '../utils/canvas-utils.js';
+import { updatePlaneViewportRanges, mapCanvasToWorldCoords, inverseRotate3D, rotate3D, projectSphereToCanvas2D } from '../utils/canvas-utils.js';
 import { requestRedrawAll } from '../main.js';
 import { updateFourierTransform } from '../analysis/fourier-transform.js';
 import { updateLaplaceTransform, updateLaplaceEvaluationPoint, analyzeStability, findPolesZeros } from '../analysis/laplace-transform.js';
 import { ComplexPointsUI } from './complex-points-ui.js';
 import { TAYLOR_CENTER_PRESET_GROUPS, ZOOM_IN_FACTOR, ZOOM_OUT_FACTOR, MIN_STATE_ZOOM_LEVEL, MAX_STATE_ZOOM_LEVEL } from '../constants/numerical.js';
 import { SPHERE_SENSITIVITY, SPHERE_INITIAL_ROT_X, SPHERE_INITIAL_ROT_Y } from '../constants/rendering.js';
-import { updateTitlesAndGlobalUI, syncTaylorSeriesCenterStatus, updateDomainColoringKey, syncParameterControlsPanelVisibility } from './ui-updates.js';
+import { updateTitlesAndGlobalUI, syncTaylorSeriesCenterStatus, updateDomainColoringKey, syncParameterControlsPanelVisibility, syncRiemannTransformationUI } from './ui-updates.js';
 import { stopLaplaceAnimation, toggleLaplaceAnimation, resetLaplaceAnimation, showFullLaplaceSpiral } from '../rendering/laplace-animation.js';
+import { toggleRiemannTransformationAnimationZ, toggleRiemannTransformationAnimationW, syncRiemannTransformationPlayPauseButton } from '../rendering/riemann-transformation-animation.js';
 import { setNavigationModeEnabled, followNavigationViewports, resetNavigationVehicle, setNavigationKey, stopNavigationLoop, initializeNavigationStateFromControls } from '../navigation-plane.js';
 import { toggleAnimation } from './animation.js';
 import { initializePolynomialCoeffs, generatePolynomialCoeffSliders } from './polynomial-ui.js';
@@ -92,6 +93,7 @@ const BASIC_CHECKBOX_BINDINGS = [
     ['enableRadialDiscreteStepsCb', 'radialDiscreteStepsEnabled'],
     ['enableRiemannSphereCb', 'riemannSphereViewEnabled'],
     ['enablePlotly3DCb', 'plotly3DEnabled'],
+    ['enableRiemannTransformationCb', 'riemannTransformationEnabled'],
     ['toggleSphereAxesGridCb', 'showSphereAxesAndGrid'],
     ['togglePlotlySphereGridCb', 'showPlotlySphereGrid'],
     ['enableTaylorSeriesCb', 'taylorSeriesEnabled'],
@@ -651,6 +653,13 @@ function syncPalette(selectors, container) {
 
 function bindDomainColoringControls() {
     bindCheckbox('enableDomainColoringCb', 'domainColoringEnabled', () => {
+        if (state.domainColoringEnabled) {
+            if (state.riemannTransformationEnabled) {
+                state.riemannTransformationEnabled = false;
+                checked('enableRiemannTransformationCb', false);
+                call(syncRiemannTransformationUI);
+            }
+        }
         hidden(controls.domainColoringOptionsDiv, !state.domainColoringEnabled);
         hidden(controls.domainColoringKeyDiv, !state.domainColoringEnabled);
         hidden(controls.riemannSphereDomainColoringOptions, !state.domainColoringEnabled);
@@ -705,7 +714,14 @@ function disableRiemannSurface() {
 
 function bindViewControls() {
     bindCheckbox('enableSplitViewCb', 'splitViewEnabled', () => {
-        if (state.splitViewEnabled && state.riemannSurfaceEnabled) disableRiemannSurface();
+        if (state.splitViewEnabled) {
+            if (state.riemannSurfaceEnabled) disableRiemannSurface();
+            if (state.riemannTransformationEnabled) {
+                state.riemannTransformationEnabled = false;
+                checked('enableRiemannTransformationCb', false);
+            }
+        }
+        call(syncRiemannTransformationUI);
         call(updateChainingTitles);
         requestDomainRedraw(true);
     });
@@ -719,23 +735,52 @@ function bindViewControls() {
     }));
 
     bindCheckbox('enableRiemannSphereCb', 'riemannSphereViewEnabled', () => {
-        if (state.riemannSphereViewEnabled && state.riemannSurfaceEnabled) disableRiemannSurface();
+        if (state.riemannSphereViewEnabled) {
+            if (state.riemannSurfaceEnabled) disableRiemannSurface();
+        } else {
+            state.riemannTransformationEnabled = false;
+            checked('enableRiemannTransformationCb', false);
+            hidden(controls.plotly3DOptionsDiv, true);
+        }
         hidden(controls.riemannSphereOptionsDiv, !state.riemannSphereViewEnabled);
-        if (!state.riemannSphereViewEnabled) hidden(controls.plotly3DOptionsDiv, true);
+        call(syncRiemannTransformationUI);
         call(updateChainingTitles);
         requestDomainRedraw(true);
     });
 
     bindCheckbox('enablePlotly3DCb', 'plotly3DEnabled', () => {
+        if (state.plotly3DEnabled) {
+            if (state.riemannTransformationEnabled) {
+                state.riemannTransformationEnabled = false;
+                checked('enableRiemannTransformationCb', false);
+                call(syncRiemannTransformationUI);
+            }
+        }
         hidden(controls.plotly3DOptionsDiv, !state.plotly3DEnabled);
         call(updateChainingTitles);
         requestRedrawAll();
     });
 
+    bindCheckbox('enableRiemannTransformationCb', 'riemannTransformationEnabled', () => {
+        if (state.riemannTransformationEnabled) {
+            if (!state.riemannSphereViewEnabled) {
+                state.riemannSphereViewEnabled = true;
+                checked('enableRiemannSphereCb', true);
+                hidden(controls.riemannSphereOptionsDiv, false);
+            }
+            if (state.riemannSurfaceEnabled) {
+                disableRiemannSurface();
+            }
+        }
+        call(syncRiemannTransformationUI);
+        call(updateChainingTitles);
+        requestDomainRedraw(true);
+    });
+
     bindCheckbox('enableRiemannSurfaceCb', 'riemannSurfaceEnabled', () => {
         if (state.riemannSurfaceEnabled) {
-            Object.assign(state, { riemannSphereViewEnabled: false, splitViewEnabled: false, plotly3DEnabled: false });
-            ['enableRiemannSphereCb', 'enableSplitViewCb', 'enablePlotly3DCb'].forEach(key => checked(key, false));
+            Object.assign(state, { riemannSphereViewEnabled: false, riemannTransformationEnabled: false, splitViewEnabled: false, plotly3DEnabled: false });
+            ['enableRiemannSphereCb', 'enableRiemannTransformationCb', 'enableSplitViewCb', 'enablePlotly3DCb'].forEach(key => checked(key, false));
             if (state.navigationModeEnabled) call(setNavigationModeEnabled, false);
         }
 
@@ -744,6 +789,40 @@ function bindViewControls() {
         call(updateChainingTitles);
         requestDomainRedraw(true);
     });
+
+    const transSliderZ = document.getElementById('z_transformation_progress_slider');
+    if (transSliderZ) {
+        bindElementListener(transSliderZ, 'input', event => {
+            state.riemannTransformationPlayingZ = false;
+            state.riemannTransformationProgressZ = parseFloat(event.target.value);
+            call(syncRiemannTransformationPlayPauseButton);
+            requestDomainRedraw(true);
+        });
+    }
+
+    const transPlayPauseBtnZ = document.getElementById('z_transformation_play_pause_btn');
+    if (transPlayPauseBtnZ) {
+        bindElementListener(transPlayPauseBtnZ, 'click', () => {
+            toggleRiemannTransformationAnimationZ();
+        });
+    }
+
+    const transSliderW = document.getElementById('w_transformation_progress_slider');
+    if (transSliderW) {
+        bindElementListener(transSliderW, 'input', event => {
+            state.riemannTransformationPlayingW = false;
+            state.riemannTransformationProgressW = parseFloat(event.target.value);
+            call(syncRiemannTransformationPlayPauseButton);
+            requestDomainRedraw(true);
+        });
+    }
+
+    const transPlayPauseBtnW = document.getElementById('w_transformation_play_pause_btn');
+    if (transPlayPauseBtnW) {
+        bindElementListener(transPlayPauseBtnW, 'click', () => {
+            toggleRiemannTransformationAnimationW();
+        });
+    }
 
     bindControlListener('riemannSurfaceResetViewBtn', 'click', () => resetRiemannSurfaceViews());
     bindCheckbox('toggleSphereAxesGridCb', 'showSphereAxesAndGrid');
@@ -1510,33 +1589,80 @@ function canvasFor(planeType) {
     return planeType === 'z' ? zCanvas : wCanvas;
 }
 
+function mapSphereCanvasToWorldCoords(cX, cY, cSP) {
+    const rotX = cSP.rotX;
+    const rotY = cSP.rotY;
+    const sCX = cSP.centerX;
+    const sCY = cSP.centerY;
+    const sR = cSP.radius;
+    if (sR === 0) return { re: NaN, im: NaN };
+    
+    const x1 = (cX - sCX) / sR;
+    const y1 = (sCY - cY) / sR;
+    
+    const cY_cos = Math.cos(rotY), sY_sin = Math.sin(rotY);
+    const cX_cos = Math.cos(rotX), sX_sin = Math.sin(rotX);
+    
+    const denom = cX_cos * cY_cos;
+    if (Math.abs(denom) < 1e-5) {
+        return { re: NaN, im: NaN };
+    }
+    
+    const t = (x1 * sY_sin - y1 * sX_sin * cY_cos) / denom;
+    
+    const p3D_rot = { x: x1, y: y1, z: t };
+    const p3D_world = inverseRotate3D(p3D_rot, rotX, rotY);
+    
+    return { re: p3D_world.x, im: p3D_world.y };
+}
+
 function handleSphereMouseDown(event, planeType) {
     const params = sphereParams(planeType);
     if (!isSphereInteractionActive(planeType === 'z')) return;
 
+    const canvas = canvasFor(planeType);
+    if (!canvas) return;
+    const rect = canvas.getBoundingClientRect();
+    const cX = event.clientX - rect.left;
+    const cY = event.clientY - rect.top;
+
     params.dragging = true;
     params.lastMouseX = event.clientX;
     params.lastMouseY = event.clientY;
-    if (canvasFor(planeType)) canvasFor(planeType).style.cursor = 'grabbing';
+    canvas.style.cursor = 'grabbing';
 }
 
 function handleSphereMouseMove(event, planeType) {
     const params = sphereParams(planeType);
-    if (!isSphereInteractionActive(planeType === 'z') || !params.dragging) return;
+    if (!isSphereInteractionActive(planeType === 'z')) return;
 
-    params.rotY += (event.clientX - params.lastMouseX) * SPHERE_SENSITIVITY;
-    params.rotX += (event.clientY - params.lastMouseY) * SPHERE_SENSITIVITY;
-    params.lastMouseX = event.clientX;
-    params.lastMouseY = event.clientY;
-    requestDomainRedraw(true);
+    const canvas = canvasFor(planeType);
+    if (!canvas) return;
+
+    if (params.dragging) {
+        params.rotY += (event.clientX - params.lastMouseX) * SPHERE_SENSITIVITY;
+        params.rotX += (event.clientY - params.lastMouseY) * SPHERE_SENSITIVITY;
+        params.lastMouseX = event.clientX;
+        params.lastMouseY = event.clientY;
+        requestDomainRedraw(true);
+        return;
+    }
 }
 
 function handleSphereMouseUp(planeType) {
     const params = sphereParams(planeType);
+    
+    if (planeType === 'z') {
+        context.draggingProbeOnSphere = false;
+    }
+    
     if (!isSphereInteractionActive(planeType === 'z') && !params.dragging) return;
 
     params.dragging = false;
-    if (canvasFor(planeType)) canvasFor(planeType).style.cursor = 'crosshair';
+    const canvas = canvasFor(planeType);
+    if (canvas) {
+        canvas.style.cursor = 'crosshair';
+    }
 }
 
 function fullscreenTarget(planeType, index = 0) {
@@ -1545,7 +1671,7 @@ function fullscreenTarget(planeType, index = 0) {
         return {
             isZ: true,
             isPlotly: false,
-            element: zCanvas,
+            element: controls.zCanvasWrapper || zCanvas,
             card: controls.zCanvasCard
         };
     }
@@ -1556,10 +1682,19 @@ function fullscreenTarget(planeType, index = 0) {
     const surface = state.riemannSurfaceEnabled ? getRiemannSurfaceCanvas(canvas) : null;
     const isPlotly = state.plotly3DEnabled && state.riemannSphereViewEnabled && plotly;
 
+    let element = surface || (isPlotly ? plotly : canvas);
+    if (!surface && !isPlotly) {
+        if (index === 0 && controls.wCanvasWrapper) {
+            element = controls.wCanvasWrapper;
+        } else if (canvas && canvas.parentElement) {
+            element = canvas.parentElement;
+        }
+    }
+
     return {
         isZ: false,
         isPlotly,
-        element: surface || (isPlotly ? plotly : canvas),
+        element,
         card,
         canvas
     };
