@@ -48,7 +48,7 @@ const WEBGL_CONTEXT_ATTRIBUTES = Object.freeze({
     powerPreference: 'high-performance'
 });
 
-const DOMAIN_PALETTE_IDS = Object.freeze({
+export const DOMAIN_PALETTE_IDS = Object.freeze({
     'analytic-base': 0,
     'ocean-depth': 1,
     'midnight-flare': 2,
@@ -64,7 +64,7 @@ const DOMAIN_PALETTE_IDS = Object.freeze({
     green: 13
 });
 
-const CHAIN_MODE_IDS = Object.freeze({
+export const CHAIN_MODE_IDS = Object.freeze({
     recursion: 1,
     power: 2,
     sqrt: 3,
@@ -1037,4 +1037,216 @@ export function getGPUBackendStatus() {
 
 if (typeof window !== 'undefined') {
     window.getGPUBackendStatus = getGPUBackendStatus;
+}
+
+export function getThreeSphereShaderConfig(planeType) {
+    const isWPlane = planeType === 'w';
+
+    const uniformsDecl = `
+        precision highp float;
+        varying vec3 vLocalPosition;
+
+        uniform float u_domainBrightness;
+        uniform float u_domainContrast;
+        uniform float u_domainSaturation;
+        uniform float u_domainLightnessCycles;
+        uniform int u_domainPalette;
+
+        uniform float u_isWPlaneColoring;
+        uniform float u_functionId;
+        uniform vec2 u_mobiusA;
+        uniform vec2 u_mobiusB;
+        uniform vec2 u_mobiusC;
+        uniform vec2 u_mobiusD;
+        uniform int u_polyDegree;
+        uniform vec2 u_polyCoeffs[11];
+        uniform float u_zetaContinuationEnabled;
+        uniform float u_zetaReflectionBoundary;
+        uniform float u_fracPower;
+        uniform int u_chainCount;
+        uniform int u_chainMode;
+    `;
+
+    const fragmentHelpers = `
+        vec2 domainComplexSqrt(vec2 z) {
+          float r = length(z);
+          if (r < 1.0e-20) return vec2(0.0);
+          float angle = atan(z.y, z.x) * 0.5;
+          float sr = sqrt(r);
+          return vec2(sr * cos(angle), sr * sin(angle));
+        }
+
+        vec3 hslToRgb(vec3 hsl) {
+          float h = fract(hsl.x);
+          float s = clamp(hsl.y, 0.0, 1.0);
+          float l = clamp(hsl.z, 0.0, 1.0);
+          float c = (1.0 - abs(2.0 * l - 1.0)) * s;
+          vec3 rgb = clamp(abs(mod(h * 6.0 + vec3(0.0, 4.0, 2.0), 6.0) - 3.0) - 1.0, 0.0, 1.0);
+          return l + (rgb - 0.5) * c;
+        }
+
+        vec3 interpolate7(vec3 c0, vec3 c1, vec3 c2, vec3 c3, vec3 c4, vec3 c5, vec3 c6, float h) {
+          float val = fract(h) * 6.0;
+          if (val < 1.0) return mix(c0, c1, val);
+          if (val < 2.0) return mix(c1, c2, val - 1.0);
+          if (val < 3.0) return mix(c2, c3, val - 2.0);
+          if (val < 4.0) return mix(c3, c4, val - 3.0);
+          if (val < 5.0) return mix(c4, c5, val - 4.0);
+          return mix(c5, c6, val - 5.0);
+        }
+
+        vec3 getPaletteColor(int paletteId, float h) {
+          if (paletteId == 10) return hslToRgb(vec3(h, 1.0, 0.5));
+          vec3 c0; vec3 c1; vec3 c2; vec3 c3; vec3 c4; vec3 c5; vec3 c6;
+          loadPalette(paletteId, c0, c1, c2, c3, c4, c5, c6);
+          return interpolate7(c0, c1, c2, c3, c4, c5, c6, h);
+        }
+
+        vec3 applyLightnessAndSaturation(vec3 rgb, float lightness, float saturation) {
+          vec3 lit = lightness < 0.5
+            ? rgb * (lightness / 0.5)
+            : mix(rgb, vec3(1.0), (lightness - 0.5) / 0.5);
+          float gray = dot(lit, vec3(0.299, 0.587, 0.114));
+          return mix(vec3(gray), lit, saturation);
+        }
+
+        bool mapDomainValue(vec2 inputValue, out vec2 outputValue) {
+          return evaluateMappedValueBase(
+            inputValue,
+            u_isWPlaneColoring,
+            u_functionId,
+            u_mobiusA,
+            u_mobiusB,
+            u_mobiusC,
+            u_mobiusD,
+            u_polyDegree,
+            u_polyCoeffs,
+            u_zetaContinuationEnabled,
+            u_zetaReflectionBoundary,
+            u_fracPower,
+            outputValue
+          );
+        }
+
+        bool applyChainStep(int chainMode, vec2 baseValue, inout vec2 mappedValue) {
+          if (chainMode == 1) {
+            vec2 nextValue = vec2(0.0);
+            bool ok = mapDomainValue(mappedValue, nextValue);
+            mappedValue = nextValue;
+            return ok;
+          }
+          if (chainMode == 2) { mappedValue = complexMul(mappedValue, baseValue); return true; }
+          if (chainMode == 3) { mappedValue = domainComplexSqrt(mappedValue); return true; }
+          if (chainMode == 4) { mappedValue = complexLn(mappedValue); return true; }
+          if (chainMode == 5) { mappedValue = complexExp(mappedValue); return true; }
+          if (chainMode == 6) {
+            mappedValue = dot(mappedValue, mappedValue) < 1.0e-20
+              ? vec2(0.0)
+              : complexDiv(vec2(1.0, 0.0), mappedValue);
+            return true;
+          }
+          return true;
+        }
+
+        bool applyConfiguredChain(inout vec2 mappedValue) {
+          if (u_isWPlaneColoring >= 0.5 || u_chainCount <= 1) return true;
+          vec2 baseValue = mappedValue;
+          for (int i = 1; i < 30; i++) {
+            if (i >= u_chainCount) break;
+            if (!applyChainStep(u_chainMode, baseValue, mappedValue)) return false;
+            if (!isFiniteVec2Compat(mappedValue)) return false;
+          }
+          return true;
+        }
+
+        vec4 domainColorForValue(vec2 value, float brightnessFactor) {
+          float phase = atan(value.y, value.x);
+          float modValue = length(value);
+          if (!isFiniteFloatCompat(modValue)) return vec4(0.0, 0.0, 0.0, 1.0);
+
+          float logMod = log(1.0 + modValue);
+          float lightnessAngle = (logMod / 0.6931471805599453) * u_domainLightnessCycles * 6.283185307179586;
+          float lightnessBase = 0.5 + sin(lightnessAngle) * 0.25;
+          float lightnessContrasted = 0.5 + (lightnessBase - 0.5) * u_domainContrast;
+          float lightnessFinal = clamp(lightnessContrasted * u_domainBrightness * brightnessFactor, 0.05, 0.95);
+          float saturationFinal = clamp(u_domainSaturation, 0.0, 1.0);
+          float hue = fract((phase + 3.141592653589793) / 6.283185307179586);
+
+          vec3 baseColor = getPaletteColor(u_domainPalette, hue);
+          return vec4(applyLightnessAndSaturation(baseColor, lightnessFinal, saturationFinal), 1.0);
+        }
+    `;
+
+    const mainSource = `
+        void main() {
+            float R = 5.0;
+            float den = 2.0 * R - vLocalPosition.y;
+            if (abs(den) < 1e-6) {
+                gl_FragColor = vec4(0.0, 0.0, 0.0, 1.0);
+                return;
+            }
+            
+            vec2 zInput = vec2(vLocalPosition.x / den, vLocalPosition.z / den);
+            
+            vec2 mappedValue = vec2(0.0);
+            if (!mapDomainValue(zInput, mappedValue) || !isFiniteVec2Compat(mappedValue)) {
+                gl_FragColor = vec4(0.0, 0.0, 0.0, 1.0);
+                return;
+            }
+            
+            if (!applyConfiguredChain(mappedValue)) {
+                gl_FragColor = vec4(0.0, 0.0, 0.0, 1.0);
+                return;
+            }
+            
+            gl_FragColor = domainColorForValue(mappedValue, 1.0);
+        }
+    `;
+
+    const fragmentShader = lines(
+        uniformsDecl,
+        '',
+        getGLSLComplexMathLibrary(state),
+        '',
+        createPaletteLoaderSource(),
+        '',
+        fragmentHelpers,
+        '',
+        mainSource
+    );
+
+    const vertexShader = `
+        varying vec3 vLocalPosition;
+        void main() {
+            vLocalPosition = position;
+            gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+        }
+    `;
+
+    const uniforms = {
+        u_domainBrightness: { value: 1.0 },
+        u_domainContrast: { value: 1.0 },
+        u_domainSaturation: { value: 1.0 },
+        u_domainLightnessCycles: { value: 1.0 },
+        u_domainPalette: { value: 0 },
+        u_isWPlaneColoring: { value: isWPlane ? 1.0 : 0.0 },
+        u_functionId: { value: 0.0 },
+        u_mobiusA: { value: [1.0, 0.0] },
+        u_mobiusB: { value: [0.0, 0.0] },
+        u_mobiusC: { value: [0.0, 0.0] },
+        u_mobiusD: { value: [1.0, 0.0] },
+        u_polyDegree: { value: 0 },
+        u_polyCoeffs: { value: Array.from({ length: 11 }, () => [0.0, 0.0]) },
+        u_zetaContinuationEnabled: { value: 0.0 },
+        u_zetaReflectionBoundary: { value: 0.5 },
+        u_fracPower: { value: 0.5 },
+        u_chainCount: { value: 1 },
+        u_chainMode: { value: 1 }
+    };
+
+    return {
+        uniforms,
+        vertexShader,
+        fragmentShader
+    };
 }

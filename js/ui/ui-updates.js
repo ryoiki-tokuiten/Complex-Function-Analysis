@@ -150,7 +150,8 @@ const PARTICLE_VALUE_BINDINGS = Object.freeze([
 
 const RIEMANN_VIEW_VALUE_BINDINGS = Object.freeze([
     { display: 'plotlySphereOpacityValueDisplay', key: 'plotlySphereOpacity', digits: 2, companion: 'plotlySphereOpacitySlider' },
-    { display: 'plotlyGridDensityValueDisplay', key: 'plotlyGridDensity', companion: 'plotlyGridDensitySlider' },
+    { display: 'sphereGridOpacityValueDisplay', key: 'sphereGridOpacity', digits: 2, companion: 'sphereGridOpacitySlider' },
+    { display: 'taylorSeriesOrderValueDisplay', key: 'taylorSeriesOrder', companion: 'taylorSeriesOrderSlider' },
     { display: 'riemannSurfaceSheetsValueDisplay', key: 'riemannSurfaceSheets' },
     { display: 'riemannSurfaceBranchCenterValueDisplay', key: 'riemannSurfaceBranchCenter' },
     { display: 'riemannSurfaceHeightScaleValueDisplay', key: 'riemannSurfaceHeightScale', digits: 2 },

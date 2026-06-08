@@ -35,7 +35,8 @@ export function buildThreeJSMeshes() {
         const zPointSets = generateCurrentInputShapePointSets(zPlaneParams, {
             currentFunction: state.currentFunction,
             zetaContinuationEnabled: state.zetaContinuationEnabled,
-            curvePoints: 250 // Match LINE_RESOLUTION from reference HTML
+            curvePoints: 250, // Match LINE_RESOLUTION from reference HTML
+            gridDensity: state.gridDensity
         });
         zRenderer.buildGridFromPointSets(zPointSets);
     }
@@ -45,7 +46,8 @@ export function buildThreeJSMeshes() {
         const wPointSets = generateCurrentMappedInputShapePointSets(zPlaneParams, {
             currentFunction: state.currentFunction,
             zetaContinuationEnabled: state.zetaContinuationEnabled,
-            curvePoints: 250
+            curvePoints: 250,
+            gridDensity: state.gridDensity
         });
         wRenderer.buildGridFromPointSets(wPointSets);
     }

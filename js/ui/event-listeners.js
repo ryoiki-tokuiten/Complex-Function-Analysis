@@ -33,7 +33,7 @@ const DOMAIN_DIRTY_STATE_KEYS = new Set([
     'a0', 'b0', 'circleR', 'ellipseA', 'ellipseB', 'hyperbolaA', 'hyperbolaB',
     'stripY1', 'stripY2', 'sectorAngle1', 'sectorAngle2', 'sectorRMin', 'sectorRMax',
     'imageSize', 'imageOpacity', 'videoSize', 'videoOpacity', 'vectorFieldScale',
-    'zPlaneZoom', 'wPlaneZoom', 'fractionalPowerN'
+    'zPlaneZoom', 'wPlaneZoom', 'fractionalPowerN', 'plotlySphereOpacity', 'sphereGridOpacity'
 ]);
 
 const BASIC_SLIDER_BINDINGS = [
@@ -50,8 +50,8 @@ const BASIC_SLIDER_BINDINGS = [
     ['streamlineThicknessSlider', 'streamlineThickness'],
     ['streamlineSeedDensityFactorSlider', 'streamlineSeedDensityFactor'],
     ['radialDiscreteStepsCountSlider', 'radialDiscreteStepsCount', parseInteger],
-    ['plotlyGridDensitySlider', 'plotlyGridDensity', parseInteger],
     ['plotlySphereOpacitySlider', 'plotlySphereOpacity'],
+    ['sphereGridOpacitySlider', 'sphereGridOpacity'],
     ['taylorSeriesOrderSlider', 'taylorSeriesOrder', parseInteger],
     ['particleDensitySlider', 'particleDensity', parseInteger],
     ['particleSpeedSlider', 'particleSpeed'],
@@ -94,8 +94,6 @@ const BASIC_CHECKBOX_BINDINGS = [
     ['enableRiemannSphereCb', 'riemannSphereViewEnabled'],
     ['enablePlotly3DCb', 'plotly3DEnabled'],
     ['enableRiemannTransformationCb', 'riemannTransformationEnabled'],
-    ['toggleSphereAxesGridCb', 'showSphereAxesAndGrid'],
-    ['togglePlotlySphereGridCb', 'showPlotlySphereGrid'],
     ['enableTaylorSeriesCb', 'taylorSeriesEnabled'],
     ['enableTaylorSeriesCustomCenterCb', 'taylorSeriesCustomCenterEnabled'],
     ['enableGeneralPointsCb', 'generalPointsEnabled'],
@@ -139,8 +137,7 @@ const SPECIAL_CHECKBOXES = new Set([
     'enablePlotly3DCb', 'enableTaylorSeriesCb', 'enableTaylorSeriesCustomCenterCb',
     'enableGeneralPointsCb', 'laplaceShowROCCb', 'laplaceShowPolesZerosCb',
     'laplaceShowFourierLineCb', 'laplaceAnimationLoopCb', 'enableParticleAnimationCb',
-    'showVectorFieldPanelCb', 'enableDomainColoringCb', 'toggleSphereAxesGridCb',
-    'togglePlotlySphereGridCb'
+    'showVectorFieldPanelCb', 'enableDomainColoringCb'
 ]);
 
 const SPECIAL_SELECTORS = new Set([
@@ -737,6 +734,16 @@ function bindViewControls() {
     bindCheckbox('enableRiemannSphereCb', 'riemannSphereViewEnabled', () => {
         if (state.riemannSphereViewEnabled) {
             if (state.riemannSurfaceEnabled) disableRiemannSurface();
+            
+            if (!state.plotly3DEnabled) {
+                state.plotly3DEnabled = true;
+                checked('enablePlotly3DCb', true);
+                hidden(controls.plotly3DOptionsDiv, false);
+            }
+            if (!state.splitViewEnabled) {
+                state.splitViewEnabled = true;
+                checked('enableSplitViewCb', true);
+            }
         } else {
             state.riemannTransformationEnabled = false;
             checked('enableRiemannTransformationCb', false);
@@ -770,6 +777,22 @@ function bindViewControls() {
             }
             if (state.riemannSurfaceEnabled) {
                 disableRiemannSurface();
+            }
+            if (state.domainColoringEnabled) {
+                state.domainColoringEnabled = false;
+                checked('enableDomainColoringCb', false);
+                hidden(controls.domainColoringOptionsDiv, true);
+                hidden(controls.domainColoringKeyDiv, true);
+                hidden(controls.riemannSphereDomainColoringOptions, true);
+            }
+            if (state.splitViewEnabled) {
+                state.splitViewEnabled = false;
+                checked('enableSplitViewCb', false);
+            }
+            if (state.plotly3DEnabled) {
+                state.plotly3DEnabled = false;
+                checked('enablePlotly3DCb', false);
+                hidden(controls.plotly3DOptionsDiv, true);
             }
         }
         call(syncRiemannTransformationUI);
@@ -825,8 +848,6 @@ function bindViewControls() {
     }
 
     bindControlListener('riemannSurfaceResetViewBtn', 'click', () => resetRiemannSurfaceViews());
-    bindCheckbox('toggleSphereAxesGridCb', 'showSphereAxesAndGrid');
-    bindCheckbox('togglePlotlySphereGridCb', 'showPlotlySphereGrid');
 
     Object.entries(SPHERE_VIEW_BUTTONS).forEach(([controlKey, rotation]) => {
         bindControlListener(controlKey, 'click', () => {

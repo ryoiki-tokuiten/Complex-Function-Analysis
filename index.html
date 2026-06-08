@@ -1450,11 +1450,11 @@
                                 <label for="enable_plotly_3d_cb"
                                     class="control-label tooltip-label viz-toggle-card viz-toggle-card--compact">
                                     <input type="checkbox" id="enable_plotly_3d_cb" class="control-checkbox"
-                                        data-tooltip="Toggle interactive 3D Riemann Sphere rendering using Plotly for the w-plane">
+                                        data-tooltip="Toggle interactive 3D Riemann Sphere rendering using Three.js for the w-plane">
                                     <span class="custom-checkbox-visual"></span>
                                     <span class="viz-toggle-card-content">
                                         <span class="viz-toggle-card-title">3D Sphere</span>
-                                        <span class="viz-toggle-card-copy">Use Plotly for an interactive
+                                        <span class="viz-toggle-card-copy">Use Three.js for an interactive
                                             w-sphere.</span>
                                     </span>
                                 </label>
@@ -1483,15 +1483,6 @@
                                 class="dependent-settings-block hidden control-group-indent viz-subdetail-block">
                                 <div class="viz-settings-grid">
                                     <div class="control-group">
-                                        <label for="toggle_sphere_axes_grid_cb" class="control-label tooltip-label">
-                                            <input type="checkbox" id="toggle_sphere_axes_grid_cb"
-                                                class="control-checkbox"
-                                                data-tooltip="Toggle visibility of axes and grid lines in the 3D sphere view">
-                                            <span class="custom-checkbox-visual"></span>
-                                            Show Axes & Grid (3D)
-                                        </label>
-                                    </div>
-                                    <div class="control-group">
                                         <label for="plotly_sphere_opacity_slider">
                                             Sphere Opacity:
                                             <output id="plotly_sphere_opacity_value_display">0.10</output>
@@ -1500,52 +1491,25 @@
                                             <input type="range" id="plotly_sphere_opacity_slider"
                                                 name="plotly_sphere_opacity_slider" min="0" max="1" step="0.05"
                                                 value="0.10"
-                                                data-tooltip="Adjust opacity of the base Riemann sphere mesh in 3D Plotly view">
+                                                data-tooltip="Adjust opacity of the base Riemann sphere mesh in 3D view">
                                         </div>
                                     </div>
                                     <div class="control-group">
-                                        <label for="plotly_grid_density_slider">
-                                            Sphere Grid Density:
-                                            <output id="plotly_grid_density_value_display">12</output>
+                                        <label for="sphere_grid_opacity_slider">
+                                            Surface Grid Opacity:
+                                            <output id="sphere_grid_opacity_value_display">0.00</output>
                                         </label>
                                         <div class="slider-container">
-                                            <input type="range" id="plotly_grid_density_slider"
-                                                name="plotly_grid_density_slider" min="4" max="30" step="1" value="12"
-                                                data-tooltip="Adjust density of grid lines on the 3D Plotly sphere surface">
+                                            <input type="range" id="sphere_grid_opacity_slider"
+                                                name="sphere_grid_opacity_slider" min="0" max="1" step="0.05"
+                                                value="0"
+                                                data-tooltip="Adjust opacity of the intrinsic latitude/longitude grid on the sphere">
                                         </div>
-                                    </div>
-                                    <div class="control-group">
-                                        <label for="toggle_plotly_sphere_grid_cb" class="control-label tooltip-label">
-                                            <input type="checkbox" id="toggle_plotly_sphere_grid_cb"
-                                                class="control-checkbox" checked
-                                                data-tooltip="Toggle visibility of the latitude/longitude grid lines on the sphere surface">
-                                            <span class="custom-checkbox-visual"></span>
-                                            Show Sphere Surface Grid
-                                        </label>
                                     </div>
                                 </div>
                             </div>
                         </div>
-                        <div id="sphere_view_controls_div" class="dependent-settings-block hidden viz-detail-block">
-                            <div class="viz-detail-header">
-                                <span class="viz-detail-title">Sphere Views</span>
-                                <span class="viz-detail-copy">Jump to common orientations.</span>
-                            </div>
-                            <div class="sphere-view-button-row">
-                                <button id="sphere_view_north_btn"
-                                    data-tooltip="View Riemann sphere from North Pole">North</button>
-                                <button id="sphere_view_south_btn"
-                                    data-tooltip="View Riemann sphere from South Pole">South</button>
-                                <button id="sphere_view_east_btn"
-                                    data-tooltip="View Riemann sphere from East">East</button>
-                                <button id="sphere_view_west_btn"
-                                    data-tooltip="View Riemann sphere from West">West</button>
-                                <button id="sphere_view_front_btn"
-                                    data-tooltip="View Riemann sphere from Front (default perspective)">Front</button>
-                                <button id="sphere_view_reset_btn"
-                                    data-tooltip="Reset Riemann sphere rotation to initial view">Reset</button>
-                            </div>
-                        </div>
+
                     </div>
 
                     <div class="viz-feature-section viz-feature-section--vector">

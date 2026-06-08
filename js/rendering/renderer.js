@@ -30,7 +30,8 @@ import {
 } from './webgl-planar.js';
 import { drawWindingVisualization, drawTimeDomainSignal } from './draw-fourier-winding.js';
 import { drawLaplaceWindingVisualization, drawLaplaceTimeDomain } from './draw-laplace-panels.js';
-import { renderPlotlyRiemannSphere } from './draw-plotly-sphere.js';
+import { ThreeRiemannRenderer } from './three-riemann-renderer.js';
+import { generateCurrentMappedInputShapePointSets, buildInputShapeGeometryConfig } from './shape-generators.js';
 import { hideRiemannSurface, renderRiemannSurface } from './webgl-riemann-surface.js';
 import { drawAxes, drawGridLines } from './canvas-primitives.js';
 import {
@@ -67,6 +68,7 @@ let wCtxList;
 let wPlaneParamsList;
 let wPlanePlotlyContainersList;
 let sphereViewWParamsList;
+let wStaticThreeRenderer = null;
 
 const { controls } = context;
 
@@ -1008,6 +1010,9 @@ function showPlotlyContainer() {
 
 function hidePlotlyContainer() {
     setHidden(controls.wPlanePlotlyContainer, true);
+    if (wStaticThreeRenderer) {
+        wStaticThreeRenderer.stopAnimationLoop();
+    }
 }
 
 function setPlotlyContainerSize() {
@@ -1103,7 +1108,47 @@ function renderPlotlyWPlane(transform) {
     hideCanvas(wCanvas);
     showPlotlyContainer();
     setPlotlyContainerSize();
-    renderPlotlyRiemannSphere(transform, container);
+
+    if (!wStaticThreeRenderer) {
+        wStaticThreeRenderer = new ThreeRiemannRenderer(container, 'w');
+    }
+
+    const gridConfigObj = buildInputShapeGeometryConfig(zPlaneParams, {
+        currentFunction: state.currentFunction,
+        zetaContinuationEnabled: state.zetaContinuationEnabled,
+        gridDensity: state.gridDensity
+    });
+    const gridConfigKey = JSON.stringify(gridConfigObj);
+
+    if (wStaticThreeRenderer.lastGridConfigKey !== gridConfigKey) {
+        // Skip rebuilding heavy 3D geometries continuously during 2D canvas drag-panning
+        if (state.panStateZ.isPanning || state.panStateW.isPanning) {
+            // We'll catch it on the pointerup event which triggers a redraw
+        } else {
+            wStaticThreeRenderer.lastGridConfigKey = gridConfigKey;
+
+            const wPointSets = generateCurrentMappedInputShapePointSets(zPlaneParams, {
+                currentFunction: state.currentFunction,
+                zetaContinuationEnabled: state.zetaContinuationEnabled,
+                curvePoints: 250,
+                gridDensity: state.gridDensity
+            });
+
+            wStaticThreeRenderer.buildGridFromPointSets(wPointSets, 1.0);
+        }
+    }
+
+    wStaticThreeRenderer.updateGeometry(1.0);
+
+    if (state.probeActive && state.probeZ) {
+        const tfProfile = getMappedTransformProfile(state.currentFunction);
+        const wProbe = tfProfile.evaluate(state.probeZ.re, state.probeZ.im);
+        wStaticThreeRenderer.updateProbe(wProbe);
+    } else {
+        wStaticThreeRenderer.updateProbe(null);
+    }
+
+    wStaticThreeRenderer.startAnimationLoop();
 }
 
 function shouldDrawWReferenceGrid() {
