@@ -1,3 +1,5 @@
+import { parseExpression, walkExpression } from '../math/expression/parser.js';
+
 const MULTIVALUED_FUNCTIONS = new Set(['ln', 'power']);
 
 function isIntegerLike(value) {
@@ -27,8 +29,59 @@ export function algebraicExpressionHasBranches(terms, runtimeState) {
     );
 }
 
+function expressionHasBranches(source, runtimeState) {
+    try {
+        const ast = parseExpression(source);
+        let hasBranches = false;
+
+        walkExpression(ast, node => {
+            if (hasBranches) return;
+            if (node.type === 'call') {
+                if (node.name === 'ln' || node.name === 'log' || node.name === 'sqrt') {
+                    hasBranches = true;
+                } else if (
+                    (node.name === 'selected' || node.name === 'selectedFunction' || node.name === 'f') &&
+                    isMultivaluedFunction(runtimeState.currentFunction, runtimeState)
+                ) {
+                    hasBranches = true;
+                } else if (isMultivaluedFunction(node.name, runtimeState)) {
+                    hasBranches = true;
+                }
+            }
+
+            if (node.type === 'binary' && node.op === '^') {
+                const exponent = node.right?.type === 'literal' && Math.abs(node.right.value?.im || 0) < 1e-12
+                    ? node.right.value.re
+                    : NaN;
+                if (!isIntegerLike(exponent)) hasBranches = true;
+            }
+        });
+
+        return hasBranches;
+    } catch {
+        return false;
+    }
+}
+
+export function dynamicExpressionHasBranches(runtimeState) {
+    const config = runtimeState?.dynamicPlotting;
+    if (!config?.enabled || config.mode !== 'aggregate') return false;
+    if (expressionHasBranches(config.pointExpression || 'd', runtimeState)) return true;
+    if (config.term?.kind === 'selected-function') {
+        return isMultivaluedFunction(runtimeState.currentFunction, runtimeState);
+    }
+    return expressionHasBranches(config.term?.expression || 'selected(z)', runtimeState);
+}
+
 export function baseExpressionHasBranches(runtimeState) {
     if (!runtimeState) return false;
+    if (
+        runtimeState.dynamicPlotting?.enabled &&
+        runtimeState.dynamicPlotting.mode === 'aggregate' &&
+        runtimeState.dynamicPlotting.reduction?.kind !== 'none'
+    ) {
+        return dynamicExpressionHasBranches(runtimeState);
+    }
     if (runtimeState.taylorSeriesEnabled) return false;
     if (runtimeState.currentFunction === 'algebraic_chaining') {
         return algebraicExpressionHasBranches(runtimeState.algebraicChainingTerms, runtimeState);

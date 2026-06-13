@@ -8,6 +8,11 @@ import {
   setComplexFunctionUniformsShared
 } from './webgl-shared.js';
 import {
+  buildDynamicAggregateGLSL,
+  dynamicAggregateGLSLSignature,
+  isDynamicAggregateGLSLActive
+} from '../math/expression/glsl.js';
+import {
   getBranchWindowLabel,
   getSurfaceComponentLabel,
   getVisibleBranchIndices,
@@ -532,6 +537,12 @@ const SURFACE_MATH_GLSL = Object.freeze({
     return isFiniteVec2Compat(mapped);
   }
   float fId = floor(functionId + 0.5);
+  if (abs(fId - 17.0) < 0.5) {
+    return evaluateDynamicAggregateOnSheet(
+      z, branchIndex, branchCutWidth, mA, mB, mC, mD,
+      polyDeg, polyCoeffs, zetaCont, zetaRefl, fracPower, mapped
+    );
+  }
   if (abs(fId - 16.0) < 0.5) {
 ${buildAlgebraicBranchBody(appState)}
   }
@@ -740,7 +751,46 @@ const FRAGMENT_GLSL = Object.freeze({
 });
 
 export function buildRiemannSurfaceMathLibrary(appState) {
+  const dynamic = buildDynamicAggregateGLSL(
+    appState,
+    functionName => getWebGLDomainColorFunctionIdShared(functionName, true)
+  );
+  const dynamicSource = dynamic.source || `bool evaluateDynamicAggregate(
+  vec2 s,
+  vec2 mA,
+  vec2 mB,
+  vec2 mC,
+  vec2 mD,
+  int polyDeg,
+  vec2 polyCoeffs[11],
+  float zetaCont,
+  float zetaRefl,
+  float fracPower,
+  out vec2 mapped
+) {
+  mapped = vec2(0.0);
+  return false;
+}
+bool evaluateDynamicAggregateOnSheet(
+  vec2 s,
+  float branchIndex,
+  float branchCutWidth,
+  vec2 mA,
+  vec2 mB,
+  vec2 mC,
+  vec2 mD,
+  int polyDeg,
+  vec2 polyCoeffs[11],
+  float zetaCont,
+  float zetaRefl,
+  float fracPower,
+  out vec2 mapped
+) {
+  mapped = vec2(0.0);
+  return false;
+}`;
   return `${GLSL_COMPLEX_MATH_LIBRARY_BASE}
+${dynamicSource}
 ${assembleGlslModules(SURFACE_MATH_GLSL, ['evaluateSurfaceStage'], { appState })}
 `;
 }
@@ -999,7 +1049,10 @@ function disposeMesh(gl, mesh) {
 }
 
 function getProgramSignature(appState) {
-  return JSON.stringify((appState && appState.algebraicChainingTerms) || []);
+  return JSON.stringify({
+    algebraic: (appState && appState.algebraicChainingTerms) || [],
+    dynamic: dynamicAggregateGLSLSignature(appState)
+  });
 }
 
 function collectArrayUniformLocations(gl, program, name, length) {
@@ -1155,7 +1208,7 @@ function resizeRenderer(renderer) {
 }
 
 function getTaylorCoefficients(order) {
-  if (!state.taylorSeriesEnabled) return null;
+  if (!state.taylorSeriesEnabled || isDynamicAggregateGLSLActive(state)) return null;
 
   const coefficients = computeTaylorSeriesCoefficients(
     state.currentFunction,
@@ -1477,6 +1530,13 @@ class RiemannSurfaceRendererFactory {
 const rendererFactory = new RiemannSurfaceRendererFactory();
 
 export function renderRiemannSurface(baseCanvas, stage = 1) {
+  if (isDynamicAggregateGLSLActive(state)) {
+    const dynamic = buildDynamicAggregateGLSL(
+      state,
+      functionName => getWebGLDomainColorFunctionIdShared(functionName, true)
+    );
+    if (!dynamic.source || dynamic.error) return false;
+  }
   return rendererFactory.render(baseCanvas, stage);
 }
 

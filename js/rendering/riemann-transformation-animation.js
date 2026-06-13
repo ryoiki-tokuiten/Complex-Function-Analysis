@@ -4,67 +4,204 @@ import { ThreeRiemannRenderer } from './three-riemann-renderer.js';
 import { generateCurrentInputShapePointSets, generateCurrentMappedInputShapePointSets } from './shape-generators.js';
 import { getMappedTransformProfile } from '../math-utils.js';
 
-let zRenderer = null;
-let wRenderer = null;
-let animationHandle = null;
-let lastFrameTime = 0;
+/**
+ * ARCHITECTURAL DESIGN: Polymorphic Component Encapsulation (High Performance)
+ * 
+ * KEY OPTIMIZATIONS:
+ * 1. Zero-Allocation Loop: Uses a pre-allocated array and classic loops to eliminate GC pressure.
+ * 2. Dirty-Checking: DOM updates are strictly gated by state-change detection to prevent layout thrashing.
+ * 3. Math Memoization: Transform profiles are cached to eliminate heavy CPU load during probe movement.
+ * 4. Pure Polymorphism: Z and W planes are driven entirely by their config descriptors.
+ */
 
-let directionZ = 1;
-let directionW = 1;
-let pauseTimerZ = 0;
-let pauseTimerW = 0;
+const ANIMATION_DURATION = 4.0;
+const BOUNCE_PAUSE_TIME = 1.5;
 
-const ANIMATION_DURATION = 4.0; // 4 seconds
+const SVG_ICONS = {
+    PLAY: `<svg viewBox="0 0 24 24"><path d="M8 5v14l11-7z"></path></svg>`,
+    PAUSE: `<svg viewBox="0 0 24 24"><rect x="6" y="4" width="4" height="16"></rect><rect x="14" y="4" width="4" height="16"></rect></svg>`
+};
 
-export function initThreeJSRenderers() {
-    if (!zRenderer) {
-        const zContainer = document.getElementById('z_plane_threejs_container');
-        if (zContainer) zRenderer = new ThreeRiemannRenderer(zContainer, 'z');
+/**
+ * Plane Configuration Descriptor
+ * Centralizes the divergence between Z and W planes, including mathematical projection strategies.
+ */
+const PLANE_CONFIGS = {
+    z: {
+        containerId: 'z_plane_threejs_container',
+        sliderId: 'z_transformation_progress_slider',
+        buttonId: 'z_transformation_play_pause_btn',
+        progressKey: 'riemannTransformationProgressZ',
+        playingKey: 'riemannTransformationPlayingZ',
+        generator: generateCurrentInputShapePointSets,
+        // The Z-plane evaluates directly to itself
+        evaluateProbe: (probeZ, mathCache) => probeZ 
+    },
+    w: {
+        containerId: 'w_plane_threejs_container',
+        sliderId: 'w_transformation_progress_slider',
+        buttonId: 'w_transformation_play_pause_btn',
+        progressKey: 'riemannTransformationProgressW',
+        playingKey: 'riemannTransformationPlayingW',
+        generator: generateCurrentMappedInputShapePointSets,
+        // The W-plane memoizes the complex transformation map against the current global function
+        evaluateProbe: (probeZ, mathCache) => {
+            if (state.currentFunction !== mathCache.currentFunction) {
+                mathCache.tfProfile = getMappedTransformProfile(state.currentFunction);
+                mathCache.currentFunction = state.currentFunction;
+            }
+            return mathCache.tfProfile ? mathCache.tfProfile.evaluate(probeZ.re, probeZ.im) : null;
+        }
     }
-    if (!wRenderer) {
-        const wContainer = document.getElementById('w_plane_threejs_container');
-        if (wContainer) wRenderer = new ThreeRiemannRenderer(wContainer, 'w');
+};
+
+class PlaneController {
+    constructor(id, config) {
+        this.id = id;
+        this.config = config;
+        this.renderer = null;
+        
+        // Temporal state
+        this.direction = 1;
+        this.pauseTimer = 0;
+
+        // DOM Cache
+        this.ui = { slider: null, button: null };
+
+        // State & Math Cache for Dirty-Checking
+        this.cache = {
+            progress: null,
+            playing: null,
+            currentFunction: null,
+            tfProfile: null
+        };
     }
-}
 
-export function buildThreeJSMeshes() {
-    if (!zRenderer && !wRenderer) return;
-
-    // Build Z Plane Grids
-    if (zRenderer) {
-        const zPointSets = generateCurrentInputShapePointSets(zPlaneParams, {
-            currentFunction: state.currentFunction,
-            zetaContinuationEnabled: state.zetaContinuationEnabled,
-            curvePoints: 250, // Match LINE_RESOLUTION from reference HTML
-            gridDensity: state.gridDensity
-        });
-        zRenderer.buildGridFromPointSets(zPointSets);
+    init() {
+        const container = document.getElementById(this.config.containerId);
+        if (container) {
+            this.renderer = new ThreeRiemannRenderer(container, this.id);
+        }
+        this.ui.slider = document.getElementById(this.config.sliderId);
+        this.ui.button = document.getElementById(this.config.buttonId);
     }
 
-    // Build W Plane Grids
-    if (wRenderer) {
-        const wPointSets = generateCurrentMappedInputShapePointSets(zPlaneParams, {
+    build() {
+        if (!this.renderer) return;
+        const pointSets = this.config.generator(zPlaneParams, {
             currentFunction: state.currentFunction,
             zetaContinuationEnabled: state.zetaContinuationEnabled,
             curvePoints: 250,
             gridDensity: state.gridDensity
         });
-        wRenderer.buildGridFromPointSets(wPointSets);
+        this.renderer.buildGridFromPointSets(pointSets);
+    }
+
+    /**
+     * Computes temporal progression. Returns true if actively playing.
+     */
+    updateAnimation(deltaTime) {
+        const isPlaying = state[this.config.playingKey];
+        if (!isPlaying) return false;
+
+        if (this.pauseTimer > 0) {
+            this.pauseTimer -= deltaTime;
+            return true;
+        }
+
+        const deltaProgress = deltaTime / ANIMATION_DURATION;
+        let progress = state[this.config.progressKey] + this.direction * deltaProgress;
+
+        if (progress >= 1.0) {
+            progress = 1.0;
+            this.direction = -1;
+            this.pauseTimer = BOUNCE_PAUSE_TIME;
+        } else if (progress <= 0.0) {
+            progress = 0.0;
+            this.direction = 1;
+            this.pauseTimer = BOUNCE_PAUSE_TIME;
+        }
+
+        state[this.config.progressKey] = progress;
+        return true;
+    }
+
+    /**
+     * Handles polymorphic spatial probe projection.
+     */
+    updateProbe(probeZ) {
+        if (!this.renderer) return;
+        if (!probeZ) {
+            this.renderer.updateProbe(null);
+            return;
+        }
+        
+        const mappedProbe = this.config.evaluateProbe(probeZ, this.cache);
+        this.renderer.updateProbe(mappedProbe);
+    }
+
+    /**
+     * Synchronizes the DOM using dirty-checking to prevent layout thrashing.
+     */
+    syncUI() {
+        const currentProgress = state[this.config.progressKey];
+        const currentPlaying = state[this.config.playingKey];
+
+        // Sync Slider (Guarded against contention)
+        if (currentProgress !== this.cache.progress) {
+            if (this.ui.slider && document.activeElement !== this.ui.slider) {
+                this.ui.slider.value = currentProgress;
+            }
+            this.cache.progress = currentProgress;
+        }
+
+        // Sync Button (Guarded against innerHTML thrashing)
+        if (currentPlaying !== this.cache.playing) {
+            if (this.ui.button) {
+                this.ui.button.innerHTML = currentPlaying ? SVG_ICONS.PAUSE : SVG_ICONS.PLAY;
+                this.ui.button.classList.toggle('playing', currentPlaying);
+            }
+            this.cache.playing = currentPlaying;
+        }
+    }
+
+    render(progress) {
+        if (!this.renderer) return;
+        this.renderer.updateGeometry(progress);
+        this.renderer.render();
+    }
+
+    resetTemporalState() {
+        this.direction = 1;
+        this.pauseTimer = 0;
+    }
+
+    dispose() {
+        if (this.renderer) {
+            this.renderer.dispose();
+            this.renderer = null;
+        }
+        // Drop DOM references to prevent memory leaks if container is destroyed
+        this.ui.slider = null;
+        this.ui.button = null;
     }
 }
 
-function updateProbePositions() {
-    if (state.probeActive && state.probeZ) {
-        if (zRenderer) zRenderer.updateProbe(state.probeZ);
-        if (wRenderer) {
-            const tfProfile = getMappedTransformProfile(state.currentFunction);
-            const wProbe = tfProfile.evaluate(state.probeZ.re, state.probeZ.im);
-            wRenderer.updateProbe(wProbe);
-        }
-    } else {
-        if (zRenderer) zRenderer.updateProbe(null);
-        if (wRenderer) wRenderer.updateProbe(null);
-    }
+// Pre-allocate controllers to eliminate GC pressure
+const controllers = Object.entries(PLANE_CONFIGS).map(([id, config]) => new PlaneController(id, config));
+let animationHandle = null;
+let lastFrameTime = 0;
+
+/**
+ * PUBLIC API - Frozen Signatures for downstream parity
+ */
+
+export function initThreeJSRenderers() {
+    for (let i = 0; i < controllers.length; i++) controllers[i].init();
+}
+
+export function buildThreeJSMeshes() {
+    for (let i = 0; i < controllers.length; i++) controllers[i].build();
 }
 
 export function startRiemannTransformationAnimation() {
@@ -77,53 +214,32 @@ export function startRiemannTransformationAnimation() {
             return;
         }
 
-        if (!state.riemannTransformationPlayingZ && !state.riemannTransformationPlayingW) {
-            // Keep rendering to allow orbit controls if paused
-            if (zRenderer) zRenderer.render();
-            if (wRenderer) wRenderer.render();
-            lastFrameTime = timestamp; // Prevent time jump on resume
-            animationHandle = requestAnimationFrame(animateFrame);
-            return;
-        }
-
         const deltaTime = (timestamp - lastFrameTime) / 1000;
         lastFrameTime = timestamp;
-        const deltaProgress = deltaTime / ANIMATION_DURATION;
 
-        // Process Z Plane
-        if (state.riemannTransformationPlayingZ) {
-            if (pauseTimerZ > 0) {
-                pauseTimerZ -= deltaTime;
-            } else {
-                let nextZ = state.riemannTransformationProgressZ + directionZ * deltaProgress;
-                if (nextZ >= 1.0) { nextZ = 1.0; directionZ = -1; pauseTimerZ = 1.5; }
-                else if (nextZ <= 0.0) { nextZ = 0.0; directionZ = 1; pauseTimerZ = 1.5; }
-                state.riemannTransformationProgressZ = nextZ;
-                syncRiemannSliders();
+        let isAnyPlaneMoving = false;
+
+        // 1. Math Pipeline
+        for (let i = 0; i < controllers.length; i++) {
+            if (controllers[i].updateAnimation(deltaTime)) {
+                isAnyPlaneMoving = true;
             }
         }
 
-        // Process W Plane
-        if (state.riemannTransformationPlayingW) {
-            if (pauseTimerW > 0) {
-                pauseTimerW -= deltaTime;
-            } else {
-                let nextW = state.riemannTransformationProgressW + directionW * deltaProgress;
-                if (nextW >= 1.0) { nextW = 1.0; directionW = -1; pauseTimerW = 1.5; }
-                else if (nextW <= 0.0) { nextW = 0.0; directionW = 1; pauseTimerW = 1.5; }
-                state.riemannTransformationProgressW = nextW;
-                syncRiemannSliders();
-            }
+        // 2. Spatial Projection Pipeline
+        const activeProbe = (state.probeActive && state.probeZ) ? state.probeZ : null;
+        for (let i = 0; i < controllers.length; i++) {
+            controllers[i].updateProbe(activeProbe);
         }
 
-        if (zRenderer) {
-            zRenderer.updateGeometry(state.riemannTransformationProgressZ);
-            updateProbePositions();
-            zRenderer.render();
+        // 3. WebGL Render Pipeline
+        for (let i = 0; i < controllers.length; i++) {
+            controllers[i].render(state[controllers[i].config.progressKey]);
         }
-        if (wRenderer) {
-            wRenderer.updateGeometry(state.riemannTransformationProgressW);
-            wRenderer.render();
+
+        // 4. DOM Sync Pipeline (Gated)
+        if (isAnyPlaneMoving) {
+            syncRiemannSliders();
         }
 
         animationHandle = requestAnimationFrame(animateFrame);
@@ -157,51 +273,22 @@ export function resetRiemannTransformationAnimation() {
     stopRiemannTransformationAnimation();
     state.riemannTransformationProgressZ = 0.0;
     state.riemannTransformationProgressW = 0.0;
-    directionZ = 1; directionW = 1;
-    pauseTimerZ = 0; pauseTimerW = 0;
+    
+    for (let i = 0; i < controllers.length; i++) {
+        controllers[i].resetTemporalState();
+        controllers[i].render(0);
+    }
+
     syncRiemannSliders();
     syncRiemannTransformationPlayPauseButton();
-    
-    if (zRenderer) {
-        zRenderer.updateGeometry(0);
-        zRenderer.render();
-    }
-    if (wRenderer) {
-        wRenderer.updateGeometry(0);
-        wRenderer.render();
-    }
 }
 
 export function syncRiemannSliders() {
-    const sliderZ = document.getElementById('z_transformation_progress_slider');
-    if (sliderZ && document.activeElement !== sliderZ) sliderZ.value = state.riemannTransformationProgressZ;
-    
-    const sliderW = document.getElementById('w_transformation_progress_slider');
-    if (sliderW && document.activeElement !== sliderW) sliderW.value = state.riemannTransformationProgressW;
+    for (let i = 0; i < controllers.length; i++) controllers[i].syncUI();
 }
 
 export function syncRiemannTransformationPlayPauseButton() {
-    const btnZ = document.getElementById('z_transformation_play_pause_btn');
-    if (btnZ) {
-        if (state.riemannTransformationPlayingZ) {
-            btnZ.innerHTML = `<svg viewBox="0 0 24 24"><rect x="6" y="4" width="4" height="16"></rect><rect x="14" y="4" width="4" height="16"></rect></svg>`;
-            btnZ.classList.add('playing');
-        } else {
-            btnZ.innerHTML = `<svg viewBox="0 0 24 24"><path d="M8 5v14l11-7z"></path></svg>`;
-            btnZ.classList.remove('playing');
-        }
-    }
-    
-    const btnW = document.getElementById('w_transformation_play_pause_btn');
-    if (btnW) {
-        if (state.riemannTransformationPlayingW) {
-            btnW.innerHTML = `<svg viewBox="0 0 24 24"><rect x="6" y="4" width="4" height="16"></rect><rect x="14" y="4" width="4" height="16"></rect></svg>`;
-            btnW.classList.add('playing');
-        } else {
-            btnW.innerHTML = `<svg viewBox="0 0 24 24"><path d="M8 5v14l11-7z"></path></svg>`;
-            btnW.classList.remove('playing');
-        }
-    }
+    for (let i = 0; i < controllers.length; i++) controllers[i].syncUI();
 }
 
 export function disposeThreeJSRenderers() {
@@ -209,11 +296,11 @@ export function disposeThreeJSRenderers() {
         cancelAnimationFrame(animationHandle);
         animationHandle = null;
     }
-    if (zRenderer) { zRenderer.dispose(); zRenderer = null; }
-    if (wRenderer) { wRenderer.dispose(); wRenderer = null; }
+    for (let i = 0; i < controllers.length; i++) controllers[i].dispose();
 }
 
 export function renderThreeJSFrame() {
-    if (zRenderer) zRenderer.render();
-    if (wRenderer) wRenderer.render();
+    for (let i = 0; i < controllers.length; i++) {
+        controllers[i].render(state[controllers[i].config.progressKey]);
+    }
 }

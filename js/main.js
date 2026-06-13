@@ -12,6 +12,11 @@ import { setupEventListeners, setActiveFunctionButton, initializeStateFromContro
 import { initializeSectionAnimations } from './ui/section-animations.js';
 import { initializeTooltips, showDynamicTooltip, hideDynamicTooltip } from './ui/tooltip.js';
 import { mapCanvasToWorldCoords } from './utils/canvas-utils.js';
+import { initializeDynamicPlottingEngine } from './analysis/dynamic-plotting.js';
+import {
+    findNearestDynamicSample,
+    formatDynamicSampleTooltip
+} from './rendering/draw-dynamic-plotting.js';
 
 const { controls } = context;
 
@@ -78,6 +83,7 @@ function initializeAnimationSpeedSelectors() {
 
 function setup() {
     try {
+        initializeDynamicPlottingEngine();
         setupDOMReferences();
         setupVisualParameters(true, true);
         initializeStateFromControls();
@@ -107,74 +113,88 @@ function setup() {
 }
 
 function setupCanvasTooltipEvents() {
-    if (!controls.zPlaneCanvas) return;
+    const bindPlaneTooltip = (canvas, plane, planeParams) => {
+        if (!canvas || !planeParams) return;
+        canvas.addEventListener('mousemove', (event) => {
+            try {
+                const rect = canvas.getBoundingClientRect();
+                const mouseX = event.clientX - rect.left;
+                const mouseY = event.clientY - rect.top;
 
-    controls.zPlaneCanvas.addEventListener('mousemove', (event) => {
-        try {
-            const rect = controls.zPlaneCanvas.getBoundingClientRect();
-            const mouseX = event.clientX - rect.left;
-            const mouseY = event.clientY - rect.top;
+                const worldCoords = mapCanvasToWorldCoords(mouseX, mouseY, planeParams);
+                const probeWorld = { re: worldCoords.x, im: worldCoords.y };
 
-            const worldCoords = mapCanvasToWorldCoords(mouseX, mouseY, zPlaneParams);
-            const probeWorld = { re: worldCoords.x, im: worldCoords.y };
+                let foundItem = null;
+                const xRange = planeParams.currentVisXRange || planeParams.xRange;
+                const clickRadiusWorld = xRange[1] - xRange[0];
+                const tolerance = (clickRadiusWorld / planeParams.width) * 5;
 
-            let foundItem = null;
-            const clickRadiusWorld = zPlaneParams.currentVisXRange[1] - zPlaneParams.currentVisXRange[0];
-            const tolerance = (clickRadiusWorld / zPlaneParams.width) * 5; 
+                const dynamicSample = findNearestDynamicSample(probeWorld, plane, {
+                    worldSpan: clickRadiusWorld,
+                    pixelWidth: planeParams.width,
+                    tolerance: tolerance * 2
+                });
+                if (dynamicSample) {
+                    foundItem = formatDynamicSampleTooltip(dynamicSample);
+                }
 
-            if (state.poles && state.showZerosPoles) {
-                for (const pole of state.poles) {
-                    if (Math.abs(pole.re - probeWorld.re) < tolerance && Math.abs(pole.im - probeWorld.im) < tolerance) {
-                        let content = `<b>Singularity</b><br>z = ${pole.re.toFixed(3)} + ${pole.im.toFixed(3)}i`;
-                        content += `<br>Type: ${pole.type || 'Unknown'}`;
-                        if (pole.type === 'pole' && pole.order) {
-                            content += `<br>Order: ${pole.order}`;
+                if (!foundItem && plane === 'z' && state.poles && state.showZerosPoles) {
+                    for (const pole of state.poles) {
+                        if (Math.abs(pole.re - probeWorld.re) < tolerance && Math.abs(pole.im - probeWorld.im) < tolerance) {
+                            let content = `<b>Singularity</b><br>z = ${pole.re.toFixed(3)} + ${pole.im.toFixed(3)}i`;
+                            content += `<br>Type: ${pole.type || 'Unknown'}`;
+                            if (pole.type === 'pole' && pole.order) {
+                                content += `<br>Order: ${pole.order}`;
+                            }
+                            if (pole.residue && typeof pole.residue.re === 'number' && typeof pole.residue.im === 'number' &&
+                                isFinite(pole.residue.re) && isFinite(pole.residue.im)) {
+                                content += `<br>Residue: ${pole.residue.re.toFixed(3)} + ${pole.residue.im.toFixed(3)}i`;
+                            }
+                            foundItem = content;
+                            break;
                         }
-                        if (pole.residue && typeof pole.residue.re === 'number' && typeof pole.residue.im === 'number' &&
-                            isFinite(pole.residue.re) && isFinite(pole.residue.im)) {
-                            content += `<br>Residue: ${pole.residue.re.toFixed(3)} + ${pole.residue.im.toFixed(3)}i`;
+                    }
+                }
+
+                if (!foundItem && plane === 'z' && state.zeros && state.showZerosPoles) {
+                    for (const zero of state.zeros) {
+                        if (Math.abs(zero.re - probeWorld.re) < tolerance && Math.abs(zero.im - probeWorld.im) < tolerance) {
+                            foundItem = `<b>Zero</b><br>z = ${zero.re.toFixed(3)} + ${zero.im.toFixed(3)}i`;
+                            break;
                         }
-                        foundItem = content;
-                        break;
                     }
                 }
-            }
 
-            if (!foundItem && state.zeros && state.showZerosPoles) {
-                for (const zero of state.zeros) {
-                    if (Math.abs(zero.re - probeWorld.re) < tolerance && Math.abs(zero.im - probeWorld.im) < tolerance) {
-                        foundItem = `<b>Zero</b><br>z = ${zero.re.toFixed(3)} + ${zero.im.toFixed(3)}i`;
-                        break;
+                if (!foundItem && plane === 'z' && state.criticalPoints && state.showCriticalPoints) {
+                    for (const cp of state.criticalPoints) {
+                        if (Math.abs(cp.re - probeWorld.re) < tolerance && Math.abs(cp.im - probeWorld.im) < tolerance) {
+                            foundItem = `<b>Critical Point</b><br>z = ${cp.re.toFixed(3)} + ${cp.im.toFixed(3)}i`;
+                            break;
+                        }
                     }
                 }
-            }
 
-            if (!foundItem && state.criticalPoints && state.showCriticalPoints) {
-                for (const cp of state.criticalPoints) {
-                    if (Math.abs(cp.re - probeWorld.re) < tolerance && Math.abs(cp.im - probeWorld.im) < tolerance) {
-                        foundItem = `<b>Critical Point</b><br>z = ${cp.re.toFixed(3)} + ${cp.im.toFixed(3)}i`;
-                        break;
-                    }
+                if (foundItem) {
+                    showDynamicTooltip(foundItem, event.pageX, event.pageY);
+                } else {
+                    hideDynamicTooltip();
                 }
+            } catch (error) {
+                console.error(`Error in ${plane}-plane mousemove listener for tooltips:`, error);
             }
+        });
 
-            if (foundItem) {
-                showDynamicTooltip(foundItem, event.pageX, event.pageY);
-            } else {
+        canvas.addEventListener('mouseout', () => {
+            try {
                 hideDynamicTooltip();
+            } catch (error) {
+                console.error(`Error in ${plane}-plane mouseout listener for tooltips:`, error);
             }
-        } catch (error) {
-            console.error("Error in zPlaneCanvas mousemove listener for tooltips:", error);
-        }
-    });
+        });
+    };
 
-    controls.zPlaneCanvas.addEventListener('mouseout', () => {
-        try {
-            hideDynamicTooltip();
-        } catch (error) {
-            console.error("Error in zPlaneCanvas mouseout listener for tooltips:", error);
-        }
-    });
+    bindPlaneTooltip(controls.zPlaneCanvas, 'z', zPlaneParams);
+    bindPlaneTooltip(controls.wPlaneCanvas, 'w', context.wPlaneParamsList?.[0]);
 }
 
 // Event bus subscriptions for asynchronous redraw events from raster-media

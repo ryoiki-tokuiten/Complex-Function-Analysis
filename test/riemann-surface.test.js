@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 
 import {
     algebraicExpressionHasBranches,
+    dynamicExpressionHasBranches,
     getBranchWindowLabel,
     getVisibleBranchIndices,
     surfaceStageHasBranches
@@ -79,4 +80,18 @@ test('branch windows remain odd, bounded, and centered', () => {
     assert.deepEqual(getVisibleBranchIndices(8, 3, true), [0, 1, 2, 3, 4, 5, 6]);
     assert.deepEqual(getVisibleBranchIndices(99, -2, true), [-6, -5, -4, -3, -2, -1, 0, 1, 2]);
     assert.equal(getBranchWindowLabel([-2, -1, 0, 1, 2]), 'sheets k = -2...2');
+});
+
+test('dynamic aggregate expressions contribute branch metadata', () => {
+    const runtimeState = makeState({
+        dynamicPlotting: {
+            enabled: true,
+            mode: 'aggregate',
+            pointExpression: 'd',
+            term: { kind: 'expression', expression: 'sqrt(s) + d^(-s)' },
+            reduction: { kind: 'sum' }
+        }
+    });
+    assert.equal(dynamicExpressionHasBranches(runtimeState), true);
+    assert.equal(surfaceStageHasBranches(runtimeState, 1), true);
 });

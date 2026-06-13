@@ -1,5 +1,9 @@
 import { state } from '../store/state.js';
 import { ZETA_REFLECTION_POINT_RE } from '../constants/numerical.js';
+import {
+    buildDynamicAggregateGLSL,
+    isDynamicAggregateGLSLActive
+} from '../math/expression/glsl.js';
 /**
  * Shared WebGL utility functions and common GLSL shaders for complex arithmetic.
  */
@@ -193,7 +197,8 @@ export function getWebGLBackendInfoShared(gl) {
     return info;
 }
 
-export function getWebGLDomainColorFunctionIdShared(functionName) {
+export function getWebGLDomainColorFunctionIdShared(functionName, ignoreDynamic = false) {
+    if (!ignoreDynamic && isDynamicAggregateGLSLActive(state)) return 17;
     switch (functionName) {
         case 'cos': return 1;
         case 'sin': return 2;
@@ -211,6 +216,7 @@ export function getWebGLDomainColorFunctionIdShared(functionName) {
         case 'tanh': return 14;
         case 'power': return 15;
         case 'algebraic_chaining': return 16;
+        case 'dynamic_aggregate': return 17;
         default: return 0;
     }
 }
@@ -244,9 +250,16 @@ export function setComplexFunctionUniformsShared(gl, locs, state) {
 }
 
 export function getGLSLComplexMathLibrary(appState) {
+    const dynamic = buildDynamicAggregateGLSL(
+        appState,
+        functionName => getWebGLDomainColorFunctionIdShared(functionName, true)
+    );
     let algStr = `bool evaluateMappedValueBase(vec2 z, float isWPlane, float functionId, vec2 mA, vec2 mB, vec2 mC, vec2 mD, int polyDeg, vec2 polyCoeffs[11], float zetaCont, float zetaRefl, float fracPower, out vec2 mapped) {\n`;
     algStr += `  if (isWPlane > 0.5 || isWPlane < 0.0) { mapped = z; return isFiniteVec2Compat(mapped); }\n`;
     algStr += `  float fId = floor(functionId + 0.5);\n`;
+    if (dynamic.source && !dynamic.error) {
+        algStr += `  if (abs(fId - 17.0) < 0.5) return evaluateDynamicAggregate(z, mA, mB, mC, mD, polyDeg, polyCoeffs, zetaCont, zetaRefl, fracPower, mapped);\n`;
+    }
     algStr += `  if (abs(fId - 16.0) < 0.5) {\n`;
     algStr += `    vec2 sum = vec2(0.0);\n`;
 
@@ -303,6 +316,5 @@ export function getGLSLComplexMathLibrary(appState) {
     algStr += `  return evaluateBasicFuncShared(fId, z, mA, mB, mC, mD, polyDeg, polyCoeffs, zetaCont, zetaRefl, fracPower, mapped);\n`;
     algStr += `}\n`;
 
-    return GLSL_COMPLEX_MATH_LIBRARY_BASE + algStr;
+    return GLSL_COMPLEX_MATH_LIBRARY_BASE + (dynamic.source || '') + algStr;
 }
-

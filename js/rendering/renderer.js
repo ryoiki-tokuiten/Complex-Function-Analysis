@@ -54,6 +54,15 @@ import { drawNavigationLayer } from '../navigation-plane.js';
 import { renderSphereDomainColoring, renderPlanarDomainColoring } from './domain-coloring.js';
 import { drawRiemannSphereBase, drawSphereGridAndShape, drawSphereProbeAndNeighborhood } from './draw-sphere.js';
 import { updateWindingNumberDisplay } from '../analysis/cauchy.js';
+import {
+    getDynamicPlottingCacheKey
+} from '../analysis/dynamic-plotting.js';
+import {
+    drawDynamicSphere,
+    drawDynamicWPlane,
+    drawDynamicZPlane,
+    getDynamicSphereSceneData
+} from './draw-dynamic-plotting.js';
 
 let zCanvas;
 let wCanvas;
@@ -133,7 +142,8 @@ const PLANAR_CACHE_FIELDS = Object.freeze([
     ['vidFps', () => state.videoProcessingFps || 0],
     ['vidSize', () => toCacheKeyNumber(state.videoSize)],
     ['vidOpacity', () => toCacheKeyNumber(state.videoOpacity)],
-    ['vidVer', () => state.videoFrameVersion || 0]
+    ['vidVer', () => state.videoFrameVersion || 0],
+    ['dynamic', () => getDynamicPlottingCacheKey()]
 ]);
 
 const Z_FLOW_CACHE_FIELDS = Object.freeze([
@@ -741,6 +751,7 @@ function renderZSphere(transform) {
     drawPlaneLayer(zCtx, zPlaneParams, 'z', layerCtx => {
         drawRiemannSphereBase(layerCtx, sphereParams);
         drawSphereGridAndShape(layerCtx, sphereParams, false);
+        drawDynamicSphere(layerCtx, sphereParams, { isWPlane: false });
 
         if (state.probeActive) {
             drawSphereProbeAndNeighborhood(
@@ -924,6 +935,14 @@ function renderZParticles() {
 function renderZPlanar(transform) {
     renderZPlanarBackground(transform);
     renderZPrimaryPlanarContent();
+    drawLayerWhen(
+        state.dynamicPlotting?.enabled,
+        zCtx,
+        zPlaneParams,
+        'z',
+        layerCtx => drawDynamicZPlane(layerCtx, zPlaneParams),
+        'raster'
+    );
     renderZMarkers();
     renderZTaylorOverlay();
     renderZProbeOverlay();
@@ -1097,7 +1116,7 @@ function renderRiemannSurfaceIfEnabled(index) {
     return false;
 }
 
-function renderPlotlyWPlane(transform) {
+function renderPlotlyWPlane(transform, stageIndex) {
     const container = controls.wPlanePlotlyContainer;
 
     if (!container) {
@@ -1139,10 +1158,13 @@ function renderPlotlyWPlane(transform) {
     }
 
     wStaticThreeRenderer.updateGeometry(1.0);
+    wStaticThreeRenderer.setDynamicOverlay(
+        getDynamicSphereSceneData({ transform, stageIndex }),
+        `${stageIndex}:${getDynamicPlottingCacheKey()}`
+    );
 
     if (state.probeActive && state.probeZ) {
-        const tfProfile = getMappedTransformProfile(state.currentFunction);
-        const wProbe = tfProfile.evaluate(state.probeZ.re, state.probeZ.im);
+        const wProbe = transform(state.probeZ.re, state.probeZ.im);
         wStaticThreeRenderer.updateProbe(wProbe);
     } else {
         wStaticThreeRenderer.updateProbe(null);
@@ -1219,7 +1241,7 @@ function refreshWSphereDomainColoring() {
     }
 }
 
-function renderWCanvasRiemannSphere(transform) {
+function renderWCanvasRiemannSphere(transform, index) {
     const sphereParams = sphereViewParams.w;
 
     refreshWSphereDomainColoring();
@@ -1231,6 +1253,11 @@ function renderWCanvasRiemannSphere(transform) {
     drawPlaneLayer(wCtx, wPlaneParams, 'w', layerCtx => {
         drawRiemannSphereBase(layerCtx, sphereParams);
         drawSphereGridAndShape(layerCtx, sphereParams, true, transform);
+        drawDynamicSphere(layerCtx, sphereParams, {
+            isWPlane: true,
+            transform,
+            stageIndex: index
+        });
     }, 'capture');
 }
 
@@ -1267,7 +1294,7 @@ function renderWPrimaryContent(index, transform, isRiemannW) {
     }
 
     if (isRiemannW) {
-        renderWCanvasRiemannSphere(transform);
+        renderWCanvasRiemannSphere(transform, index);
         return;
     }
 
@@ -1313,6 +1340,12 @@ function renderWProbe(transform, index, isRiemannW) {
 }
 
 function renderWCommonOverlays(index, transform, isRiemannW) {
+    if (!isRiemannW && state.dynamicPlotting?.enabled) {
+        drawPlaneLayer(wCtx, wPlaneParams, 'w', layerCtx => {
+            drawDynamicWPlane(layerCtx, wPlaneParams, transform, index);
+        }, 'raster');
+    }
+
     renderWCriticalValueMarkers(isRiemannW);
     renderWProbe(transform, index, isRiemannW);
 
@@ -1329,7 +1362,7 @@ function renderNormalWPlane(index, transform) {
     const isRiemannW = state.riemannSphereViewEnabled || state.splitViewEnabled;
 
     if (state.plotly3DEnabled && isRiemannW) {
-        renderPlotlyWPlane(transform);
+        renderPlotlyWPlane(transform, index);
         return;
     }
 

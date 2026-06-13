@@ -18,6 +18,10 @@ import { initializePolynomialCoeffs, generatePolynomialCoeffSliders } from './po
 import { updateLaplace3DSurface } from '../rendering/laplace-3d-surface.js';
 import { getRiemannSurfaceCanvas, resetRiemannSurfaceViews } from '../rendering/webgl-riemann-surface.js';
 import { applyTheme, renderThemesList, renderDomainPalettesUI, domainPalettes } from './theme-manager.js';
+import {
+    initializeDynamicPlottingUI,
+    syncDynamicPlottingUI
+} from './dynamic-plotting-ui.js';
 
 const { controls = {} } = context;
 
@@ -176,6 +180,7 @@ const ALGEBRAIC_SYMBOLS = new Map([
 const BINDERS = [
     bindBaseParameterControls,
     bindAlgebraicChainingControls,
+    bindDynamicPlottingControls,
     bindMobiusControls,
     bindFunctionButtons,
     bindImageControls,
@@ -199,6 +204,12 @@ const BINDERS = [
     bindFullscreenControls,
     bindThemeControls
 ];
+
+function bindDynamicPlottingControls() {
+    initializeDynamicPlottingUI({
+        requestRedraw: markDomainDirty => requestDomainRedraw(markDomainDirty)
+    });
+}
 
 function parseInteger(value) {
     return parseInt(value, 10);
@@ -483,6 +494,7 @@ function activateFunctionMode(key) {
 
     updateModePanels();
     setActiveFunctionButton(key);
+    if (state.dynamicPlotting?.enabled) syncDynamicPlottingUI();
     requestDomainRedraw(true);
 }
 

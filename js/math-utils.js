@@ -21,6 +21,7 @@ const COMPLEX_ZERO_MAG_SQ = 1e-30;
 const DEFAULT_FRACTIONAL_POWER = 0.5;
 const SQRT_TWO_PI = Math.sqrt(2 * Math.PI);
 const LN_2 = Math.log(2);
+let activeTransformProvider = null;
 
 const isObject = value => value !== null && typeof value === 'object';
 const finite = Number.isFinite;
@@ -918,7 +919,18 @@ export function getEffectiveBaseTransformFunction(funcKey = state.currentFunctio
         );
     }
 
+    if (typeof activeTransformProvider === 'function') {
+        const provided = activeTransformProvider({ funcKey, baseFunc, state });
+        if (typeof provided === 'function') {
+            baseFunc = provided;
+        }
+    }
+
     return baseFunc;
+}
+
+export function setActiveTransformProvider(provider) {
+    activeTransformProvider = typeof provider === 'function' ? provider : null;
 }
 
 const CHAIN_TRANSFORMS = {

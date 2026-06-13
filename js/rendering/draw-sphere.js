@@ -24,7 +24,7 @@ export function drawRiemannSphereBase(ctx, cSP) {
     ctx.restore();
 }
 
-export function drawSphereMappedPoint(ctx, cSP, value, col, radius = 6) {
+export function drawSphereMappedPoint(ctx, cSP, value, col, radius = 6, options = {}) {
     const spherePoint = complexToSphere(value.re, value.im);
     const rotatedSpherePoint = rotate3D(spherePoint, cSP.rotX, cSP.rotY);
     const canvasPoint = projectSphereToCanvas2D(rotatedSpherePoint, cSP.centerX, cSP.centerY, cSP.radius);
@@ -33,11 +33,22 @@ export function drawSphereMappedPoint(ctx, cSP, value, col, radius = 6) {
     ctx.save();
     ctx.beginPath();
     ctx.arc(canvasPoint.x, canvasPoint.y, radius, 0, 2 * Math.PI);
-    ctx.fillStyle = col;
-    ctx.fill();
-    ctx.lineWidth = 1.5;
-    ctx.strokeStyle = 'rgba(255, 255, 255, 0.8)';
+    if (options.variant !== 'outline') {
+        ctx.fillStyle = col;
+        ctx.fill();
+    }
+    ctx.lineWidth = options.variant === 'outline' ? 1.35 : 1;
+    ctx.strokeStyle = options.variant === 'outline'
+        ? col
+        : 'rgba(10, 13, 22, 0.82)';
     ctx.stroke();
+    if (options.variant === 'final') {
+        ctx.beginPath();
+        ctx.arc(canvasPoint.x, canvasPoint.y, radius + 2, 0, 2 * Math.PI);
+        ctx.lineWidth = 1;
+        ctx.strokeStyle = 'rgba(95, 199, 160, 0.58)';
+        ctx.stroke();
+    }
     ctx.restore();
 }
 

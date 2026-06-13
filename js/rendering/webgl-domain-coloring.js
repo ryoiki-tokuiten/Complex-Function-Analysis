@@ -7,6 +7,11 @@ import {
     getGLSLComplexMathLibrary
 } from './webgl-shared.js';
 import {
+    buildDynamicAggregateGLSL,
+    dynamicAggregateGLSLSignature,
+    isDynamicAggregateGLSLActive
+} from '../math/expression/glsl.js';
+import {
     WEBGL_DOMAIN_COLOR_SUPERSAMPLE,
     WEBGL_DOMAIN_COLOR_STRESS_SCALE,
     SPHERE_LIGHT_DIRECTION_CAMERA,
@@ -671,23 +676,26 @@ function createCacheStringifier() {
     };
 }
 
-function serializeAlgebraicTermsForProgramCache() {
+function serializeProgramMathForCache() {
     try {
-        return JSON.stringify(state?.algebraicChainingTerms || [], createCacheStringifier());
+        return JSON.stringify({
+            algebraic: state?.algebraicChainingTerms || [],
+            dynamic: dynamicAggregateGLSLSignature(state)
+        }, createCacheStringifier());
     } catch (error) {
         return `unserializable:${error?.message || String(error)}`;
     }
 }
 
-function refreshAlgebraicRendererIfNeeded() {
-    if (state?.currentFunction !== 'algebraic_chaining') return true;
+function refreshMathRendererIfNeeded() {
+    if (state?.currentFunction !== 'algebraic_chaining' && !isDynamicAggregateGLSLActive(state)) return true;
     if (!webglDomainColorSupport) return false;
 
-    const hash = serializeAlgebraicTermsForProgramCache();
+    const hash = serializeProgramMathForCache();
     if (webglDomainColorSupport.lastAlgHash === hash) return true;
 
-    webglDomainColorSupport.lastAlgHash = hash;
     initializeWebGLDomainColoringSupport();
+    webglDomainColorSupport.lastAlgHash = hash;
     return !!webglDomainColorSupport.available;
 }
 
@@ -927,6 +935,13 @@ export function createWebGLDomainColorRenderer() {
 }
 
 export function isWebGLDomainColoringFunctionSupported(functionName, isWPlaneColoring = false) {
+    if (!isWPlaneColoring && isDynamicAggregateGLSLActive(state)) {
+        const compiled = buildDynamicAggregateGLSL(
+            state,
+            name => getWebGLDomainColorFunctionIdShared(name, true)
+        );
+        return Boolean(compiled.source && !compiled.error);
+    }
     return !!isWPlaneColoring || getWebGLDomainColorFunctionIdShared(functionName) !== 0;
 }
 
@@ -1001,7 +1016,7 @@ export function warnWebGLDomainFunctionFallback(functionName) {
 export function renderDomainColoringWithWebGL(targetCtx, planeParams, options = null) {
     if (!targetCtx || !planeParams || !webglDomainColorSupport?.available) return false;
     if (!state?.webglDomainColoringEnabled) return false;
-    if (!refreshAlgebraicRendererIfNeeded()) return false;
+    if (!refreshMathRendererIfNeeded()) return false;
 
     const job = resolveRenderJob(targetCtx, planeParams, options);
     if (!job) return false;

@@ -13,6 +13,7 @@ import {
 } from '../analysis/riemann-surface.js';
 import { renderDomainPalettesUI, domainPalettes } from './theme-manager.js';
 import { startRiemannTransformationAnimation, stopRiemannTransformationAnimation, syncRiemannTransformationPlayPauseButton, initThreeJSRenderers, buildThreeJSMeshes, syncRiemannSliders, disposeThreeJSRenderers } from '../rendering/riemann-transformation-animation.js';
+import { getDynamicFunctionFormulaHtml } from '../analysis/dynamic-plotting.js';
 
 const { controls = {} } = context;
 
@@ -844,6 +845,11 @@ function formatAlgebraicTerm(term) {
 }
 
 function currentFunctionFormulaHtml() {
+    const dynamicFormula = getDynamicFunctionFormulaHtml();
+    if (dynamicFormula) {
+        return dynamicFormula;
+    }
+
     if (state.currentFunction === 'algebraic_chaining') {
         const terms = safeArray(state.algebraicChainingTerms);
         return terms.length

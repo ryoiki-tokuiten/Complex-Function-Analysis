@@ -220,6 +220,66 @@ const rawState = {
     generalPointsEnabled: false,
     generalPointsList: [],
 
+    dynamicPlotting: {
+        enabled: false,
+        mode: 'map',
+        source: {
+            kind: 'naturals',
+            count: 50,
+            start: 0,
+            step: 1,
+            ratio: 2,
+            ordering: 'ascending',
+            includeZero: false,
+            includeNegative: false,
+            min: 2,
+            max: '',
+            bound: 12,
+            boundType: 'norm',
+            associatePolicy: 'all',
+            includeConjugates: true,
+            points: [],
+            pointsText: '0,0; 1,0; 0,1; -1,0; 0,-1',
+            generatorExpression: 'j',
+            filterExpression: ''
+        },
+        pointExpression: 'd',
+        term: {
+            kind: 'expression',
+            expression: 'z',
+            bindings: []
+        },
+        reduction: {
+            kind: 'none',
+            invalidPolicy: 'stop'
+        },
+        aggregateParameter: { re: 2, im: 0 },
+        parameters: [
+            { id: 'k', name: 'k', value: 1, min: -5, max: 5, step: 0.05 }
+        ],
+        playback: {
+            visibleCount: 50,
+            playing: false,
+            speed: 12,
+            loop: true,
+            followResult: false
+        },
+        display: {
+            showInputPoints: true,
+            showInputPath: false,
+            showTermPoints: true,
+            showPartialPath: true,
+            showVectors: true,
+            showLabels: false,
+            showInvalid: true,
+            colorMode: 'semantic',
+            productView: 'orbit',
+            pointRadius: 3
+        },
+        selectedSampleId: null,
+        preset: 'custom'
+    },
+
     navigationModeEnabled: false,
     navigationPosition: { re: 0, im: 0 },
     navigationHeading: 0,
@@ -236,7 +296,10 @@ function createDeepProxy(obj, path = []) {
     return new Proxy(obj, {
         get(target, prop, receiver) {
             const value = Reflect.get(target, prop, receiver);
-            if (value && typeof value === 'object' && !Array.isArray(value) && !(value instanceof Element) && !(value instanceof Image) && !(value instanceof HTMLVideoElement)) {
+            const isElement = typeof Element !== 'undefined' && value instanceof Element;
+            const isImage = typeof Image !== 'undefined' && value instanceof Image;
+            const isVideo = typeof HTMLVideoElement !== 'undefined' && value instanceof HTMLVideoElement;
+            if (value && typeof value === 'object' && !Array.isArray(value) && !isElement && !isImage && !isVideo) {
                 return createDeepProxy(value, [...path, prop]);
             }
             return value;

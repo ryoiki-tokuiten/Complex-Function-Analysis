@@ -3,7 +3,12 @@ import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { state } from '../store/state.js';
 import { requestRedrawAll } from '../main.js';
 import { getChainedTransformFunction } from '../math-utils.js';
-import { getThreeSphereShaderConfig, DOMAIN_PALETTE_IDS, CHAIN_MODE_IDS } from './webgl-domain-coloring.js';
+import {
+    CHAIN_MODE_IDS,
+    DOMAIN_PALETTE_IDS,
+    getThreeSphereShaderConfig,
+    isWebGLDomainColoringFunctionSupported
+} from './webgl-domain-coloring.js';
 import { getWebGLDomainColorFunctionIdShared } from './webgl-shared.js';
 
 const COLOR_BACKGROUND = 0x0b0914;
@@ -109,6 +114,10 @@ export class ThreeRiemannRenderer {
         // Groups
         this.linesGroup = new THREE.Group();
         this.scene.add(this.linesGroup);
+
+        this.dynamicOverlayGroup = new THREE.Group();
+        this.dynamicOverlayGroup.renderOrder = 20;
+        this.scene.add(this.dynamicOverlayGroup);
 
         this.markersGroup = new THREE.Group();
         this.scene.add(this.markersGroup);
@@ -288,6 +297,94 @@ export class ThreeRiemannRenderer {
         this.render();
     }
 
+    clearDynamicOverlay() {
+        if (!this.dynamicOverlayGroup) return;
+
+        while (this.dynamicOverlayGroup.children.length > 0) {
+            const child = this.dynamicOverlayGroup.children[0];
+            this.dynamicOverlayGroup.remove(child);
+            child.geometry?.dispose();
+            if (Array.isArray(child.material)) {
+                child.material.forEach(material => material.dispose());
+            } else {
+                child.material?.dispose();
+            }
+        }
+    }
+
+    setDynamicOverlay(data, cacheKey = null) {
+        if (cacheKey !== null && this.dynamicOverlayCacheKey === cacheKey) return;
+        this.clearDynamicOverlay();
+        this.dynamicOverlayCacheKey = cacheKey;
+        if (!data) return;
+
+        const spherePositions = values => {
+            const positions = [];
+            for (const value of values || []) {
+                if (!Number.isFinite(value?.re) || !Number.isFinite(value?.im)) continue;
+                const projected = getSphereCoordinate(
+                    value.re * this.scale,
+                    value.im * this.scale,
+                    SPHERE_RADIUS
+                );
+                positions.push(projected.x, projected.y, projected.z);
+            }
+            return positions;
+        };
+
+        const pointPositions = spherePositions(data.points);
+        if (pointPositions.length > 0) {
+            const geometry = new THREE.BufferGeometry();
+            geometry.setAttribute(
+                'position',
+                new THREE.Float32BufferAttribute(pointPositions, 3)
+            );
+            const material = new THREE.PointsMaterial({
+                color: 0xd8dee9,
+                size: Math.max(0.1, Math.min(0.28, Number(data.pointSize) * 0.038)),
+                sizeAttenuation: true,
+                transparent: true,
+                opacity: 0.86,
+                depthWrite: false
+            });
+            this.dynamicOverlayGroup.add(new THREE.Points(geometry, material));
+        }
+
+        const pathPositions = spherePositions(data.path);
+        if (pathPositions.length >= 6) {
+            const geometry = new THREE.BufferGeometry();
+            geometry.setAttribute(
+                'position',
+                new THREE.Float32BufferAttribute(pathPositions, 3)
+            );
+            const material = new THREE.LineBasicMaterial({
+                color: 0xa78bfa,
+                transparent: true,
+                opacity: 0.56,
+                depthWrite: false
+            });
+            this.dynamicOverlayGroup.add(new THREE.Line(geometry, material));
+        }
+
+        const finalPositions = spherePositions(data.finalPoint ? [data.finalPoint] : []);
+        if (finalPositions.length === 3) {
+            const geometry = new THREE.BufferGeometry();
+            geometry.setAttribute(
+                'position',
+                new THREE.Float32BufferAttribute(finalPositions, 3)
+            );
+            const material = new THREE.PointsMaterial({
+                color: 0x5fc7a0,
+                size: 0.3,
+                sizeAttenuation: true,
+                transparent: true,
+                opacity: 0.96,
+                depthWrite: false
+            });
+            this.dynamicOverlayGroup.add(new THREE.Points(geometry, material));
+        }
+    }
+
     updateProbe(probePoint) {
         if (!probePoint || !Number.isFinite(probePoint.re) || !Number.isFinite(probePoint.im)) {
             this.markersGroup.visible = false;
@@ -340,7 +437,7 @@ export class ThreeRiemannRenderer {
 
         this.updateSphereMaterial();
 
-        if (state.domainColoringEnabled) {
+        if (this.isDomainColoringActive()) {
             if (this.ghostSphere.material) {
                 this.ghostSphere.material.opacity = Math.pow(easedProgress, 2);
             }
@@ -375,10 +472,18 @@ export class ThreeRiemannRenderer {
         this.updateProbeGeometry();
     }
 
+    isDomainColoringActive() {
+        return state.domainColoringEnabled &&
+            isWebGLDomainColoringFunctionSupported(
+                state.currentFunction,
+                this.planeType === 'w'
+            );
+    }
+
     updateSphereMaterial() {
         if (!this.ghostSphere) return;
 
-        const showDomainColoring = state.domainColoringEnabled;
+        const showDomainColoring = this.isDomainColoringActive();
 
         if (showDomainColoring) {
             if (!(this.ghostSphere.material instanceof THREE.ShaderMaterial)) {
@@ -507,7 +612,7 @@ export class ThreeRiemannRenderer {
         
         this.updateSphereMaterial();
 
-        if (state.domainColoringEnabled) {
+        if (this.isDomainColoringActive()) {
             if (this.ghostSphere.material) {
                 this.ghostSphere.material.opacity = 1.0;
             }
