@@ -5,7 +5,7 @@ import {
 import { generateDiscreteSource } from './discrete-sources.js';
 
 const BUILT_IN_VARIABLES = new Set([
-    'd', 'j', 'z', 's', 'i', 'pi', 'e', 'true', 'false'
+    'c', 'd', 'j', 'z', 's', 'i', 'pi', 'e', 'true', 'false'
 ]);
 
 export const SEQUENCE_BINDING_KINDS = Object.freeze([

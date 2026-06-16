@@ -432,6 +432,7 @@
                             <select id="chain_mode_selector" class="control-select" style="margin-bottom: 10px;"
                                 data-tooltip="Mathematical operation to chain across outputs">
                                 <option value="recursion">Recursion: f(w)</option>
+                                <option value="zero_seed">Zero Seed: f(w), z₀ = 0</option>
                                 <option value="power">Higher Powers: w * f(z)</option>
                                 <option value="sqrt">Square Root: sqrt(w)</option>
                                 <option value="ln">Natural Log: ln(w)</option>
@@ -744,6 +745,7 @@
                                                     <strong>Values you already have</strong>
                                                     <dl>
                                                         <dt><code>j</code></dt><dd>term index: 0, 1, 2, ...</dd>
+                                                        <dt><code>c</code></dt><dd>current input-plane parameter</dd>
                                                         <dt><code>d</code></dt><dd>current source value d<sub>j</sub></dd>
                                                         <dt><code>z</code></dt><dd>current input-plane point z<sub>j</sub></dd>
                                                         <dt><code>i, pi, e</code></dt><dd>mathematical constants</dd>

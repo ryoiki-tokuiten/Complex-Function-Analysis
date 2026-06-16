@@ -31,7 +31,8 @@ const CHAIN_MODE = Object.freeze({
     sqrt: 3,
     ln: 4,
     exp: 5,
-    reciprocal: 6
+    reciprocal: 6,
+    zero_seed: 7
 });
 
 const VECTOR_MODE = Object.freeze({
@@ -645,6 +646,7 @@ function createForwardVertexShader(snapshot) {
         '  float isWP = (u_isWPlane > 0.5) ? 0.0 : 1.0;',
         '  bool ok = evaluateMappedValueBase(',
         '    zInput,',
+        '    zInput,',
         '    isWP,',
         '    u_functionId,',
         '    u_mobiusA,',
@@ -796,7 +798,10 @@ function uploadForwardMesh(renderer, dimensions) {
 }
 
 function shouldUseCpuForwardEvaluation(isWP, snapshot) {
-    return Boolean(isWP && snapshot.chainingEnabled && snapshot.chainCount > 1);
+    return Boolean(isWP && snapshot.chainingEnabled && (
+        snapshot.chainCount > 1 ||
+        snapshot.chainingMode === 'zero_seed'
+    ));
 }
 
 function getForwardTransform(isWP) {
@@ -992,6 +997,7 @@ function drawForwardImagePath(renderer, planeParams, isWP, currentShape, snapsho
 function isInverseImageRenderSupportedForSnapshot(snapshot) {
     const funcId = getWebGLDomainColorFunctionIdShared(snapshot.currentFunction);
 
+    if (snapshot.chainingMode === 'zero_seed') return false;
     if (funcId === 11) return false;
     if (funcId === 9) return (snapshot.polynomialN || 0) <= 2;
 
@@ -1068,6 +1074,7 @@ function createVectorFragmentShader(snapshot) {
         'bool evaluateVector(vec2 cc, out vec2 fz) {',
         '  bool ok = evaluateMappedValueBase(',
         '    cc,',
+        '    cc,',
         '    0.0,',
         '    u_functionId,',
         '    u_mobiusA,',
@@ -1094,8 +1101,8 @@ function createVectorFragmentShader(snapshot) {
         '    float h = 1e-5;',
         '    vec2 fr;',
         '    vec2 fl;',
-        '    evaluateMappedValueBase(cc + vec2(h, 0), 0.0, u_functionId, u_mobiusA, u_mobiusB, u_mobiusC, u_mobiusD, u_polyDegree, u_polyCoeffs, u_zetaContinuationEnabled, u_zetaReflectionBoundary, u_fracPower, fr);',
-        '    evaluateMappedValueBase(cc - vec2(h, 0), 0.0, u_functionId, u_mobiusA, u_mobiusB, u_mobiusC, u_mobiusD, u_polyDegree, u_polyCoeffs, u_zetaContinuationEnabled, u_zetaReflectionBoundary, u_fracPower, fl);',
+        '    evaluateMappedValueBase(cc + vec2(h, 0), cc + vec2(h, 0), 0.0, u_functionId, u_mobiusA, u_mobiusB, u_mobiusC, u_mobiusD, u_polyDegree, u_polyCoeffs, u_zetaContinuationEnabled, u_zetaReflectionBoundary, u_fracPower, fr);',
+        '    evaluateMappedValueBase(cc - vec2(h, 0), cc - vec2(h, 0), 0.0, u_functionId, u_mobiusA, u_mobiusB, u_mobiusC, u_mobiusD, u_polyDegree, u_polyCoeffs, u_zetaContinuationEnabled, u_zetaReflectionBoundary, u_fracPower, fl);',
         '    fz = (fr - fl) / (2.0 * h);',
         '  }',
         '',

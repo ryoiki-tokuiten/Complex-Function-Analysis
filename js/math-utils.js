@@ -584,6 +584,10 @@ export function complexPoincareCustomMetric(a, b) {
     return { re: z.re / sqrtIm, im: sqrtIm };
 }
 
+function algebraicParameter(context, fallback) {
+    return toComplex(context?.c ?? fallback);
+}
+
 export function numericDerivative(funcName, z, h = 1e-7) {
     const func = getChainedTransformFunction(funcName);
     if (!func) return { re: NaN, im: NaN };
@@ -610,7 +614,7 @@ export function numericDerivative(funcName, z, h = 1e-7) {
     return complexDivide(complexSub(plus, minus), { re: 2 * step, im: 0 });
 }
 
-export function evaluateFunctionBlock(block, z_re, z_im) {
+export function evaluateFunctionBlock(block, z_re, z_im, context = null) {
     if (!block || block.func === 'none') {
         return isObject(z_re) ? z_re : { re: z_re, im: z_im };
     }
@@ -618,14 +622,22 @@ export function evaluateFunctionBlock(block, z_re, z_im) {
     let arg = toComplex(z_re, z_im);
 
     if (block.chainedFunc && block.chainedFunc !== 'none') {
-        const chained = transformFunctions[block.chainedFunc];
-        if (chained) arg = chained(arg);
+        if (block.chainedFunc === 'c') {
+            arg = algebraicParameter(context, arg);
+        } else {
+            const chained = transformFunctions[block.chainedFunc];
+            if (chained) arg = chained(arg);
+        }
     }
 
-    const base = transformFunctions[block.func];
-    if (!base) return arg;
-
-    let value = base(arg);
+    let value;
+    if (block.func === 'c') {
+        value = algebraicParameter(context, arg);
+    } else {
+        const base = transformFunctions[block.func];
+        if (!base) return arg;
+        value = base(arg);
+    }
 
     if (block.power !== undefined && block.power !== 1) value = complexPow(value, block.power, 0);
     if (block.reciprocal) value = complexReciprocal(value);
@@ -635,31 +647,33 @@ export function evaluateFunctionBlock(block, z_re, z_im) {
     return value;
 }
 
-export function evaluateAlgebraicTerm(term, z_re, z_im) {
+export function evaluateAlgebraicTerm(term, z_re, z_im, context = null) {
     if (!term) return { re: NaN, im: NaN };
 
     let value = toComplex(term.coeff ?? ONE);
     const z = toComplex(z_re, z_im);
+    const evalContext = context || { c: z };
 
     for (const factor of term.factors ?? []) {
         if (!factor || factor.func === 'none') break;
-        value = complexMul(value, evaluateFunctionBlock(factor, z));
+        value = complexMul(value, evaluateFunctionBlock(factor, z, undefined, evalContext));
     }
 
     return value;
 }
 
-export function evaluateAlgebraicChaining(z_re, z_im) {
+export function evaluateAlgebraicChaining(z_re, z_im, context = null) {
     const terms = state.algebraicChainingTerms;
     if (!state.algebraicChainingEnabled || !Array.isArray(terms) || terms.length === 0) {
         return { re: 0, im: 0 };
     }
 
     const z = toComplex(z_re, z_im);
+    const evalContext = context || { c: z };
     let sum = { re: 0, im: 0 };
 
     for (const term of terms) {
-        const value = evaluateAlgebraicTerm(term, z);
+        const value = evaluateAlgebraicTerm(term, z, undefined, evalContext);
         if (invalidComplex(value)) return { re: NaN, im: NaN };
         sum = complexAdd(sum, value);
     }
@@ -690,6 +704,7 @@ const MAPPED_TRANSFORM_ABS_EPSILON = 1e-5;
 const MAPPED_TRANSFORM_REL_EPSILON = 1e-7;
 const MAPPED_TRANSFORM_MIN_AGREEMENT_RATIO = 0.9;
 const MAPPED_TRANSFORM_MIN_CONSTANT_SAMPLES = 9;
+const DOMAIN_COLOR_CHAIN_BAILOUT_MAGNITUDE = 1e18;
 const MAPPED_TRANSFORM_DIAGNOSTIC_STENCIL = Object.freeze([
     Object.freeze({ re: 0, im: 0 }),
     Object.freeze({ re: 1, im: 0 }),
@@ -797,11 +812,11 @@ export function shouldSkipMappedTransformPoint(functionKey, zPoint) {
         zPoint.re <= ZETA_REFLECTION_POINT_RE;
 }
 
-export function evaluateRawMappedTransform(transformFunc, zPoint, functionKey = state.currentFunction) {
+export function evaluateRawMappedTransform(transformFunc, zPoint, functionKey = state.currentFunction, evalContext = null) {
     if (!transformFunc || !zPoint || zPoint.re === undefined || zPoint.im === undefined) return null;
     if (shouldSkipMappedTransformPoint(functionKey, zPoint)) return null;
 
-    const mapped = transformFunc(zPoint.re, zPoint.im);
+    const mapped = transformFunc(zPoint.re, zPoint.im, evalContext);
     return isValidMappedTransformValue(mapped) ? mapped : null;
 }
 
@@ -889,22 +904,73 @@ export function getMappedTransformProfile(functionKey = state.currentFunction, t
     return profile;
 }
 
-export function evaluateMappedTransform(profileOrTransform, re, im, functionKey = state.currentFunction) {
+export function evaluateMappedTransform(profileOrTransform, re, im, functionKey = state.currentFunction, evalContext = null) {
     if (!profileOrTransform) return null;
 
     if (typeof profileOrTransform === 'function') {
-        return evaluateRawMappedTransform(profileOrTransform, { re, im }, functionKey);
+        return evaluateRawMappedTransform(profileOrTransform, { re, im }, functionKey, evalContext);
     }
 
-    if (profileOrTransform.isConstant && profileOrTransform.constantValue) {
+    if (!evalContext && profileOrTransform.isConstant && profileOrTransform.constantValue) {
         return cloneMappedComplex(profileOrTransform.constantValue);
     }
 
     return evaluateRawMappedTransform(
         profileOrTransform.transformFunc,
         { re, im },
-        profileOrTransform.functionKey || functionKey
+        profileOrTransform.functionKey || functionKey,
+        evalContext
     );
+}
+
+function exceedsDomainColorChainBailout(value) {
+    return Math.max(Math.abs(value?.re ?? 0), Math.abs(value?.im ?? 0)) >= DOMAIN_COLOR_CHAIN_BAILOUT_MAGNITUDE;
+}
+
+export function evaluateDomainColoringMappedTransform(profileOrTransform, re, im, functionKey = state.currentFunction) {
+    if (!state.chainingEnabled || state.chainCount <= 1) {
+        return evaluateMappedTransform(profileOrTransform, re, im, functionKey, { c: { re, im } });
+    }
+
+    const c = { re, im };
+    const count = Math.max(1, Math.floor(Number(state.chainCount) || 1));
+
+    if (state.chainingMode === 'zero_seed') {
+        let current = { re: 0, im: 0 };
+
+        for (let i = 0; i < count; i += 1) {
+            const next = evaluateMappedTransform(profileOrTransform, current.re, current.im, functionKey, { c });
+            if (!next || !isValidMappedTransformValue(next)) return null;
+
+            current = next;
+
+            if (exceedsDomainColorChainBailout(current)) return null;
+        }
+
+        return current;
+    }
+
+    if (state.chainingMode !== 'recursion') {
+        return evaluateMappedTransform(profileOrTransform, re, im, functionKey, { c });
+    }
+
+    let current = evaluateMappedTransform(profileOrTransform, re, im, functionKey, { c });
+    if (!current) return null;
+
+    let lastFinite = isValidMappedTransformValue(current) ? current : null;
+    if (!lastFinite || exceedsDomainColorChainBailout(lastFinite)) return lastFinite;
+
+    for (let i = 1; i < count; i += 1) {
+        const next = evaluateMappedTransform(profileOrTransform, current.re, current.im, functionKey, { c });
+        if (!next || !isValidMappedTransformValue(next)) return lastFinite;
+
+        current = next;
+        lastFinite = current;
+
+        if (exceedsDomainColorChainBailout(current)) return current;
+    }
+
+    return current;
 }
 
 export function getEffectiveBaseTransformFunction(funcKey = state.currentFunction) {
@@ -945,21 +1011,36 @@ const CHAIN_TRANSFORMS = {
     reciprocal: previous => (re, im) =>
         complexReciprocal(previous(re, im)),
     recursion: (previous, context) => (re, im) =>
-        context.evalBase(previous(re, im))
+        context.evalBase(previous(re, im), { re, im })
 };
 
 export function getChainedTransformFunction(funcKey = state.currentFunction) {
     const baseFunc = getEffectiveBaseTransformFunction(funcKey);
 
-    if (!state.chainingEnabled || state.chainCount <= 1) {
+    if (!state.chainingEnabled || (state.chainCount <= 1 && state.chainingMode !== 'zero_seed')) {
         return baseFunc;
     }
 
     const baseProfile = getMappedTransformProfile(funcKey, baseFunc);
     const context = {
-        evalBase: value => evaluateMappedTransform(baseProfile, value.re, value.im) || { re: NaN, im: NaN },
-        evalBaseAtInput: (re, im) => evaluateMappedTransform(baseProfile, re, im) || { re: NaN, im: NaN }
+        evalBase: (value, c) => evaluateMappedTransform(baseProfile, value.re, value.im, funcKey, { c }) || { re: NaN, im: NaN },
+        evalBaseAtInput: (re, im) => evaluateMappedTransform(baseProfile, re, im, funcKey, { c: { re, im } }) || { re: NaN, im: NaN }
     };
+
+    if (state.chainingMode === 'zero_seed') {
+        const count = Math.max(1, Math.floor(Number(state.chainCount) || 1));
+        return (re, im) => {
+            const c = { re, im };
+            let current = { re: 0, im: 0 };
+
+            for (let i = 0; i < count; i++) {
+                current = context.evalBase(current, c);
+                if (invalidComplex(current)) return { re: NaN, im: NaN };
+            }
+
+            return current;
+        };
+    }
 
     const mode = CHAIN_TRANSFORMS[state.chainingMode] ? state.chainingMode : 'recursion';
     let current = baseFunc;

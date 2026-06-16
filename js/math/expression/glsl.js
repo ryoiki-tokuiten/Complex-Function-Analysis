@@ -397,6 +397,7 @@ export function buildDynamicAggregateGLSL(appState, getFunctionId) {
                     ? 'vec2(s.x, 0.0)'
                     : `dynamicBinding_${binding.symbol}(idx)`
         ]));
+        variables.c = 'c';
         const selectedFunctionId = getFunctionId(config.selectedFunction || appState.currentFunction, true);
         if (!selectedFunctionId || selectedFunctionId === 16 || selectedFunctionId === 17) {
             throw new Error('The selected function is not available in the GPU expression backend');
@@ -433,6 +434,7 @@ ${domainValueFunction(records)}
 ${bindingValueFunctions(bindingResult, bindings)}
 bool evaluateDynamicAggregate(
   vec2 s,
+  vec2 c,
   vec2 mA,
   vec2 mB,
   vec2 mC,
@@ -457,6 +459,7 @@ bool evaluateDynamicAggregate(
 }
 bool evaluateDynamicAggregateOnSheet(
   vec2 s,
+  vec2 c,
   float branchIndex,
   float branchCutWidth,
   vec2 mA,

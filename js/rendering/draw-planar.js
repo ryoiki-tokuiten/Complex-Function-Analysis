@@ -243,8 +243,14 @@ function isCanvasPointNearViewport(point, planeParams) {
         point.y < height + margin;
 }
 
-function evaluateProfilePoint(mappedTransform, re, im) {
-    return evaluateMappedTransform(mappedTransform, re, im) || INVALID_COMPLEX_POINT;
+function evaluateProfilePoint(mappedTransform, re, im, evalContext = null) {
+    return evaluateMappedTransform(
+        mappedTransform,
+        re,
+        im,
+        appState.currentFunction,
+        evalContext
+    ) || INVALID_COMPLEX_POINT;
 }
 
 function createProfileEvaluator(mappedTransform) {
@@ -542,9 +548,10 @@ function getChainedOrbitPoint(mode, previousPoint, seedPoint, baseProfile) {
             return complexExp(previousPoint);
         case 'reciprocal':
             return complexReciprocal(previousPoint);
+        case 'zero_seed':
         case 'recursion':
         default:
-            return evaluateProfilePoint(baseProfile, previousPoint.re, previousPoint.im);
+            return evaluateProfilePoint(baseProfile, previousPoint.re, previousPoint.im, { c: seedPoint });
     }
 }
 
@@ -574,14 +581,17 @@ function drawChainedOrbit(ctx, planeParams, startWorldPoint, startCanvasPoint, r
     const baseProfile = getMappedTransformProfile(appState.currentFunction, baseFunc);
     const limit = renderLimit * 3;
 
-    let previousWorldPoint = startWorldPoint;
-    let lastCanvasPoint = startCanvasPoint;
+    const zeroSeed = appState.chainingMode === 'zero_seed';
+    let previousWorldPoint = zeroSeed ? { re: 0, im: 0 } : startWorldPoint;
+    let lastCanvasPoint = zeroSeed
+        ? mapToCanvasCoords(0, 0, planeParams)
+        : startCanvasPoint;
 
     ctx.strokeStyle = ORBIT_COLOR;
     ctx.fillStyle = ORBIT_COLOR;
     ctx.lineWidth = 1.5;
 
-    for (let k = 1; k < appState.chainCount; k++) {
+    for (let k = zeroSeed ? 0 : 1; k < appState.chainCount; k++) {
         const nextWorldPoint = getChainedOrbitPoint(
             appState.chainingMode,
             previousWorldPoint,

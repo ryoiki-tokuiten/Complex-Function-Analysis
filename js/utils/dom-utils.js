@@ -538,10 +538,13 @@ export function setupVisualParameters(updateZFromSlider = true, updateWFromSlide
 }
 
 export function getChainingTitleHTML(i, mode) {
-    if (i === 0) return `w = f(z)`;
+    if (i === 0) {
+        return mode === 'zero_seed' ? `w = f(0; c=z)` : `w = f(z)`;
+    }
     const prevSub = i === 1 ? `0` : `${i-1}`;
     switch (mode) {
         case 'recursion': return `w = f<sup>${i+1}</sup>(z)`;
+        case 'zero_seed': return `w = f<sup>${i+1}</sup>(0; c=z)`;
         case 'power': return `w = f(z)<sup>${i+1}</sup>`;
         case 'sqrt': return `w = &radic;w<sub>${prevSub}</sub>`;
         case 'ln': return `w = ln(w<sub>${prevSub}</sub>)`;
@@ -677,7 +680,7 @@ export function updateChainingColumns(count) {
     // Update the original w_plane title if needed
     const wPlaneTitleFunc = document.getElementById('w-plane-title-func');
     if (wPlaneTitleFunc && count > 1) {
-        wPlaneTitleFunc.innerHTML = `w = f(z)`;
+        wPlaneTitleFunc.innerHTML = getChainingTitleHTML(0, state.chainingMode);
     }
     
     setupVisualParameters(false, false);

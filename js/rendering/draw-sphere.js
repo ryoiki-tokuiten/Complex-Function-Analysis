@@ -87,7 +87,13 @@ export function drawMappedLineSetOnSphere(ctx, cSP, z_pts_src_arr, col, isWP, ma
             }
 
             const transformedPoint = isWP
-                ? evaluateMappedTransform(mappedTransform, z_orig.re, z_orig.im)
+                ? evaluateMappedTransform(
+                    mappedTransform,
+                    z_orig.re,
+                    z_orig.im,
+                    state.currentFunction,
+                    { c: z_orig }
+                )
                 : z_orig;
 
             if (!transformedPoint || isNaN(transformedPoint.re) || isNaN(transformedPoint.im) || !isFinite(transformedPoint.re) || !isFinite(transformedPoint.im)) {
@@ -200,7 +206,13 @@ export function drawSphereProbeAndNeighborhood(ctx, cSP, sourceProbeZ, neighborh
     const isWSphere = typeof transformFuncIfWSphere === 'function';
     const transformProfile = isWSphere ? getMappedTransformProfile(state.currentFunction, transformFuncIfWSphere) : null;
     const centerToDisplayOnSphere = isWSphere
-        ? evaluateMappedTransform(transformProfile, sourceProbeZ.re, sourceProbeZ.im)
+        ? evaluateMappedTransform(
+            transformProfile,
+            sourceProbeZ.re,
+            sourceProbeZ.im,
+            state.currentFunction,
+            { c: sourceProbeZ }
+        )
         : sourceProbeZ;
 
     if (!centerToDisplayOnSphere || isNaN(centerToDisplayOnSphere.re) || isNaN(centerToDisplayOnSphere.im) || !isFinite(centerToDisplayOnSphere.re) || !isFinite(centerToDisplayOnSphere.im) || !isNumericallyStable(centerToDisplayOnSphere)) {

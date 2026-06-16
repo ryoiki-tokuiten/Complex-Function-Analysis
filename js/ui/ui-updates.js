@@ -764,6 +764,8 @@ function baseFunctionHtml(funcKey) {
     }
 
     switch (funcKey) {
+        case 'c':
+            return 'c';
         case 'power':
             return `(·)<sup>${fractionalPowerExponent()}</sup>`;
         case 'reciprocal':
@@ -782,6 +784,10 @@ function baseFunctionHtml(funcKey) {
 }
 
 function argumentFunctionHtml(funcKey) {
+    if (funcKey === 'c') {
+        return 'c';
+    }
+
     if (funcKey === 'power') {
         return `z<sup>${fractionalPowerExponent()}</sup>`;
     }
@@ -799,7 +805,9 @@ function formatFuncForFormula(funcKey, termFactor = null) {
         ? argumentFunctionHtml(termFactor.chainedFunc)
         : 'z';
 
-    let result = funcKey === 'power'
+    let result = funcKey === 'c'
+        ? 'c'
+        : funcKey === 'power'
         ? base.replace('(·)', innerArg)
         : funcKey === 'reciprocal'
             ? `1/${innerArg}`
@@ -962,6 +970,10 @@ function getChainedFormula(baseFormula, chainingMode, chainCount) {
     }
 
     switch (chainingMode) {
+        case 'zero_seed':
+            return state.currentFunction === 'algebraic_chaining'
+                ? `f<sup>${chainCount}</sup>(0; c = z) <span style="font-size:0.85em; opacity:0.8;">[where f(z, c) = ${baseFormula}]</span>`
+                : `${compactRecursionSymbol()}<sup>${chainCount}</sup>(0; c = z)`;
         case 'power':
             return `(${baseFormula})<sup>${chainCount}</sup>`;
         case 'sqrt':

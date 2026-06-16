@@ -42,7 +42,8 @@ const CHAIN_MODE_IDS = Object.freeze({
   sqrt: 3,
   ln: 4,
   exp: 5,
-  reciprocal: 6
+  reciprocal: 6,
+  zero_seed: 7
 });
 
 const SURFACE_COMPONENT_IDS = Object.freeze({
@@ -323,17 +324,23 @@ function emitAlgebraicFactor(factor) {
     '        vec2 tempValue = vec2(0.0);'
   ];
 
-  if (chainedId) {
+  if (factor.chainedFunc === 'c') {
+    steps.push('        factorValue = c;');
+  } else if (chainedId) {
     steps.push(
       `        if (!evaluateBasicOnSheet(float(${chainedId}), factorValue, branchIndex, branchCutWidth, mA, mB, mC, mD, polyDeg, polyCoeffs, zetaCont, zetaRefl, fracPower, tempValue)) return false;`,
       '        factorValue = tempValue;'
     );
   }
 
-  steps.push(
-    `        if (!evaluateBasicOnSheet(float(${functionId}), factorValue, branchIndex, branchCutWidth, mA, mB, mC, mD, polyDeg, polyCoeffs, zetaCont, zetaRefl, fracPower, tempValue)) return false;`,
-    '        factorValue = tempValue;'
-  );
+  if (factor.func === 'c') {
+    steps.push('        factorValue = c;');
+  } else {
+    steps.push(
+      `        if (!evaluateBasicOnSheet(float(${functionId}), factorValue, branchIndex, branchCutWidth, mA, mB, mC, mD, polyDeg, polyCoeffs, zetaCont, zetaRefl, fracPower, tempValue)) return false;`,
+      '        factorValue = tempValue;'
+    );
+  }
 
   if (factorPower !== 1) {
     steps.push(
@@ -514,6 +521,7 @@ const SURFACE_MATH_GLSL = Object.freeze({
     deps: ['evaluateTaylorSurface', 'evaluateBasicOnSheet'],
     source: ({ appState }) => `bool evaluateSurfaceBase(
   vec2 z,
+  vec2 c,
   float functionId,
   float branchIndex,
   float branchCutWidth,
@@ -539,7 +547,7 @@ const SURFACE_MATH_GLSL = Object.freeze({
   float fId = floor(functionId + 0.5);
   if (abs(fId - 17.0) < 0.5) {
     return evaluateDynamicAggregateOnSheet(
-      z, branchIndex, branchCutWidth, mA, mB, mC, mD,
+      z, c, branchIndex, branchCutWidth, mA, mB, mC, mD,
       polyDeg, polyCoeffs, zetaCont, zetaRefl, fracPower, mapped
     );
   }
@@ -557,6 +565,7 @@ ${buildAlgebraicBranchBody(appState)}
     deps: ['evaluateSurfaceBase', 'complexPowRealOnSheet', 'complexLnOnSheet'],
     source: `bool evaluateSurfaceStage(
   vec2 z,
+  vec2 c,
   int stage,
   int chainMode,
   float functionId,
@@ -577,8 +586,22 @@ ${buildAlgebraicBranchBody(appState)}
   vec2 taylorCoefficients[9],
   out vec2 mapped
 ) {
+  if (chainMode == 7) {
+    mapped = vec2(0.0);
+    for (int i = 0; i < 25; i++) {
+      if (i >= stage) break;
+      bool seedOk = evaluateSurfaceBase(
+        mapped, c, functionId, branchIndex, branchCutWidth, mA, mB, mC, mD,
+        polyDeg, polyCoeffs, zetaCont, zetaRefl, fracPower,
+        useTaylor, taylorCenter, taylorOrder, taylorCoefficients, mapped
+      );
+      if (!seedOk || !isFiniteVec2Compat(mapped)) return false;
+    }
+    return isFiniteVec2Compat(mapped);
+  }
+
   bool ok = evaluateSurfaceBase(
-    z, functionId, branchIndex, branchCutWidth, mA, mB, mC, mD,
+    z, c, functionId, branchIndex, branchCutWidth, mA, mB, mC, mD,
     polyDeg, polyCoeffs, zetaCont, zetaRefl, fracPower,
     useTaylor, taylorCenter, taylorOrder, taylorCoefficients, mapped
   );
@@ -588,7 +611,7 @@ ${buildAlgebraicBranchBody(appState)}
     if (i >= stage) break;
     if (chainMode == 1) {
       ok = evaluateSurfaceBase(
-        mapped, functionId, branchIndex, branchCutWidth, mA, mB, mC, mD,
+        mapped, c, functionId, branchIndex, branchCutWidth, mA, mB, mC, mD,
         polyDeg, polyCoeffs, zetaCont, zetaRefl, fracPower,
         useTaylor, taylorCenter, taylorOrder, taylorCoefficients, mapped
       );
@@ -680,7 +703,7 @@ ${emitPaletteBranches()}
     deps: ['surfaceHeight'],
     source: `bool mapSurfacePoint(vec2 z, out vec2 mapped, out float height) {
   bool ok = evaluateSurfaceStage(
-    z, u_stage, u_chainMode, u_functionId, u_branchIndex, u_branchCutWidth,
+    z, z, u_stage, u_chainMode, u_functionId, u_branchIndex, u_branchCutWidth,
     u_mobiusA, u_mobiusB, u_mobiusC, u_mobiusD, u_polyDegree, u_polyCoeffs,
     u_zetaContinuationEnabled, u_zetaReflectionBoundary, u_fracPower,
     u_useTaylor, u_taylorCenter, u_taylorOrder, u_taylorCoefficients, mapped
@@ -757,6 +780,7 @@ export function buildRiemannSurfaceMathLibrary(appState) {
   );
   const dynamicSource = dynamic.source || `bool evaluateDynamicAggregate(
   vec2 s,
+  vec2 c,
   vec2 mA,
   vec2 mB,
   vec2 mC,
@@ -773,6 +797,7 @@ export function buildRiemannSurfaceMathLibrary(appState) {
 }
 bool evaluateDynamicAggregateOnSheet(
   vec2 s,
+  vec2 c,
   float branchIndex,
   float branchCutWidth,
   vec2 mA,

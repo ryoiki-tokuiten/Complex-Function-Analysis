@@ -75,7 +75,8 @@ export const CHAIN_MODE_IDS = Object.freeze({
     sqrt: 3,
     ln: 4,
     exp: 5,
-    reciprocal: 6
+    reciprocal: 6,
+    zero_seed: 7
 });
 
 const DOMAIN_FLOAT_UNIFORMS = Object.freeze([
@@ -255,9 +256,14 @@ vec4 invalidDomainColor() {
   return vec4(0.0, 0.0, 0.0, u_useSphere > 0.5 ? 0.0 : 1.0);
 }
 
-bool mapDomainValue(vec2 inputValue, out vec2 outputValue) {
+bool shouldStopDomainChain(vec2 value) {
+  return max(abs(value.x), abs(value.y)) >= 1.0e18;
+}
+
+bool mapDomainValue(vec2 inputValue, vec2 parameterValue, out vec2 outputValue) {
   return evaluateMappedValueBase(
     inputValue,
+    parameterValue,
     u_isWPlaneColoring,
     u_functionId,
     u_mobiusA,
@@ -325,10 +331,10 @@ bool projectPixelToDomain(vec2 pixel, vec2 resolutionSafe, out vec2 zInput, out 
   return true;
 }
 
-bool applyChainStep(int chainMode, vec2 baseValue, inout vec2 mappedValue) {
+bool applyChainStep(int chainMode, vec2 baseValue, vec2 parameterValue, inout vec2 mappedValue) {
   if (chainMode == 1) {
     vec2 nextValue = vec2(0.0);
-    bool ok = mapDomainValue(mappedValue, nextValue);
+    bool ok = mapDomainValue(mappedValue, parameterValue, nextValue);
     mappedValue = nextValue;
     return ok;
   }
@@ -363,16 +369,40 @@ bool applyChainStep(int chainMode, vec2 baseValue, inout vec2 mappedValue) {
   return true;
 }
 
-bool applyConfiguredChain(inout vec2 mappedValue) {
+bool applyConfiguredChain(inout vec2 mappedValue, vec2 parameterValue) {
   if (u_isWPlaneColoring >= 0.5 || u_chainCount <= 1) return true;
 
   vec2 baseValue = mappedValue;
+  if (shouldStopDomainChain(mappedValue)) return true;
+
   for (int i = 1; i < ${CFG.maxChainStepsGlsl}; i++) {
     if (i >= u_chainCount) break;
-    if (!applyChainStep(u_chainMode, baseValue, mappedValue)) return false;
-    if (!isFiniteVec2Compat(mappedValue)) return false;
+
+    vec2 nextValue = mappedValue;
+    if (!applyChainStep(u_chainMode, baseValue, parameterValue, nextValue)) return true;
+    if (!isFiniteVec2Compat(nextValue)) return true;
+
+    mappedValue = nextValue;
+    if (shouldStopDomainChain(mappedValue)) return true;
   }
 
+  return true;
+}
+
+bool evaluateZeroSeedChain(vec2 parameterValue, out vec2 mappedValue) {
+  vec2 current = vec2(0.0);
+
+  for (int i = 0; i < ${CFG.maxChainStepsGlsl}; i++) {
+    if (i >= u_chainCount) break;
+    vec2 nextValue = vec2(0.0);
+    if (!mapDomainValue(current, parameterValue, nextValue)) return false;
+    if (!isFiniteVec2Compat(nextValue)) return false;
+
+    current = nextValue;
+    if (shouldStopDomainChain(current)) return false;
+  }
+
+  mappedValue = current;
   return true;
 }
 
@@ -408,12 +438,21 @@ void main() {
   }
 
   vec2 mappedValue = vec2(0.0);
-  if (!mapDomainValue(zInput, mappedValue) || !isFiniteVec2Compat(mappedValue)) {
+  if (u_isWPlaneColoring < 0.5 && u_chainMode == 7) {
+    if (!evaluateZeroSeedChain(zInput, mappedValue)) {
+      gl_FragColor = invalidDomainColor();
+      return;
+    }
+    gl_FragColor = domainColorForValue(mappedValue, brightnessFactor);
+    return;
+  }
+
+  if (!mapDomainValue(zInput, zInput, mappedValue) || !isFiniteVec2Compat(mappedValue)) {
     gl_FragColor = invalidDomainColor();
     return;
   }
 
-  if (!applyConfiguredChain(mappedValue)) {
+  if (!applyConfiguredChain(mappedValue, zInput)) {
     gl_FragColor = invalidDomainColor();
     return;
   }
@@ -1125,9 +1164,10 @@ export function getThreeSphereShaderConfig(planeType) {
           return mix(vec3(gray), lit, saturation);
         }
 
-        bool mapDomainValue(vec2 inputValue, out vec2 outputValue) {
+        bool mapDomainValue(vec2 inputValue, vec2 parameterValue, out vec2 outputValue) {
           return evaluateMappedValueBase(
             inputValue,
+            parameterValue,
             u_isWPlaneColoring,
             u_functionId,
             u_mobiusA,
@@ -1143,10 +1183,14 @@ export function getThreeSphereShaderConfig(planeType) {
           );
         }
 
-        bool applyChainStep(int chainMode, vec2 baseValue, inout vec2 mappedValue) {
+        bool shouldStopDomainChain(vec2 value) {
+          return max(abs(value.x), abs(value.y)) >= 1.0e18;
+        }
+
+        bool applyChainStep(int chainMode, vec2 baseValue, vec2 parameterValue, inout vec2 mappedValue) {
           if (chainMode == 1) {
             vec2 nextValue = vec2(0.0);
-            bool ok = mapDomainValue(mappedValue, nextValue);
+            bool ok = mapDomainValue(mappedValue, parameterValue, nextValue);
             mappedValue = nextValue;
             return ok;
           }
@@ -1163,14 +1207,36 @@ export function getThreeSphereShaderConfig(planeType) {
           return true;
         }
 
-        bool applyConfiguredChain(inout vec2 mappedValue) {
+        bool applyConfiguredChain(inout vec2 mappedValue, vec2 parameterValue) {
           if (u_isWPlaneColoring >= 0.5 || u_chainCount <= 1) return true;
           vec2 baseValue = mappedValue;
+          if (shouldStopDomainChain(mappedValue)) return true;
+
           for (int i = 1; i < 30; i++) {
             if (i >= u_chainCount) break;
-            if (!applyChainStep(u_chainMode, baseValue, mappedValue)) return false;
-            if (!isFiniteVec2Compat(mappedValue)) return false;
+            vec2 nextValue = mappedValue;
+            if (!applyChainStep(u_chainMode, baseValue, parameterValue, nextValue)) return true;
+            if (!isFiniteVec2Compat(nextValue)) return true;
+
+            mappedValue = nextValue;
+            if (shouldStopDomainChain(mappedValue)) return true;
           }
+          return true;
+        }
+
+        bool evaluateZeroSeedChain(vec2 parameterValue, out vec2 mappedValue) {
+          vec2 current = vec2(0.0);
+
+          for (int i = 0; i < 30; i++) {
+            if (i >= u_chainCount) break;
+            vec2 nextValue = vec2(0.0);
+            if (!mapDomainValue(current, parameterValue, nextValue)) return false;
+            if (!isFiniteVec2Compat(nextValue)) return false;
+
+            current = nextValue;
+            if (shouldStopDomainChain(current)) return false;
+          }
+          mappedValue = current;
           return true;
         }
 
@@ -1204,12 +1270,21 @@ export function getThreeSphereShaderConfig(planeType) {
             vec2 zInput = vec2(vLocalPosition.x / den, vLocalPosition.z / den);
             
             vec2 mappedValue = vec2(0.0);
-            if (!mapDomainValue(zInput, mappedValue) || !isFiniteVec2Compat(mappedValue)) {
+            if (u_isWPlaneColoring < 0.5 && u_chainMode == 7) {
+                if (!evaluateZeroSeedChain(zInput, mappedValue)) {
+                    gl_FragColor = vec4(0.0, 0.0, 0.0, 1.0);
+                    return;
+                }
+                gl_FragColor = domainColorForValue(mappedValue, 1.0);
+                return;
+            }
+
+            if (!mapDomainValue(zInput, zInput, mappedValue) || !isFiniteVec2Compat(mappedValue)) {
                 gl_FragColor = vec4(0.0, 0.0, 0.0, 1.0);
                 return;
             }
             
-            if (!applyConfiguredChain(mappedValue)) {
+            if (!applyConfiguredChain(mappedValue, zInput)) {
                 gl_FragColor = vec4(0.0, 0.0, 0.0, 1.0);
                 return;
             }

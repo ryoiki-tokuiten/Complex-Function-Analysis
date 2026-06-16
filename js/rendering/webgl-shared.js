@@ -254,11 +254,11 @@ export function getGLSLComplexMathLibrary(appState) {
         appState,
         functionName => getWebGLDomainColorFunctionIdShared(functionName, true)
     );
-    let algStr = `bool evaluateMappedValueBase(vec2 z, float isWPlane, float functionId, vec2 mA, vec2 mB, vec2 mC, vec2 mD, int polyDeg, vec2 polyCoeffs[11], float zetaCont, float zetaRefl, float fracPower, out vec2 mapped) {\n`;
+    let algStr = `bool evaluateMappedValueBase(vec2 z, vec2 c, float isWPlane, float functionId, vec2 mA, vec2 mB, vec2 mC, vec2 mD, int polyDeg, vec2 polyCoeffs[11], float zetaCont, float zetaRefl, float fracPower, out vec2 mapped) {\n`;
     algStr += `  if (isWPlane > 0.5 || isWPlane < 0.0) { mapped = z; return isFiniteVec2Compat(mapped); }\n`;
     algStr += `  float fId = floor(functionId + 0.5);\n`;
     if (dynamic.source && !dynamic.error) {
-        algStr += `  if (abs(fId - 17.0) < 0.5) return evaluateDynamicAggregate(z, mA, mB, mC, mD, polyDeg, polyCoeffs, zetaCont, zetaRefl, fracPower, mapped);\n`;
+        algStr += `  if (abs(fId - 17.0) < 0.5) return evaluateDynamicAggregate(z, c, mA, mB, mC, mD, polyDeg, polyCoeffs, zetaCont, zetaRefl, fracPower, mapped);\n`;
     }
     algStr += `  if (abs(fId - 16.0) < 0.5) {\n`;
     algStr += `    vec2 sum = vec2(0.0);\n`;
@@ -276,13 +276,21 @@ export function getGLSLComplexMathLibrary(appState) {
                     algStr += `        vec2 argZ = z;\n`;
                     algStr += `        vec2 temp = vec2(0.0);\n`;
                     if (f.chainedFunc && f.chainedFunc !== 'none') {
-                        const cfId = getWebGLDomainColorFunctionIdShared(f.chainedFunc);
-                        algStr += `        if (!evaluateBasicFuncShared(float(${cfId}.0), argZ, mA, mB, mC, mD, polyDeg, polyCoeffs, zetaCont, zetaRefl, fracPower, temp)) return false;\n`;
+                        if (f.chainedFunc === 'c') {
+                            algStr += `        argZ = c;\n`;
+                        } else {
+                            const cfId = getWebGLDomainColorFunctionIdShared(f.chainedFunc);
+                            algStr += `        if (!evaluateBasicFuncShared(float(${cfId}.0), argZ, mA, mB, mC, mD, polyDeg, polyCoeffs, zetaCont, zetaRefl, fracPower, temp)) return false;\n`;
+                            algStr += `        argZ = temp;\n`;
+                        }
+                    }
+                    if (f.func === 'c') {
+                        algStr += `        argZ = c;\n`;
+                    } else {
+                        const fId = getWebGLDomainColorFunctionIdShared(f.func);
+                        algStr += `        if (!evaluateBasicFuncShared(float(${fId}.0), argZ, mA, mB, mC, mD, polyDeg, polyCoeffs, zetaCont, zetaRefl, fracPower, temp)) return false;\n`;
                         algStr += `        argZ = temp;\n`;
                     }
-                    const fId = getWebGLDomainColorFunctionIdShared(f.func);
-                    algStr += `        if (!evaluateBasicFuncShared(float(${fId}.0), argZ, mA, mB, mC, mD, polyDeg, polyCoeffs, zetaCont, zetaRefl, fracPower, temp)) return false;\n`;
-                    algStr += `        argZ = temp;\n`;
 
                     if (f.power !== undefined && f.power !== 1.0) {
                         algStr += `        if (dot(argZ, argZ) < 1.0e-20) { argZ = vec2(0.0); } else {\n`;

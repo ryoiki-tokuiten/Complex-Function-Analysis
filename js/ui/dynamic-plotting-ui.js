@@ -461,6 +461,7 @@ function termFormula() {
 
 function sequenceVariableNames() {
     return [
+        'c',
         'd',
         'z',
         ...getDynamicTermBindings()

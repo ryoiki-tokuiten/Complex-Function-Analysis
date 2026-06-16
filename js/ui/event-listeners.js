@@ -162,7 +162,7 @@ const SPHERE_VIEW_BUTTONS = {
 };
 
 const ALGEBRAIC_FUNCTION_OPTIONS = [
-    ['none', 'None'], ['cos', 'cos(z)'], ['sin', 'sin(z)'], ['tan', 'tan(z)'],
+    ['none', 'None'], ['c', 'c'], ['cos', 'cos(z)'], ['sin', 'sin(z)'], ['tan', 'tan(z)'],
     ['sec', 'sec(z)'], ['exp', 'e^z'], ['ln', 'ln(z)'], ['sinh', 'sinh(z)'],
     ['cosh', 'cosh(z)'], ['tanh', 'tanh(z)'], ['power', 'z^n'], ['reciprocal', '1/z'],
     ['mobius', 'Möbius'], ['zeta', 'ζ(z)'], ['polynomial', 'Polynomial'],
@@ -170,6 +170,7 @@ const ALGEBRAIC_FUNCTION_OPTIONS = [
 ].map(([value, label]) => ({ value, label }));
 
 const ALGEBRAIC_SYMBOLS = new Map([
+    ['c', 'c'],
     ['power', 'z^n'],
     ['zeta', 'ζ'],
     ['polynomial', 'P'],
@@ -1915,9 +1916,11 @@ function algebraicSymbol(func) {
 }
 
 function factorText(factor) {
-    let text = factor.chainedFunc && factor.chainedFunc !== 'none'
-        ? `${algebraicSymbol(factor.func)}(${algebraicSymbol(factor.chainedFunc)}(z))`
-        : `${algebraicSymbol(factor.func)}(z)`;
+    let text = factor.func === 'c'
+        ? 'c'
+        : factor.chainedFunc && factor.chainedFunc !== 'none'
+            ? `${algebraicSymbol(factor.func)}(${algebraicSymbol(factor.chainedFunc)}(z))`
+            : `${algebraicSymbol(factor.func)}(z)`;
 
     if (factor.power !== undefined && factor.power !== 1) text = `(${text})^${Number(factor.power).toFixed(1)}`;
     if (factor.reciprocal) text = `1/(${text})`;
@@ -1973,6 +1976,7 @@ function trimFactors(factors) {
 function setFactorFunction(term, index, func) {
     if (index < term.factors.length) term.factors[index].func = func;
     else term.factors.push(createAlgebraicFactor(func));
+    if (func === 'c') term.factors[index].chainedFunc = 'none';
 
     term.factors = trimFactors(term.factors);
 }
@@ -2037,15 +2041,20 @@ function modifierCheckbox(factor, key, label, onChange) {
 }
 
 function renderFactorDetails(term, factor, preview) {
-    return h('div', { className: 'algebraic-factor-details' }, [
-        h('div', { className: 'algebraic-factor-detail-row' }, [
+    const rows = [];
+
+    if (factor.func !== 'c') {
+        rows.push(h('div', { className: 'algebraic-factor-detail-row' }, [
             h('span', { className: 'algebraic-factor-label', text: 'Chain f(g(z))' }),
             select(ALGEBRAIC_FUNCTION_OPTIONS, factor.chainedFunc, event => {
                 factor.chainedFunc = event.target.value;
                 refreshAlgebraicFormula(preview, term);
                 syncParameterControlsPanelVisibility();
             })
-        ]),
+        ]));
+    }
+
+    rows.push(
         algebraicRange('Power ', factor.power === undefined ? 1.0 : factor.power, value => {
             factor.power = value;
             refreshAlgebraicFormula(preview, term);
@@ -2055,7 +2064,9 @@ function renderFactorDetails(term, factor, preview) {
             modifierCheckbox(factor, 'log', 'ln(f)', () => refreshAlgebraicFormula(preview, term)),
             modifierCheckbox(factor, 'exp', 'e^f', () => refreshAlgebraicFormula(preview, term))
         ])
-    ]);
+    );
+
+    return h('div', { className: 'algebraic-factor-details' }, rows);
 }
 
 function renderFactor(term, factor, index, preview) {

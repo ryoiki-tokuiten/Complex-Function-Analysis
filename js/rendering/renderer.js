@@ -166,7 +166,13 @@ const Z_FLOW_CACHE_FIELDS = Object.freeze([
 const CHAIN_COMPOSERS = Object.freeze({
     power: (previous, { baseProfile }) => (re, im) => {
         const value = complexOrInvalid(previous(re, im));
-        const base = evaluateMappedTransform(baseProfile, re, im) || invalidComplex();
+        const base = evaluateMappedTransform(
+            baseProfile,
+            re,
+            im,
+            state.currentFunction,
+            { c: { re, im } }
+        ) || invalidComplex();
 
         return complexMul(value, base);
     },
@@ -179,7 +185,8 @@ const CHAIN_COMPOSERS = Object.freeze({
 
     reciprocal: previous => (re, im) => complexReciprocal(complexOrInvalid(previous(re, im))),
 
-    recursion: (previous, { evalBaseFunc }) => (re, im) => evalBaseFunc(complexOrInvalid(previous(re, im)))
+    recursion: (previous, { evalBaseFunc }) => (re, im) =>
+        evalBaseFunc(complexOrInvalid(previous(re, im)), { re, im })
 });
 
 const Z_SIGNAL_RENDERERS = Object.freeze([
@@ -1052,12 +1059,18 @@ function getBaseTransformContext() {
     return {
         baseFunc,
         baseProfile,
-        evalBaseFunc: value => {
+        evalBaseFunc: (value, c) => {
             if (!isFiniteComplex(value)) {
                 return invalidComplex();
             }
 
-            return evaluateMappedTransform(baseProfile, value.re, value.im) || invalidComplex();
+            return evaluateMappedTransform(
+                baseProfile,
+                value.re,
+                value.im,
+                state.currentFunction,
+                { c }
+            ) || invalidComplex();
         }
     };
 }
@@ -1066,6 +1079,22 @@ function composeNextWTransform(previous, transformContext) {
     const composer = CHAIN_COMPOSERS[state.chainingMode] || CHAIN_COMPOSERS.recursion;
 
     return composer(previous, transformContext);
+}
+
+function createZeroSeedStageTransform(stageIndex, transformContext) {
+    return (re, im) => {
+        const c = { re, im };
+        let current = { re: 0, im: 0 };
+
+        for (let step = 0; step <= stageIndex; step += 1) {
+            current = transformContext.evalBaseFunc(current, c);
+            if (!isFiniteComplex(current)) {
+                return invalidComplex();
+            }
+        }
+
+        return current;
+    };
 }
 
 function getWPlaneRenderCount() {
@@ -1080,8 +1109,16 @@ function getWPlaneRenderCount() {
 }
 
 function* iterWPlaneTransforms(transformContext) {
-    let current = transformContext.baseFunc;
     const count = getWPlaneRenderCount();
+
+    if (state.chainingEnabled && state.chainingMode === 'zero_seed') {
+        for (let index = 0; index < count; index += 1) {
+            yield [index, createZeroSeedStageTransform(index, transformContext)];
+        }
+        return;
+    }
+
+    let current = transformContext.baseFunc;
 
     for (let index = 0; index < count; index += 1) {
         yield [index, current];

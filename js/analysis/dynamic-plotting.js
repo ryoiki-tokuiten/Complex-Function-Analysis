@@ -317,10 +317,10 @@ function compilePipelineExpressions() {
         ? SELECTED_TERM_EXPRESSION
         : String(dynamicConfig().term?.expression ?? DEFAULT_CUSTOM_TERM_EXPRESSION);
     const point = compileExpression(pointSource, {
-        allowedVariables: allowedVariables(['d', 'j', 's'])
+        allowedVariables: allowedVariables(['c', 'd', 'j', 's'])
     });
     const term = compileExpression(termSource, {
-        allowedVariables: allowedVariables(['d', 'j', 'z', 's'])
+        allowedVariables: allowedVariables(['c', 'd', 'j', 'z', 's'])
     });
 
     runtime.compilationSignature = signature;
@@ -388,6 +388,7 @@ function evaluatePoint(
         d: record.domainValue,
         j: { re: record.ordinal, im: 0 },
         s: aggregateParameter,
+        c: aggregateParameter,
         selectedFunction
     }));
 }
@@ -413,6 +414,7 @@ function evaluateTerm(
         j: { re: record.ordinal, im: 0 },
         z: inputPoint,
         s: aggregateParameter,
+        c: aggregateParameter,
         selectedFunction
     }));
 }

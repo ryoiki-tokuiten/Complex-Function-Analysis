@@ -1,5 +1,9 @@
 import { state, context } from '../store/state.js';
-import { getMappedTransformProfile, evaluateMappedTransform } from '../math-utils.js';
+import {
+    getMappedTransformProfile,
+    getEffectiveBaseTransformFunction,
+    evaluateDomainColoringMappedTransform
+} from '../math-utils.js';
 import { renderDomainColoringWithWebGL } from './webgl-domain-coloring.js';
 import { hslToRgb } from './canvas-primitives.js';
 import { domainPalettes } from '../ui/theme-manager.js';
@@ -55,10 +59,13 @@ export function getDomainColorPlaneKey(targetCtx) {
 
 export function renderPlanarDomainColoring(tCtx, pP, isWPC, sTF) {
     const w = pP.width; const h = pP.height; if (w === 0 || h === 0) return;
-    const sourceProfile = (!isWPC && typeof sTF === 'function')
-        ? getMappedTransformProfile(state.currentFunction, sTF)
+    const profileTransform = state.chainingEnabled
+        ? getEffectiveBaseTransformFunction(state.currentFunction)
+        : sTF;
+    const sourceProfile = (!isWPC && typeof profileTransform === 'function')
+        ? getMappedTransformProfile(state.currentFunction, profileTransform)
         : null;
-    if (sourceProfile && sourceProfile.isConstant) {
+    if (sourceProfile && sourceProfile.isConstant && !state.chainingEnabled) {
         renderConstantPlanarDomainColoring(tCtx, pP, sourceProfile.constantValue);
         return;
     }
@@ -75,10 +82,13 @@ export function renderPlanarDomainColoring(tCtx, pP, isWPC, sTF) {
 
 export function renderSphereDomainColoring(tCtx, cSP, cDOMP, isWPC, sTF) {
     const w = cDOMP.width; const h = cDOMP.height; if (w === 0 || h === 0) return;
-    const sourceProfile = (!isWPC && typeof sTF === 'function')
-        ? getMappedTransformProfile(state.currentFunction, sTF)
+    const profileTransform = state.chainingEnabled
+        ? getEffectiveBaseTransformFunction(state.currentFunction)
+        : sTF;
+    const sourceProfile = (!isWPC && typeof profileTransform === 'function')
+        ? getMappedTransformProfile(state.currentFunction, profileTransform)
         : null;
-    if (sourceProfile && sourceProfile.isConstant) {
+    if (sourceProfile && sourceProfile.isConstant && !state.chainingEnabled) {
         renderSphereDomainColoringCPU(tCtx, cSP, cDOMP, isWPC, sTF, sourceProfile);
         return;
     }
@@ -232,7 +242,12 @@ export function renderPlanarDomainColoringCPU(tCtx, pP, isWPC, sTF, sourceProfil
             if (isWPC) {
                 mapped = { re: reZ, im: imZ };
             } else if (sourceProfile) {
-                mapped = evaluateMappedTransform(sourceProfile, reZ, imZ);
+                mapped = evaluateDomainColoringMappedTransform(
+                    sourceProfile,
+                    reZ,
+                    imZ,
+                    state.currentFunction
+                );
             } else {
                 if (typeof sTF === 'function') {
                     mapped = sTF(reZ, imZ);
@@ -325,7 +340,12 @@ export function renderSphereDomainColoringCPU(tCtx, cSP, cDOMP, isWPC, sTF, sour
             if (isWPC) {
                 mapped = { re: reZ, im: imZ };
             } else if (sourceProfile) {
-                mapped = evaluateMappedTransform(sourceProfile, reZ, imZ);
+                mapped = evaluateDomainColoringMappedTransform(
+                    sourceProfile,
+                    reZ,
+                    imZ,
+                    state.currentFunction
+                );
             } else {
                 if (typeof sTF === 'function') {
                     mapped = sTF(reZ, imZ);
