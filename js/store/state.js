@@ -205,6 +205,8 @@ const rawState = {
     chainingEnabled: false,
     chainingMode: 'recursion',
     chainCount: 1,
+    currentFunctionPreset: null,
+    fractalOrbitColoringEnabled: false,
 
     algebraicChainingEnabled: false,
     algebraicChainingTerms: [

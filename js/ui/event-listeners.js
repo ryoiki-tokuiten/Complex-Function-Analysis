@@ -18,6 +18,7 @@ import { initializePolynomialCoeffs, generatePolynomialCoeffSliders } from './po
 import { updateLaplace3DSurface } from '../rendering/laplace-3d-surface.js';
 import { getRiemannSurfaceCanvas, resetRiemannSurfaceViews } from '../rendering/webgl-riemann-surface.js';
 import { applyTheme, renderThemesList, renderDomainPalettesUI, domainPalettes } from './theme-manager.js';
+import { applyFractalPreset, isFractalPresetKey } from '../analysis/fractal-presets.js';
 import {
     initializeDynamicPlottingUI,
     syncDynamicPlottingUI
@@ -448,7 +449,58 @@ function disableAlgebraicChaining() {
     display(controls.algebraicChainingControlsContainer, false);
 }
 
+function syncChainingControlsFromState() {
+    checked('enableChainingCb', state.chainingEnabled);
+    display(controls.chainingControlsContainer, state.chainingEnabled);
+    if (controls.chainModeSelector) controls.chainModeSelector.value = state.chainingMode;
+    if (controls.chainCountSlider) controls.chainCountSlider.value = state.chainCount;
+    if (controls.chainCountValueDisplay) controls.chainCountValueDisplay.textContent = state.chainCount;
+    call(updateChainingColumns, state.chainingEnabled ? state.chainCount : 1);
+    call(updateChainingTitles);
+}
+
+function syncAlgebraicControlsFromState() {
+    checked('enableAlgebraicChainingCb', state.algebraicChainingEnabled);
+    display(controls.algebraicChainingControlsContainer, state.algebraicChainingEnabled);
+    if (state.algebraicChainingEnabled) renderAlgebraicChainingTerms();
+}
+
+function syncDomainControlsFromState() {
+    checked('enableDomainColoringCb', state.domainColoringEnabled);
+    hidden(controls.domainColoringOptionsDiv, !state.domainColoringEnabled);
+    hidden(controls.domainColoringKeyDiv, !state.domainColoringEnabled);
+    hidden(controls.riemannSphereDomainColoringOptions, !state.domainColoringEnabled);
+    if (controls.domainPaletteSelect) controls.domainPaletteSelect.value = state.domainPalette;
+    call(renderDomainPalettesUI, $('domain_palette_circles'));
+    call(updateDomainColoringKey);
+}
+
+function syncInputShapeControlFromState() {
+    if (controls.inputShapeSelector) controls.inputShapeSelector.value = state.currentInputShape;
+}
+
+function activateFractalPreset(key) {
+    const preset = applyFractalPreset(state, key);
+    if (!preset) return false;
+
+    if (state.laplaceModeEnabled) call(stopLaplaceAnimation);
+    syncChainingControlsFromState();
+    syncAlgebraicControlsFromState();
+    syncDomainControlsFromState();
+    syncInputShapeControlFromState();
+    updateModePanels();
+    generatePolynomialCoeffSliders();
+    setActiveFunctionButton(key);
+    updateTitlesAndGlobalUI();
+    syncParameterControlsPanelVisibility();
+    if (state.dynamicPlotting?.enabled) syncDynamicPlottingUI();
+    requestDomainRedraw(true);
+    return true;
+}
+
 function activateFunctionMode(key) {
+    if (isFractalPresetKey(key) && activateFractalPreset(key)) return;
+
     const enteringFourier = key === 'fourier';
     const enteringLaplace = key === 'laplace';
 
@@ -458,6 +510,8 @@ function activateFunctionMode(key) {
     disableAlgebraicChaining();
 
     state.currentFunction = key;
+    state.currentFunctionPreset = null;
+    state.fractalOrbitColoringEnabled = false;
     state.fourierModeEnabled = enteringFourier;
     state.laplaceModeEnabled = enteringLaplace;
 
@@ -1521,6 +1575,8 @@ function bindChainingControls() {
 
     bindElementListener(controls.enableChainingCb, 'change', event => {
         state.chainingEnabled = event.target.checked;
+        state.fractalOrbitColoringEnabled = false;
+        state.currentFunctionPreset = null;
         display(controls.chainingControlsContainer, state.chainingEnabled);
         call(updateChainingColumns, state.chainingEnabled ? state.chainCount : 1);
         updateTitlesAndGlobalUI();
@@ -1530,6 +1586,8 @@ function bindChainingControls() {
 
     bindElementListener(controls.chainModeSelector, 'change', event => {
         state.chainingMode = event.target.value;
+        state.fractalOrbitColoringEnabled = false;
+        state.currentFunctionPreset = null;
         call(updateChainingTitles);
         requestRedrawAll();
     });
@@ -1810,6 +1868,8 @@ function handleFullScreenToggle(planeType, index = 0) {
 function bindAlgebraicChainingControls() {
     bindElementListener(controls.enableAlgebraicChainingCb, 'change', event => {
         state.algebraicChainingEnabled = event.target.checked;
+        state.fractalOrbitColoringEnabled = false;
+        state.currentFunctionPreset = null;
         display(controls.algebraicChainingControlsContainer, state.algebraicChainingEnabled);
 
         state.currentFunction = state.algebraicChainingEnabled ? 'algebraic_chaining' : 'cos';

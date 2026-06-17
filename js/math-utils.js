@@ -944,73 +944,6 @@ function exceedsDomainColorChainBailout(value) {
     return Math.max(Math.abs(value?.re ?? 0), Math.abs(value?.im ?? 0)) >= DOMAIN_COLOR_CHAIN_BAILOUT_MAGNITUDE;
 }
 
-export function evaluateDomainColoringMappedTransform(profileOrTransform, re, im, functionKey = state.currentFunction) {
-    const c = { re, im };
-
-    if (!state.chainingEnabled || state.chainCount <= 1) {
-        return evaluateMappedTransform(profileOrTransform, re, im, functionKey, { c });
-    }
-
-    const count = Math.max(1, Math.floor(Number(state.chainCount) || 1));
-
-    if (state.chainingMode === 'zero_seed') {
-        let current = { re: 0, im: 0 };
-
-        for (let i = 0; i < count; i += 1) {
-            const next = evaluateMappedTransform(profileOrTransform, current.re, current.im, functionKey, { c });
-            if (!next || !isValidMappedTransformValue(next)) return null;
-
-            current = next;
-
-            if (exceedsDomainColorChainBailout(current)) return null;
-        }
-
-        return current;
-    }
-
-    let current = evaluateMappedTransform(profileOrTransform, re, im, functionKey, { c });
-    if (!current) return null;
-
-    let lastFinite = isValidMappedTransformValue(current) ? current : null;
-    if (!lastFinite || exceedsDomainColorChainBailout(lastFinite)) return lastFinite;
-    const baseValue = lastFinite;
-
-    for (let i = 1; i < count; i += 1) {
-        let next;
-
-        switch (state.chainingMode) {
-            case 'power':
-                next = complexMul(current, baseValue);
-                break;
-            case 'sqrt':
-                next = complexPow(current, 0.5, 0);
-                break;
-            case 'ln':
-                next = complexLn(current);
-                break;
-            case 'exp':
-                next = complexExp(current);
-                break;
-            case 'reciprocal':
-                next = complexReciprocal(current);
-                break;
-            case 'recursion':
-            default:
-                next = evaluateMappedTransform(profileOrTransform, current.re, current.im, functionKey, { c });
-                break;
-        }
-
-        if (!next || !isValidMappedTransformValue(next)) return lastFinite;
-
-        current = next;
-        lastFinite = current;
-
-        if (exceedsDomainColorChainBailout(current)) return current;
-    }
-
-    return current;
-}
-
 export function getEffectiveBaseTransformFunction(funcKey = state.currentFunction) {
     let baseFunc = transformFunctions[funcKey];
     if (!baseFunc) return (re, im) => ({ re, im });
@@ -1037,53 +970,105 @@ export function setActiveTransformProvider(provider) {
     activeTransformProvider = typeof provider === 'function' ? provider : null;
 }
 
-const CHAIN_TRANSFORMS = {
-    power: (previous, context) => (re, im) =>
-        complexMul(previous(re, im), context.evalBaseAtInput(re, im)),
-    sqrt: previous => (re, im) =>
-        complexPow(previous(re, im), 0.5, 0),
-    ln: previous => (re, im) =>
-        complexLn(previous(re, im)),
-    exp: previous => (re, im) =>
-        complexExp(previous(re, im)),
-    reciprocal: previous => (re, im) =>
-        complexReciprocal(previous(re, im)),
-    recursion: (previous, context) => (re, im) =>
-        context.evalBase(previous(re, im), { re, im })
-};
+function validOrNull(value) {
+    return isValidMappedTransformValue(value) ? value : null;
+}
 
-function createChainedTransformForStage(funcKey, stageIndex, baseFunc) {
-    const baseProfile = getMappedTransformProfile(funcKey, baseFunc);
-    const context = {
-        evalBase: (value, c) => invalidComplex(value)
-            ? { re: NaN, im: NaN }
-            : evaluateMappedTransform(baseProfile, value.re, value.im, funcKey, { c }) || { re: NaN, im: NaN },
-        evalBaseAtInput: (re, im) => evaluateMappedTransform(baseProfile, re, im, funcKey, { c: { re, im } }) || { re: NaN, im: NaN }
-    };
-    const stage = Math.max(0, Math.floor(Number(stageIndex) || 0));
+function chainStageIndex(value) {
+    return Math.max(0, Math.floor(Number(value) || 0));
+}
+
+function evaluateChainBase(profileOrTransform, value, functionKey, c) {
+    if (!validComplex(value)) return null;
+    return validOrNull(evaluateMappedTransform(
+        profileOrTransform,
+        value.re,
+        value.im,
+        functionKey,
+        { c }
+    ));
+}
+
+function evaluateChainStep(mode, current, baseValue, profileOrTransform, functionKey, c) {
+    switch (mode) {
+        case 'power':
+            return validOrNull(complexMul(current, baseValue));
+        case 'sqrt':
+            return validOrNull(complexPow(current, 0.5, 0));
+        case 'ln':
+            return validOrNull(complexLn(current));
+        case 'exp':
+            return validOrNull(complexExp(current));
+        case 'reciprocal':
+            return validOrNull(complexReciprocal(current));
+        case 'recursion':
+        default:
+            return evaluateChainBase(profileOrTransform, current, functionKey, c);
+    }
+}
+
+function evaluateMappedChainStage(profileOrTransform, re, im, functionKey, stageIndex, options = null) {
+    const c = { re, im };
+    const stage = chainStageIndex(stageIndex);
+    const returnLastFinite = !!options?.returnLastFinite;
 
     if (state.chainingMode === 'zero_seed') {
-        return (re, im) => {
-            const c = { re, im };
-            let current = { re: 0, im: 0 };
+        let current = { re: 0, im: 0 };
+        let lastFinite = null;
 
-            for (let i = 0; i <= stage; i++) {
-                current = context.evalBase(current, c);
-                if (invalidComplex(current)) return { re: NaN, im: NaN };
-            }
+        for (let i = 0; i <= stage; i += 1) {
+            current = evaluateChainBase(profileOrTransform, current, functionKey, c);
+            if (!current) return returnLastFinite ? lastFinite : null;
+            lastFinite = current;
+            if (exceedsDomainColorChainBailout(current)) return returnLastFinite ? current : null;
+        }
 
-            return current;
-        };
+        return current;
     }
 
-    const mode = CHAIN_TRANSFORMS[state.chainingMode] ? state.chainingMode : 'recursion';
-    let current = baseFunc;
+    let current = evaluateMappedTransform(profileOrTransform, re, im, functionKey, { c });
+    if (!current) return null;
 
-    for (let i = 0; i < stage; i++) {
-        current = CHAIN_TRANSFORMS[mode](current, context);
+    let lastFinite = validOrNull(current);
+    if (!lastFinite || exceedsDomainColorChainBailout(lastFinite)) return returnLastFinite ? lastFinite : null;
+
+    const mode = state.chainingMode || 'recursion';
+    const baseValue = lastFinite;
+
+    for (let i = 1; i <= stage; i += 1) {
+        current = evaluateChainStep(mode, current, baseValue, profileOrTransform, functionKey, c);
+        if (!current) return returnLastFinite ? lastFinite : null;
+
+        lastFinite = current;
+        if (exceedsDomainColorChainBailout(current)) return returnLastFinite ? current : null;
     }
 
     return current;
+}
+
+export function evaluateDomainColoringMappedTransform(profileOrTransform, re, im, functionKey = state.currentFunction) {
+    if (!state.chainingEnabled || (state.chainCount <= 1 && state.chainingMode !== 'zero_seed')) {
+        return evaluateMappedTransform(profileOrTransform, re, im, functionKey, { c: { re, im } });
+    }
+
+    return evaluateMappedChainStage(
+        profileOrTransform,
+        re,
+        im,
+        functionKey,
+        Math.floor(Number(state.chainCount) || 1) - 1,
+        { returnLastFinite: true }
+    );
+}
+
+function createChainedTransformForStage(funcKey, stageIndex, baseFunc) {
+    const baseProfile = getMappedTransformProfile(funcKey, baseFunc);
+    const stage = chainStageIndex(stageIndex);
+
+    return (re, im) => {
+        const mapped = evaluateMappedChainStage(baseProfile, re, im, funcKey, stage);
+        return mapped || { re: NaN, im: NaN };
+    };
 }
 
 export function getChainedStageTransformFunction(funcKey = state.currentFunction, stageIndex = 0) {

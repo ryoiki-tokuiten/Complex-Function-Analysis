@@ -16,7 +16,7 @@ const DOMAIN_LIGHTNESS_DETAIL_BASE = 0.72;
 const DOMAIN_LIGHTNESS_DETAIL_SCALE = 0.28;
 const DYNAMICS_ESCAPE_RADIUS = 64;
 const DYNAMICS_ESCAPE_RADIUS_SQ = DYNAMICS_ESCAPE_RADIUS * DYNAMICS_ESCAPE_RADIUS;
-const DYNAMICS_CHAIN_LIMIT = 105;
+const DYNAMICS_CHAIN_LIMIT = 512;
 
 function magnitudeLightness(logMod, cycles) {
     if (!Number.isFinite(logMod)) return DOMAIN_LIGHTNESS_MAX;
@@ -50,6 +50,7 @@ function isFiniteComplex(value) {
 
 function shouldUseIteratedDynamicsColoring(isWPC) {
     return !isWPC &&
+        state.fractalOrbitColoringEnabled &&
         state.chainingEnabled &&
         state.chainCount > 1 &&
         (state.chainingMode === 'recursion' || state.chainingMode === 'zero_seed');
@@ -330,7 +331,7 @@ export function renderPlanarDomainColoringCPU(tCtx, pP, isWPC, sTF, sourceProfil
         (state.panStateZ && state.panStateZ.isPanning) ||
         (state.panStateW && state.panStateW.isPanning)
     ));
-    const ds = isInteracting ? 3 : 2;
+    const ds = isInteracting ? 2 : 1;
     const w = Math.max(1, Math.floor(targetW / ds));
     const h = Math.max(1, Math.floor(targetH / ds));
 
@@ -391,7 +392,7 @@ export function renderSphereDomainColoringCPU(tCtx, cSP, cDOMP, isWPC, sTF, sour
         (state.panStateZ && state.panStateZ.isPanning) ||
         (state.panStateW && state.panStateW.isPanning)
     ));
-    const ds = isInteracting ? 3 : 2;
+    const ds = isInteracting ? 2 : 1;
     const w = Math.max(1, Math.floor(targetW / ds));
     const h = Math.max(1, Math.floor(targetH / ds));
 

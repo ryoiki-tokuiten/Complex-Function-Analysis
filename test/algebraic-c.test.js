@@ -217,3 +217,94 @@ test('domain coloring and staged output chains share non-recursive mode semantic
         restoreState(before);
     }
 });
+
+test('zero-seed depth one evaluates from the seed in domain coloring too', () => {
+    const keys = [
+        'currentFunction',
+        'algebraicChainingEnabled',
+        'algebraicChainingTerms',
+        'polynomialN',
+        'polynomialCoeffs',
+        'chainingEnabled',
+        'chainingMode',
+        'chainCount'
+    ];
+    const before = snapshotState(keys);
+
+    try {
+        Object.assign(state, {
+            currentFunction: 'algebraic_chaining',
+            algebraicChainingEnabled: true,
+            polynomialN: 1,
+            polynomialCoeffs: [
+                { re: 0, im: 0 },
+                { re: 1, im: 0 }
+            ],
+            algebraicChainingTerms: [
+                {
+                    coeff: { re: 1, im: 0 },
+                    factors: [{ func: 'polynomial', chainedFunc: 'none', power: 1, reciprocal: false, log: false, exp: false }]
+                },
+                {
+                    coeff: { re: 1, im: 0 },
+                    factors: [{ func: 'c', chainedFunc: 'none', power: 1, reciprocal: false, log: false, exp: false }]
+                }
+            ],
+            chainingEnabled: true,
+            chainingMode: 'zero_seed',
+            chainCount: 1
+        });
+
+        const baseProfile = getMappedTransformProfile(
+            'algebraic_chaining',
+            getEffectiveBaseTransformFunction('algebraic_chaining')
+        );
+        const mapped = evaluateDomainColoringMappedTransform(baseProfile, 2, 0, 'algebraic_chaining');
+        const staged = getChainedStageTransformFunction('algebraic_chaining', 0);
+
+        assert.deepEqual(mapped, { re: 2, im: 0 });
+        assert.deepEqual(staged(2, 0), { re: 2, im: 0 });
+    } finally {
+        restoreState(before);
+    }
+});
+
+test('large output-chain depths evaluate iteratively without nested call stacks', () => {
+    const keys = [
+        'currentFunction',
+        'algebraicChainingEnabled',
+        'algebraicChainingTerms',
+        'polynomialN',
+        'polynomialCoeffs',
+        'chainingEnabled',
+        'chainingMode',
+        'chainCount'
+    ];
+    const before = snapshotState(keys);
+
+    try {
+        Object.assign(state, {
+            currentFunction: 'algebraic_chaining',
+            algebraicChainingEnabled: true,
+            polynomialN: 1,
+            polynomialCoeffs: [
+                { re: 0, im: 0 },
+                { re: 1, im: 0 }
+            ],
+            algebraicChainingTerms: [
+                {
+                    coeff: { re: 1, im: 0 },
+                    factors: [{ func: 'polynomial', chainedFunc: 'none', power: 1, reciprocal: false, log: false, exp: false }]
+                }
+            ],
+            chainingEnabled: true,
+            chainingMode: 'recursion',
+            chainCount: 512
+        });
+
+        const chained = getChainedTransformFunction('algebraic_chaining');
+        assert.deepEqual(chained(2, 0), { re: 2, im: 0 });
+    } finally {
+        restoreState(before);
+    }
+});

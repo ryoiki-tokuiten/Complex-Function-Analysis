@@ -507,7 +507,8 @@ export class ThreeRiemannRenderer {
                     u_zetaReflectionBoundary: { value: 0.5 },
                     u_fracPower: { value: 0.5 },
                     u_chainCount: { value: 1 },
-                    u_chainMode: { value: 1 }
+                    u_chainMode: { value: 1 },
+                    u_useOrbitColoring: { value: 0.0 }
                 };
                 this.ghostSphere.material = new THREE.ShaderMaterial({
                     uniforms: uniforms,
@@ -575,10 +576,11 @@ export class ThreeRiemannRenderer {
         uniforms.u_zetaContinuationEnabled.value = state.zetaContinuationEnabled ? 1.0 : 0.0;
         uniforms.u_zetaReflectionBoundary.value = 0.5;
         uniforms.u_fracPower.value = state.fractionalPowerN !== undefined ? state.fractionalPowerN : 0.5;
-        uniforms.u_chainCount.value = state.chainingEnabled ? (state.chainCount || 1) : 1;
+        uniforms.u_chainCount.value = state.chainingEnabled ? Math.max(1, Math.min(512, state.chainCount || 1)) : 1;
         
         const chainModeVal = CHAIN_MODE_IDS[state.chainingMode];
         uniforms.u_chainMode.value = chainModeVal !== undefined ? chainModeVal : 1;
+        uniforms.u_useOrbitColoring.value = state.fractalOrbitColoringEnabled ? 1.0 : 0.0;
     }
 
     startAnimationLoop() {

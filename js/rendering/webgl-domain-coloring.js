@@ -31,8 +31,8 @@ const CFG = Object.freeze({
     maxDprBoost: 1.35,
     dprScaleFactor: 0.92,
     polyCoeffCount: 11,
-    maxChainStepsGlsl: 105,
-    maxPerturbationOrbit: 106
+    maxChainStepsGlsl: 512,
+    maxPerturbationOrbit: 513
 });
 
 const EMPTY_OPTIONS = Object.freeze({});
@@ -115,6 +115,7 @@ const UNIFORM_ALIASES = Object.freeze({
     uFracPower: 'u_fracPower',
     uChainCount: 'u_chainCount',
     uChainMode: 'u_chainMode',
+    uUseOrbitColoring: 'u_useOrbitColoring',
     uUseDynamicsPerturbation: 'u_useDynamicsPerturbation',
     uPerturbationA1: 'u_perturbationA1',
     uPerturbationA2: 'u_perturbationA2',
@@ -191,6 +192,7 @@ const FRAGMENT_UNIFORMS = lines(
     'uniform float u_fracPower;',
     'uniform int u_chainCount;',
     'uniform int u_chainMode;',
+    'uniform float u_useOrbitColoring;',
     'uniform float u_useDynamicsPerturbation;',
     'uniform vec2 u_perturbationA1;',
     'uniform vec2 u_perturbationA2;',
@@ -562,7 +564,7 @@ void main() {
   }
 
   vec2 mappedValue = vec2(0.0);
-  if (u_isWPlaneColoring < 0.5 && u_chainCount > 1 && (u_chainMode == 1 || u_chainMode == 7)) {
+  if (u_useOrbitColoring > 0.5 && u_isWPlaneColoring < 0.5 && u_chainCount > 1 && (u_chainMode == 1 || u_chainMode == 7)) {
     if (u_useDynamicsPerturbation > 0.5 && u_useSphere < 0.5) {
       gl_FragColor = iteratedQuadraticPerturbationColor(
         projectPlanarParameterOffset(pixel, resolutionSafe),
@@ -1163,11 +1165,14 @@ function uploadLightingUniforms(gl, renderer) {
 
 function uploadChainingUniforms(gl, renderer) {
     const enabled = !!state?.chainingEnabled;
-    const chainCount = enabled ? Math.max(1, uniformInt(state.chainCount, 1)) : 1;
+    const chainCount = enabled
+        ? Math.max(1, Math.min(CFG.maxChainStepsGlsl, uniformInt(state.chainCount, 1)))
+        : 1;
     const chainMode = enabled ? enumId(CHAIN_MODE_IDS, state.chainingMode, 1) : 0;
 
     gl.uniform1i(renderer.uChainCount, chainCount);
     gl.uniform1i(renderer.uChainMode, chainMode);
+    gl.uniform1f(renderer.uUseOrbitColoring, state?.fractalOrbitColoringEnabled ? 1 : 0);
 }
 
 function uploadComplexUniform(gl, location, value) {
@@ -1176,6 +1181,7 @@ function uploadComplexUniform(gl, location, value) {
 
 function shouldUseQuadraticPerturbation(job, chainMode, chainCount) {
     return !job.isWPlaneColoring &&
+        state?.fractalOrbitColoringEnabled &&
         !job.sphereParams &&
         chainCount > 1 &&
         (chainMode === CHAIN_MODE_IDS.recursion || chainMode === CHAIN_MODE_IDS.zero_seed);
@@ -1450,6 +1456,7 @@ export function getThreeSphereShaderConfig(planeType) {
         uniform float u_fracPower;
         uniform int u_chainCount;
         uniform int u_chainMode;
+        uniform float u_useOrbitColoring;
     `;
 
     const fragmentHelpers = `
@@ -1609,7 +1616,7 @@ export function getThreeSphereShaderConfig(planeType) {
             vec2 zInput = vec2(vLocalPosition.x / den, vLocalPosition.z / den);
             
             vec2 mappedValue = vec2(0.0);
-            if (u_isWPlaneColoring < 0.5 && u_chainCount > 1 && (u_chainMode == 1 || u_chainMode == 7)) {
+            if (u_useOrbitColoring > 0.5 && u_isWPlaneColoring < 0.5 && u_chainCount > 1 && (u_chainMode == 1 || u_chainMode == 7)) {
                 gl_FragColor = iteratedDynamicsColor(zInput, u_chainMode, 1.0);
                 return;
             }
@@ -1675,7 +1682,8 @@ export function getThreeSphereShaderConfig(planeType) {
         u_zetaReflectionBoundary: { value: 0.5 },
         u_fracPower: { value: 0.5 },
         u_chainCount: { value: 1 },
-        u_chainMode: { value: 1 }
+        u_chainMode: { value: 1 },
+        u_useOrbitColoring: { value: 0.0 }
     };
 
     return {

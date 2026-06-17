@@ -378,7 +378,7 @@ export function setupDOMReferences() {
     });
 
     controls.funcButtons = {};
-    ['fourier', 'laplace', 'cos', 'sin', 'tan', 'sec', 'exp', 'ln', 'reciprocal', 'mobius', 'zeta', 'polynomial', 'poincare', 'sinh', 'cosh', 'tanh', 'power'].forEach(f => { 
+    ['fourier', 'laplace', 'cos', 'sin', 'tan', 'sec', 'exp', 'ln', 'reciprocal', 'mobius', 'zeta', 'polynomial', 'poincare', 'sinh', 'cosh', 'tanh', 'power', 'mandelbrot', 'newton_fractal'].forEach(f => {
         controls.funcButtons[f] = document.getElementById(`select_${f}_btn`);
     });
     

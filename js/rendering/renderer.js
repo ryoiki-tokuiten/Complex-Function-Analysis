@@ -353,7 +353,9 @@ function renderThroughCache({
 }
 
 function toCacheKeyNumber(value) {
-    return Number.isFinite(value) ? value.toFixed(6) : `${value}`;
+    if (!Number.isFinite(value)) return `${value}`;
+    if (Object.is(value, -0)) return '0';
+    return Number(value).toPrecision(15);
 }
 
 function appendKey(parts, name, value) {
@@ -472,6 +474,7 @@ function appendChainingCacheKey(parts) {
 
     appendKey(parts, 'cM', state.chainingMode);
     appendKey(parts, 'cC', state.chainCount);
+    appendKey(parts, 'orbit', state.fractalOrbitColoringEnabled ? 1 : 0);
 }
 
 function appendTaylorCacheKey(parts, isWPlane) {

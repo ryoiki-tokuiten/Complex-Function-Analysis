@@ -60,6 +60,10 @@
                                 data-tooltip="Select w = P(z) polynomial function">Polynomial</button>
                             <button id="select_poincare_btn"
                                 data-tooltip="Select Poincare Disk transformation">Poincare</button>
+                            <button id="select_mandelbrot_btn"
+                                data-tooltip="Load Mandelbrot as zero-seed output chaining of f(w,c)=w²+c">Mandelbrot</button>
+                            <button id="select_newton_fractal_btn"
+                                data-tooltip="Load Newton fractals as recursive algebraic chaining">Newton Fractals</button>
                         </div>
                     </div>
                 </div>
@@ -445,8 +449,8 @@
                                 <output id="chain_count_value_display">1</output>
                             </label>
                             <div class="slider-container">
-                                <input type="range" id="chain_count_slider" name="chain_count_slider" min="1" max="100"
-                                    step="1" value="1" data-tooltip="Number of repeated applications (max 100)">
+                                <input type="range" id="chain_count_slider" name="chain_count_slider" min="1" max="512"
+                                    step="1" value="1" data-tooltip="Number of repeated applications">
                             </div>
 
                             <button id="grid_view_btn" class="sidebar-button"
@@ -1586,7 +1590,7 @@
                             </label>
                             <div class="slider-container">
                                 <input type="range" id="z_plane_zoom_slider" name="z_plane_zoom_slider" min="0.01"
-                                    max="100" step="0.01" value="1.0" data-tooltip="Zoom level for the z-plane view">
+                                    max="1e24" step="any" value="1.0" data-tooltip="Zoom level for the z-plane view">
                             </div>
                         </div>
                         <div class="control-group"> <!-- W-Plane Zoom -->
@@ -1596,7 +1600,7 @@
                             </label>
                             <div class="slider-container">
                                 <input type="range" id="w_plane_zoom_slider" name="w_plane_zoom_slider" min="0.01"
-                                    max="100" step="0.01" value="1.0" data-tooltip="Zoom level for the w-plane view">
+                                    max="1e24" step="any" value="1.0" data-tooltip="Zoom level for the w-plane view">
                             </div>
                         </div>
                     </div>
