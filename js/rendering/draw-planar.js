@@ -1,4 +1,5 @@
 import { state as appState, zPlaneParams } from '../store/state.js';
+import { eventBus } from '../store/events.js';
 import {
     COLOR_PROBE_MARKER, COLOR_PROBE_NEIGHBORHOOD, COLOR_TEXT_ON_CANVAS,
     COLOR_Z_GRID_HORZ, COLOR_CAUCHY_CONTOUR_Z, COLOR_CAUCHY_CONTOUR_W,
@@ -36,6 +37,11 @@ import { drawTaylorAxes } from './draw-primitives.js';
 const EPSILON = 1e-9;
 const DEGENERATE_SEGMENT_EPSILON = 1e-12;
 const STREAMLINE_COLOR_BUCKETS = 32;
+const STREAMLINE_FRAME_BUDGET_MS = 8;
+const STREAMLINE_INTERACTION_FRAME_BUDGET_MS = 4;
+const STREAMLINE_STEP_BUDGET = 12000;
+const STREAMLINE_INTERACTION_STEP_BUDGET = 3500;
+const STREAMLINE_MAX_STEPS_PER_PATH = 650;
 const PROBE_NEIGHBORHOOD_SEGMENTS = 60;
 const PROBE_MARKER_RADIUS = 5;
 const CONSTANT_POINT_RADIUS = 7;
@@ -45,6 +51,12 @@ const ORBIT_ARROW_SIZE = 6;
 const ORBIT_COLOR = 'rgba(0, 255, 200, 0.9)';
 const DEFAULT_VIEW_RANGE = Object.freeze([-1, 1]);
 const INVALID_COMPLEX_POINT = Object.freeze({ re: NaN, im: NaN });
+
+const streamlineProgressState = {
+    key: null,
+    nextSeedOffset: 0,
+    redrawScheduled: false
+};
 
 const LINEAR_SOURCE_POINT_SET_ROLES = new Set([
     'grid-horizontal',
@@ -318,6 +330,71 @@ function createGridSeeds(planeParams, renderState) {
     }
 
     return seeds;
+}
+
+function nowMs() {
+    return typeof performance !== 'undefined' && typeof performance.now === 'function'
+        ? performance.now()
+        : Date.now();
+}
+
+function getStreamlineProgressKey(planeParams, renderState, options) {
+    if (options && typeof options.cacheKey === 'string') {
+        return options.cacheKey;
+    }
+
+    const xRange = getPlaneXRanges(planeParams);
+    const yRange = getPlaneYRanges(planeParams);
+
+    return [
+        renderState.currentFunction,
+        renderState.vectorFieldFunction,
+        finiteOr(renderState.streamlineStepSize, 0),
+        finiteOr(renderState.streamlineMaxLength, 0),
+        finiteOr(renderState.streamlineSeedDensityFactor, 0),
+        xRange[0],
+        xRange[1],
+        yRange[0],
+        yRange[1],
+        planeParams.width,
+        planeParams.height
+    ].join('|');
+}
+
+function resetStreamlineProgress(key) {
+    streamlineProgressState.key = key;
+    streamlineProgressState.nextSeedOffset = 0;
+}
+
+function getStreamlineRenderBudget() {
+    const interacting = isInteractionActive();
+
+    return {
+        frameMs: interacting ? STREAMLINE_INTERACTION_FRAME_BUDGET_MS : STREAMLINE_FRAME_BUDGET_MS,
+        stepBudget: interacting ? STREAMLINE_INTERACTION_STEP_BUDGET : STREAMLINE_STEP_BUDGET
+    };
+}
+
+function shouldStopStreamlinePass(deadline, tracedSteps, stepBudget) {
+    return tracedSteps >= stepBudget || nowMs() >= deadline;
+}
+
+function scheduleStreamlineProgressRedraw() {
+    if (streamlineProgressState.redrawScheduled) {
+        return;
+    }
+
+    streamlineProgressState.redrawScheduled = true;
+    const request = () => {
+        streamlineProgressState.redrawScheduled = false;
+        eventBus.emit('redraw:all');
+    };
+
+    if (typeof setTimeout === 'function') {
+        setTimeout(request, 0);
+    } else {
+        request();
+    }
 }
 
 function getBucketIndex(magnitude, minMagnitude, magnitudeRange) {
@@ -775,12 +852,23 @@ export function drawRadialDiscreteSteps(ctx, planeParams, currentFunctionKey, st
     });
 }
 
-export function drawStreamlinesOnZPlane(ctx, planeParams, state) {
+export function drawStreamlinesOnZPlane(ctx, planeParams, state, options = null) {
+    const progressKey = getStreamlineProgressKey(planeParams, state, options);
+    if (options?.fresh || streamlineProgressState.key !== progressKey) {
+        resetStreamlineProgress(progressKey);
+    }
+
+    let completed = true;
+
     withSavedContext(ctx, () => {
         ctx.lineWidth = state.streamlineThickness;
         configureRoundStroke(ctx);
 
         const seeds = createGridSeeds(planeParams, state);
+        const seedStartOffset = Math.min(
+            streamlineProgressState.nextSeedOffset,
+            Math.max(0, seeds.length - (seeds.length % 2))
+        );
         const minMagnitude = STREAMLINE_COLOR_MIN_MAG;
         const magnitudeRange = Math.max(EPSILON, STREAMLINE_COLOR_MAX_MAG - minMagnitude);
         const buckets = Array.from(
@@ -789,35 +877,54 @@ export function drawStreamlinesOnZPlane(ctx, planeParams, state) {
         );
 
         const vectorEvaluator = getVectorEvaluator(state.currentFunction, state.vectorFieldFunction, state);
+        const budget = getStreamlineRenderBudget();
+        const deadline = nowMs() + budget.frameMs;
 
-        let totalStepsTraced = 0;
-        const maxStepsBudget = 300000;
+        let tracedSteps = 0;
+        let nextSeedOffset = seedStartOffset;
 
-        for (let i = 0; i < seeds.length; i += 2) {
-            if (totalStepsTraced >= maxStepsBudget) {
+        for (let i = seedStartOffset; i < seeds.length; i += 2) {
+            if (shouldStopStreamlinePass(deadline, tracedSteps, budget.stepBudget)) {
+                completed = false;
+                nextSeedOffset = i;
                 break;
             }
+
             const path = calculateStreamline(
                 seeds[i],
                 seeds[i + 1],
                 vectorEvaluator,
                 planeParams,
-                state
+                state,
+                {
+                    maxSteps: Math.min(
+                        STREAMLINE_MAX_STEPS_PER_PATH,
+                        Math.max(1, budget.stepBudget - tracedSteps)
+                    ),
+                    shouldContinue: () => nowMs() < deadline
+                }
             );
+            nextSeedOffset = i + 2;
+            tracedSteps += Math.max(1, Array.isArray(path) ? path.length : 0);
 
             if (!Array.isArray(path) || path.length < 2) {
                 continue;
             }
-
-            totalStepsTraced += path.length;
 
             for (let k = 0; k < path.length - 1; k++) {
                 const start = mapToCanvasCoords(path[k].x, path[k].y, planeParams);
                 const end = mapToCanvasCoords(path[k + 1].x, path[k + 1].y, planeParams);
                 const bucketIndex = getBucketIndex(path[k].magnitude, minMagnitude, magnitudeRange);
 
-                buckets[bucketIndex].push(start.x, start.y, end.x, end.y);
+                if (isFiniteCanvasPoint(start) && isFiniteCanvasPoint(end)) {
+                    buckets[bucketIndex].push(start.x, start.y, end.x, end.y);
+                }
             }
+        }
+
+        streamlineProgressState.nextSeedOffset = nextSeedOffset;
+        if (nextSeedOffset < seeds.length) {
+            completed = false;
         }
 
         for (let bucketIndex = 0; bucketIndex <= STREAMLINE_COLOR_BUCKETS; bucketIndex++) {
@@ -840,6 +947,12 @@ export function drawStreamlinesOnZPlane(ctx, planeParams, state) {
             ctx.stroke();
         }
     });
+
+    if (!completed) {
+        scheduleStreamlineProgressRedraw();
+    }
+
+    return completed;
 }
 
 export function drawPlanarInputShape(ctx, planeParams) {

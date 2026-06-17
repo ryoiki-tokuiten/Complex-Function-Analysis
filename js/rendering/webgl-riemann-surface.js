@@ -685,9 +685,13 @@ ${emitPaletteBranches()}
   float phase = atan(value.y, value.x);
   float hue = fract((phase + PI) / TWO_PI + u_sheetTint);
   float logMagnitude = log(1.0 + length(value));
-  float bands = 0.5 + 0.25 * sin((logMagnitude / LOG_TWO) * u_domainLightnessCycles * TWO_PI);
+  float detail = max(0.05, u_domainLightnessCycles);
+  float tone = atan(logMagnitude * (0.72 + detail * 0.28)) / 1.5707963267948966;
+  float magnitudeLightness = u_domainLightnessCycles <= 0.0001
+    ? 0.5
+    : mix(0.34, 0.72, clamp(tone, 0.0, 1.0));
   float lightness = clamp(
-    (0.5 + (bands - 0.5) * u_domainContrast) * u_domainBrightness,
+    (0.5 + (magnitudeLightness - 0.5) * u_domainContrast) * u_domainBrightness,
     0.08,
     0.92
   );
@@ -1305,7 +1309,7 @@ function setCommonUniforms(renderer, options) {
   gl.uniform1f(locations.uDomainBrightness, finiteNumber(state.domainBrightness, 1));
   gl.uniform1f(locations.uDomainContrast, finiteNumber(state.domainContrast, 1));
   gl.uniform1f(locations.uDomainSaturation, finiteNumber(state.domainSaturation, 1));
-  gl.uniform1f(locations.uDomainLightnessCycles, finiteNumber(state.domainLightnessCycles, 1));
+  gl.uniform1f(locations.uDomainLightnessCycles, finiteNumber(state.domainLightnessCycles, 0));
   gl.uniform1i(locations.uDomainPalette, getPaletteId(state.domainPalette));
 
   setTaylorUniforms(renderer);

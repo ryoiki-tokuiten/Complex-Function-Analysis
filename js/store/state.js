@@ -122,7 +122,7 @@ const rawState = {
     domainBrightness: 1.0,
     domainContrast: 1.0,
     domainSaturation: 1.0,
-    domainLightnessCycles: 1.0,
+    domainLightnessCycles: 0.0,
     domainPalette: 'analytic-base',
     themeId: 'rose',
     gridColor1: '#FB923C',
@@ -205,7 +205,6 @@ const rawState = {
     chainingEnabled: false,
     chainingMode: 'recursion',
     chainCount: 1,
-    isHighQualityCpuRender: false,
 
     algebraicChainingEnabled: false,
     algebraicChainingTerms: [

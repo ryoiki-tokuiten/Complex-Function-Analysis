@@ -7,7 +7,8 @@ import {
     evaluateAlgebraicChaining,
     getEffectiveBaseTransformFunction,
     getMappedTransformProfile,
-    getChainedTransformFunction
+    getChainedTransformFunction,
+    getChainedStageTransformFunction
 } from '../js/math-utils.js';
 
 function snapshotState(keys) {
@@ -163,6 +164,55 @@ test('deep escaped recursion still provides a finite domain-coloring value', () 
 
         assert.ok(Number.isFinite(mapped.re));
         assert.ok(Number.isFinite(mapped.im));
+    } finally {
+        restoreState(before);
+    }
+});
+
+test('domain coloring and staged output chains share non-recursive mode semantics', () => {
+    const keys = [
+        'currentFunction',
+        'algebraicChainingEnabled',
+        'algebraicChainingTerms',
+        'polynomialN',
+        'polynomialCoeffs',
+        'chainingEnabled',
+        'chainingMode',
+        'chainCount'
+    ];
+    const before = snapshotState(keys);
+
+    try {
+        Object.assign(state, {
+            currentFunction: 'algebraic_chaining',
+            algebraicChainingEnabled: true,
+            polynomialN: 1,
+            polynomialCoeffs: [
+                { re: 0, im: 0 },
+                { re: 1, im: 0 }
+            ],
+            algebraicChainingTerms: [
+                {
+                    coeff: { re: 1, im: 0 },
+                    factors: [{ func: 'polynomial', chainedFunc: 'none', power: 1, reciprocal: false, log: false, exp: false }]
+                }
+            ],
+            chainingEnabled: true,
+            chainingMode: 'power',
+            chainCount: 3
+        });
+
+        const baseProfile = getMappedTransformProfile(
+            'algebraic_chaining',
+            getEffectiveBaseTransformFunction('algebraic_chaining')
+        );
+        const mapped = evaluateDomainColoringMappedTransform(baseProfile, 2, 0, 'algebraic_chaining');
+        const stageOne = getChainedStageTransformFunction('algebraic_chaining', 1);
+        const stageTwo = getChainedStageTransformFunction('algebraic_chaining', 2);
+
+        assert.deepEqual(mapped, { re: 8, im: 0 });
+        assert.deepEqual(stageOne(2, 0), { re: 4, im: 0 });
+        assert.deepEqual(stageTwo(2, 0), { re: 8, im: 0 });
     } finally {
         restoreState(before);
     }

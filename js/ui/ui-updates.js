@@ -1298,7 +1298,7 @@ export function updateDomainColoringKey() {
         }
     }
 
-    lines.push('<span style="display:inline-block; margin-top: 4px;">- Lightness maps to Magnitude (Log-scaled, cyclic bands).</span>');
+    lines.push('<span style="display:inline-block; margin-top: 4px;">- Optional lightness shading can emphasize magnitude.</span>');
     keyDiv.innerHTML = lines.join('');
 }
 

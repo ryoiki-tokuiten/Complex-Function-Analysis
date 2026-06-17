@@ -13,14 +13,7 @@ import { ORIGIN_GLOW_DURATION_MS } from '../constants/rendering.js';
 import { mapToCanvasCoords } from '../utils/canvas-utils.js';
 import {
     getChainedTransformFunction,
-    getEffectiveBaseTransformFunction,
-    getMappedTransformProfile,
-    evaluateMappedTransform,
-    complexMul,
-    complexPow,
-    complexLn,
-    complexExp,
-    complexReciprocal
+    getChainedStageTransformFunction
 } from '../math-utils.js';
 import {
     drawWithWebGLRaster,
@@ -153,41 +146,11 @@ const Z_FLOW_CACHE_FIELDS = Object.freeze([
     ['vfScale', () => toCacheKeyNumber(state.vectorFieldScale)],
     ['vfThick', () => toCacheKeyNumber(state.vectorArrowThickness)],
     ['vfHead', () => toCacheKeyNumber(state.vectorArrowHeadSize)],
-    ['domB', () => toCacheKeyNumber(state.domainBrightness)],
-    ['domC', () => toCacheKeyNumber(state.domainContrast)],
-    ['domS', () => toCacheKeyNumber(state.domainSaturation)],
-    ['domL', () => toCacheKeyNumber(state.domainLightnessCycles)],
     ['sStep', () => toCacheKeyNumber(state.streamlineStepSize)],
     ['sMax', () => state.streamlineMaxLength],
     ['sThick', () => toCacheKeyNumber(state.streamlineThickness)],
     ['sSeed', () => toCacheKeyNumber(state.streamlineSeedDensityFactor)]
 ]);
-
-const CHAIN_COMPOSERS = Object.freeze({
-    power: (previous, { baseProfile }) => (re, im) => {
-        const value = complexOrInvalid(previous(re, im));
-        const base = evaluateMappedTransform(
-            baseProfile,
-            re,
-            im,
-            state.currentFunction,
-            { c: { re, im } }
-        ) || invalidComplex();
-
-        return complexMul(value, base);
-    },
-
-    sqrt: previous => (re, im) => complexPow(complexOrInvalid(previous(re, im)), 0.5, 0),
-
-    ln: previous => (re, im) => complexLn(complexOrInvalid(previous(re, im))),
-
-    exp: previous => (re, im) => complexExp(complexOrInvalid(previous(re, im))),
-
-    reciprocal: previous => (re, im) => complexReciprocal(complexOrInvalid(previous(re, im))),
-
-    recursion: (previous, { evalBaseFunc }) => (re, im) =>
-        evalBaseFunc(complexOrInvalid(previous(re, im)), { re, im })
-});
 
 const Z_SIGNAL_RENDERERS = Object.freeze([
     {
@@ -218,17 +181,10 @@ const W_SIGNAL_RENDERERS = Object.freeze([
 function createLayerCache() {
     return {
         key: null,
+        pendingKey: null,
         canvas: null,
         ctx: null
     };
-}
-
-function invalidComplex() {
-    return { re: NaN, im: NaN };
-}
-
-function complexOrInvalid(value) {
-    return value && typeof value === 'object' ? value : invalidComplex();
 }
 
 function asArray(value) {
@@ -250,6 +206,7 @@ function isGridInputShape(shape = state.currentInputShape) {
 function invalidateCache(cache) {
     if (cache) {
         cache.key = null;
+        cache.pendingKey = null;
     }
 }
 
@@ -341,6 +298,7 @@ function ensurePlanarLayerCacheCanvas(cache, width, height) {
         cache.canvas.width = width;
         cache.canvas.height = height;
         cache.key = null;
+        cache.pendingKey = null;
     }
 
     return cache.canvas;
@@ -361,7 +319,7 @@ function renderThroughCache({
 
     if (!enabled) {
         invalidateCache(cache);
-        renderDirect(targetCtx);
+        renderDirect(targetCtx, { cacheKey, fresh: true, direct: true });
         return;
     }
 
@@ -369,14 +327,26 @@ function renderThroughCache({
     const cacheCtx = cache?.ctx;
 
     if (!cacheCanvas || !cacheCtx) {
-        renderDirect(targetCtx);
+        renderDirect(targetCtx, { cacheKey, fresh: true, direct: true });
         return;
     }
 
     if (cache.key !== cacheKey) {
-        resetCanvasContext(cacheCtx, cacheCanvas);
-        render(cacheCtx);
-        cache.key = cacheKey;
+        const fresh = cache.pendingKey !== cacheKey;
+
+        if (fresh) {
+            resetCanvasContext(cacheCtx, cacheCanvas);
+            cache.pendingKey = cacheKey;
+        }
+
+        const complete = render(cacheCtx, { cacheKey, fresh }) !== false;
+
+        if (complete) {
+            cache.key = cacheKey;
+            cache.pendingKey = null;
+        } else {
+            cache.key = null;
+        }
     }
 
     targetCtx.drawImage(cacheCanvas, 0, 0);
@@ -532,6 +502,9 @@ function buildZFlowLayerCacheKey() {
     const parts = [buildPlanarLayerCacheKey(false)];
 
     appendKeyFields(parts, Z_FLOW_CACHE_FIELDS);
+    if (state.vectorFieldEnabled && !state.streamlineFlowEnabled) {
+        appendKey(parts, 'vfDomB', toCacheKeyNumber(state.domainBrightness));
+    }
     appendManualSeedPointsToCacheKey(parts, state.manualSeedPoints);
 
     return parts.join('|');
@@ -794,16 +767,22 @@ function renderZPlanarBackground(transform) {
     }, 'raster');
 }
 
-function renderZPlaneFlowLayer(targetCtx, planeParams) {
+function renderZPlaneFlowLayer(targetCtx, planeParams, cacheMeta = null) {
     if (state.streamlineFlowEnabled) {
-        drawPlaneLayer(targetCtx, planeParams, 'z', layerCtx => {
-            drawStreamlinesOnZPlane(layerCtx, planeParams, state);
+        let complete = true;
+        const streamOptions = {
+            cacheKey: cacheMeta?.cacheKey || null,
+            fresh: cacheMeta ? !!cacheMeta.fresh : true
+        };
+        const rendered = drawPlaneLayer(targetCtx, planeParams, 'z', layerCtx => {
+            complete = drawStreamlinesOnZPlane(layerCtx, planeParams, state, streamOptions) !== false;
         }, 'capture');
 
-        return;
+        return rendered && complete;
     }
 
     drawZPlaneVectorField(targetCtx, planeParams, state.currentFunction, state.vectorFieldFunction);
+    return true;
 }
 
 function renderZFlowContent() {
@@ -815,7 +794,8 @@ function renderZFlowContent() {
         planeParams: zPlaneParams,
         cacheKey: buildZFlowLayerCacheKey(),
         enabled: shouldUseZFlowLayerCache(),
-        render: cacheCtx => renderZPlaneFlowLayer(cacheCtx, zPlaneParams)
+        render: (cacheCtx, cacheMeta) => renderZPlaneFlowLayer(cacheCtx, zPlaneParams, cacheMeta),
+        renderDirect: (targetCtx, cacheMeta) => renderZPlaneFlowLayer(targetCtx, zPlaneParams, cacheMeta)
     });
 }
 
@@ -1052,51 +1032,6 @@ function setPlotlyContainerSize() {
     container.style.height = `${wPlaneParams.height}px`;
 }
 
-function getBaseTransformContext() {
-    const baseFunc = getEffectiveBaseTransformFunction(state.currentFunction);
-    const baseProfile = getMappedTransformProfile(state.currentFunction, baseFunc);
-
-    return {
-        baseFunc,
-        baseProfile,
-        evalBaseFunc: (value, c) => {
-            if (!isFiniteComplex(value)) {
-                return invalidComplex();
-            }
-
-            return evaluateMappedTransform(
-                baseProfile,
-                value.re,
-                value.im,
-                state.currentFunction,
-                { c }
-            ) || invalidComplex();
-        }
-    };
-}
-
-function composeNextWTransform(previous, transformContext) {
-    const composer = CHAIN_COMPOSERS[state.chainingMode] || CHAIN_COMPOSERS.recursion;
-
-    return composer(previous, transformContext);
-}
-
-function createZeroSeedStageTransform(stageIndex, transformContext) {
-    return (re, im) => {
-        const c = { re, im };
-        let current = { re: 0, im: 0 };
-
-        for (let step = 0; step <= stageIndex; step += 1) {
-            current = transformContext.evalBaseFunc(current, c);
-            if (!isFiniteComplex(current)) {
-                return invalidComplex();
-            }
-        }
-
-        return current;
-    };
-}
-
 function getWPlaneRenderCount() {
     if (!state.chainingEnabled) {
         return 1;
@@ -1108,7 +1043,7 @@ function getWPlaneRenderCount() {
     return Math.max(0, Math.min(requested, available));
 }
 
-function* iterWPlaneTransforms(transformContext) {
+function* iterWPlaneTransforms() {
     const count = getWPlaneRenderCount();
 
     if (state.chainingEnabled && state.chainCount > 25) {
@@ -1116,21 +1051,8 @@ function* iterWPlaneTransforms(transformContext) {
         return;
     }
 
-    if (state.chainingEnabled && state.chainingMode === 'zero_seed') {
-        for (let index = 0; index < count; index += 1) {
-            yield [index, createZeroSeedStageTransform(index, transformContext)];
-        }
-        return;
-    }
-
-    let current = transformContext.baseFunc;
-
     for (let index = 0; index < count; index += 1) {
-        yield [index, current];
-
-        if (index + 1 < count) {
-            current = composeNextWTransform(current, transformContext);
-        }
+        yield [index, getChainedStageTransformFunction(state.currentFunction, index)];
     }
 }
 
@@ -1441,14 +1363,12 @@ export function drawWPlaneContent() {
         return;
     }
 
-    const transformContext = getBaseTransformContext();
-
     if (state.fourierModeEnabled || state.laplaceModeEnabled) {
-        _renderSingleWPlaneMode(0, transformContext.baseFunc, true);
+        _renderSingleWPlaneMode(0, null, true);
         return;
     }
 
-    for (const [index, transform] of iterWPlaneTransforms(transformContext)) {
+    for (const [index, transform] of iterWPlaneTransforms()) {
         _renderSingleWPlaneMode(index, transform, false);
     }
 }

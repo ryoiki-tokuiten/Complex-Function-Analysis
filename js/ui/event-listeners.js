@@ -28,7 +28,6 @@ const { controls = {} } = context;
 let zCanvas;
 let wCanvas;
 let uiEventListenersBound = false;
-let cpuHighQualityTimeout = null;
 
 const COMPLEX_PARTS = ['re', 'im'];
 const MOBIUS_PARAMS = ['A', 'B', 'C', 'D'];
@@ -404,23 +403,6 @@ function bindSimpleControlRemainder() {
 
 export function requestDomainRedraw(markDomainDirty = false) {
     if (markDomainDirty) context.domainColoringDirty = true;
-
-    if (cpuHighQualityTimeout) {
-        clearTimeout(cpuHighQualityTimeout);
-        cpuHighQualityTimeout = null;
-    }
-
-    if (state.domainColoringEnabled && !state.isHighQualityCpuRender) {
-        cpuHighQualityTimeout = setTimeout(() => {
-            state.isHighQualityCpuRender = true;
-            context.domainColoringDirty = true;
-            requestRedrawAll();
-            frame(() => {
-                state.isHighQualityCpuRender = false;
-            });
-        }, 120);
-    }
-
     requestRedrawAll();
 }
 

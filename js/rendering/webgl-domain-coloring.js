@@ -30,9 +30,9 @@ const CFG = Object.freeze({
     maxRenderScale: 3,
     maxDprBoost: 1.35,
     dprScaleFactor: 0.92,
-    maxSafeZoom: 1e7,
     polyCoeffCount: 11,
-    maxChainStepsGlsl: 105
+    maxChainStepsGlsl: 105,
+    maxPerturbationOrbit: 106
 });
 
 const EMPTY_OPTIONS = Object.freeze({});
@@ -84,12 +84,13 @@ const DOMAIN_FLOAT_UNIFORMS = Object.freeze([
     ['uDomainBrightness', 'domainBrightness', 1],
     ['uDomainContrast', 'domainContrast', 1],
     ['uDomainSaturation', 'domainSaturation', 1],
-    ['uDomainLightnessCycles', 'domainLightnessCycles', 1]
+    ['uDomainLightnessCycles', 'domainLightnessCycles', 0]
 ]);
 
 const UNIFORM_ALIASES = Object.freeze({
     uResolution: 'u_resolution',
-    uViewBounds: 'u_viewBounds',
+    uViewCenter: 'u_viewCenter',
+    uViewSpan: 'u_viewSpan',
     uDomainBrightness: 'u_domainBrightness',
     uDomainContrast: 'u_domainContrast',
     uDomainSaturation: 'u_domainSaturation',
@@ -113,7 +114,12 @@ const UNIFORM_ALIASES = Object.freeze({
     uZetaRefl: 'u_zetaReflectionBoundary',
     uFracPower: 'u_fracPower',
     uChainCount: 'u_chainCount',
-    uChainMode: 'u_chainMode'
+    uChainMode: 'u_chainMode',
+    uUseDynamicsPerturbation: 'u_useDynamicsPerturbation',
+    uPerturbationA1: 'u_perturbationA1',
+    uPerturbationA2: 'u_perturbationA2',
+    uPerturbationCScale: 'u_perturbationCScale',
+    uPerturbationOrbit: 'u_perturbationOrbit[0]'
 });
 
 const PALETTES = Object.freeze([
@@ -156,7 +162,8 @@ const FRAGMENT_UNIFORMS = lines(
     'varying vec2 v_uv;',
     '',
     'uniform vec2 u_resolution;',
-    'uniform vec4 u_viewBounds;',
+    'uniform vec2 u_viewCenter;',
+    'uniform vec2 u_viewSpan;',
     'uniform float u_domainBrightness;',
     'uniform float u_domainContrast;',
     'uniform float u_domainSaturation;',
@@ -183,8 +190,110 @@ const FRAGMENT_UNIFORMS = lines(
     'uniform float u_zetaReflectionBoundary;',
     'uniform float u_fracPower;',
     'uniform int u_chainCount;',
-    'uniform int u_chainMode;'
+    'uniform int u_chainMode;',
+    'uniform float u_useDynamicsPerturbation;',
+    'uniform vec2 u_perturbationA1;',
+    'uniform vec2 u_perturbationA2;',
+    'uniform vec2 u_perturbationCScale;',
+    `uniform vec2 u_perturbationOrbit[${CFG.maxPerturbationOrbit}];`
 );
+
+const DYNAMICS_COLOR_HELPERS = `
+vec4 dynamicsInteriorColor() {
+  return vec4(0.0, 0.0, 0.0, 1.0);
+}
+
+vec4 dynamicsEscapeColor(float smoothIteration, float brightnessFactor) {
+  float count = max(float(u_chainCount), 1.0);
+  float t = clamp(smoothIteration / count, 0.0, 1.0);
+  vec3 baseColor = getPaletteColor(u_domainPalette, min(t, 0.9999));
+  float lightnessBase = 0.22 + 0.58 * pow(t, 0.65);
+  float lightnessContrasted = 0.5 + (lightnessBase - 0.5) * u_domainContrast;
+  float lightnessFinal = clamp(lightnessContrasted * u_domainBrightness * brightnessFactor, 0.05, 0.95);
+  return vec4(applyLightnessAndSaturation(baseColor, lightnessFinal, clamp(u_domainSaturation, 0.0, 1.0)), 1.0);
+}
+
+vec4 iteratedDynamicsColor(vec2 parameterValue, int chainMode, float brightnessFactor) {
+  vec2 current = chainMode == 7 ? vec2(0.0) : parameterValue;
+  float escapeRadius = 64.0;
+  float escapeRadiusSq = escapeRadius * escapeRadius;
+  float smoothIteration = float(u_chainCount);
+  bool escaped = false;
+
+  for (int i = 0; i < ${CFG.maxChainStepsGlsl}; i++) {
+    if (i >= u_chainCount) break;
+
+    vec2 nextValue = vec2(0.0);
+    bool ok = mapDomainValue(current, parameterValue, nextValue);
+    float magSq = dot(nextValue, nextValue);
+
+    if (!ok || !isFiniteVec2Compat(nextValue) || magSq > escapeRadiusSq || shouldStopDomainChain(nextValue)) {
+      float magnitude = sqrt(max(magSq, escapeRadius));
+      smoothIteration = float(i) + 1.0;
+
+      if (ok && isFiniteFloatCompat(magnitude) && magnitude > 1.0001) {
+        float smoothAdjust = log(max(log(magnitude) / log(escapeRadius), 1.0e-6)) / LOG_TWO;
+        smoothIteration = clamp(smoothIteration - smoothAdjust, 0.0, float(u_chainCount));
+      }
+
+      escaped = true;
+      break;
+    }
+
+    current = nextValue;
+  }
+
+  return escaped
+    ? dynamicsEscapeColor(smoothIteration, brightnessFactor)
+    : dynamicsInteriorColor();
+}
+`;
+
+const DYNAMICS_PERTURBATION_HELPERS = `
+vec4 iteratedQuadraticPerturbationColor(vec2 parameterOffset, int chainMode, float brightnessFactor) {
+  vec2 delta = chainMode == 7 ? vec2(0.0) : parameterOffset;
+  float escapeRadius = 64.0;
+  float escapeRadiusSq = escapeRadius * escapeRadius;
+  float smoothIteration = float(u_chainCount);
+  bool escaped = false;
+
+  for (int i = 0; i < ${CFG.maxChainStepsGlsl}; i++) {
+    if (i >= u_chainCount) break;
+
+    vec2 reference = u_perturbationOrbit[i];
+    vec2 nextReference = u_perturbationOrbit[i + 1];
+    vec2 quadraticDelta = complexMul(
+      u_perturbationA2,
+      complexAdd(2.0 * complexMul(reference, delta), complexMul(delta, delta))
+    );
+    vec2 nextDelta = complexAdd(
+      complexAdd(quadraticDelta, complexMul(u_perturbationA1, delta)),
+      complexMul(u_perturbationCScale, parameterOffset)
+    );
+    vec2 nextValue = complexAdd(nextReference, nextDelta);
+    float magSq = dot(nextValue, nextValue);
+
+    if (!isFiniteVec2Compat(nextValue) || magSq > escapeRadiusSq || shouldStopDomainChain(nextValue)) {
+      float magnitude = sqrt(max(magSq, escapeRadius));
+      smoothIteration = float(i) + 1.0;
+
+      if (isFiniteFloatCompat(magnitude) && magnitude > 1.0001) {
+        float smoothAdjust = log(max(log(magnitude) / log(escapeRadius), 1.0e-6)) / LOG_TWO;
+        smoothIteration = clamp(smoothIteration - smoothAdjust, 0.0, float(u_chainCount));
+      }
+
+      escaped = true;
+      break;
+    }
+
+    delta = nextDelta;
+  }
+
+  return escaped
+    ? dynamicsEscapeColor(smoothIteration, brightnessFactor)
+    : dynamicsInteriorColor();
+}
+`;
 
 const FRAGMENT_HELPERS = `
 vec2 domainComplexSqrt(vec2 z) {
@@ -253,6 +362,13 @@ vec3 applyLightnessAndSaturation(vec3 rgb, float lightness, float saturation) {
   return mix(vec3(gray), lit, saturation);
 }
 
+float magnitudeLightness(float logMod, float cycles) {
+  if (cycles <= 0.0001) return 0.5;
+  float detail = max(0.05, cycles);
+  float tone = atan(logMod * (0.72 + detail * 0.28)) / 1.5707963267948966;
+  return mix(0.34, 0.72, clamp(tone, 0.0, 1.0));
+}
+
 vec4 invalidDomainColor() {
   return vec4(0.0, 0.0, 0.0, u_useSphere > 0.5 ? 0.0 : 1.0);
 }
@@ -281,11 +397,16 @@ bool mapDomainValue(vec2 inputValue, vec2 parameterValue, out vec2 outputValue) 
 }
 
 void projectPlanarPixel(vec2 pixel, vec2 resolutionSafe, out vec2 zInput) {
-  vec2 unit = pixel / resolutionSafe;
+  vec2 unit = pixel / resolutionSafe - vec2(0.5);
   zInput = vec2(
-    mix(u_viewBounds.x, u_viewBounds.y, unit.x),
-    mix(u_viewBounds.w, u_viewBounds.z, unit.y)
+    u_viewCenter.x + unit.x * u_viewSpan.x,
+    u_viewCenter.y - unit.y * u_viewSpan.y
   );
+}
+
+vec2 projectPlanarParameterOffset(vec2 pixel, vec2 resolutionSafe) {
+  vec2 unit = pixel / resolutionSafe - vec2(0.5);
+  return vec2(unit.x * u_viewSpan.x, -unit.y * u_viewSpan.y);
 }
 
 bool projectSpherePixel(vec2 pixel, out vec2 zInput, out float brightnessFactor) {
@@ -407,14 +528,16 @@ bool evaluateZeroSeedChain(vec2 parameterValue, out vec2 mappedValue) {
   return true;
 }
 
+${DYNAMICS_COLOR_HELPERS}
+${DYNAMICS_PERTURBATION_HELPERS}
+
 vec4 domainColorForValue(vec2 value, float brightnessFactor) {
   float phase = atan(value.y, value.x);
   float modValue = length(value);
   if (!isFiniteFloatCompat(modValue)) return vec4(0.0);
 
   float logMod = log(1.0 + modValue);
-  float lightnessAngle = (logMod / LOG_TWO) * u_domainLightnessCycles * TWO_PI;
-  float lightnessBase = 0.5 + sin(lightnessAngle) * 0.25;
+  float lightnessBase = magnitudeLightness(logMod, u_domainLightnessCycles);
   float lightnessContrasted = 0.5 + (lightnessBase - 0.5) * u_domainContrast;
   float lightnessFinal = clamp(lightnessContrasted * u_domainBrightness * brightnessFactor, 0.05, 0.95);
   float saturationFinal = clamp(u_domainSaturation, 0.0, 1.0);
@@ -439,6 +562,19 @@ void main() {
   }
 
   vec2 mappedValue = vec2(0.0);
+  if (u_isWPlaneColoring < 0.5 && u_chainCount > 1 && (u_chainMode == 1 || u_chainMode == 7)) {
+    if (u_useDynamicsPerturbation > 0.5 && u_useSphere < 0.5) {
+      gl_FragColor = iteratedQuadraticPerturbationColor(
+        projectPlanarParameterOffset(pixel, resolutionSafe),
+        u_chainMode,
+        brightnessFactor
+      );
+    } else {
+      gl_FragColor = iteratedDynamicsColor(zInput, u_chainMode, brightnessFactor);
+    }
+    return;
+  }
+
   if (u_isWPlaneColoring < 0.5 && u_chainMode == 7) {
     if (!evaluateZeroSeedChain(zInput, mappedValue)) {
       gl_FragColor = invalidDomainColor();
@@ -476,6 +612,7 @@ const LIGHTING_UNIFORM_VALUES = Object.freeze([
 ]);
 
 const HAS_OWN = Function.call.bind(Object.prototype.hasOwnProperty);
+const ZERO_COMPLEX = Object.freeze({ re: 0, im: 0 });
 
 function lines(...parts) {
     return parts.join('\n');
@@ -492,6 +629,32 @@ function finite(value, fallback) {
 function finiteNumber(value, fallback) {
     const number = Number(value);
     return Number.isFinite(number) ? number : fallback;
+}
+
+function finiteComplex(value, fallback = ZERO_COMPLEX) {
+    return {
+        re: finiteNumber(value?.re, fallback.re),
+        im: finiteNumber(value?.im, fallback.im)
+    };
+}
+
+function isFiniteComplex(value) {
+    return Number.isFinite(value?.re) && Number.isFinite(value?.im);
+}
+
+function complexAdd(a, b) {
+    return { re: a.re + b.re, im: a.im + b.im };
+}
+
+function complexMul(a, b) {
+    return {
+        re: a.re * b.re - a.im * b.im,
+        im: a.re * b.im + a.im * b.re
+    };
+}
+
+function complexTermScale(value, scale) {
+    return complexMul(value, scale);
 }
 
 function stateNumber(key, fallback) {
@@ -522,6 +685,98 @@ function finiteRange(candidate) {
 
 function chooseRange(primary, fallback) {
     return finiteRange(primary) || finiteRange(fallback);
+}
+
+function activeTermFactor(term) {
+    const factors = (term?.factors || []).filter(factor => factor && factor.func && factor.func !== 'none');
+    if (factors.length !== 1) return null;
+
+    const factor = factors[0];
+    const plain =
+        (!factor.chainedFunc || factor.chainedFunc === 'none') &&
+        !factor.reciprocal &&
+        !factor.log &&
+        !factor.exp &&
+        finiteNumber(factor.power ?? 1, 1) === 1;
+
+    return plain ? factor : null;
+}
+
+function accumulateQuadraticDynamicsProfileTerm(profile, term) {
+    const factor = activeTermFactor(term);
+    if (!factor) return false;
+
+    const scale = finiteComplex(term?.coeff, { re: 1, im: 0 });
+
+    if (factor.func === 'c') {
+        profile.cScale = complexAdd(profile.cScale, scale);
+        profile.hasParameter = true;
+        return true;
+    }
+
+    if (factor.func !== 'polynomial') return false;
+
+    const degree = Math.max(0, Math.min(CFG.polyCoeffCount - 1, uniformInt(state?.polynomialN, 0)));
+    if (degree > 2) return false;
+
+    const coeffs = state?.polynomialCoeffs || [];
+    profile.a0 = complexAdd(profile.a0, complexTermScale(finiteComplex(coeffs[0]), scale));
+    profile.a1 = complexAdd(profile.a1, complexTermScale(finiteComplex(coeffs[1]), scale));
+    profile.a2 = complexAdd(profile.a2, complexTermScale(finiteComplex(coeffs[2]), scale));
+    profile.hasPolynomial = true;
+    return true;
+}
+
+function getQuadraticDynamicsProfile() {
+    if (state?.currentFunction !== 'algebraic_chaining' || !state?.algebraicChainingEnabled) return null;
+    if (!Array.isArray(state.algebraicChainingTerms) || state.algebraicChainingTerms.length === 0) return null;
+
+    const profile = {
+        a0: { re: 0, im: 0 },
+        a1: { re: 0, im: 0 },
+        a2: { re: 0, im: 0 },
+        cScale: { re: 0, im: 0 },
+        hasParameter: false,
+        hasPolynomial: false
+    };
+
+    for (const term of state.algebraicChainingTerms) {
+        if (!accumulateQuadraticDynamicsProfileTerm(profile, term)) return null;
+    }
+
+    return profile.hasPolynomial && profile.hasParameter ? profile : null;
+}
+
+function evaluateQuadraticProfile(profile, z, c) {
+    const zSq = complexMul(z, z);
+    return complexAdd(
+        complexAdd(
+            complexAdd(complexTermScale(zSq, profile.a2), complexTermScale(z, profile.a1)),
+            profile.a0
+        ),
+        complexTermScale(c, profile.cScale)
+    );
+}
+
+function buildPerturbationOrbit(profile, center, chainMode, chainCount) {
+    const orbit = new Float32Array(CFG.maxPerturbationOrbit * 2);
+    const count = Math.max(1, Math.min(CFG.maxChainStepsGlsl, chainCount));
+    let current = chainMode === 7 ? { re: 0, im: 0 } : center;
+
+    for (let i = 0; i < CFG.maxPerturbationOrbit; i += 1) {
+        if (!isFiniteComplex(current) || Math.max(Math.abs(current.re), Math.abs(current.im)) >= 1e18) {
+            return null;
+        }
+
+        orbit[i * 2] = current.re;
+        orbit[i * 2 + 1] = current.im;
+
+        if (i < count) {
+            current = evaluateQuadraticProfile(profile, current, center);
+        }
+    }
+
+    return orbit;
 }
 
 function recordFromPlanes(factory) {
@@ -785,6 +1040,8 @@ function resolveRenderJob(targetCtx, planeParams, options) {
         renderer,
         targetWidth: size.width,
         targetHeight: size.height,
+        origin: planeParams.origin || null,
+        scale: planeParams.scale || null,
         xRange: bounds.xRange,
         yRange: bounds.yRange,
         isWPlaneColoring: !!opts.isWPlaneColoring,
@@ -806,11 +1063,6 @@ function renderMetrics(targetWidth, targetHeight) {
         scaleY,
         uniformScale: Math.min(scaleX, scaleY)
     };
-}
-
-function precisionSafe(isWPlaneColoring) {
-    const zoom = Number(isWPlaneColoring ? state?.wPlaneZoom : state?.zPlaneZoom);
-    return !Number.isFinite(zoom) || zoom <= CFG.maxSafeZoom;
 }
 
 function bindPipeline(gl, renderer) {
@@ -847,9 +1099,35 @@ function resolveSphere(sphereParams, job, metrics) {
     };
 }
 
+function resolvePlanarView(job) {
+    const scaleX = finiteNumber(job.scale?.x, 0);
+    const scaleY = finiteNumber(job.scale?.y, 0);
+    const originX = finiteNumber(job.origin?.x, NaN);
+    const originY = finiteNumber(job.origin?.y, NaN);
+
+    if (scaleX > 0 && scaleY > 0 && Number.isFinite(originX) && Number.isFinite(originY)) {
+        return {
+            centerX: (job.targetWidth * 0.5 - originX) / scaleX,
+            centerY: (originY - job.targetHeight * 0.5) / scaleY,
+            spanX: job.targetWidth / scaleX,
+            spanY: job.targetHeight / scaleY
+        };
+    }
+
+    return {
+        centerX: (job.xRange[0] + job.xRange[1]) * 0.5,
+        centerY: (job.yRange[0] + job.yRange[1]) * 0.5,
+        spanX: job.xRange[1] - job.xRange[0],
+        spanY: job.yRange[1] - job.yRange[0]
+    };
+}
+
 function uploadFrameUniforms(gl, renderer, job) {
+    const view = resolvePlanarView(job);
+
     gl.uniform2f(renderer.uResolution, renderer.canvas.width, renderer.canvas.height);
-    gl.uniform4f(renderer.uViewBounds, job.xRange[0], job.xRange[1], job.yRange[0], job.yRange[1]);
+    gl.uniform2f(renderer.uViewCenter, view.centerX, view.centerY);
+    gl.uniform2f(renderer.uViewSpan, view.spanX, view.spanY);
 }
 
 function uploadDomainStyleUniforms(gl, renderer) {
@@ -892,6 +1170,45 @@ function uploadChainingUniforms(gl, renderer) {
     gl.uniform1i(renderer.uChainMode, chainMode);
 }
 
+function uploadComplexUniform(gl, location, value) {
+    gl.uniform2f(location, finiteNumber(value?.re, 0), finiteNumber(value?.im, 0));
+}
+
+function shouldUseQuadraticPerturbation(job, chainMode, chainCount) {
+    return !job.isWPlaneColoring &&
+        !job.sphereParams &&
+        chainCount > 1 &&
+        (chainMode === CHAIN_MODE_IDS.recursion || chainMode === CHAIN_MODE_IDS.zero_seed);
+}
+
+function uploadDynamicsPerturbationUniforms(gl, renderer, job) {
+    const enabled = !!state?.chainingEnabled;
+    const chainCount = enabled ? Math.max(1, Math.min(CFG.maxChainStepsGlsl, uniformInt(state.chainCount, 1))) : 1;
+    const chainMode = enabled ? enumId(CHAIN_MODE_IDS, state.chainingMode, 1) : 0;
+    const profile = shouldUseQuadraticPerturbation(job, chainMode, chainCount)
+        ? getQuadraticDynamicsProfile()
+        : null;
+
+    if (!profile) {
+        gl.uniform1f(renderer.uUseDynamicsPerturbation, 0);
+        return;
+    }
+
+    const view = resolvePlanarView(job);
+    const center = { re: view.centerX, im: view.centerY };
+    const orbit = buildPerturbationOrbit(profile, center, chainMode, chainCount);
+    if (!orbit) {
+        gl.uniform1f(renderer.uUseDynamicsPerturbation, 0);
+        return;
+    }
+
+    uploadComplexUniform(gl, renderer.uPerturbationA1, profile.a1);
+    uploadComplexUniform(gl, renderer.uPerturbationA2, profile.a2);
+    uploadComplexUniform(gl, renderer.uPerturbationCScale, profile.cScale);
+    gl.uniform2fv(renderer.uPerturbationOrbit, orbit);
+    gl.uniform1f(renderer.uUseDynamicsPerturbation, 1);
+}
+
 function uploadRenderUniforms(gl, renderer, job, metrics) {
     uploadFrameUniforms(gl, renderer, job);
     uploadDomainStyleUniforms(gl, renderer);
@@ -900,6 +1217,7 @@ function uploadRenderUniforms(gl, renderer, job, metrics) {
     gl.uniform1f(renderer.uIsWPlaneColoring, job.isWPlaneColoring ? 1 : 0);
     setComplexFunctionUniformsShared(gl, renderer, state);
     uploadChainingUniforms(gl, renderer);
+    uploadDynamicsPerturbationUniforms(gl, renderer, job);
 }
 
 function draw(gl) {
@@ -1073,7 +1391,6 @@ export function renderDomainColoringWithWebGL(targetCtx, planeParams, options = 
 
     const job = resolveRenderJob(targetCtx, planeParams, options);
     if (!job) return false;
-    if (!precisionSafe(job.isWPlaneColoring)) return false;
     if (!currentFunctionSupported(state.currentFunction, job.isWPlaneColoring)) return false;
 
     return executeRenderJob(job);
@@ -1178,6 +1495,13 @@ export function getThreeSphereShaderConfig(planeType) {
           return mix(vec3(gray), lit, saturation);
         }
 
+        float magnitudeLightness(float logMod, float cycles) {
+          if (cycles <= 0.0001) return 0.5;
+          float detail = max(0.05, cycles);
+          float tone = atan(logMod * (0.72 + detail * 0.28)) / 1.5707963267948966;
+          return mix(0.34, 0.72, clamp(tone, 0.0, 1.0));
+        }
+
         bool mapDomainValue(vec2 inputValue, vec2 parameterValue, out vec2 outputValue) {
           return evaluateMappedValueBase(
             inputValue,
@@ -1254,14 +1578,15 @@ export function getThreeSphereShaderConfig(planeType) {
           return true;
         }
 
+        ${DYNAMICS_COLOR_HELPERS}
+
         vec4 domainColorForValue(vec2 value, float brightnessFactor) {
           float phase = atan(value.y, value.x);
           float modValue = length(value);
           if (!isFiniteFloatCompat(modValue)) return vec4(0.0, 0.0, 0.0, 1.0);
 
           float logMod = log(1.0 + modValue);
-          float lightnessAngle = (logMod / 0.6931471805599453) * u_domainLightnessCycles * 6.283185307179586;
-          float lightnessBase = 0.5 + sin(lightnessAngle) * 0.25;
+          float lightnessBase = magnitudeLightness(logMod, u_domainLightnessCycles);
           float lightnessContrasted = 0.5 + (lightnessBase - 0.5) * u_domainContrast;
           float lightnessFinal = clamp(lightnessContrasted * u_domainBrightness * brightnessFactor, 0.05, 0.95);
           float saturationFinal = clamp(u_domainSaturation, 0.0, 1.0);
@@ -1284,6 +1609,11 @@ export function getThreeSphereShaderConfig(planeType) {
             vec2 zInput = vec2(vLocalPosition.x / den, vLocalPosition.z / den);
             
             vec2 mappedValue = vec2(0.0);
+            if (u_isWPlaneColoring < 0.5 && u_chainCount > 1 && (u_chainMode == 1 || u_chainMode == 7)) {
+                gl_FragColor = iteratedDynamicsColor(zInput, u_chainMode, 1.0);
+                return;
+            }
+
             if (u_isWPlaneColoring < 0.5 && u_chainMode == 7) {
                 if (!evaluateZeroSeedChain(zInput, mappedValue)) {
                     gl_FragColor = vec4(0.0, 0.0, 0.0, 1.0);
@@ -1331,7 +1661,7 @@ export function getThreeSphereShaderConfig(planeType) {
         u_domainBrightness: { value: 1.0 },
         u_domainContrast: { value: 1.0 },
         u_domainSaturation: { value: 1.0 },
-        u_domainLightnessCycles: { value: 1.0 },
+        u_domainLightnessCycles: { value: 0.0 },
         u_domainPalette: { value: 0 },
         u_isWPlaneColoring: { value: isWPlane ? 1.0 : 0.0 },
         u_functionId: { value: 0.0 },

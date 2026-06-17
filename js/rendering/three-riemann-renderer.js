@@ -493,7 +493,7 @@ export class ThreeRiemannRenderer {
                     u_domainBrightness: { value: 1.0 },
                     u_domainContrast: { value: 1.0 },
                     u_domainSaturation: { value: 1.0 },
-                    u_domainLightnessCycles: { value: 1.0 },
+                    u_domainLightnessCycles: { value: 0.0 },
                     u_domainPalette: { value: 0 },
                     u_isWPlaneColoring: { value: this.planeType === 'w' ? 1.0 : 0.0 },
                     u_functionId: { value: 0.0 },
@@ -541,7 +541,7 @@ export class ThreeRiemannRenderer {
         uniforms.u_domainBrightness.value = state.domainBrightness !== undefined ? state.domainBrightness : 1.0;
         uniforms.u_domainContrast.value = state.domainContrast !== undefined ? state.domainContrast : 1.0;
         uniforms.u_domainSaturation.value = state.domainSaturation !== undefined ? state.domainSaturation : 1.0;
-        uniforms.u_domainLightnessCycles.value = state.domainLightnessCycles !== undefined ? state.domainLightnessCycles : 1.0;
+        uniforms.u_domainLightnessCycles.value = state.domainLightnessCycles !== undefined ? state.domainLightnessCycles : 0.0;
         
         const paletteVal = DOMAIN_PALETTE_IDS[state.domainPalette];
         uniforms.u_domainPalette.value = paletteVal !== undefined ? paletteVal : 0;
