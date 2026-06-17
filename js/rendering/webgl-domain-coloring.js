@@ -1,4 +1,5 @@
 import { state, context } from '../store/state.js';
+import { eventBus } from '../store/events.js';
 import {
     createWebGLProgramShared,
     getWebGLDomainColorFunctionIdShared,
@@ -29,9 +30,9 @@ const CFG = Object.freeze({
     maxRenderScale: 3,
     maxDprBoost: 1.35,
     dprScaleFactor: 0.92,
-    maxSafeZoom: 100000,
+    maxSafeZoom: 1e7,
     polyCoeffCount: 11,
-    maxChainStepsGlsl: 30
+    maxChainStepsGlsl: 105
 });
 
 const EMPTY_OPTIONS = Object.freeze({});
@@ -726,11 +727,24 @@ function serializeProgramMathForCache() {
     }
 }
 
+let mathRendererHashCached = '';
+let mathRendererHashDirty = true;
+
+if (typeof eventBus !== 'undefined' && eventBus.on) {
+    eventBus.on('state:change', () => {
+        mathRendererHashDirty = true;
+    });
+}
+
 function refreshMathRendererIfNeeded() {
     if (state?.currentFunction !== 'algebraic_chaining' && !isDynamicAggregateGLSLActive(state)) return true;
     if (!webglDomainColorSupport) return false;
 
-    const hash = serializeProgramMathForCache();
+    if (mathRendererHashDirty) {
+        mathRendererHashCached = serializeProgramMathForCache();
+        mathRendererHashDirty = false;
+    }
+    const hash = mathRendererHashCached;
     if (webglDomainColorSupport.lastAlgHash === hash) return true;
 
     initializeWebGLDomainColoringSupport();
@@ -1212,7 +1226,7 @@ export function getThreeSphereShaderConfig(planeType) {
           vec2 baseValue = mappedValue;
           if (shouldStopDomainChain(mappedValue)) return true;
 
-          for (int i = 1; i < 30; i++) {
+          for (int i = 1; i < ${CFG.maxChainStepsGlsl}; i++) {
             if (i >= u_chainCount) break;
             vec2 nextValue = mappedValue;
             if (!applyChainStep(u_chainMode, baseValue, parameterValue, nextValue)) return true;
@@ -1227,7 +1241,7 @@ export function getThreeSphereShaderConfig(planeType) {
         bool evaluateZeroSeedChain(vec2 parameterValue, out vec2 mappedValue) {
           vec2 current = vec2(0.0);
 
-          for (int i = 0; i < 30; i++) {
+          for (int i = 0; i < ${CFG.maxChainStepsGlsl}; i++) {
             if (i >= u_chainCount) break;
             vec2 nextValue = vec2(0.0);
             if (!mapDomainValue(current, parameterValue, nextValue)) return false;

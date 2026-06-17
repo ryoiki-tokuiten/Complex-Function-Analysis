@@ -21,7 +21,7 @@ import {
 } from '../math-utils.js';
 import {
     calculateStreamline, getVectorForStreamline, getVectorFieldValueAtPoint,
-    getStreamlineColorByMagnitude
+    getStreamlineColorByMagnitude, getVectorEvaluator
 } from '../analysis/streamline.js';
 import { isRasterInputShape } from '../utils/raster-media.js';
 import { drawImageWithWebGL, drawVectorFieldWithWebGL } from './draw-image-webgl.js';
@@ -295,7 +295,7 @@ function getFirstVisibleColor(pointSets, colorResolver, fallback) {
 function createGridSeeds(planeParams, renderState) {
     const xRange = getPlaneXRanges(planeParams);
     const yRange = getPlaneYRanges(planeParams);
-    const densityValue = finiteOr(renderState.gridDensity * renderState.streamlineSeedDensityFactor, 0);
+    const densityValue = Math.min(40, finiteOr(renderState.gridDensity * renderState.streamlineSeedDensityFactor, 0));
     const rows = Math.max(2, Math.floor(densityValue));
     const cols = rows;
     const seeds = [];
@@ -352,14 +352,16 @@ function syncParticlePool(renderState, planeParams) {
     }
 }
 
-function getNormalizedParticleVector(x, y, renderState) {
-    const vector = getVectorForStreamline(
-        x,
-        y,
-        renderState.currentFunction,
-        renderState.vectorFieldFunction,
-        renderState
-    );
+function getNormalizedParticleVector(x, y, renderState, vectorEvaluator = null) {
+    const vector = vectorEvaluator
+        ? vectorEvaluator(x, y)
+        : getVectorForStreamline(
+            x,
+            y,
+            renderState.currentFunction,
+            renderState.vectorFieldFunction,
+            renderState
+        );
 
     if (!vector || !isFiniteNumber(vector.vx) || !isFiniteNumber(vector.vy)) {
         return null;
@@ -376,15 +378,15 @@ function getNormalizedParticleVector(x, y, renderState) {
     };
 }
 
-function advanceParticleRK2(particle, speed, renderState) {
-    const first = getNormalizedParticleVector(particle.x, particle.y, renderState);
+function advanceParticleRK2(particle, speed, renderState, vectorEvaluator = null) {
+    const first = getNormalizedParticleVector(particle.x, particle.y, renderState, vectorEvaluator);
     if (!first) {
         return false;
     }
 
     const midpointX = particle.x + first.x * speed * 0.5;
     const midpointY = particle.y + first.y * speed * 0.5;
-    const second = getNormalizedParticleVector(midpointX, midpointY, renderState) || first;
+    const second = getNormalizedParticleVector(midpointX, midpointY, renderState, vectorEvaluator) || first;
 
     particle.x += second.x * speed;
     particle.y += second.y * speed;
@@ -786,11 +788,19 @@ export function drawStreamlinesOnZPlane(ctx, planeParams, state) {
             () => []
         );
 
+        const vectorEvaluator = getVectorEvaluator(state.currentFunction, state.vectorFieldFunction, state);
+
+        let totalStepsTraced = 0;
+        const maxStepsBudget = 300000;
+
         for (let i = 0; i < seeds.length; i += 2) {
+            if (totalStepsTraced >= maxStepsBudget) {
+                break;
+            }
             const path = calculateStreamline(
                 seeds[i],
                 seeds[i + 1],
-                getVectorForStreamline,
+                vectorEvaluator,
                 planeParams,
                 state
             );
@@ -798,6 +808,8 @@ export function drawStreamlinesOnZPlane(ctx, planeParams, state) {
             if (!Array.isArray(path) || path.length < 2) {
                 continue;
             }
+
+            totalStepsTraced += path.length;
 
             for (let k = 0; k < path.length - 1; k++) {
                 const start = mapToCanvasCoords(path[k].x, path[k].y, planeParams);
@@ -873,11 +885,13 @@ export function updateAndDrawParticles(ctx, planeParams, state) {
 
         const speed = getParticleSpeed(planeParams, state);
 
+        const vectorEvaluator = getVectorEvaluator(state.currentFunction, state.vectorFieldFunction, state);
+
         for (let i = 0; i < state.particles.length; i++) {
             let particle = state.particles[i];
             particle.lifetime++;
 
-            if (!advanceParticleRK2(particle, speed, state)) {
+            if (!advanceParticleRK2(particle, speed, state, vectorEvaluator)) {
                 state.particles[i] = initializeSingleParticle(planeParams);
                 particle = state.particles[i];
             }

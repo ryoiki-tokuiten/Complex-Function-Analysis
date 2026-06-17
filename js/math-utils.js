@@ -1,4 +1,16 @@
 import { state } from './store/state.js';
+import { eventBus } from './store/events.js';
+
+let cachesDirty = true;
+const mappedProfileCache = new Map();
+const chainedFuncCache = new Map();
+
+if (typeof eventBus !== 'undefined' && eventBus.on) {
+    eventBus.on('state:change', () => {
+        cachesDirty = true;
+    });
+}
+
 import {
     POLE_MAGNITUDE_THRESHOLD,
     MAX_POLY_DEGREE,
@@ -880,10 +892,16 @@ export function getMappedTransformProfile(functionKey = state.currentFunction, t
     }
 
     const cacheable = resolvedTransform === transformFunctions[functionKey];
-    const cacheKey = cacheable ? buildMappedTransformProfileKey(functionKey) : null;
-
-    if (cacheable && cacheKey === mappedTransformProfileCacheKey && mappedTransformProfileCacheValue) {
-        return mappedTransformProfileCacheValue;
+    if (cacheable) {
+        if (cachesDirty) {
+            mappedProfileCache.clear();
+            chainedFuncCache.clear();
+            cachesDirty = false;
+        }
+        const cached = mappedProfileCache.get(functionKey);
+        if (cached) {
+            return cached;
+        }
     }
 
     const constant = detectMappedConstantTransform(resolvedTransform, functionKey);
@@ -897,8 +915,7 @@ export function getMappedTransformProfile(functionKey = state.currentFunction, t
     };
 
     if (cacheable) {
-        mappedTransformProfileCacheKey = cacheKey;
-        mappedTransformProfileCacheValue = profile;
+        mappedProfileCache.set(functionKey, profile);
     }
 
     return profile;
@@ -1015,41 +1032,55 @@ const CHAIN_TRANSFORMS = {
 };
 
 export function getChainedTransformFunction(funcKey = state.currentFunction) {
+    if (cachesDirty) {
+        mappedProfileCache.clear();
+        chainedFuncCache.clear();
+        cachesDirty = false;
+    }
+
+    const cached = chainedFuncCache.get(funcKey);
+    if (cached) {
+        return cached;
+    }
+
     const baseFunc = getEffectiveBaseTransformFunction(funcKey);
 
+    let resultFunc;
     if (!state.chainingEnabled || (state.chainCount <= 1 && state.chainingMode !== 'zero_seed')) {
-        return baseFunc;
-    }
-
-    const baseProfile = getMappedTransformProfile(funcKey, baseFunc);
-    const context = {
-        evalBase: (value, c) => evaluateMappedTransform(baseProfile, value.re, value.im, funcKey, { c }) || { re: NaN, im: NaN },
-        evalBaseAtInput: (re, im) => evaluateMappedTransform(baseProfile, re, im, funcKey, { c: { re, im } }) || { re: NaN, im: NaN }
-    };
-
-    if (state.chainingMode === 'zero_seed') {
-        const count = Math.max(1, Math.floor(Number(state.chainCount) || 1));
-        return (re, im) => {
-            const c = { re, im };
-            let current = { re: 0, im: 0 };
-
-            for (let i = 0; i < count; i++) {
-                current = context.evalBase(current, c);
-                if (invalidComplex(current)) return { re: NaN, im: NaN };
-            }
-
-            return current;
+        resultFunc = baseFunc;
+    } else {
+        const baseProfile = getMappedTransformProfile(funcKey, baseFunc);
+        const context = {
+            evalBase: (value, c) => evaluateMappedTransform(baseProfile, value.re, value.im, funcKey, { c }) || { re: NaN, im: NaN },
+            evalBaseAtInput: (re, im) => evaluateMappedTransform(baseProfile, re, im, funcKey, { c: { re, im } }) || { re: NaN, im: NaN }
         };
+
+        if (state.chainingMode === 'zero_seed') {
+            const count = Math.max(1, Math.floor(Number(state.chainCount) || 1));
+            resultFunc = (re, im) => {
+                const c = { re, im };
+                let current = { re: 0, im: 0 };
+
+                for (let i = 0; i < count; i++) {
+                    current = context.evalBase(current, c);
+                    if (invalidComplex(current)) return { re: NaN, im: NaN };
+                }
+
+                return current;
+            };
+        } else {
+            const mode = CHAIN_TRANSFORMS[state.chainingMode] ? state.chainingMode : 'recursion';
+            let current = baseFunc;
+
+            for (let i = 1; i < state.chainCount; i++) {
+                current = CHAIN_TRANSFORMS[mode](current, context);
+            }
+            resultFunc = current;
+        }
     }
 
-    const mode = CHAIN_TRANSFORMS[state.chainingMode] ? state.chainingMode : 'recursion';
-    let current = baseFunc;
-
-    for (let i = 1; i < state.chainCount; i++) {
-        current = CHAIN_TRANSFORMS[mode](current, context);
-    }
-
-    return current;
+    chainedFuncCache.set(funcKey, resultFunc);
+    return resultFunc;
 }
 
 const CONTOUR_GENERATORS = {

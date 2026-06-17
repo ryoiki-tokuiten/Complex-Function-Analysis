@@ -2,13 +2,31 @@ import { state, context } from '../store/state.js';
 import {
     getMappedTransformProfile,
     getEffectiveBaseTransformFunction,
-    evaluateDomainColoringMappedTransform
+    getChainedTransformFunction,
+    evaluateMappedTransform
 } from '../math-utils.js';
 import { renderDomainColoringWithWebGL } from './webgl-domain-coloring.js';
 import { hslToRgb } from './canvas-primitives.js';
 import { domainPalettes } from '../ui/theme-manager.js';
 
 const parsedPalettesCache = {};
+
+function getDomainColoringEvaluator(isWPC, sourceProfile, sTF) {
+    if (isWPC) {
+        return (x, y) => ({ re: x, im: y });
+    }
+    if (state.chainingEnabled && state.chainCount > 1) {
+        const chained = getChainedTransformFunction(state.currentFunction);
+        return (x, y) => chained(x, y) || { re: NaN, im: NaN };
+    }
+    if (sourceProfile) {
+        return (x, y) => evaluateMappedTransform(sourceProfile, x, y, state.currentFunction) || { re: NaN, im: NaN };
+    }
+    if (typeof sTF === 'function') {
+        return (x, y) => sTF(x, y) || { re: NaN, im: NaN };
+    }
+    return (x, y) => ({ re: x, im: y });
+}
 
 function parsePaletteColors(colorsStr) {
     return colorsStr.split(/,\s*(?![^(]*\))/).map(s => {
@@ -231,6 +249,8 @@ export function renderPlanarDomainColoringCPU(tCtx, pP, isWPC, sTF, sourceProfil
     const xRange = pP.currentVisXRange || pP.xRange;
     const yRange = pP.currentVisYRange || pP.yRange;
 
+    const evalFunc = getDomainColoringEvaluator(isWPC, sourceProfile, sTF);
+
     for (let py = 0; py < h; py++) {
         const unitY = py / h;
         const imZ = yRange[1] - unitY * (yRange[1] - yRange[0]);
@@ -238,23 +258,7 @@ export function renderPlanarDomainColoringCPU(tCtx, pP, isWPC, sTF, sourceProfil
             const unitX = px / w;
             const reZ = xRange[0] + unitX * (xRange[1] - xRange[0]);
 
-            let mapped;
-            if (isWPC) {
-                mapped = { re: reZ, im: imZ };
-            } else if (sourceProfile) {
-                mapped = evaluateDomainColoringMappedTransform(
-                    sourceProfile,
-                    reZ,
-                    imZ,
-                    state.currentFunction
-                );
-            } else {
-                if (typeof sTF === 'function') {
-                    mapped = sTF(reZ, imZ);
-                } else {
-                    mapped = { re: reZ, im: imZ };
-                }
-            }
+            const mapped = evalFunc(reZ, imZ);
 
             let rgb;
             if (!mapped || isNaN(mapped.re) || isNaN(mapped.im) || !isFinite(mapped.re) || !isFinite(mapped.im)) {
@@ -305,6 +309,8 @@ export function renderSphereDomainColoringCPU(tCtx, cSP, cDOMP, isWPC, sTF, sour
     const rotX = cSP.rotX || 0;
     const rotY = cSP.rotY || 0;
 
+    const evalFunc = getDomainColoringEvaluator(isWPC, sourceProfile, sTF);
+
     for (let py = 0; py < h; py++) {
         for (let px = 0; px < w; px++) {
             const nx = (px - sCenterX) / sRadius;
@@ -336,23 +342,7 @@ export function renderSphereDomainColoringCPU(tCtx, cSP, cDOMP, isWPC, sTF, sour
                 imZ = pt.y / den;
             }
 
-            let mapped;
-            if (isWPC) {
-                mapped = { re: reZ, im: imZ };
-            } else if (sourceProfile) {
-                mapped = evaluateDomainColoringMappedTransform(
-                    sourceProfile,
-                    reZ,
-                    imZ,
-                    state.currentFunction
-                );
-            } else {
-                if (typeof sTF === 'function') {
-                    mapped = sTF(reZ, imZ);
-                } else {
-                    mapped = { re: reZ, im: imZ };
-                }
-            }
+            let mapped = evalFunc(reZ, imZ);
 
             let rgb;
             if (!mapped || isNaN(mapped.re) || isNaN(mapped.im) || !isFinite(mapped.re) || !isFinite(mapped.im)) {

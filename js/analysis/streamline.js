@@ -77,6 +77,66 @@ export function getVectorForStreamline(x, y, currentFunctionStr, vectorFieldType
     return { vx: vector.re, vy: vector.im };
 }
 
+export function getVectorEvaluator(currentFunctionStr, vectorFieldTypeStr, runtimeState = state) {
+    const isChained = runtimeState.chainingEnabled && runtimeState.chainCount > 1;
+    let evalFunc;
+    
+    if (isChained) {
+        evalFunc = getChainedTransformFunction(currentFunctionStr);
+    } else {
+        const profile = getMappedTransformProfile(currentFunctionStr);
+        if (!profile || !profile.transformFunc) {
+            evalFunc = () => ({ re: 0, im: 0 });
+        } else if (profile.isConstant && profile.constantValue) {
+            const val = profile.constantValue;
+            evalFunc = () => val;
+        } else {
+            evalFunc = profile.transformFunc;
+        }
+    }
+    
+    switch (vectorFieldTypeStr) {
+        case 'f(z)':
+            return (x, y) => {
+                const f_z = evalFunc(x, y);
+                return { vx: f_z.re, vy: f_z.im };
+            };
+        case '1/f(z)':
+            return (x, y) => {
+                const f_z = evalFunc(x, y);
+                const magnitudeSquared = f_z.re * f_z.re + f_z.im * f_z.im;
+                if (magnitudeSquared < 1e-12) return { vx: 0, vy: 0 };
+                return { vx: f_z.re / magnitudeSquared, vy: -f_z.im / magnitudeSquared };
+            };
+        case "f'(z)": {
+            const isChainedVal = isChained;
+            const profile = isChainedVal ? null : getMappedTransformProfile(currentFunctionStr);
+            const isConstant = profile && profile.isConstant;
+            
+            return (x, y) => {
+                if (!isChainedVal && isConstant) {
+                    return { vx: 0, vy: 0 };
+                }
+                const z = { re: x, im: y };
+                const derivative = numericDerivative(currentFunctionStr, z);
+                if (
+                    derivative === undefined ||
+                    derivative === null ||
+                    isNaN(derivative.re) ||
+                    isNaN(derivative.im) ||
+                    !isFinite(derivative.re) ||
+                    !isFinite(derivative.im)
+                ) {
+                    return { vx: 0, vy: 0 };
+                }
+                return { vx: derivative.re, vy: derivative.im };
+            };
+        }
+        default:
+            return () => ({ vx: 0, vy: 0 });
+    }
+}
+
 
 export function calculateStreamline(startX, startY, getVectorAtPointCallback, zPlaneParams, state) {
     const streamlinePoints = [];
@@ -93,13 +153,15 @@ export function calculateStreamline(startX, startY, getVectorAtPointCallback, zP
     const step = state.streamlineStepSize * viewSpan * 0.1;
 
     for (let i = 0; i < state.streamlineMaxLength; i++) {
+        if (!isFinite(currentX) || !isFinite(currentY) || isNaN(currentX) || isNaN(currentY)) break;
+
         const k1 = getVectorAtPointCallback(currentX, currentY, state.currentFunction, state.vectorFieldFunction, state);
         const k1Mag = Math.hypot(k1.vx, k1.vy);
 
         streamlinePoints.push({ x: currentX, y: currentY, magnitude: k1Mag });
 
         if (currentX < xMin || currentX > xMax || currentY < yMin || currentY > yMax) break;
-        if (k1Mag < 1e-9) break;
+        if (isNaN(k1Mag) || !isFinite(k1Mag) || k1Mag < 1e-9) break;
 
         // Normalize direction — streamlines trace direction, not speed.
         // This prevents explosion when |f(z)| is large (e.g. sinh terms at wide zoom).

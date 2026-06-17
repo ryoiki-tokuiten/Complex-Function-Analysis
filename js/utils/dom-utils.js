@@ -582,12 +582,12 @@ export function updateChainingColumns(count) {
         sphereViewWParamsList = [sphereViewParams.w];
     }
     
-    count = Math.max(1, Math.min(25, Math.floor(count)));
+    const displayCount = count > 25 ? 1 : Math.max(1, Math.min(25, Math.floor(count)));
     const canvasesRow = document.querySelector('.canvas-row.two-column-layout');
     if (!canvasesRow) return;
 
     // Create more planes if needed
-    while (wCanvasList.length < count) {
+    while (wCanvasList.length < displayCount) {
         const i = wCanvasList.length;
         
         // Clone the w-plane column
@@ -663,7 +663,7 @@ export function updateChainingColumns(count) {
     }
     
     // Remove planes if needed
-    while (wCanvasList.length > count) {
+    while (wCanvasList.length > displayCount) {
         const i = wCanvasList.length - 1;
         const colToRemove = document.getElementById(`w_plane_column_${i}`);
         disposeRiemannSurface(wCanvasList[i]);
@@ -679,7 +679,7 @@ export function updateChainingColumns(count) {
     
     // Update the original w_plane title if needed
     const wPlaneTitleFunc = document.getElementById('w-plane-title-func');
-    if (wPlaneTitleFunc && count > 1) {
+    if (wPlaneTitleFunc && displayCount > 1) {
         wPlaneTitleFunc.innerHTML = getChainingTitleHTML(0, state.chainingMode);
     }
     

@@ -1111,6 +1111,11 @@ function getWPlaneRenderCount() {
 function* iterWPlaneTransforms(transformContext) {
     const count = getWPlaneRenderCount();
 
+    if (state.chainingEnabled && state.chainCount > 25) {
+        yield [0, getChainedTransformFunction(state.currentFunction)];
+        return;
+    }
+
     if (state.chainingEnabled && state.chainingMode === 'zero_seed') {
         for (let index = 0; index < count; index += 1) {
             yield [index, createZeroSeedStageTransform(index, transformContext)];

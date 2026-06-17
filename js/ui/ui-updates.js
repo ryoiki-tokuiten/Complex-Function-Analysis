@@ -998,16 +998,20 @@ function outputFormulaModel() {
     }
 
     const hasOutputChain = state.chainingEnabled && state.chainCount > 1;
+    const isSinglePanelChain = state.chainingEnabled && state.chainCount > 25;
     const wOutputFormula = hasOutputChain
-        ? getChainingTitleHTML(0, state.chainingMode)
+        ? getChainingTitleHTML(isSinglePanelChain ? state.chainCount - 1 : 0, state.chainingMode)
         : `w = ${fND}`;
+
+    const chainLabel = isSinglePanelChain ? `Chain ${state.chainCount - 1}` : 'Chain 0';
+    const mappedChainLabel = isSinglePanelChain ? `mapped chain ${state.chainCount - 1}` : 'mapped chain 0';
 
     return {
         fND,
         hasOutputChain,
         wOutputFormula,
-        wOutputDescriptor: `${hasOutputChain ? 'Chain 0' : 'Output'}: <code id="w-plane-title-func">${wOutputFormula}</code>`,
-        mappedWOutputDescriptor: `${hasOutputChain ? 'mapped chain 0' : 'mapped output'}: <code id="w-plane-title-func">${wOutputFormula}</code>`
+        wOutputDescriptor: `${hasOutputChain ? chainLabel : 'Output'}: <code id="w-plane-title-func">${wOutputFormula}</code>`,
+        mappedWOutputDescriptor: `${hasOutputChain ? mappedChainLabel : 'mapped output'}: <code id="w-plane-title-func">${wOutputFormula}</code>`
     };
 }
 
