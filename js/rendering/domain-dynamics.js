@@ -1,0 +1,482 @@
+import { eventBus } from '../store/events.js';
+import { domainPalettes } from '../ui/theme-manager.js';
+import {
+    createDomainDynamicsTileRenderer,
+    domainDynamicsSignature,
+    isDomainDynamicsSnapshot,
+    renderDomainDynamicsTile
+} from './domain-dynamics-core.js';
+
+const PASS_SCALES = Object.freeze([16, 4, 1]);
+const TILE_SIZE = 64;
+const MAX_WORKERS = 8;
+const SUPPORTED_FUNCTIONS = new Set([
+    'cos',
+    'sin',
+    'tan',
+    'sec',
+    'exp',
+    'ln',
+    'reciprocal',
+    'sinh',
+    'cosh',
+    'tanh',
+    'power',
+    'mobius',
+    'zeta',
+    'polynomial',
+    'poincare',
+    'algebraic_chaining'
+]);
+
+let nextJobId = 1;
+let activeSignature = null;
+let activeBackend = null;
+let activeJobId = 0;
+
+function cloneComplex(value, fallback = { re: 0, im: 0 }) {
+    return {
+        re: Number.isFinite(Number(value?.re)) ? Number(value.re) : fallback.re,
+        im: Number.isFinite(Number(value?.im)) ? Number(value.im) : fallback.im
+    };
+}
+
+function cloneComplexList(values) {
+    return Array.isArray(values) ? values.map(value => cloneComplex(value)) : [];
+}
+
+function cloneAlgebraicTerms(terms) {
+    return Array.isArray(terms)
+        ? terms.map(term => ({
+            coeff: cloneComplex(term?.coeff, { re: 1, im: 0 }),
+            factors: Array.isArray(term?.factors)
+                ? term.factors.map(factor => ({ ...factor }))
+                : []
+        }))
+        : [];
+}
+
+function parsePaletteColor(color) {
+    const value = String(color || '').trim();
+    if (value.startsWith('#')) {
+        const hex = value.slice(1);
+        return [
+            parseInt(hex.slice(0, 2), 16) / 255,
+            parseInt(hex.slice(2, 4), 16) / 255,
+            parseInt(hex.slice(4, 6), 16) / 255
+        ];
+    }
+
+    const hsl = value.match(/hsl\((\d+(?:\.\d+)?),\s*(\d+(?:\.\d+)?)%,\s*(\d+(?:\.\d+)?)%\)/);
+    if (!hsl) return [0, 0, 0];
+
+    const h = Number(hsl[1]) / 360;
+    const s = Number(hsl[2]) / 100;
+    const l = Number(hsl[3]) / 100;
+    if (s === 0) return [l, l, l];
+
+    const q = l < 0.5 ? l * (1 + s) : l + s - l * s;
+    const p = 2 * l - q;
+    const hue2rgb = tValue => {
+        let t = tValue;
+        if (t < 0) t += 1;
+        if (t > 1) t -= 1;
+        if (t < 1 / 6) return p + (q - p) * 6 * t;
+        if (t < 1 / 2) return q;
+        if (t < 2 / 3) return p + (q - p) * (2 / 3 - t) * 6;
+        return p;
+    };
+
+    return [hue2rgb(h + 1 / 3), hue2rgb(h), hue2rgb(h - 1 / 3)];
+}
+
+function paletteStops(paletteId) {
+    const palette = domainPalettes.find(candidate => candidate.id === paletteId) || domainPalettes[0];
+    const colors = String(palette?.colors || '').split(/,\s*(?![^(]*\))/).map(parsePaletteColor);
+    return colors.length >= 2 ? colors : [[1, 0, 0], [0, 1, 0], [0, 0, 1], [1, 0, 0]];
+}
+
+function planeRanges(planeParams) {
+    const xRange = planeParams?.currentVisXRange || planeParams?.xRange;
+    const yRange = planeParams?.currentVisYRange || planeParams?.yRange;
+    return Array.isArray(xRange) && Array.isArray(yRange)
+        ? { xRange: [Number(xRange[0]), Number(xRange[1])], yRange: [Number(yRange[0]), Number(yRange[1])] }
+        : null;
+}
+
+export function buildPlanarDomainDynamicsSnapshot(runtimeState, planeParams, options = null) {
+    const ranges = planeRanges(planeParams);
+    if (!runtimeState || !planeParams || !ranges) return null;
+
+    const functionKey = runtimeState.currentFunction;
+    if (!SUPPORTED_FUNCTIONS.has(functionKey)) return null;
+
+    const snapshot = {
+        isWPlaneColoring: !!options?.isWPlaneColoring,
+        functionKey,
+        chainingEnabled: !!runtimeState.chainingEnabled,
+        chainMode: runtimeState.chainingMode || 'recursion',
+        chainCount: Math.max(1, Math.floor(Number(runtimeState.chainCount) || 1)),
+        fractalOrbitColoringEnabled: !!runtimeState.fractalOrbitColoringEnabled,
+        algebraicChainingEnabled: !!runtimeState.algebraicChainingEnabled,
+        algebraicChainingTerms: cloneAlgebraicTerms(runtimeState.algebraicChainingTerms),
+        mobiusA: cloneComplex(runtimeState.mobiusA, { re: 1, im: 0 }),
+        mobiusB: cloneComplex(runtimeState.mobiusB),
+        mobiusC: cloneComplex(runtimeState.mobiusC),
+        mobiusD: cloneComplex(runtimeState.mobiusD, { re: 1, im: 0 }),
+        polynomialN: Math.max(0, Math.floor(Number(runtimeState.polynomialN) || 0)),
+        polynomialCoeffs: cloneComplexList(runtimeState.polynomialCoeffs),
+        fractionalPowerN: Number.isFinite(Number(runtimeState.fractionalPowerN)) ? Number(runtimeState.fractionalPowerN) : 0.5,
+        zetaContinuationEnabled: !!runtimeState.zetaContinuationEnabled,
+        taylorSeriesEnabled: !!runtimeState.taylorSeriesEnabled,
+        dynamicAggregateEnabled: !!runtimeState.dynamicPlotting?.enabled,
+        style: {
+            brightness: Number(runtimeState.domainBrightness) || 1,
+            contrast: Number(runtimeState.domainContrast) || 1,
+            saturation: Number(runtimeState.domainSaturation) || 1,
+            lightnessCycles: Number(runtimeState.domainLightnessCycles) || 0
+        },
+        paletteStops: paletteStops(runtimeState.domainPalette),
+        viewport: {
+            width: Math.max(1, Math.floor(Number(planeParams.width) || 1)),
+            height: Math.max(1, Math.floor(Number(planeParams.height) || 1)),
+            xRange: ranges.xRange,
+            yRange: ranges.yRange
+        }
+    };
+
+    if (snapshot.taylorSeriesEnabled || snapshot.dynamicAggregateEnabled) return null;
+    return isDomainDynamicsSnapshot(snapshot) ? snapshot : null;
+}
+
+function canUseWorker() {
+    return typeof Worker !== 'undefined' && typeof URL !== 'undefined';
+}
+
+function workerCount() {
+    const cores = typeof navigator !== 'undefined' && Number.isFinite(navigator.hardwareConcurrency)
+        ? navigator.hardwareConcurrency
+        : 4;
+    return Math.max(1, Math.min(MAX_WORKERS, Math.floor(cores) || 1));
+}
+
+function createTileList(passWidth, passHeight, scale) {
+    const tiles = [];
+    for (let y = 0; y < passHeight; y += TILE_SIZE) {
+        for (let x = 0; x < passWidth; x += TILE_SIZE) {
+            tiles.push({
+                x,
+                y,
+                width: Math.min(TILE_SIZE, passWidth - x),
+                height: Math.min(TILE_SIZE, passHeight - y),
+                scale
+            });
+        }
+    }
+    return tiles;
+}
+
+function createImageDataFromPixels(pixels, width, height) {
+    if (typeof ImageData !== 'undefined') return new ImageData(pixels, width, height);
+    return null;
+}
+
+function passSampleStep(passScale) {
+    return passScale;
+}
+
+function drawPassToTarget(job, pass) {
+    const ctx = job.targetCtx;
+    ctx.save();
+    try {
+        ctx.setTransform(1, 0, 0, 1, 0, 0);
+        ctx.clearRect(0, 0, job.snapshot.viewport.width, job.snapshot.viewport.height);
+        ctx.imageSmoothingEnabled = pass.sampleStep !== 1;
+        if (ctx.imageSmoothingQuality !== undefined) ctx.imageSmoothingQuality = 'high';
+        ctx.drawImage(
+            pass.canvas,
+            0, 0, pass.width, pass.height,
+            0, 0, job.snapshot.viewport.width, job.snapshot.viewport.height
+        );
+    } finally {
+        ctx.restore();
+    }
+
+    eventBus.emit('redraw:all');
+}
+
+function clearTarget(targetCtx, viewport) {
+    targetCtx.save();
+    try {
+        targetCtx.setTransform(1, 0, 0, 1, 0, 0);
+        targetCtx.clearRect(0, 0, viewport.width, viewport.height);
+    } finally {
+        targetCtx.restore();
+    }
+}
+
+class WorkerCpuDomainDynamicsBackend {
+    constructor() {
+        this.id = 'worker-cpu';
+        this.workers = [];
+        this.queue = [];
+        this.activeJob = null;
+        this.pass = null;
+        this.inlineTimer = null;
+        this.failed = false;
+    }
+
+    supports() {
+        return true;
+    }
+
+    start(job) {
+        this.cancel();
+        this.activeJob = {
+            ...job,
+            cancelled: false,
+            passIndex: -1,
+            renderTile: createDomainDynamicsTileRenderer(job.snapshot)
+        };
+        this.ensureWorkers();
+        this.initializeWorkerJobs(this.activeJob);
+        this.startNextPass();
+        return true;
+    }
+
+    cancel(jobId = null) {
+        const cancelledJobId = jobId || this.activeJob?.id || null;
+        if (this.activeJob) this.activeJob.cancelled = true;
+        this.queue = [];
+        this.pass = null;
+        if (this.inlineTimer) {
+            clearTimeout(this.inlineTimer);
+            this.inlineTimer = null;
+        }
+        if (cancelledJobId) {
+            this.workers.forEach(entry => entry.worker.postMessage({ type: 'cancel', jobId: cancelledJobId }));
+        }
+    }
+
+    dispose() {
+        this.cancel();
+        this.workers.forEach(entry => {
+            entry.worker.postMessage({ type: 'dispose' });
+            entry.worker.terminate();
+        });
+        this.workers = [];
+    }
+
+    ensureWorkers() {
+        if (!canUseWorker() || this.failed || this.workers.length) return;
+        try {
+            const count = workerCount();
+            for (let i = 0; i < count; i += 1) {
+                const worker = new Worker(new URL('./domain-dynamics-worker.js', import.meta.url), { type: 'module' });
+                const entry = { worker, busy: false };
+                worker.onmessage = event => this.handleWorkerMessage(entry, event.data);
+                worker.onerror = error => {
+                    console.warn('Domain dynamics worker failed; falling back to inline tiles.', error?.message || error);
+                    this.failed = true;
+                    this.workers.forEach(item => item.worker.terminate());
+                    this.workers = [];
+                    this.restartInline();
+                };
+                this.workers.push(entry);
+            }
+        } catch (error) {
+            console.warn('Domain dynamics workers unavailable; falling back to inline tiles.', error?.message || error);
+            this.failed = true;
+            this.workers = [];
+        }
+    }
+
+    initializeWorkerJobs(job) {
+        if (!this.workers.length || this.failed) return;
+        this.workers.forEach(entry => {
+            entry.worker.postMessage({
+                type: 'start',
+                jobId: job.id,
+                snapshot: job.snapshot
+            });
+        });
+    }
+
+    restartInline() {
+        const job = this.activeJob;
+        if (!job || job.cancelled) return;
+        const currentScale = this.pass?.scale || PASS_SCALES[0];
+        const startIndex = Math.max(0, PASS_SCALES.indexOf(currentScale));
+        job.passIndex = startIndex - 1;
+        this.queue = [];
+        this.pass = null;
+        this.startNextPass();
+    }
+
+    startNextPass() {
+        const job = this.activeJob;
+        if (!job || job.cancelled) return;
+
+        job.passIndex += 1;
+        if (job.passIndex >= PASS_SCALES.length) {
+            this.pass = null;
+            return;
+        }
+
+        const scale = PASS_SCALES[job.passIndex];
+        const sampleStep = passSampleStep(scale);
+        const passWidth = Math.max(1, Math.ceil(job.snapshot.viewport.width / sampleStep));
+        const passHeight = Math.max(1, Math.ceil(job.snapshot.viewport.height / sampleStep));
+        const canvas = document.createElement('canvas');
+        canvas.width = passWidth;
+        canvas.height = passHeight;
+        const ctx = canvas.getContext('2d');
+
+        this.pass = {
+            id: `${job.id}:${scale}`,
+            scale,
+            sampleStep,
+            width: passWidth,
+            height: passHeight,
+            canvas,
+            ctx,
+            remaining: 0
+        };
+        this.queue = createTileList(passWidth, passHeight, sampleStep);
+        this.pass.remaining = this.queue.length;
+
+        if (!this.queue.length) {
+            this.startNextPass();
+            return;
+        }
+
+        if (this.workers.length && !this.failed) {
+            this.workers.forEach(worker => this.dispatchWorker(worker));
+        } else {
+            this.processInlineTiles();
+        }
+    }
+
+    dispatchWorker(entry) {
+        const job = this.activeJob;
+        if (!job || job.cancelled || entry.busy) return;
+
+        const tile = this.queue.shift();
+        if (!tile) return;
+
+        entry.busy = true;
+        entry.worker.postMessage({
+            type: 'tile',
+            jobId: job.id,
+            passId: this.pass.id,
+            tile
+        });
+    }
+
+    handleWorkerMessage(entry, message) {
+        entry.busy = false;
+        this.handleTileMessage(message);
+        this.dispatchWorker(entry);
+    }
+
+    handleTileMessage(message) {
+        const job = this.activeJob;
+        const pass = this.pass;
+        if (!job || job.cancelled || !pass || message.jobId !== job.id || message.passId !== pass.id) return;
+
+        if (message.type === 'error') {
+            console.warn('Domain dynamics tile failed:', message.message);
+            pass.remaining -= 1;
+        } else if (message.type === 'tile') {
+            const image = createImageDataFromPixels(message.pixels, message.tile.width, message.tile.height);
+            if (image) pass.ctx.putImageData(image, message.tile.x, message.tile.y);
+            pass.remaining -= 1;
+        }
+
+        if (pass.remaining <= 0) {
+            drawPassToTarget(job, pass);
+            this.startNextPass();
+        }
+    }
+
+    processInlineTiles() {
+        const job = this.activeJob;
+        const pass = this.pass;
+        if (!job || job.cancelled || !pass) return;
+
+        const runOne = () => {
+            const currentJob = this.activeJob;
+            const currentPass = this.pass;
+            if (!currentJob || currentJob.cancelled || currentPass !== pass) return;
+
+            const tile = this.queue.shift();
+            if (!tile) return;
+
+            const pixels = currentJob.renderTile
+                ? currentJob.renderTile(tile)
+                : renderDomainDynamicsTile(currentJob.snapshot, tile);
+            this.handleTileMessage({
+                type: 'tile',
+                jobId: currentJob.id,
+                passId: currentPass.id,
+                tile,
+                pixels
+            });
+
+            if (this.queue.length && this.pass === currentPass && !currentJob.cancelled) {
+                this.inlineTimer = setTimeout(runOne, 0);
+            }
+        };
+
+        this.inlineTimer = setTimeout(runOne, 0);
+    }
+}
+
+const workerBackend = new WorkerCpuDomainDynamicsBackend();
+
+export function selectDomainDynamicsBackend() {
+    return workerBackend;
+}
+
+export function renderPlanarDomainDynamics(targetCtx, planeParams, snapshot) {
+    if (!targetCtx || !planeParams || !snapshot) return false;
+
+    const signature = domainDynamicsSignature(snapshot);
+    if (signature === activeSignature && activeJobId) return true;
+
+    if (activeBackend) activeBackend.cancel(activeJobId);
+
+    activeSignature = signature;
+    activeJobId = nextJobId;
+    nextJobId += 1;
+    clearTarget(targetCtx, snapshot.viewport);
+
+    const job = {
+        id: activeJobId,
+        targetCtx,
+        planeParams,
+        snapshot
+    };
+
+    const selected = selectDomainDynamicsBackend(snapshot);
+    activeBackend = selected;
+    if (!selected.start(job)) {
+        activeBackend = workerBackend;
+        workerBackend.start(job);
+    }
+
+    return true;
+}
+
+export function cancelPlanarDomainDynamics() {
+    if (activeBackend) activeBackend.cancel(activeJobId);
+    activeSignature = null;
+    activeJobId = 0;
+}
+
+export function disposePlanarDomainDynamics() {
+    workerBackend.dispose();
+    activeBackend = null;
+    activeSignature = null;
+    activeJobId = 0;
+}

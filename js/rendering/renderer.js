@@ -1302,7 +1302,7 @@ function renderWProbe(transform, index, isRiemannW) {
     }
 
     drawPlaneLayer(wCtx, wPlaneParams, 'w', layerCtx => {
-        drawPlanarTransformedProbe(layerCtx, wPlaneParams, transform, index);
+        drawPlanarTransformedProbe(layerCtx, wPlaneParams, transform);
     }, 'capture');
 }
 

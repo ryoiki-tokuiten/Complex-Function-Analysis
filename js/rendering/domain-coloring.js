@@ -2,10 +2,14 @@ import { state, context } from '../store/state.js';
 import {
     getMappedTransformProfile,
     getEffectiveBaseTransformFunction,
-    evaluateMappedTransform,
     evaluateDomainColoringMappedTransform
 } from '../math-utils.js';
 import { renderDomainColoringWithWebGL } from './webgl-domain-coloring.js';
+import {
+    buildPlanarDomainDynamicsSnapshot,
+    cancelPlanarDomainDynamics,
+    renderPlanarDomainDynamics
+} from './domain-dynamics.js';
 import { hslToRgb } from './canvas-primitives.js';
 import { domainPalettes } from '../ui/theme-manager.js';
 
@@ -14,9 +18,6 @@ const DOMAIN_LIGHTNESS_MIN = 0.34;
 const DOMAIN_LIGHTNESS_MAX = 0.72;
 const DOMAIN_LIGHTNESS_DETAIL_BASE = 0.72;
 const DOMAIN_LIGHTNESS_DETAIL_SCALE = 0.28;
-const DYNAMICS_ESCAPE_RADIUS = 64;
-const DYNAMICS_ESCAPE_RADIUS_SQ = DYNAMICS_ESCAPE_RADIUS * DYNAMICS_ESCAPE_RADIUS;
-const DYNAMICS_CHAIN_LIMIT = 512;
 
 function magnitudeLightness(logMod, cycles) {
     if (!Number.isFinite(logMod)) return DOMAIN_LIGHTNESS_MAX;
@@ -44,88 +45,8 @@ function getDomainColoringEvaluator(isWPC, sourceProfile, sTF) {
     return (x, y) => ({ re: x, im: y });
 }
 
-function isFiniteComplex(value) {
-    return !!value && Number.isFinite(value.re) && Number.isFinite(value.im);
-}
-
-function shouldUseIteratedDynamicsColoring(isWPC) {
-    return !isWPC &&
-        state.fractalOrbitColoringEnabled &&
-        state.chainingEnabled &&
-        state.chainCount > 1 &&
-        (state.chainingMode === 'recursion' || state.chainingMode === 'zero_seed');
-}
-
-function evaluateDynamicsStep(value, parameter, sourceProfile, sTF) {
-    try {
-        if (sourceProfile) {
-            return evaluateMappedTransform(
-                sourceProfile,
-                value.re,
-                value.im,
-                state.currentFunction,
-                { c: parameter }
-            );
-        }
-
-        if (typeof sTF === 'function') {
-            return sTF(value.re, value.im);
-        }
-    } catch (_error) {
-        return null;
-    }
-
-    return null;
-}
-
-function dynamicsEscapeColor(smoothIteration, count, runtimeState) {
-    const t = Math.max(0, Math.min(1, smoothIteration / Math.max(1, count)));
-    const paletteId = runtimeState?.domainPalette || 'analytic-base';
-    const baseColor = getPaletteColor(paletteId, Math.min(t, 0.9999));
-    const lightnessBase = 0.22 + 0.58 * Math.pow(t, 0.65);
-    const contrast = Number.isFinite(runtimeState?.domainContrast) ? runtimeState.domainContrast : 1;
-    const brightness = Number.isFinite(runtimeState?.domainBrightness) ? runtimeState.domainBrightness : 1;
-    const saturation = Number.isFinite(runtimeState?.domainSaturation) ? runtimeState.domainSaturation : 1;
-    const lightness = Math.min(0.95, Math.max(0.05, (0.5 + (lightnessBase - 0.5) * contrast) * brightness));
-
-    return applyLightnessAndSaturation(baseColor, lightness, Math.min(1, Math.max(0, saturation)));
-}
-
-function iteratedDynamicsColorForPoint(re, im, sourceProfile, sTF) {
-    const count = Math.max(1, Math.min(DYNAMICS_CHAIN_LIMIT, Math.floor(Number(state.chainCount) || 1)));
-    const parameter = { re, im };
-    let current = state.chainingMode === 'zero_seed' ? { re: 0, im: 0 } : parameter;
-    let smoothIteration = count;
-    let escaped = false;
-
-    for (let i = 0; i < count; i++) {
-        const next = evaluateDynamicsStep(current, parameter, sourceProfile, sTF);
-        const valid = isFiniteComplex(next);
-        const magSq = valid ? next.re * next.re + next.im * next.im : DYNAMICS_ESCAPE_RADIUS_SQ;
-        const tooLarge = valid && (
-            magSq > DYNAMICS_ESCAPE_RADIUS_SQ ||
-            Math.max(Math.abs(next.re), Math.abs(next.im)) >= 1e18
-        );
-
-        if (!valid || tooLarge) {
-            const magnitude = Math.sqrt(Math.max(magSq, DYNAMICS_ESCAPE_RADIUS));
-            smoothIteration = i + 1;
-
-            if (valid && Number.isFinite(magnitude) && magnitude > 1.0001) {
-                const smoothAdjust = Math.log(
-                    Math.max(Math.log(magnitude) / Math.log(DYNAMICS_ESCAPE_RADIUS), 1e-6)
-                ) / Math.LN2;
-                smoothIteration = Math.max(0, Math.min(count, smoothIteration - smoothAdjust));
-            }
-
-            escaped = true;
-            break;
-        }
-
-        current = next;
-    }
-
-    return escaped ? dynamicsEscapeColor(smoothIteration, count, state) : [0, 0, 0];
+function cancelZPlaneDynamicsIfNeeded(isWPlaneColoring) {
+    if (!isWPlaneColoring) cancelPlanarDomainDynamics();
 }
 
 function parsePaletteColors(colorsStr) {
@@ -184,18 +105,29 @@ export function renderPlanarDomainColoring(tCtx, pP, isWPC, sTF) {
         ? getMappedTransformProfile(state.currentFunction, profileTransform)
         : null;
     if (sourceProfile && sourceProfile.isConstant && !state.chainingEnabled) {
+        cancelZPlaneDynamicsIfNeeded(isWPC);
         renderConstantPlanarDomainColoring(tCtx, pP, sourceProfile.constantValue);
         return;
     }
+
+    const dynamicsSnapshot = buildPlanarDomainDynamicsSnapshot(state, pP, { isWPlaneColoring: !!isWPC });
+    if (dynamicsSnapshot && renderPlanarDomainDynamics(tCtx, pP, dynamicsSnapshot)) {
+        return;
+    }
+
     const ok = renderDomainColoringWithWebGL(tCtx, pP, {
         planeKey: getDomainColorPlaneKey(tCtx),
         isWPlaneColoring: !!isWPC,
         sphereParams: null,
         sourceTransformFn: sTF
     });
-    if (!ok) {
-        renderPlanarDomainColoringCPU(tCtx, pP, isWPC, sTF, sourceProfile);
+    if (ok) {
+        cancelZPlaneDynamicsIfNeeded(isWPC);
+        return;
     }
+
+    cancelZPlaneDynamicsIfNeeded(isWPC);
+    renderPlanarDomainColoringCPU(tCtx, pP, isWPC, sTF, sourceProfile);
 }
 
 export function renderSphereDomainColoring(tCtx, cSP, cDOMP, isWPC, sTF) {
@@ -327,13 +259,8 @@ export function renderConstantPlanarDomainColoring(tCtx, pP, value) {
 export function renderPlanarDomainColoringCPU(tCtx, pP, isWPC, sTF, sourceProfile = null) {
     const targetW = pP.width;
     const targetH = pP.height;
-    const isInteracting = !!(state && (
-        (state.panStateZ && state.panStateZ.isPanning) ||
-        (state.panStateW && state.panStateW.isPanning)
-    ));
-    const ds = isInteracting ? 2 : 1;
-    const w = Math.max(1, Math.floor(targetW / ds));
-    const h = Math.max(1, Math.floor(targetH / ds));
+    const w = Math.max(1, Math.floor(targetW));
+    const h = Math.max(1, Math.floor(targetH));
 
     const tempCanvas = document.createElement('canvas');
     tempCanvas.width = w;
@@ -346,7 +273,6 @@ export function renderPlanarDomainColoringCPU(tCtx, pP, isWPC, sTF, sourceProfil
     const yRange = pP.currentVisYRange || pP.yRange;
 
     const evalFunc = getDomainColoringEvaluator(isWPC, sourceProfile, sTF);
-    const useDynamicsColoring = shouldUseIteratedDynamicsColoring(isWPC);
 
     for (let py = 0; py < h; py++) {
         const unitY = py / h;
@@ -355,18 +281,10 @@ export function renderPlanarDomainColoringCPU(tCtx, pP, isWPC, sTF, sourceProfil
             const unitX = px / w;
             const reZ = xRange[0] + unitX * (xRange[1] - xRange[0]);
 
-            let rgb;
-            if (useDynamicsColoring) {
-                rgb = iteratedDynamicsColorForPoint(reZ, imZ, sourceProfile, sTF);
-            } else {
-                const mapped = evalFunc(reZ, imZ);
-
-                if (!mapped || isNaN(mapped.re) || isNaN(mapped.im) || !isFinite(mapped.re) || !isFinite(mapped.im)) {
-                    rgb = [0, 0, 0];
-                } else {
-                    rgb = domainColorForValue(mapped.re, mapped.im, state);
-                }
-            }
+            const mapped = evalFunc(reZ, imZ);
+            const rgb = (!mapped || isNaN(mapped.re) || isNaN(mapped.im) || !isFinite(mapped.re) || !isFinite(mapped.im))
+                ? [0, 0, 0]
+                : domainColorForValue(mapped.re, mapped.im, state);
 
             const idx = (py * w + px) * 4;
             data[idx] = rgb[0];
@@ -388,13 +306,8 @@ export function renderPlanarDomainColoringCPU(tCtx, pP, isWPC, sTF, sourceProfil
 export function renderSphereDomainColoringCPU(tCtx, cSP, cDOMP, isWPC, sTF, sourceProfile = null) {
     const targetW = cDOMP.width;
     const targetH = cDOMP.height;
-    const isInteracting = !!(state && (
-        (state.panStateZ && state.panStateZ.isPanning) ||
-        (state.panStateW && state.panStateW.isPanning)
-    ));
-    const ds = isInteracting ? 2 : 1;
-    const w = Math.max(1, Math.floor(targetW / ds));
-    const h = Math.max(1, Math.floor(targetH / ds));
+    const w = Math.max(1, Math.floor(targetW));
+    const h = Math.max(1, Math.floor(targetH));
 
     const tempCanvas = document.createElement('canvas');
     tempCanvas.width = w;
@@ -403,14 +316,13 @@ export function renderSphereDomainColoringCPU(tCtx, cSP, cDOMP, isWPC, sTF, sour
     const imgData = tempCtx.createImageData(w, h);
     const data = imgData.data;
 
-    const sCenterX = cSP.centerX / ds;
-    const sCenterY = cSP.centerY / ds;
-    const sRadius = cSP.radius / ds;
+    const sCenterX = cSP.centerX;
+    const sCenterY = cSP.centerY;
+    const sRadius = cSP.radius;
     const rotX = cSP.rotX || 0;
     const rotY = cSP.rotY || 0;
 
     const evalFunc = getDomainColoringEvaluator(isWPC, sourceProfile, sTF);
-    const useDynamicsColoring = shouldUseIteratedDynamicsColoring(isWPC);
 
     for (let py = 0; py < h; py++) {
         for (let px = 0; px < w; px++) {
@@ -443,18 +355,10 @@ export function renderSphereDomainColoringCPU(tCtx, cSP, cDOMP, isWPC, sTF, sour
                 imZ = pt.y / den;
             }
 
-            let rgb;
-            if (useDynamicsColoring) {
-                rgb = iteratedDynamicsColorForPoint(reZ, imZ, sourceProfile, sTF);
-            } else {
-                const mapped = evalFunc(reZ, imZ);
-
-                if (!mapped || isNaN(mapped.re) || isNaN(mapped.im) || !isFinite(mapped.re) || !isFinite(mapped.im)) {
-                    rgb = [0, 0, 0];
-                } else {
-                    rgb = domainColorForValue(mapped.re, mapped.im, state);
-                }
-            }
+            const mapped = evalFunc(reZ, imZ);
+            const rgb = (!mapped || isNaN(mapped.re) || isNaN(mapped.im) || !isFinite(mapped.re) || !isFinite(mapped.im))
+                ? [0, 0, 0]
+                : domainColorForValue(mapped.re, mapped.im, state);
 
             data[idx] = rgb[0];
             data[idx + 1] = rgb[1];

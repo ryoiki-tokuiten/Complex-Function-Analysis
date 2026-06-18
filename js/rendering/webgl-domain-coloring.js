@@ -31,8 +31,7 @@ const CFG = Object.freeze({
     maxDprBoost: 1.35,
     dprScaleFactor: 0.92,
     polyCoeffCount: 11,
-    maxChainStepsGlsl: 512,
-    maxPerturbationOrbit: 513
+    maxChainStepsGlsl: 512
 });
 
 const EMPTY_OPTIONS = Object.freeze({});
@@ -115,12 +114,7 @@ const UNIFORM_ALIASES = Object.freeze({
     uFracPower: 'u_fracPower',
     uChainCount: 'u_chainCount',
     uChainMode: 'u_chainMode',
-    uUseOrbitColoring: 'u_useOrbitColoring',
-    uUseDynamicsPerturbation: 'u_useDynamicsPerturbation',
-    uPerturbationA1: 'u_perturbationA1',
-    uPerturbationA2: 'u_perturbationA2',
-    uPerturbationCScale: 'u_perturbationCScale',
-    uPerturbationOrbit: 'u_perturbationOrbit[0]'
+    uUseOrbitColoring: 'u_useOrbitColoring'
 });
 
 const PALETTES = Object.freeze([
@@ -192,12 +186,7 @@ const FRAGMENT_UNIFORMS = lines(
     'uniform float u_fracPower;',
     'uniform int u_chainCount;',
     'uniform int u_chainMode;',
-    'uniform float u_useOrbitColoring;',
-    'uniform float u_useDynamicsPerturbation;',
-    'uniform vec2 u_perturbationA1;',
-    'uniform vec2 u_perturbationA2;',
-    'uniform vec2 u_perturbationCScale;',
-    `uniform vec2 u_perturbationOrbit[${CFG.maxPerturbationOrbit}];`
+    'uniform float u_useOrbitColoring;'
 );
 
 const DYNAMICS_COLOR_HELPERS = `
@@ -243,52 +232,6 @@ vec4 iteratedDynamicsColor(vec2 parameterValue, int chainMode, float brightnessF
     }
 
     current = nextValue;
-  }
-
-  return escaped
-    ? dynamicsEscapeColor(smoothIteration, brightnessFactor)
-    : dynamicsInteriorColor();
-}
-`;
-
-const DYNAMICS_PERTURBATION_HELPERS = `
-vec4 iteratedQuadraticPerturbationColor(vec2 parameterOffset, int chainMode, float brightnessFactor) {
-  vec2 delta = chainMode == 7 ? vec2(0.0) : parameterOffset;
-  float escapeRadius = 64.0;
-  float escapeRadiusSq = escapeRadius * escapeRadius;
-  float smoothIteration = float(u_chainCount);
-  bool escaped = false;
-
-  for (int i = 0; i < ${CFG.maxChainStepsGlsl}; i++) {
-    if (i >= u_chainCount) break;
-
-    vec2 reference = u_perturbationOrbit[i];
-    vec2 nextReference = u_perturbationOrbit[i + 1];
-    vec2 quadraticDelta = complexMul(
-      u_perturbationA2,
-      complexAdd(2.0 * complexMul(reference, delta), complexMul(delta, delta))
-    );
-    vec2 nextDelta = complexAdd(
-      complexAdd(quadraticDelta, complexMul(u_perturbationA1, delta)),
-      complexMul(u_perturbationCScale, parameterOffset)
-    );
-    vec2 nextValue = complexAdd(nextReference, nextDelta);
-    float magSq = dot(nextValue, nextValue);
-
-    if (!isFiniteVec2Compat(nextValue) || magSq > escapeRadiusSq || shouldStopDomainChain(nextValue)) {
-      float magnitude = sqrt(max(magSq, escapeRadius));
-      smoothIteration = float(i) + 1.0;
-
-      if (isFiniteFloatCompat(magnitude) && magnitude > 1.0001) {
-        float smoothAdjust = log(max(log(magnitude) / log(escapeRadius), 1.0e-6)) / LOG_TWO;
-        smoothIteration = clamp(smoothIteration - smoothAdjust, 0.0, float(u_chainCount));
-      }
-
-      escaped = true;
-      break;
-    }
-
-    delta = nextDelta;
   }
 
   return escaped
@@ -410,11 +353,6 @@ void projectPlanarPixel(vec2 pixel, vec2 resolutionSafe, out vec2 zInput) {
     u_viewCenter.x + unit.x * u_viewSpan.x,
     u_viewCenter.y - unit.y * u_viewSpan.y
   );
-}
-
-vec2 projectPlanarParameterOffset(vec2 pixel, vec2 resolutionSafe) {
-  vec2 unit = pixel / resolutionSafe - vec2(0.5);
-  return vec2(unit.x * u_viewSpan.x, -unit.y * u_viewSpan.y);
 }
 
 bool projectSpherePixel(vec2 pixel, out vec2 zInput, out float brightnessFactor) {
@@ -556,7 +494,6 @@ bool evaluateZeroSeedChain(vec2 parameterValue, out vec2 mappedValue) {
 }
 
 ${DYNAMICS_COLOR_HELPERS}
-${DYNAMICS_PERTURBATION_HELPERS}
 
 vec4 domainColorForValue(vec2 value, float brightnessFactor) {
   float phase = atan(value.y, value.x);
@@ -589,15 +526,7 @@ void main() {
 
   vec2 mappedValue = vec2(0.0);
   if (u_useOrbitColoring > 0.5 && u_isWPlaneColoring < 0.5 && u_chainCount > 1 && (u_chainMode == 1 || u_chainMode == 7)) {
-    if (u_useDynamicsPerturbation > 0.5 && u_useSphere < 0.5) {
-      gl_FragColor = iteratedQuadraticPerturbationColor(
-        projectPlanarParameterOffset(pixel, resolutionSafe),
-        u_chainMode,
-        brightnessFactor
-      );
-    } else {
-      gl_FragColor = iteratedDynamicsColor(zInput, u_chainMode, brightnessFactor);
-    }
+    gl_FragColor = iteratedDynamicsColor(zInput, u_chainMode, brightnessFactor);
     return;
   }
 
@@ -638,7 +567,6 @@ const LIGHTING_UNIFORM_VALUES = Object.freeze([
 ]);
 
 const HAS_OWN = Function.call.bind(Object.prototype.hasOwnProperty);
-const ZERO_COMPLEX = Object.freeze({ re: 0, im: 0 });
 
 function lines(...parts) {
     return parts.join('\n');
@@ -655,32 +583,6 @@ function finite(value, fallback) {
 function finiteNumber(value, fallback) {
     const number = Number(value);
     return Number.isFinite(number) ? number : fallback;
-}
-
-function finiteComplex(value, fallback = ZERO_COMPLEX) {
-    return {
-        re: finiteNumber(value?.re, fallback.re),
-        im: finiteNumber(value?.im, fallback.im)
-    };
-}
-
-function isFiniteComplex(value) {
-    return Number.isFinite(value?.re) && Number.isFinite(value?.im);
-}
-
-function complexAdd(a, b) {
-    return { re: a.re + b.re, im: a.im + b.im };
-}
-
-function complexMul(a, b) {
-    return {
-        re: a.re * b.re - a.im * b.im,
-        im: a.re * b.im + a.im * b.re
-    };
-}
-
-function complexTermScale(value, scale) {
-    return complexMul(value, scale);
 }
 
 function stateNumber(key, fallback) {
@@ -711,98 +613,6 @@ function finiteRange(candidate) {
 
 function chooseRange(primary, fallback) {
     return finiteRange(primary) || finiteRange(fallback);
-}
-
-function activeTermFactor(term) {
-    const factors = (term?.factors || []).filter(factor => factor && factor.func && factor.func !== 'none');
-    if (factors.length !== 1) return null;
-
-    const factor = factors[0];
-    const plain =
-        (!factor.chainedFunc || factor.chainedFunc === 'none') &&
-        !factor.reciprocal &&
-        !factor.log &&
-        !factor.exp &&
-        finiteNumber(factor.power ?? 1, 1) === 1;
-
-    return plain ? factor : null;
-}
-
-function accumulateQuadraticDynamicsProfileTerm(profile, term) {
-    const factor = activeTermFactor(term);
-    if (!factor) return false;
-
-    const scale = finiteComplex(term?.coeff, { re: 1, im: 0 });
-
-    if (factor.func === 'c') {
-        profile.cScale = complexAdd(profile.cScale, scale);
-        profile.hasParameter = true;
-        return true;
-    }
-
-    if (factor.func !== 'polynomial') return false;
-
-    const degree = Math.max(0, Math.min(CFG.polyCoeffCount - 1, uniformInt(state?.polynomialN, 0)));
-    if (degree > 2) return false;
-
-    const coeffs = state?.polynomialCoeffs || [];
-    profile.a0 = complexAdd(profile.a0, complexTermScale(finiteComplex(coeffs[0]), scale));
-    profile.a1 = complexAdd(profile.a1, complexTermScale(finiteComplex(coeffs[1]), scale));
-    profile.a2 = complexAdd(profile.a2, complexTermScale(finiteComplex(coeffs[2]), scale));
-    profile.hasPolynomial = true;
-    return true;
-}
-
-function getQuadraticDynamicsProfile() {
-    if (state?.currentFunction !== 'algebraic_chaining' || !state?.algebraicChainingEnabled) return null;
-    if (!Array.isArray(state.algebraicChainingTerms) || state.algebraicChainingTerms.length === 0) return null;
-
-    const profile = {
-        a0: { re: 0, im: 0 },
-        a1: { re: 0, im: 0 },
-        a2: { re: 0, im: 0 },
-        cScale: { re: 0, im: 0 },
-        hasParameter: false,
-        hasPolynomial: false
-    };
-
-    for (const term of state.algebraicChainingTerms) {
-        if (!accumulateQuadraticDynamicsProfileTerm(profile, term)) return null;
-    }
-
-    return profile.hasPolynomial && profile.hasParameter ? profile : null;
-}
-
-function evaluateQuadraticProfile(profile, z, c) {
-    const zSq = complexMul(z, z);
-    return complexAdd(
-        complexAdd(
-            complexAdd(complexTermScale(zSq, profile.a2), complexTermScale(z, profile.a1)),
-            profile.a0
-        ),
-        complexTermScale(c, profile.cScale)
-    );
-}
-
-function buildPerturbationOrbit(profile, center, chainMode, chainCount) {
-    const orbit = new Float32Array(CFG.maxPerturbationOrbit * 2);
-    const count = Math.max(1, Math.min(CFG.maxChainStepsGlsl, chainCount));
-    let current = chainMode === 7 ? { re: 0, im: 0 } : center;
-
-    for (let i = 0; i < CFG.maxPerturbationOrbit; i += 1) {
-        if (!isFiniteComplex(current) || Math.max(Math.abs(current.re), Math.abs(current.im)) >= 1e18) {
-            return null;
-        }
-
-        orbit[i * 2] = current.re;
-        orbit[i * 2 + 1] = current.im;
-
-        if (i < count) {
-            current = evaluateQuadraticProfile(profile, current, center);
-        }
-    }
-
-    return orbit;
 }
 
 function recordFromPlanes(factory) {
@@ -1199,46 +1009,6 @@ function uploadChainingUniforms(gl, renderer) {
     gl.uniform1f(renderer.uUseOrbitColoring, state?.fractalOrbitColoringEnabled ? 1 : 0);
 }
 
-function uploadComplexUniform(gl, location, value) {
-    gl.uniform2f(location, finiteNumber(value?.re, 0), finiteNumber(value?.im, 0));
-}
-
-function shouldUseQuadraticPerturbation(job, chainMode, chainCount) {
-    return !job.isWPlaneColoring &&
-        state?.fractalOrbitColoringEnabled &&
-        !job.sphereParams &&
-        chainCount > 1 &&
-        (chainMode === CHAIN_MODE_IDS.recursion || chainMode === CHAIN_MODE_IDS.zero_seed);
-}
-
-function uploadDynamicsPerturbationUniforms(gl, renderer, job) {
-    const enabled = !!state?.chainingEnabled;
-    const chainCount = enabled ? Math.max(1, Math.min(CFG.maxChainStepsGlsl, uniformInt(state.chainCount, 1))) : 1;
-    const chainMode = enabled ? enumId(CHAIN_MODE_IDS, state.chainingMode, 1) : 0;
-    const profile = shouldUseQuadraticPerturbation(job, chainMode, chainCount)
-        ? getQuadraticDynamicsProfile()
-        : null;
-
-    if (!profile) {
-        gl.uniform1f(renderer.uUseDynamicsPerturbation, 0);
-        return;
-    }
-
-    const view = resolvePlanarView(job);
-    const center = { re: view.centerX, im: view.centerY };
-    const orbit = buildPerturbationOrbit(profile, center, chainMode, chainCount);
-    if (!orbit) {
-        gl.uniform1f(renderer.uUseDynamicsPerturbation, 0);
-        return;
-    }
-
-    uploadComplexUniform(gl, renderer.uPerturbationA1, profile.a1);
-    uploadComplexUniform(gl, renderer.uPerturbationA2, profile.a2);
-    uploadComplexUniform(gl, renderer.uPerturbationCScale, profile.cScale);
-    gl.uniform2fv(renderer.uPerturbationOrbit, orbit);
-    gl.uniform1f(renderer.uUseDynamicsPerturbation, 1);
-}
-
 function uploadRenderUniforms(gl, renderer, job, metrics) {
     uploadFrameUniforms(gl, renderer, job);
     uploadDomainStyleUniforms(gl, renderer);
@@ -1247,7 +1017,6 @@ function uploadRenderUniforms(gl, renderer, job, metrics) {
     gl.uniform1f(renderer.uIsWPlaneColoring, job.isWPlaneColoring ? 1 : 0);
     setComplexFunctionUniformsShared(gl, renderer, state);
     uploadChainingUniforms(gl, renderer);
-    uploadDynamicsPerturbationUniforms(gl, renderer, job);
 }
 
 function draw(gl) {
@@ -1301,16 +1070,6 @@ function currentFunctionSupported(functionName, isWPlaneColoring) {
 }
 
 export function getWebGLDomainColorRenderScale() {
-    const previewActive =
-        Boolean(state?.panStateZ?.isPanning || state?.panStateW?.isPanning) ||
-        (typeof performance !== 'undefined' && performance.now() < (Number(state?.domainRenderPreviewUntil) || 0));
-    const expensiveDynamics =
-        state?.fractalOrbitColoringEnabled ||
-        (state?.chainingEnabled && Number(state.chainCount) > 32);
-
-    if (previewActive && expensiveDynamics) {
-        return 1;
-    }
 
     const baseScale = finite(WEBGL_DOMAIN_COLOR_SUPERSAMPLE, CFG.defaultSupersample);
     const stressScale = finite(WEBGL_DOMAIN_COLOR_STRESS_SCALE, CFG.defaultStressScale);

@@ -23,66 +23,64 @@ const { controls } = context;
 export function requestRedrawAll() {
     if (context.redrawRequest) {
         context.redrawQueued = true;
+        if (context.domainColoringDirty) {
+            context.domainColoringDirtyQueued = true;
+        }
         return;
     }
 
-    if (!context.redrawRequest) {
-        context.redrawRequest = requestAnimationFrame(() => {
-            context.redrawQueued = false;
-            context.renderingFrame = true;
-            context.domainColoringDirtyDuringFrame = false;
+    context.redrawRequest = requestAnimationFrame(() => {
+        context.redrawQueued = false;
+        context.domainColoringDirtyQueued = false;
 
-            try {
-                const zIsPlanar = !state.riemannSphereViewEnabled || state.splitViewEnabled;
-                if (state.showZerosPoles && !state.navigationModeEnabled && zIsPlanar && state.currentFunction !== 'poincare') {
-                    findZerosAndPoles();
-                } else {
-                    state.zeros = [];
-                    state.poles = [];
-                }
-                if (state.showCriticalPoints && !state.navigationModeEnabled && zIsPlanar && state.currentFunction !== 'poincare') {
-                    findCriticalPoints();
-                } else {
-                    state.criticalPoints = [];
-                    state.criticalValues = [];
-                }
-
-                updateTaylorSeriesCenterAndRadius(); 
-                performCauchyAnalysis();
-
-                drawZPlaneContent();
-                drawWPlaneContent();
-                updateTitlesAndGlobalUI();
-                
-                if (controls.laplace3DColumn) {
-                    controls.laplace3DColumn.classList.toggle('hidden', !state.laplaceModeEnabled);
-                }
-                if (state.laplaceModeEnabled && typeof drawLaplace3DSurface === 'function') {
-                    drawLaplace3DSurface('laplace_3d_container');
-                }
-
-                context.domainColoringDirty = context.domainColoringDirtyDuringFrame;
-                context.redrawRequest = null;
-                context.renderingFrame = false;
-
-                if (
-                    context.redrawQueued ||
-                    context.domainColoringDirty ||
-                    state.particleAnimationEnabled ||
-                    (state.webglGpuStressMode && state.domainColoringEnabled)
-                ) {
-                    if (state.webglGpuStressMode && state.domainColoringEnabled) {
-                        context.domainColoringDirty = true;
-                    }
-                    requestRedrawAll();
-                }
-            } catch (error) {
-                console.error("Error during redraw (requestAnimationFrame):", error);
-                context.redrawRequest = null;
-                context.renderingFrame = false;
+        try {
+            const zIsPlanar = !state.riemannSphereViewEnabled || state.splitViewEnabled;
+            if (state.showZerosPoles && !state.navigationModeEnabled && zIsPlanar && state.currentFunction !== 'poincare') {
+                findZerosAndPoles();
+            } else {
+                state.zeros = [];
+                state.poles = [];
             }
-        });
-    }
+            if (state.showCriticalPoints && !state.navigationModeEnabled && zIsPlanar && state.currentFunction !== 'poincare') {
+                findCriticalPoints();
+            } else {
+                state.criticalPoints = [];
+                state.criticalValues = [];
+            }
+
+            updateTaylorSeriesCenterAndRadius();
+            performCauchyAnalysis();
+
+            drawZPlaneContent();
+            drawWPlaneContent();
+            updateTitlesAndGlobalUI();
+
+            if (controls.laplace3DColumn) {
+                controls.laplace3DColumn.classList.toggle('hidden', !state.laplaceModeEnabled);
+            }
+            if (state.laplaceModeEnabled && typeof drawLaplace3DSurface === 'function') {
+                drawLaplace3DSurface('laplace_3d_container');
+            }
+
+            context.domainColoringDirty = context.domainColoringDirtyQueued;
+            context.redrawRequest = null;
+
+            if (state.webglGpuStressMode && state.domainColoringEnabled) {
+                context.domainColoringDirty = true;
+            }
+
+            if (
+                context.redrawQueued ||
+                context.domainColoringDirty ||
+                state.particleAnimationEnabled
+            ) {
+                requestRedrawAll();
+            }
+        } catch (error) {
+            console.error("Error during redraw (requestAnimationFrame):", error);
+            context.redrawRequest = null;
+        }
+    });
 }
 
 function initializeAnimationSpeedSelectors() {

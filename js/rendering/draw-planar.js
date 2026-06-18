@@ -17,7 +17,6 @@ import { LINE_WIDTH_NORMAL, PARTICLE_RADIUS } from '../constants/rendering.js';
 import { mapToCanvasCoords } from '../utils/canvas-utils.js';
 import {
     getMappedTransformProfile, evaluateMappedTransform, isNumericallyStable,
-    complexMul, complexPow, complexLn, complexExp, complexReciprocal,
     createTaylorApproximationTransform, transformFunctions
 } from '../math-utils.js';
 import {
@@ -46,9 +45,6 @@ const PROBE_NEIGHBORHOOD_SEGMENTS = 60;
 const PROBE_MARKER_RADIUS = 5;
 const CONSTANT_POINT_RADIUS = 7;
 const FOCI_RADIUS = 4;
-const ORBIT_NODE_RADIUS = 3.5;
-const ORBIT_ARROW_SIZE = 6;
-const ORBIT_COLOR = 'rgba(0, 255, 200, 0.9)';
 const DEFAULT_VIEW_RANGE = Object.freeze([-1, 1]);
 const INVALID_COMPLEX_POINT = Object.freeze({ re: NaN, im: NaN });
 
@@ -613,88 +609,6 @@ function getEffectiveProbeTransform(transformFunc) {
         profile,
         evaluate: createProfileEvaluator(profile)
     };
-}
-
-function getChainedOrbitPoint(mode, previousPoint, seedPoint, baseProfile) {
-    switch (mode) {
-        case 'power':
-            return complexMul(previousPoint, seedPoint);
-        case 'sqrt':
-            return complexPow(previousPoint, 0.5, 0);
-        case 'ln':
-            return complexLn(previousPoint);
-        case 'exp':
-            return complexExp(previousPoint);
-        case 'reciprocal':
-            return complexReciprocal(previousPoint);
-        case 'zero_seed':
-        case 'recursion':
-        default:
-            return evaluateProfilePoint(baseProfile, previousPoint.re, previousPoint.im, { c: seedPoint });
-    }
-}
-
-function drawCanvasArrowhead(ctx, fromPoint, toPoint, size) {
-    const angle = Math.atan2(toPoint.y - fromPoint.y, toPoint.x - fromPoint.x);
-
-    ctx.beginPath();
-    ctx.moveTo(toPoint.x, toPoint.y);
-    ctx.lineTo(
-        toPoint.x - size * Math.cos(angle - Math.PI / 6),
-        toPoint.y - size * Math.sin(angle - Math.PI / 6)
-    );
-    ctx.lineTo(
-        toPoint.x - size * Math.cos(angle + Math.PI / 6),
-        toPoint.y - size * Math.sin(angle + Math.PI / 6)
-    );
-    ctx.closePath();
-    ctx.fill();
-}
-
-function drawChainedOrbit(ctx, planeParams, startWorldPoint, startCanvasPoint, renderLimit, index) {
-    if (index !== 0 || !appState.chainingEnabled || appState.chainCount <= 1) {
-        return;
-    }
-
-    const baseFunc = transformFunctions[appState.currentFunction];
-    const baseProfile = getMappedTransformProfile(appState.currentFunction, baseFunc);
-    const limit = renderLimit * 3;
-
-    const zeroSeed = appState.chainingMode === 'zero_seed';
-    let previousWorldPoint = zeroSeed ? { re: 0, im: 0 } : startWorldPoint;
-    let lastCanvasPoint = zeroSeed
-        ? mapToCanvasCoords(0, 0, planeParams)
-        : startCanvasPoint;
-
-    ctx.strokeStyle = ORBIT_COLOR;
-    ctx.fillStyle = ORBIT_COLOR;
-    ctx.lineWidth = 1.5;
-
-    for (let k = zeroSeed ? 0 : 1; k < appState.chainCount; k++) {
-        const nextWorldPoint = getChainedOrbitPoint(
-            appState.chainingMode,
-            previousWorldPoint,
-            startWorldPoint,
-            baseProfile
-        );
-
-        if (!isWithinComplexLimit(nextWorldPoint, limit) || !isNumericallyStable(nextWorldPoint)) {
-            break;
-        }
-
-        const currentCanvasPoint = mapToCanvasCoords(nextWorldPoint.re, nextWorldPoint.im, planeParams);
-
-        ctx.beginPath();
-        ctx.moveTo(lastCanvasPoint.x, lastCanvasPoint.y);
-        ctx.lineTo(currentCanvasPoint.x, currentCanvasPoint.y);
-        ctx.stroke();
-
-        drawCanvasArrowhead(ctx, lastCanvasPoint, currentCanvasPoint, ORBIT_ARROW_SIZE);
-        drawCircleMarker(ctx, currentCanvasPoint, ORBIT_NODE_RADIUS, ORBIT_COLOR);
-
-        previousWorldPoint = nextWorldPoint;
-        lastCanvasPoint = currentCanvasPoint;
-    }
 }
 
 function drawMappedProbeNeighborhood(ctx, planeParams, center, radius, transformFunc, renderLimit) {
@@ -1414,7 +1328,7 @@ export function drawPlanarTaylorApproximation(
     });
 }
 
-export function drawPlanarTransformedProbe(ctx, planeParams, tf, index) {
+export function drawPlanarTransformedProbe(ctx, planeParams, tf) {
     withSavedContext(ctx, () => {
         const renderLimit = getPlanarTransformRenderLimit(planeParams);
         const effectiveTransform = getEffectiveProbeTransform(tf);
@@ -1423,7 +1337,6 @@ export function drawPlanarTransformedProbe(ctx, planeParams, tf, index) {
         if (isStableRenderableComplexPoint(probeWorldPoint)) {
             const probeCanvasPoint = mapToCanvasCoords(probeWorldPoint.re, probeWorldPoint.im, planeParams);
             drawCircleMarker(ctx, probeCanvasPoint, PROBE_MARKER_RADIUS, COLOR_PROBE_MARKER);
-            drawChainedOrbit(ctx, planeParams, probeWorldPoint, probeCanvasPoint, renderLimit, index);
         }
 
         configureRoundStroke(ctx, COLOR_PROBE_NEIGHBORHOOD, 1.5);
