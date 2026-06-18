@@ -63,7 +63,8 @@
                             <button id="select_mandelbrot_btn"
                                 data-tooltip="Load Mandelbrot as zero-seed output chaining of f(w,c)=w²+c">Mandelbrot</button>
                             <button id="select_newton_fractal_btn"
-                                data-tooltip="Load Newton fractals as recursive algebraic chaining">Newton Fractals</button>
+                                data-tooltip="Load Newton fractals as recursive algebraic chaining">Newton
+                                Fractals</button>
                         </div>
                     </div>
                 </div>
@@ -460,6 +461,27 @@
                         </div>
                     </div>
 
+                    <!-- Algebraic Chaining Panel -->
+                    <div id="algebraic_chaining_params" class="control-group"
+                        style="padding-bottom: 0.5rem; border-bottom: 1px solid var(--border-color); margin-bottom: 0.5rem;">
+                        <label for="enable_algebraic_chaining_cb" class="control-label tooltip-label slider-label"
+                            data-tooltip="Sum multiple complex functions together: a*f(z)*g(z) + b*h(z)...">
+                            <input type="checkbox" id="enable_algebraic_chaining_cb" class="control-checkbox">
+                            <span class="custom-checkbox-visual"></span>
+                            Enable Algebraic Chaining
+                        </label>
+
+                        <div id="algebraic_chaining_controls_container" style="display: none;">
+                            <div id="algebraic_terms_list">
+                                <!-- Dynamically populated by JS -->
+                            </div>
+
+                            <button id="add_algebraic_term_btn" class="sidebar-button">
+                                <span class="icon">＋</span> Add Summand Term
+                            </button>
+                        </div>
+                    </div>
+
                     <!-- Dynamic Plotting Panel -->
                     <div id="dynamic_plotting_params" class="control-group dynamic-plotting-panel"
                         style="padding-bottom: 0.5rem; border-bottom: 1px solid var(--border-color); margin-bottom: 0.5rem;">
@@ -478,8 +500,8 @@
                                     <strong id="dynamic_studio_summary">Integers → selected function → map</strong>
                                 </div>
                                 <div class="dynamic-studio-actions">
-                                    <button id="dynamic_minimize_studio_btn" type="button"
-                                        class="dynamic-studio-action" aria-expanded="true">Minimize</button>
+                                    <button id="dynamic_minimize_studio_btn" type="button" class="dynamic-studio-action"
+                                        aria-expanded="true">Minimize</button>
                                     <button id="dynamic_close_studio_btn" type="button"
                                         class="dynamic-studio-action dynamic-studio-close"
                                         aria-label="Close Dynamic Plotting Studio">Close</button>
@@ -501,7 +523,8 @@
                                     <span id="dynamic_formula_mode_badge" class="dynamic-formula-mode-badge">Map</span>
                                 </div>
                                 <div id="dynamic_formula_banner_content" class="dynamic-formula-banner-content">
-                                    <span class="dynamic-formula-banner-empty">Select a preset or configure the pipeline below</span>
+                                    <span class="dynamic-formula-banner-empty">Select a preset or configure the pipeline
+                                        below</span>
                                 </div>
                                 <div id="dynamic_formula_explanation" class="dynamic-formula-explanation"></div>
                             </div>
@@ -514,7 +537,8 @@
                                     <div class="dynamic-step-badge">1</div>
                                     <div class="dynamic-step-header">
                                         <div class="dynamic-step-title">Choose the sequence</div>
-                                        <div class="dynamic-step-subtitle">Define d<sub>j</sub> and how many terms to generate</div>
+                                        <div class="dynamic-step-subtitle">Define d<sub>j</sub> and how many terms to
+                                            generate</div>
                                     </div>
                                     <div class="dynamic-step-body">
                                         <div class="dynamic-grid dynamic-grid-two">
@@ -535,54 +559,59 @@
                                             </label>
                                             <label class="dynamic-field">
                                                 <span>Terms (N)</span>
-                                                <input id="dynamic_source_count" class="dynamic-number-input" type="number"
-                                                    min="0" max="10000" step="1" value="50">
+                                                <input id="dynamic_source_count" class="dynamic-number-input"
+                                                    type="number" min="0" max="10000" step="1" value="50">
                                             </label>
                                         </div>
 
                                         <div id="dynamic_arithmetic_options" class="dynamic-options-card hidden">
                                             <div class="dynamic-grid dynamic-grid-two">
                                                 <label class="dynamic-field"><span>First term (a)</span><input
-                                                    id="dynamic_arithmetic_first" class="dynamic-number-input"
-                                                    type="number" step="any" value="1"></label>
+                                                        id="dynamic_arithmetic_first" class="dynamic-number-input"
+                                                        type="number" step="any" value="1"></label>
                                                 <label class="dynamic-field"><span>Common difference (Δ)</span><input
-                                                    id="dynamic_arithmetic_difference" class="dynamic-number-input"
-                                                    type="number" step="any" value="1"></label>
+                                                        id="dynamic_arithmetic_difference" class="dynamic-number-input"
+                                                        type="number" step="any" value="1"></label>
                                             </div>
                                         </div>
 
                                         <div id="dynamic_geometric_options" class="dynamic-options-card hidden">
                                             <div class="dynamic-grid dynamic-grid-two">
                                                 <label class="dynamic-field"><span>First term (a)</span><input
-                                                    id="dynamic_geometric_first" class="dynamic-number-input"
-                                                    type="number" step="any" value="1"></label>
+                                                        id="dynamic_geometric_first" class="dynamic-number-input"
+                                                        type="number" step="any" value="1"></label>
                                                 <label class="dynamic-field"><span>Common ratio (r)</span><input
-                                                    id="dynamic_geometric_ratio" class="dynamic-number-input"
-                                                    type="number" step="any" value="2"></label>
+                                                        id="dynamic_geometric_ratio" class="dynamic-number-input"
+                                                        type="number" step="any" value="2"></label>
                                             </div>
                                         </div>
 
                                         <div id="dynamic_harmonic_options" class="dynamic-options-card hidden">
                                             <div class="dynamic-grid dynamic-grid-two">
                                                 <label class="dynamic-field"><span>First denominator (a)</span><input
-                                                    id="dynamic_harmonic_first" class="dynamic-number-input"
-                                                    type="number" step="any" value="1"></label>
-                                                <label class="dynamic-field"><span>Denominator difference (Δ)</span><input
-                                                    id="dynamic_harmonic_difference" class="dynamic-number-input"
-                                                    type="number" step="any" value="1"></label>
+                                                        id="dynamic_harmonic_first" class="dynamic-number-input"
+                                                        type="number" step="any" value="1"></label>
+                                                <label class="dynamic-field"><span>Denominator difference
+                                                        (Δ)</span><input id="dynamic_harmonic_difference"
+                                                        class="dynamic-number-input" type="number" step="any"
+                                                        value="1"></label>
                                             </div>
                                         </div>
 
                                         <!-- Prime options -->
                                         <div id="dynamic_prime_options" class="dynamic-options-card hidden">
                                             <div class="dynamic-grid dynamic-grid-two">
-                                                <label class="dynamic-field"><span>Minimum</span><input id="dynamic_prime_min"
-                                                    class="dynamic-number-input" type="number" min="2" step="1" value="2"></label>
-                                                <label class="dynamic-field"><span>Maximum (optional)</span><input id="dynamic_prime_max"
-                                                    class="dynamic-number-input" type="number" min="2" step="1"></label>
+                                                <label class="dynamic-field"><span>Minimum</span><input
+                                                        id="dynamic_prime_min" class="dynamic-number-input"
+                                                        type="number" min="2" step="1" value="2"></label>
+                                                <label class="dynamic-field"><span>Maximum (optional)</span><input
+                                                        id="dynamic_prime_max" class="dynamic-number-input"
+                                                        type="number" min="2" step="1"></label>
                                             </div>
-                                            <label class="dynamic-check"><input id="dynamic_prime_include_negative" type="checkbox">
-                                                <span class="custom-checkbox-visual"></span>Include signed associates (±p)</label>
+                                            <label class="dynamic-check"><input id="dynamic_prime_include_negative"
+                                                    type="checkbox">
+                                                <span class="custom-checkbox-visual"></span>Include signed associates
+                                                (±p)</label>
                                         </div>
 
                                         <!-- Gaussian options -->
@@ -590,7 +619,8 @@
                                             <div class="dynamic-grid dynamic-grid-three">
                                                 <label class="dynamic-field">
                                                     <span>Starting search radius</span>
-                                                    <div class="dynamic-field-hint">Expands automatically until all N values are found.</div>
+                                                    <div class="dynamic-field-hint">Expands automatically until all N
+                                                        values are found.</div>
                                                     <input id="dynamic_gaussian_bound" class="dynamic-number-input"
                                                         type="number" min="1" step="1" value="12">
                                                 </label>
@@ -601,20 +631,24 @@
                                                     </select>
                                                 </label>
                                                 <label class="dynamic-field"><span>Associates</span>
-                                                    <select id="dynamic_gaussian_associate_policy" class="control-select">
+                                                    <select id="dynamic_gaussian_associate_policy"
+                                                        class="control-select">
                                                         <option value="all">All associates</option>
                                                         <option value="representatives">Representatives</option>
                                                     </select>
                                                 </label>
                                             </div>
                                             <label class="dynamic-check"><input id="dynamic_gaussian_include_conjugates"
-                                                type="checkbox" checked><span class="custom-checkbox-visual"></span>Include conjugates</label>
+                                                    type="checkbox" checked><span
+                                                    class="custom-checkbox-visual"></span>Include conjugates</label>
                                         </div>
 
                                         <!-- Custom points -->
                                         <div id="dynamic_custom_points_options" class="dynamic-options-card hidden">
-                                            <label class="dynamic-field"><span>Points — one per line or semicolon-separated (re,im or a+bi)</span>
-                                                <textarea id="dynamic_custom_points_text" class="dynamic-formula-input" rows="3">0,0; 1,0; 0,1; -1,0; 0,-1</textarea>
+                                            <label class="dynamic-field"><span>Points — one per line or
+                                                    semicolon-separated (re,im or a+bi)</span>
+                                                <textarea id="dynamic_custom_points_text" class="dynamic-formula-input"
+                                                    rows="3">0,0; 1,0; 0,1; -1,0; 0,-1</textarea>
                                             </label>
                                         </div>
 
@@ -635,7 +669,8 @@
 
                                         <div class="dynamic-source-definition">
                                             <span class="dynamic-source-definition-label">Source rule</span>
-                                            <div id="dynamic_source_definition_math" class="dynamic-source-definition-math"></div>
+                                            <div id="dynamic_source_definition_math"
+                                                class="dynamic-source-definition-math"></div>
                                         </div>
 
                                         <!-- Source preview -->
@@ -652,12 +687,14 @@
                                     <div class="dynamic-step-badge">2</div>
                                     <div class="dynamic-step-header">
                                         <div class="dynamic-step-title">Place it on the input plane</div>
-                                        <div class="dynamic-step-subtitle">Usually z<sub>j</sub> = d<sub>j</sub>; change it only when you want a transformed input path</div>
+                                        <div class="dynamic-step-subtitle">Usually z<sub>j</sub> = d<sub>j</sub>; change
+                                            it only when you want a transformed input path</div>
                                     </div>
                                     <div class="dynamic-step-body">
                                         <label class="dynamic-field">
                                             <span>Input point z<sub>j</sub> =</span>
-                                            <div class="dynamic-field-hint">Usually leave this as <code>d</code>. Example: <code>d * exp(i*k*j)</code> creates a spiral.</div>
+                                            <div class="dynamic-field-hint">Usually leave this as <code>d</code>.
+                                                Example: <code>d * exp(i*k*j)</code> creates a spiral.</div>
                                             <input id="dynamic_point_expression" class="dynamic-formula-input"
                                                 type="text" value="d" spellcheck="false">
                                         </label>
@@ -670,11 +707,11 @@
                                     <div class="dynamic-step-header dynamic-step-header-with-action">
                                         <div>
                                             <div class="dynamic-step-title">Write the general term</div>
-                                            <div class="dynamic-step-subtitle">Build a<sub>j</sub>, then define how each symbol changes with j</div>
+                                            <div class="dynamic-step-subtitle">Build a<sub>j</sub>, then define how each
+                                                symbol changes with j</div>
                                         </div>
-                                        <button id="dynamic_formula_help_btn" type="button"
-                                            class="dynamic-help-button" aria-expanded="false"
-                                            aria-controls="dynamic_equation_help">
+                                        <button id="dynamic_formula_help_btn" type="button" class="dynamic-help-button"
+                                            aria-expanded="false" aria-controls="dynamic_equation_help">
                                             <span aria-hidden="true">?</span>
                                             Equation guide
                                         </button>
@@ -695,7 +732,9 @@
                                             <div class="dynamic-card-heading-row">
                                                 <div>
                                                     <div class="dynamic-card-title">Product-term composer</div>
-                                                    <div class="dynamic-step-subtitle">Each factor can sit in the numerator or denominator, carry a power, or be wrapped in a function.</div>
+                                                    <div class="dynamic-step-subtitle">Each factor can sit in the
+                                                        numerator or denominator, carry a power, or be wrapped in a
+                                                        function.</div>
                                                 </div>
                                             </div>
                                             <div id="dynamic_term_factors" class="dynamic-term-factors"></div>
@@ -707,22 +746,29 @@
                                             </div>
                                             <label id="dynamic_term_expression_row" class="dynamic-field">
                                                 <span id="dynamic_term_expression_label">Complete formula</span>
-                                                <div class="dynamic-field-hint">Edit the equation directly, or use the factor composer above.</div>
+                                                <div class="dynamic-field-hint">Edit the equation directly, or use the
+                                                    factor composer above.</div>
                                                 <input id="dynamic_term_expression" class="dynamic-formula-input"
                                                     type="text" value="z" spellcheck="false" autocomplete="off">
                                             </label>
-                                            <div id="dynamic_formula_feedback" class="dynamic-inline-feedback hidden"></div>
+                                            <div id="dynamic_formula_feedback" class="dynamic-inline-feedback hidden">
+                                            </div>
                                         </div>
                                         <div id="dynamic_expression_assistant"
                                             class="dynamic-expression-assistant hidden">
-                                            <div class="dynamic-expression-assistant-title">Start from an expression</div>
+                                            <div class="dynamic-expression-assistant-title">Start from an expression
+                                            </div>
                                             <div class="dynamic-expression-chip-row">
-                                                <button type="button" data-dynamic-expression="selected(z)">f(z)</button>
+                                                <button type="button"
+                                                    data-dynamic-expression="selected(z)">f(z)</button>
                                                 <button type="button" data-dynamic-expression="1 / d^2">1 / d²</button>
                                                 <button type="button" data-dynamic-expression="d^(-s)">d^(−s)</button>
-                                                <button type="button" data-dynamic-expression="(-1)^j / d">(−1)^j / d</button>
-                                                <button type="button" data-dynamic-expression="x^n / n!">xⁿ / n!</button>
-                                                <button type="button" data-dynamic-expression="exp(i*z)">exp(i z)</button>
+                                                <button type="button" data-dynamic-expression="(-1)^j / d">(−1)^j /
+                                                    d</button>
+                                                <button type="button" data-dynamic-expression="x^n / n!">xⁿ /
+                                                    n!</button>
+                                                <button type="button" data-dynamic-expression="exp(i*z)">exp(i
+                                                    z)</button>
                                             </div>
                                             <div class="dynamic-expression-language">
                                                 <code>d</code> source value
@@ -739,43 +785,61 @@
                                             <div class="dynamic-equation-help-heading">
                                                 <div>
                                                     <div class="dynamic-card-title">Equation guide</div>
-                                                    <p>Write ordinary mathematical expressions. New symbols automatically get their own sequence rule.</p>
+                                                    <p>Write ordinary mathematical expressions. New symbols
+                                                        automatically get their own sequence rule.</p>
                                                 </div>
                                                 <button id="dynamic_formula_help_close_btn" type="button"
-                                                    class="dynamic-help-close" aria-label="Close equation guide">Close</button>
+                                                    class="dynamic-help-close"
+                                                    aria-label="Close equation guide">Close</button>
                                             </div>
                                             <div class="dynamic-equation-help-grid">
                                                 <div class="dynamic-help-section">
                                                     <strong>Values you already have</strong>
                                                     <dl>
-                                                        <dt><code>j</code></dt><dd>term index: 0, 1, 2, ...</dd>
-                                                        <dt><code>c</code></dt><dd>current input-plane parameter</dd>
-                                                        <dt><code>d</code></dt><dd>current source value d<sub>j</sub></dd>
-                                                        <dt><code>z</code></dt><dd>current input-plane point z<sub>j</sub></dd>
-                                                        <dt><code>i, pi, e</code></dt><dd>mathematical constants</dd>
+                                                        <dt><code>j</code></dt>
+                                                        <dd>term index: 0, 1, 2, ...</dd>
+                                                        <dt><code>c</code></dt>
+                                                        <dd>current input-plane parameter</dd>
+                                                        <dt><code>d</code></dt>
+                                                        <dd>current source value d<sub>j</sub></dd>
+                                                        <dt><code>z</code></dt>
+                                                        <dd>current input-plane point z<sub>j</sub></dd>
+                                                        <dt><code>i, pi, e</code></dt>
+                                                        <dd>mathematical constants</dd>
                                                     </dl>
                                                 </div>
                                                 <div class="dynamic-help-section">
                                                     <strong>Writing expressions</strong>
-                                                    <p><code>+ - * / ^ !</code> are supported. Multiplication may be implicit: <code>2j</code>, <code>3i</code>, <code>2(n+1)</code>.</p>
+                                                    <p><code>+ - * / ^ !</code> are supported. Multiplication may be
+                                                        implicit: <code>2j</code>, <code>3i</code>, <code>2(n+1)</code>.
+                                                    </p>
                                                     <p>Use conditions as <code>isPrime(j) ? 1/j : 0</code>.</p>
                                                 </div>
                                                 <div class="dynamic-help-section">
                                                     <strong>Complex functions</strong>
-                                                    <p><code>sin cos tan exp ln sqrt abs arg conj re im zeta selected</code></p>
-                                                    <p>Also: <code>floor ceil round mod gcd factorial isPrime min max complex</code>.</p>
+                                                    <p><code>sin cos tan exp ln sqrt abs arg conj re im zeta selected</code>
+                                                    </p>
+                                                    <p>Also:
+                                                        <code>floor ceil round mod gcd factorial isPrime min max complex</code>.
+                                                    </p>
                                                 </div>
                                                 <div class="dynamic-help-section">
                                                     <strong>Defined behavior</strong>
-                                                    <p>Division by zero, invalid factorials, overflow, and undefined function values are marked undefined instead of breaking the plot.</p>
-                                                    <p>Equations are bounded in size and complexity so live editing remains responsive.</p>
+                                                    <p>Division by zero, invalid factorials, overflow, and undefined
+                                                        function values are marked undefined instead of breaking the
+                                                        plot.</p>
+                                                    <p>Equations are bounded in size and complexity so live editing
+                                                        remains responsive.</p>
                                                 </div>
                                             </div>
                                         </section>
-                                        <div id="dynamic_sequence_bindings_card" class="dynamic-sequence-bindings hidden">
+                                        <div id="dynamic_sequence_bindings_card"
+                                            class="dynamic-sequence-bindings hidden">
                                             <div class="dynamic-card-title">How each symbol changes</div>
-                                            <div class="dynamic-step-subtitle">At term j, every symbol below supplies its j-th value. Change the sequence independently for each symbol.</div>
-                                            <div id="dynamic_sequence_bindings_list" class="dynamic-sequence-bindings-list"></div>
+                                            <div class="dynamic-step-subtitle">At term j, every symbol below supplies
+                                                its j-th value. Change the sequence independently for each symbol.</div>
+                                            <div id="dynamic_sequence_bindings_list"
+                                                class="dynamic-sequence-bindings-list"></div>
                                         </div>
                                     </div>
                                 </div>
@@ -785,25 +849,30 @@
                                     <div class="dynamic-step-badge">4</div>
                                     <div class="dynamic-step-header">
                                         <div class="dynamic-step-title">Combine the terms</div>
-                                        <div id="dynamic_operation_subtitle" class="dynamic-step-subtitle">Choose the mathematical object to draw</div>
+                                        <div id="dynamic_operation_subtitle" class="dynamic-step-subtitle">Choose the
+                                            mathematical object to draw</div>
                                     </div>
                                     <div class="dynamic-step-body">
                                         <!-- Segmented control -->
                                         <div class="dynamic-operation-segmented">
-                                            <input type="radio" name="dynamic_reduction_kind_radio" id="dynamic_reduction_none" value="none" checked>
+                                            <input type="radio" name="dynamic_reduction_kind_radio"
+                                                id="dynamic_reduction_none" value="none" checked>
                                             <label for="dynamic_reduction_none">
                                                 <span class="dynamic-operation-symbol">⊙</span> Map
                                             </label>
-                                            <input type="radio" name="dynamic_reduction_kind_radio" id="dynamic_reduction_sum" value="sum">
+                                            <input type="radio" name="dynamic_reduction_kind_radio"
+                                                id="dynamic_reduction_sum" value="sum">
                                             <label for="dynamic_reduction_sum">
                                                 <span class="dynamic-operation-symbol">Σ</span> Sum
                                             </label>
-                                            <input type="radio" name="dynamic_reduction_kind_radio" id="dynamic_reduction_product" value="product">
+                                            <input type="radio" name="dynamic_reduction_kind_radio"
+                                                id="dynamic_reduction_product" value="product">
                                             <label for="dynamic_reduction_product">
                                                 <span class="dynamic-operation-symbol">Π</span> Product
                                             </label>
                                         </div>
-                                        <div id="dynamic_operation_explanation" class="dynamic-operation-explanation"></div>
+                                        <div id="dynamic_operation_explanation" class="dynamic-operation-explanation">
+                                        </div>
                                         <!-- Keep hidden select for JS compatibility -->
                                         <select id="dynamic_reduction_kind" class="control-select" style="display:none">
                                             <option value="none">Map values</option>
@@ -812,8 +881,7 @@
                                         </select>
 
                                         <!-- Reduction options (shown when Sum or Product) -->
-                                        <div id="dynamic_reduction_options"
-                                            class="dynamic-options-card hidden">
+                                        <div id="dynamic_reduction_options" class="dynamic-options-card hidden">
                                             <div class="dynamic-grid dynamic-grid-two">
                                                 <label class="dynamic-field"><span>When a term is undefined</span>
                                                     <select id="dynamic_invalid_policy" class="control-select">
@@ -821,7 +889,8 @@
                                                         <option value="skip">Skip and continue</option>
                                                     </select>
                                                 </label>
-                                                <label id="dynamic_product_view_row" class="dynamic-field hidden"><span>Product visualization</span>
+                                                <label id="dynamic_product_view_row"
+                                                    class="dynamic-field hidden"><span>Product visualization</span>
                                                     <select id="dynamic_product_view" class="control-select">
                                                         <option value="orbit">Ordinary orbit</option>
                                                         <option value="normalized">Normalized orbit</option>
@@ -832,13 +901,19 @@
 
                                         <!-- Aggregate s parameter (shown for sum/product) -->
                                         <div id="dynamic_aggregate_parameter_row" class="dynamic-options-card hidden">
-                                            <div id="dynamic_free_parameter_title" class="dynamic-card-title">Free parameter</div>
-                                            <div id="dynamic_free_parameter_copy" class="dynamic-step-subtitle" style="margin-bottom:0.45rem">Evaluate the construction at this complex value.</div>
+                                            <div id="dynamic_free_parameter_title" class="dynamic-card-title">Free
+                                                parameter</div>
+                                            <div id="dynamic_free_parameter_copy" class="dynamic-step-subtitle"
+                                                style="margin-bottom:0.45rem">Evaluate the construction at this complex
+                                                value.</div>
                                             <div class="dynamic-s-param-group">
-                                                <span id="dynamic_free_parameter_label" class="dynamic-s-label">s =</span>
-                                                <input id="dynamic_s_re" class="dynamic-number-input" type="number" step="any" value="2">
+                                                <span id="dynamic_free_parameter_label" class="dynamic-s-label">s
+                                                    =</span>
+                                                <input id="dynamic_s_re" class="dynamic-number-input" type="number"
+                                                    step="any" value="2">
                                                 <span class="dynamic-s-sep">+</span>
-                                                <input id="dynamic_s_im" class="dynamic-number-input" type="number" step="any" value="0">
+                                                <input id="dynamic_s_im" class="dynamic-number-input" type="number"
+                                                    step="any" value="0">
                                                 <span class="dynamic-s-sep">i</span>
                                             </div>
                                         </div>
@@ -856,17 +931,18 @@
                                     <span class="dynamic-example-summary-action">Browse</span>
                                 </summary>
                                 <div class="dynamic-example-body">
-                                    <div class="dynamic-step-subtitle">Choose an example, then change any part of it.</div>
+                                    <div class="dynamic-step-subtitle">Choose an example, then change any part of it.
+                                    </div>
                                     <div id="dynamic_example_gallery" class="dynamic-example-grid"></div>
                                 </div>
                             </details>
 
                             <!-- Named parameters (hidden when not using custom expression) -->
-                            <div id="dynamic_parameters_card"
-                                class="dynamic-options-card hidden">
+                            <div id="dynamic_parameters_card" class="dynamic-options-card hidden">
                                 <div class="dynamic-card-heading-row">
                                     <div class="dynamic-card-title">Named parameters</div>
-                                    <button id="dynamic_add_parameter_btn" type="button" class="dynamic-small-button">+ Add</button>
+                                    <button id="dynamic_add_parameter_btn" type="button" class="dynamic-small-button">+
+                                        Add</button>
                                 </div>
                                 <div id="dynamic_parameters_list"></div>
                             </div>
@@ -874,20 +950,29 @@
                             <!-- Accumulation Playback -->
                             <div class="dynamic-options-card dynamic-playback-card">
                                 <div class="dynamic-card-title">Accumulation Playback</div>
-                                <div class="dynamic-step-subtitle" style="margin-bottom:0.45rem">Watch terms accumulate one by one. The slider controls how many terms are visible.</div>
+                                <div class="dynamic-step-subtitle" style="margin-bottom:0.45rem">Watch terms accumulate
+                                    one by one. The slider controls how many terms are visible.</div>
                                 <div class="dynamic-playback-row">
-                                    <button id="dynamic_reset_playback_btn" type="button" class="dynamic-small-button">⟲</button>
-                                    <button id="dynamic_step_back_btn" type="button" class="dynamic-small-button">◂</button>
-                                    <button id="dynamic_play_pause_btn" type="button" class="dynamic-play-button">▶ Play</button>
-                                    <button id="dynamic_step_forward_btn" type="button" class="dynamic-small-button">▸</button>
+                                    <button id="dynamic_reset_playback_btn" type="button"
+                                        class="dynamic-small-button">⟲</button>
+                                    <button id="dynamic_step_back_btn" type="button"
+                                        class="dynamic-small-button">◂</button>
+                                    <button id="dynamic_play_pause_btn" type="button" class="dynamic-play-button">▶
+                                        Play</button>
+                                    <button id="dynamic_step_forward_btn" type="button"
+                                        class="dynamic-small-button">▸</button>
                                 </div>
-                                <label class="dynamic-field"><span>Showing <output id="dynamic_visible_count_display">50 / 50</output> terms</span>
-                                    <input id="dynamic_visible_count_slider" type="range" min="0" max="50" step="1" value="50"></label>
+                                <label class="dynamic-field"><span>Showing <output id="dynamic_visible_count_display">50
+                                            / 50</output> terms</span>
+                                    <input id="dynamic_visible_count_slider" type="range" min="0" max="50" step="1"
+                                        value="50"></label>
                                 <div class="dynamic-grid dynamic-grid-two">
-                                    <label class="dynamic-field"><span>Visible count</span><input id="dynamic_visible_count_number"
-                                        class="dynamic-number-input" type="number" min="0" max="50" step="1" value="50"></label>
-                                    <label class="dynamic-field"><span>Terms / second</span><input id="dynamic_playback_speed"
-                                        class="dynamic-number-input" type="number" min="0.1" max="1000" step="0.1" value="12"></label>
+                                    <label class="dynamic-field"><span>Visible count</span><input
+                                            id="dynamic_visible_count_number" class="dynamic-number-input" type="number"
+                                            min="0" max="50" step="1" value="50"></label>
+                                    <label class="dynamic-field"><span>Terms / second</span><input
+                                            id="dynamic_playback_speed" class="dynamic-number-input" type="number"
+                                            min="0.1" max="1000" step="0.1" value="12"></label>
                                 </div>
                                 <label class="dynamic-check"><input id="dynamic_playback_loop" type="checkbox" checked>
                                     <span class="custom-checkbox-visual"></span>Loop playback</label>
@@ -896,26 +981,9 @@
                     </div>
 
 
-                    <!-- Algebraic Chaining Panel -->
-                    <div id="algebraic_chaining_params" class="control-group"
-                        style="padding-bottom: 0.5rem; border-bottom: 1px solid var(--border-color); margin-bottom: 0.5rem;">
-                        <label for="enable_algebraic_chaining_cb" class="control-label tooltip-label slider-label"
-                            data-tooltip="Sum multiple complex functions together: a*f(z)*g(z) + b*h(z)...">
-                            <input type="checkbox" id="enable_algebraic_chaining_cb" class="control-checkbox">
-                            <span class="custom-checkbox-visual"></span>
-                            Enable Algebraic Chaining
-                        </label>
 
-                        <div id="algebraic_chaining_controls_container" style="display: none;">
-                            <div id="algebraic_terms_list">
-                                <!-- Dynamically populated by JS -->
-                            </div>
 
-                            <button id="add_algebraic_term_btn" class="sidebar-button">
-                                <span class="icon">＋</span> Add Summand Term
-                            </button>
-                        </div>
-                    </div>
+
 
                     <!-- Complex Plane Navigation Panel -->
                     <div id="navigation_params" class="control-group"
@@ -981,20 +1049,6 @@
                         </div>
                     </div>
 
-                    <!-- General Points on the Complex Plane Panel -->
-                    <div id="general_points_params" class="control-group"
-                        style="padding-bottom: 0.5rem; border-bottom: 1px solid var(--border-color); margin-bottom: 0.5rem;">
-                        <label for="enable_general_points_cb" class="control-label tooltip-label slider-label"
-                            data-tooltip="Place and visualize custom points on the complex plane">
-                            <input type="checkbox" id="enable_general_points_cb" class="control-checkbox">
-                            <span class="custom-checkbox-visual"></span>
-                            General points on the complex plane
-                        </label>
-
-                        <div id="general_points_controls_container" class="dependent-settings-block hidden taylor-series-panel viz-detail-block" style="margin-top: 0.5rem;">
-                            <div id="general_points_root"></div>
-                        </div>
-                    </div>
 
                     <div id="common_params_sliders">
                         <div class="control-group">
@@ -1540,13 +1594,15 @@
                         <div class="controls-panel-header-actions">
                             <button id="theme_selector_btn" class="icon-button top-controls-toggle-btn" type="button"
                                 data-tooltip="Select application theme" aria-label="Select application theme">
-                                <span aria-hidden="true" style="display: flex; align-items: center; justify-content: center;">
+                                <span aria-hidden="true"
+                                    style="display: flex; align-items: center; justify-content: center;">
                                     <i data-lucide="palette"></i>
                                 </span>
                                 <span class="hidden-visually">Select theme</span>
                             </button>
-                            <button id="toggle_top_controls_btn" class="icon-button top-controls-toggle-btn" type="button"
-                                data-tooltip="Minimize top half panels" aria-label="Minimize top half panels">
+                            <button id="toggle_top_controls_btn" class="icon-button top-controls-toggle-btn"
+                                type="button" data-tooltip="Minimize top half panels"
+                                aria-label="Minimize top half panels">
                                 <span class="top-controls-toggle-icon top-controls-minimize-icon" aria-hidden="true">
                                     <i data-lucide="minimize-2"></i>
                                 </span>
@@ -1708,13 +1764,11 @@
                                     <span class="custom-checkbox-visual"></span>
                                     Use Custom Expansion Center
                                 </label>
-                                <p class="taylor-series-inline-copy">Use presets for common centers or enter Re(z0) and
-                                    Im(z0) directly.</p>
                             </div>
                             <div id="taylor_series_custom_center_inputs_div"
-                                 class="control-group dependent-settings-block hidden taylor-series-card taylor-series-custom-block">
-                                 <div id="taylor_complex_points_ui_container"></div>
-                             </div>
+                                class="control-group dependent-settings-block hidden taylor-series-card taylor-series-custom-block">
+                                <div id="taylor_complex_points_ui_container"></div>
+                            </div>
                         </div>
                     </div>
 
@@ -1756,10 +1810,6 @@
                         </div>
                         <div id="riemann_surface_options_div"
                             class="dependent-settings-block hidden control-group-indent viz-detail-block">
-                            <div class="viz-detail-header">
-                                <span class="viz-detail-title">Branch Surface</span>
-                                <span class="viz-detail-copy">Drag to orbit, scroll to zoom, and double-click to reset.</span>
-                            </div>
                             <div class="viz-settings-grid">
                                 <div class="control-group">
                                     <label for="riemann_surface_component_selector">Surface Height</label>
@@ -1777,8 +1827,8 @@
                                         <output id="riemann_surface_sheets_value_display">5</output>
                                     </label>
                                     <div class="slider-container">
-                                        <input type="range" id="riemann_surface_sheets_slider" min="1" max="9"
-                                            step="2" value="5" data-tooltip="Number of branch sheets rendered at once">
+                                        <input type="range" id="riemann_surface_sheets_slider" min="1" max="9" step="2"
+                                            value="5" data-tooltip="Number of branch sheets rendered at once">
                                     </div>
                                 </div>
                                 <div class="control-group">
@@ -1787,8 +1837,8 @@
                                         <output id="riemann_surface_branch_center_value_display">0</output>
                                     </label>
                                     <div class="slider-container">
-                                        <input type="range" id="riemann_surface_branch_center_slider" min="-20"
-                                            max="20" step="1" value="0"
+                                        <input type="range" id="riemann_surface_branch_center_slider" min="-20" max="20"
+                                            step="1" value="0"
                                             data-tooltip="Move the visible window through the infinite branch family">
                                     </div>
                                 </div>
@@ -1808,8 +1858,8 @@
                                         <output id="riemann_surface_height_clip_value_display">8.0</output>
                                     </label>
                                     <div class="slider-container">
-                                        <input type="range" id="riemann_surface_height_clip_slider" min="0.5"
-                                            max="40" step="0.5" value="8.0"
+                                        <input type="range" id="riemann_surface_height_clip_slider" min="0.5" max="40"
+                                            step="0.5" value="8.0"
                                             data-tooltip="Symmetric value range mapped into the surface height">
                                     </div>
                                 </div>
@@ -1823,17 +1873,26 @@
                                 </div>
                             </div>
                             <div class="riemann-surface-actions">
-                                <span id="riemann_surface_status" class="riemann-surface-status">GPU surface ready</span>
+                                <span id="riemann_surface_status" class="riemann-surface-status">GPU surface
+                                    ready</span>
                                 <button id="riemann_surface_reset_view_btn" type="button">Reset View</button>
                             </div>
                         </div>
                         <div id="domain_coloring_options_div" class="dependent-settings-block hidden viz-detail-block">
                             <div class="viz-settings-grid">
                                 <div class="domain-palette-selector-container">
-                                    <span class="domain-palette-selector-label">
-                                        <span>Domain Palette:</span>
-                                        <span id="active_domain_palette_name" style="color: var(--accent-purple); font-family: monospace; font-weight: bold;">Analytic Base</span>
-                                    </span>
+                                    <div class="domain-palette-header-row" style="display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 0.5rem; width: 100%;">
+                                        <span class="domain-palette-selector-label" style="margin: 0; justify-content: flex-start; gap: 0.5rem;">
+                                            <span>Domain Palette:</span>
+                                            <span id="active_domain_palette_name"
+                                                style="color: var(--accent-purple); font-family: monospace; font-weight: bold;">Analytic
+                                                Base</span>
+                                        </span>
+                                        <button id="view_palette_circle_btn" class="view-palette-circle-btn" type="button"
+                                            data-tooltip="View color guide circle for active palette">
+                                            View Color Circle
+                                        </button>
+                                    </div>
                                     <div class="domain-palette-circles" id="domain_palette_circles">
                                         <!-- Circles generated dynamically -->
                                     </div>
@@ -1874,12 +1933,12 @@
                                 <div class="control-group">
                                     <label for="domain_lightness_cycles_slider" style="font-size:0.8rem;">
                                         Lightness Cycles:
-                                        <output id="domain_lightness_cycles_value_display">0.0</output>
+                                        <output id="domain_lightness_cycles_value_display">1.00</output>
                                     </label>
                                     <div class="slider-container">
                                         <input type="range" id="domain_lightness_cycles_slider"
                                             name="domain_lightness_cycles_slider" min="0.0" max="4.0" step="0.25"
-                                            value="0.0"
+                                            value="1.0"
                                             data-tooltip="0 disables magnitude lightness modulation; higher values add optional magnitude shading">
                                     </div>
                                 </div>
@@ -1911,7 +1970,8 @@
                                 </label>
                                 <label for="enable_riemann_transformation_cb"
                                     class="control-label tooltip-label viz-toggle-card viz-toggle-card--compact">
-                                    <input type="checkbox" id="enable_riemann_transformation_cb" class="control-checkbox"
+                                    <input type="checkbox" id="enable_riemann_transformation_cb"
+                                        class="control-checkbox"
                                         data-tooltip="Show animation of the planar grid wrapping into the Riemann Sphere">
                                     <span class="custom-checkbox-visual"></span>
                                     <span class="viz-toggle-card-content">
@@ -1942,8 +2002,7 @@
                                         </label>
                                         <div class="slider-container">
                                             <input type="range" id="sphere_grid_opacity_slider"
-                                                name="sphere_grid_opacity_slider" min="0" max="1" step="0.05"
-                                                value="0"
+                                                name="sphere_grid_opacity_slider" min="0" max="1" step="0.05" value="0"
                                                 data-tooltip="Adjust opacity of the intrinsic latitude/longitude grid on the sphere">
                                         </div>
                                     </div>
@@ -1957,24 +2016,7 @@
                         <div class="viz-feature-section-header">
                             <span class="viz-feature-section-title">Vector Field</span>
                         </div>
-                        <label for="show_vector_field_panel_cb"
-                            class="control-label tooltip-label viz-toggle-card viz-toggle-card--hero">
-                            <input type="checkbox" id="show_vector_field_panel_cb" class="control-checkbox"
-                                data-tooltip="Show/hide all Vector Field & Flow Visualization options">
-                            <span class="custom-checkbox-visual"></span>
-                            <span class="viz-toggle-card-content">
-                                <span class="viz-toggle-card-title">Vector Field Panel</span>
-                                <span class="viz-toggle-card-copy">Open field, streamline, and particle tools
-                                    together.</span>
-                            </span>
-                        </label>
-                        <div id="vector_flow_options_content"
-                            class="dependent-settings-block hidden viz-detail-block vector-flow-workspace">
-                            <div class="viz-detail-header">
-                                <span class="viz-detail-title">Flow Modes</span>
-                                <span class="viz-detail-copy">Choose what to visualize, then tune the active layer
-                                    below.</span>
-                            </div>
+                        <div id="vector_flow_options_content" class="viz-detail-block vector-flow-workspace">
                             <div class="viz-toggle-grid viz-toggle-grid--duo vector-flow-toggle-grid">
                                 <label for="enable_vector_field_cb" class="control-label tooltip-label viz-toggle-card">
                                     <input type="checkbox" id="enable_vector_field_cb" class="control-checkbox"
@@ -2017,7 +2059,7 @@
                                 </div>
                                 <div class="vector-settings-grid">
                                     <div class="control-group">
-                                        <label for="vector_field_function_selector" style="font-size:0.8rem;">Vector
+                                        <label for="vector_field_function_selector">Vector
                                             Function:</label>
                                         <select id="vector_field_function_selector"
                                             data-tooltip="Select function for the z-plane vector field (f(z), 1/f(z), or f'(z))">
@@ -2027,7 +2069,7 @@
                                         </select>
                                     </div>
                                     <div class="control-group">
-                                        <label for="vector_field_scale_slider" style="font-size:0.8rem;">
+                                        <label for="vector_field_scale_slider">
                                             Vector Scale:
                                             <output id="vector_field_scale_value_display">0.10</output>
                                         </label>
@@ -2039,7 +2081,7 @@
                                         </div>
                                     </div>
                                     <div class="control-group">
-                                        <label for="vector_arrow_thickness_slider" style="font-size:0.8rem;">
+                                        <label for="vector_arrow_thickness_slider">
                                             Arrow Thickness:
                                             <output id="vector_arrow_thickness_value_display">1.5</output>
                                         </label>
@@ -2050,7 +2092,7 @@
                                         </div>
                                     </div>
                                     <div class="control-group">
-                                        <label for="vector_arrow_head_size_slider" style="font-size:0.8rem;">
+                                        <label for="vector_arrow_head_size_slider">
                                             Arrow Head Size:
                                             <output id="vector_arrow_head_size_value_display">6</output>
                                         </label>
@@ -2069,15 +2111,9 @@
                                     <span class="vector-settings-copy">Control seeding, thickness, and integration
                                         quality.</span>
                                 </div>
-                                <div class="vector-toolbar" id="streamline_details_div">
-                                    <button id="clear_manual_seeds_btn" class="control-button"
-                                        data-tooltip="Clear manually added seed points (Shift+click on z-plane to add seeds)">Clear
-                                        Manual
-                                        Seeds</button>
-                                </div>
                                 <div class="vector-settings-grid">
                                     <div class="control-group">
-                                        <label for="streamline_step_size_slider" style="font-size:0.8rem;">
+                                        <label for="streamline_step_size_slider">
                                             Integration Step Size:
                                             <output id="streamline_step_size_value_display">0.06</output>
                                         </label>
@@ -2089,7 +2125,7 @@
                                         </div>
                                     </div>
                                     <div class="control-group">
-                                        <label for="streamline_max_length_slider" style="font-size:0.8rem;">
+                                        <label for="streamline_max_length_slider">
                                             Max Length (steps):
                                             <output id="streamline_max_length_value_display">400</output>
                                         </label>
@@ -2101,7 +2137,7 @@
                                         </div>
                                     </div>
                                     <div class="control-group">
-                                        <label for="streamline_thickness_slider" style="font-size:0.8rem;">
+                                        <label for="streamline_thickness_slider">
                                             Streamline Thickness:
                                             <output id="streamline_thickness_value_display">1.5</output>
                                         </label>
@@ -2112,7 +2148,7 @@
                                         </div>
                                     </div>
                                     <div class="control-group">
-                                        <label for="streamline_seed_density_factor_slider" style="font-size:0.8rem;">
+                                        <label for="streamline_seed_density_factor_slider">
                                             Seed Density Factor:
                                             <output id="streamline_seed_density_factor_value_display">0.8</output>
                                         </label>
@@ -2133,28 +2169,35 @@
                                         lifetime.</span>
                                 </div>
                                 <div class="particle-settings-grid">
-                                    <div class="slider-group">
-                                        <label for="particle_density_slider" class="slider-label">Particle
-                                            Density:</label>
-                                        <input type="range" id="particle_density_slider" class="control-slider" min="10"
-                                            max="1000" step="10" value="150">
-                                        <span id="particle_density_value_display"
-                                            class="slider-value-display">150</span>
+                                    <div class="control-group">
+                                        <label for="particle_density_slider">
+                                            Particle Density:
+                                            <output id="particle_density_value_display">150</output>
+                                        </label>
+                                        <div class="slider-container">
+                                            <input type="range" id="particle_density_slider" class="control-slider"
+                                                min="10" max="1000" step="10" value="150">
+                                        </div>
                                     </div>
-                                    <div class="slider-group">
-                                        <label for="particle_speed_slider" class="slider-label">Particle Speed:</label>
-                                        <input type="range" id="particle_speed_slider" class="control-slider"
-                                            min="0.005" max="0.2" step="0.005" value="0.04">
-                                        <span id="particle_speed_value_display" class="slider-value-display">0.04</span>
+                                    <div class="control-group">
+                                        <label for="particle_speed_slider">
+                                            Particle Speed:
+                                            <output id="particle_speed_value_display">0.04</output>
+                                        </label>
+                                        <div class="slider-container">
+                                            <input type="range" id="particle_speed_slider" class="control-slider"
+                                                min="0.005" max="0.2" step="0.005" value="0.04">
+                                        </div>
                                     </div>
-                                    <div class="slider-group">
-                                        <label for="particle_max_lifetime_slider" class="slider-label">Particle Max
-                                            Lifetime
-                                            (frames):</label>
-                                        <input type="range" id="particle_max_lifetime_slider" class="control-slider"
-                                            min="50" max="1500" step="50" value="300">
-                                        <span id="particle_max_lifetime_value_display"
-                                            class="slider-value-display">300</span>
+                                    <div class="control-group">
+                                        <label for="particle_max_lifetime_slider">
+                                            Particle Max Lifetime (frames):
+                                            <output id="particle_max_lifetime_value_display">300</output>
+                                        </label>
+                                        <div class="slider-container">
+                                            <input type="range" id="particle_max_lifetime_slider" class="control-slider"
+                                                min="50" max="1500" step="50" value="300">
+                                        </div>
                                     </div>
                                 </div>
                             </div>
@@ -2168,7 +2211,8 @@
             <div class="canvas-row two-column-layout">
                 <div id="z_plane_column" class="plane-column">
                     <div class="collapsed-placeholder-content">
-                        <button class="expand-plane-btn" id="expand_z_btn" title="Expand z-plane" aria-label="Expand z-plane">
+                        <button class="expand-plane-btn" id="expand_z_btn" title="Expand z-plane"
+                            aria-label="Expand z-plane">
                             <i data-lucide="chevron-right" aria-hidden="true"></i>
                         </button>
                         <div class="collapsed-vertical-title">z-plane (Input)</div>
@@ -2194,8 +2238,7 @@
                                 <option value="video">Video Upload</option>
                             </select>
                             <button id="collapse_z_btn" class="icon-button canvas-icon-button" type="button"
-                                data-tooltip="Collapse z-plane"
-                                aria-label="Collapse z-plane">
+                                data-tooltip="Collapse z-plane" aria-label="Collapse z-plane">
                                 <i data-lucide="chevron-left" aria-hidden="true"></i>
                                 <span class="hidden-visually">Collapse z-plane</span>
                             </button>
@@ -2207,25 +2250,31 @@
                             </button>
                         </div>
                     </div>
-                    <div id="z_plane_canvas_wrapper" style="position:relative; width: 100%; height: 100%; display: flex; flex: 1;">
+                    <div id="z_plane_canvas_wrapper"
+                        style="position:relative; width: 100%; height: 100%; display: flex; flex: 1;">
                         <canvas id="z_plane_canvas"></canvas>
                         <div id="z_plane_refining_indicator" class="refining-indicator hidden">
                             <span class="pulsing-dot"></span>
                             <span>Refining...</span>
                         </div>
                         <div id="z_plane_probe_info" class="probe-info-overlay hidden"></div>
-                        
+
                         <!-- Three.js Transformation Overlays -->
-                        <div id="z_plane_threejs_container" class="threejs-container hidden" style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; z-index: 10; border-radius: inherit; overflow: hidden;"></div>
-                        
+                        <div id="z_plane_threejs_container" class="threejs-container hidden"
+                            style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; z-index: 10; border-radius: inherit; overflow: hidden;">
+                        </div>
+
                         <div id="z_plane_transformation_overlay" class="ui-layer hidden">
                             <h1>Stereographic Projection</h1>
                             <div class="controls">
                                 <button id="z_transformation_play_pause_btn" class="play-btn">
-                                    <svg viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>
+                                    <svg viewBox="0 0 24 24">
+                                        <path d="M8 5v14l11-7z" />
+                                    </svg>
                                 </button>
                                 <div class="slider-container">
-                                    <input type="range" id="z_transformation_progress_slider" min="0" max="1" step="0.001" value="0">
+                                    <input type="range" id="z_transformation_progress_slider" min="0" max="1"
+                                        step="0.001" value="0">
                                 </div>
                             </div>
                             <div class="labels">
@@ -2258,7 +2307,8 @@
                 </div>
                 <div id="w_plane_column" class="plane-column">
                     <div class="collapsed-placeholder-content">
-                        <button class="expand-plane-btn" id="expand_w_btn" title="Expand w-plane" aria-label="Expand w-plane">
+                        <button class="expand-plane-btn" id="expand_w_btn" title="Expand w-plane"
+                            aria-label="Expand w-plane">
                             <i data-lucide="chevron-left" aria-hidden="true"></i>
                         </button>
                         <div class="collapsed-vertical-title">w-plane (Output)</div>
@@ -2269,8 +2319,7 @@
                         <div class="canvas-header-controls">
                             <div id="w_plane_analysis_info"></div>
                             <button id="collapse_w_btn" class="icon-button canvas-icon-button" type="button"
-                                data-tooltip="Collapse w-plane"
-                                aria-label="Collapse w-plane">
+                                data-tooltip="Collapse w-plane" aria-label="Collapse w-plane">
                                 <i data-lucide="chevron-right" aria-hidden="true"></i>
                                 <span class="hidden-visually">Collapse w-plane</span>
                             </button>
@@ -2282,7 +2331,8 @@
                             </button>
                         </div>
                     </div>
-                    <div id="w_plane_canvas_wrapper" style="position: relative; width: 100%; height: 100%; display: flex; flex: 1;">
+                    <div id="w_plane_canvas_wrapper"
+                        style="position: relative; width: 100%; height: 100%; display: flex; flex: 1;">
                         <canvas id="w_plane_canvas"></canvas>
                         <div id="w_plane_refining_indicator" class="refining-indicator hidden">
                             <span class="pulsing-dot"></span>
@@ -2290,18 +2340,23 @@
                         </div>
                         <div id="w_plane_plotly_container" class="hidden" style="width: 100%; height: 100%;"></div>
                         <div id="w_plane_probe_info" class="probe-info-overlay hidden"></div>
-                        
+
                         <!-- Three.js Transformation Overlays -->
-                        <div id="w_plane_threejs_container" class="threejs-container hidden" style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; z-index: 10; border-radius: inherit; overflow: hidden;"></div>
-                        
+                        <div id="w_plane_threejs_container" class="threejs-container hidden"
+                            style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; z-index: 10; border-radius: inherit; overflow: hidden;">
+                        </div>
+
                         <div id="w_plane_transformation_overlay" class="ui-layer hidden">
                             <h1>Stereographic Projection</h1>
                             <div class="controls">
                                 <button id="w_transformation_play_pause_btn" class="play-btn">
-                                    <svg viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>
+                                    <svg viewBox="0 0 24 24">
+                                        <path d="M8 5v14l11-7z" />
+                                    </svg>
                                 </button>
                                 <div class="slider-container">
-                                    <input type="range" id="w_transformation_progress_slider" min="0" max="1" step="0.001" value="0">
+                                    <input type="range" id="w_transformation_progress_slider" min="0" max="1"
+                                        step="0.001" value="0">
                                 </div>
                             </div>
                             <div class="labels">
@@ -2376,17 +2431,21 @@
             <div class="theme-list-container custom-scroll" id="theme_list_container">
                 <!-- Themes dynamically generated here -->
             </div>
-            <div class="theme-modal-grid-colors" style="margin-top: 1.5rem; padding-top: 1rem; border-top: 1px solid var(--border-color);">
-                <h3 style="font-size: 0.95rem; font-weight: 600; margin-bottom: 0.75rem; color: var(--text-color);">Custom Grid Colors</h3>
+            <div class="theme-modal-grid-colors"
+                style="margin-top: 1.5rem; padding-top: 1rem; border-top: 1px solid var(--border-color);">
+                <h3 style="font-size: 0.95rem; font-weight: 600; margin-bottom: 0.75rem; color: var(--text-color);">
+                    Custom Grid Colors</h3>
                 <div class="grid-color-pickers-container" style="display: flex; gap: 1.5rem; align-items: center;">
                     <div class="circle-color-picker-wrapper">
-                        <div class="circle-color-picker" id="grid_color_1_picker_wrapper" style="background-color: #FB923C;">
+                        <div class="circle-color-picker" id="grid_color_1_picker_wrapper"
+                            style="background-color: #FB923C;">
                             <input type="color" id="grid_color_1_input" value="#FB923C">
                         </div>
                         <span class="circle-color-picker-label">Grid Line 1</span>
                     </div>
                     <div class="circle-color-picker-wrapper">
-                        <div class="circle-color-picker" id="grid_color_2_picker_wrapper" style="background-color: #C084FC;">
+                        <div class="circle-color-picker" id="grid_color_2_picker_wrapper"
+                            style="background-color: #C084FC;">
                             <input type="color" id="grid_color_2_input" value="#C084FC">
                         </div>
                         <span class="circle-color-picker-label">Grid Line 2</span>
@@ -2395,6 +2454,56 @@
             </div>
         </div>
     </div>
+    <!-- Domain Palette Color Wheel Guide Panel (Root Level) -->
+    <div id="domain_palette_circle_panel" class="dynamic-plotting-controls hidden"
+        role="dialog" aria-modal="false" aria-label="Domain Coloring Guide">
+        <div class="dynamic-studio-header">
+            <div class="dynamic-studio-identity">
+                <span class="dynamic-section-eyebrow">Domain Coloring Guide</span>
+                <strong id="domain_palette_circle_title">Analytic Base</strong>
+            </div>
+            <div class="dynamic-studio-actions">
+                <button id="close_domain_palette_circle_btn" type="button"
+                    class="dynamic-studio-action dynamic-studio-close"
+                    aria-label="Close Domain Coloring Guide">Close</button>
+            </div>
+        </div>
+        
+        <div class="dynamic-intro" style="margin-bottom: 1rem;">
+            <div>
+                <div class="dynamic-intro-title">Color Guide Wheel</div>
+                <div class="dynamic-intro-copy">
+                    Shows how complex phase angles map to colors (ring) and how modulus magnitude maps to lightness/shading.
+                </div>
+            </div>
+        </div>
+
+        <!-- Phase Angle Ring Canvas -->
+        <div class="color-wheel-canvas-container" style="display: flex; justify-content: center; align-items: center; padding: 2rem; background: rgba(0, 0, 0, 0.25); border: 1px solid var(--border-color); border-radius: 12px; margin-bottom: 1.5rem;">
+            <canvas id="domain_palette_circle_canvas" width="360" height="360" style="max-width: 100%; height: auto; aspect-ratio: 1;"></canvas>
+        </div>
+
+        <!-- Modulus (Amplitude) vs Lightness Strip -->
+        <div class="amplitude-strip-container" style="margin-top: 1rem;">
+            <div class="dynamic-intro-title" style="font-size: 0.85rem; margin-bottom: 0.35rem; font-weight: 600; color: var(--text-color);">
+                Modulus (Amplitude) vs. Lightness
+            </div>
+            <div class="dynamic-intro-copy" style="font-size: 0.75rem; margin-bottom: 0.75rem; color: var(--text-muted);">
+                Shows how magnitude |z| maps to lightness cycles and shading (from |z| = 0 to 10¹², logarithmic).
+            </div>
+            <div style="position: relative; background: rgba(0, 0, 0, 0.25); border: 1px solid var(--border-color); border-radius: 8px; padding: 1rem 1.25rem 0.75rem;">
+                <canvas id="amplitude_strip_canvas" width="320" height="24" style="width: 100%; height: 24px; display: block; border-radius: 4px;"></canvas>
+                <div style="position: relative; height: 16px; margin-top: 0.35rem; font-size: 0.75rem; color: var(--text-muted); font-family: monospace;">
+                    <span style="position: absolute; left: 0%; transform: translateX(0%);">|z| = 0</span>
+                    <span style="position: absolute; left: 2.5%; transform: translateX(-50%);">1</span>
+                    <span style="position: absolute; left: 25%; transform: translateX(-50%);">10³</span>
+                    <span style="position: absolute; left: 50%; transform: translateX(-50%);">10⁶</span>
+                    <span style="position: absolute; left: 100%; transform: translateX(-100%);">|z| = 10¹²</span>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <div id="fullscreen_container" class="hidden">
 
     </div>

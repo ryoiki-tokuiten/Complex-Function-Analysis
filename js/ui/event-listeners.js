@@ -23,6 +23,7 @@ import {
     initializeDynamicPlottingUI,
     syncDynamicPlottingUI
 } from './dynamic-plotting-ui.js';
+import { domainColorForValue } from '../rendering/domain-coloring.js';
 
 const { controls = {} } = context;
 
@@ -100,13 +101,11 @@ const BASIC_CHECKBOX_BINDINGS = [
     ['enableRiemannTransformationCb', 'riemannTransformationEnabled'],
     ['enableTaylorSeriesCb', 'taylorSeriesEnabled'],
     ['enableTaylorSeriesCustomCenterCb', 'taylorSeriesCustomCenterEnabled'],
-    ['enableGeneralPointsCb', 'generalPointsEnabled'],
     ['laplaceShowROCCb', 'laplaceShowROC'],
     ['laplaceShowPolesZerosCb', 'laplaceShowPolesZeros'],
     ['laplaceShowFourierLineCb', 'laplaceShowFourierLine'],
     ['laplaceAnimationLoopCb', 'laplaceAnimationLoop'],
     ['enableParticleAnimationCb', 'particleAnimationEnabled'],
-    ['showVectorFieldPanelCb', 'showVectorFieldPanelEnabled'],
     ['enableDomainColoringCb', 'domainColoringEnabled'],
     ['enableRiemannSurfaceCb', 'riemannSurfaceEnabled'],
     ['riemannSurfaceWireframeCb', 'riemannSurfaceWireframe']
@@ -139,9 +138,9 @@ const SPECIAL_CHECKBOXES = new Set([
     'enableSplitViewCb', 'enableVectorFieldCb', 'enableStreamlineFlowCb',
     'enableRadialDiscreteStepsCb', 'enableRiemannSphereCb', 'enableRiemannSurfaceCb',
     'enablePlotly3DCb', 'enableTaylorSeriesCb', 'enableTaylorSeriesCustomCenterCb',
-    'enableGeneralPointsCb', 'laplaceShowROCCb', 'laplaceShowPolesZerosCb',
+    'laplaceShowROCCb', 'laplaceShowPolesZerosCb',
     'laplaceShowFourierLineCb', 'laplaceAnimationLoopCb', 'enableParticleAnimationCb',
-    'showVectorFieldPanelCb', 'enableDomainColoringCb'
+    'enableDomainColoringCb'
 ]);
 
 const SPECIAL_SELECTORS = new Set([
@@ -192,7 +191,6 @@ const BINDERS = [
     bindNavigationControls,
     bindVectorFieldControls,
     bindTaylorControls,
-    bindGeneralPointsControls,
     bindRadialAndZetaControls,
     bindParticleControls,
     bindFourierControls,
@@ -203,7 +201,8 @@ const BINDERS = [
     bindCanvasInteractions,
     bindTopControlsToggle,
     bindFullscreenControls,
-    bindThemeControls
+    bindThemeControls,
+    bindDomainPaletteCirclePanelListeners
 ];
 
 function bindDynamicPlottingControls() {
@@ -405,6 +404,14 @@ function bindSimpleControlRemainder() {
 export function requestDomainRedraw(markDomainDirty = false) {
     if (markDomainDirty) context.domainColoringDirty = true;
     requestRedrawAll();
+
+    // Also update domain coloring guide panel if open
+    const panel = $('domain_palette_circle_panel');
+    if (panel && !panel.classList.contains('hidden')) {
+        if (typeof updateDomainPaletteCirclePanel === 'function') {
+            updateDomainPaletteCirclePanel();
+        }
+    }
 }
 
 export function syncLaplacePlayPauseButton() {
@@ -447,6 +454,15 @@ function disableAlgebraicChaining() {
     state.algebraicChainingEnabled = false;
     checked('enableAlgebraicChainingCb', false);
     display(controls.algebraicChainingControlsContainer, false);
+}
+
+function disableOutputChaining() {
+    if (!state.chainingEnabled) return;
+
+    state.chainingEnabled = false;
+    checked('enableChainingCb', false);
+    display(controls.chainingControlsContainer, false);
+    call(updateChainingColumns, 1);
 }
 
 function syncChainingControlsFromState() {
@@ -508,6 +524,7 @@ function activateFunctionMode(key) {
     if ((enteringFourier || enteringLaplace) && state.currentInputShape === 'video') call(pauseUploadedVideoPlayback);
 
     disableAlgebraicChaining();
+    disableOutputChaining();
 
     state.currentFunction = key;
     state.currentFunctionPreset = null;
@@ -695,6 +712,14 @@ function syncPalette(selectors, container) {
     renderDomainPalettesUI(container);
     call(updateDomainColoringKey);
     requestDomainRedraw(true);
+
+    // Also update domain coloring guide panel if open
+    const panel = $('domain_palette_circle_panel');
+    if (panel && !panel.classList.contains('hidden')) {
+        if (typeof updateDomainPaletteCirclePanel === 'function') {
+            updateDomainPaletteCirclePanel();
+        }
+    }
 }
 
 function bindDomainColoringControls() {
@@ -704,6 +729,13 @@ function bindDomainColoringControls() {
                 state.riemannTransformationEnabled = false;
                 checked('enableRiemannTransformationCb', false);
                 call(syncRiemannTransformationUI);
+            }
+            if (state.currentInputShape !== 'empty_grid') {
+                if (state.currentInputShape === 'video' && state.videoIsPlaying) {
+                    call(pauseUploadedVideoPlayback);
+                }
+                state.currentInputShape = 'empty_grid';
+                if (controls.inputShapeSelector) controls.inputShapeSelector.value = 'empty_grid';
             }
         }
         hidden(controls.domainColoringOptionsDiv, !state.domainColoringEnabled);
@@ -952,15 +984,7 @@ function bindVectorFieldControls() {
         ['streamlineThicknessSlider', 'streamlineThickness'],
         ['streamlineSeedDensityFactorSlider', 'streamlineSeedDensityFactor']
     ].forEach(([controlKey, stateKey, parser = parseFloat]) => bindSlider(controlKey, stateKey, parser));
-
     bindCheckbox('enableStreamlineFlowCb', 'streamlineFlowEnabled');
-    bindControlListener('clearManualSeedsBtn', 'click', () => {
-        state.manualSeedPoints = [];
-        requestRedrawAll();
-    });
-    bindCheckbox('showVectorFieldPanelCb', 'showVectorFieldPanelEnabled', () => {
-        hidden(controls.vectorFlowOptionsContent, !state.showVectorFieldPanelEnabled);
-    });
 }
 
 function bindTaylorControls() {
@@ -985,25 +1009,6 @@ function bindTaylorControls() {
             onChange: points => {
                 const point = points[0] || { re: 0, im: 0 };
                 setTaylorCustomCenter(point.re, point.im, true);
-            }
-        });
-    }
-}
-
-function bindGeneralPointsControls() {
-    bindCheckbox('enableGeneralPointsCb', 'generalPointsEnabled', () => {
-        hidden(controls.generalPointsControlsContainer, !state.generalPointsEnabled);
-        requestRedrawAll();
-    });
-
-    if (controls.generalPointsRoot) {
-        context.generalPointsUI = new ComplexPointsUI(controls.generalPointsRoot, {
-            multiple: true,
-            presets: TAYLOR_CENTER_PRESET_GROUPS,
-            initialPoints: state.generalPointsList,
-            onChange: points => {
-                state.generalPointsList = points;
-                requestRedrawAll();
             }
         });
     }
@@ -1259,22 +1264,12 @@ function tryStartLaplaceDrag(ctx, pos) {
     return true;
 }
 
-function tryAddManualSeed(ctx, event, pos) {
-    if (!ctx.isZ || event.button !== 0 || !event.shiftKey || !state.streamlineFlowEnabled) return false;
-
-    const world = mapCanvasToWorldCoords(pos.x, pos.y, ctx.params);
-    state.manualSeedPoints.push({ re: world.x, im: world.y });
-    requestRedrawAll();
-    event.stopPropagation();
-    return true;
-}
-
 function handleCanvasDown(ctx, event) {
     if (isSphereInteractionActive(ctx.isZ)) return;
 
     const pos = mouse(ctx.canvas, event);
     if (event.button === 0 && tryStartLaplaceDrag(ctx, pos)) return;
-    if (tryAddManualSeed(ctx, event, pos) || event.button !== 0) return;
+    if (event.button !== 0) return;
     startPan(ctx, pos);
 }
 
@@ -2150,4 +2145,198 @@ function renderAlgebraicChainingTerms() {
             renderFactors(term, preview)
         ]));
     });
+}
+
+export function drawDomainPaletteCircle(canvas, paletteId) {
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
+    const w = canvas.width;
+    const h = canvas.height;
+    ctx.clearRect(0, 0, w, h);
+
+    const cx = w / 2;
+    const cy = h / 2;
+    const rOuter = 130;
+    const rInner = 95;
+
+    const imgData = ctx.createImageData(w, h);
+    const data = imgData.data;
+
+    // Use current state settings for preview
+    const tempState = {
+        domainPalette: paletteId,
+        domainBrightness: state.domainBrightness,
+        domainContrast: state.domainContrast,
+        domainSaturation: state.domainSaturation,
+        domainLightnessCycles: state.domainLightnessCycles
+    };
+
+    for (let y = 0; y < h; y++) {
+        const dy = -(y - cy);
+        for (let x = 0; x < w; x++) {
+            const dx = x - cx;
+            const r = Math.hypot(dx, dy);
+
+            const idx = (y * w + x) * 4;
+
+            if (r > rOuter + 1.5 || r < rInner - 1.5) {
+                continue;
+            }
+
+            // Antialiasing for outer boundary
+            let alpha = 255;
+            if (r > rOuter - 1.5) {
+                alpha = Math.max(0, Math.min(255, Math.round((rOuter + 1.5 - r) * 85)));
+            } else if (r < rInner + 1.5) {
+                alpha = Math.min(alpha, Math.max(0, Math.min(255, Math.round((r - (rInner - 1.5)) * 85))));
+            }
+
+            const phase = Math.atan2(dy, dx);
+            
+            // Just map phase to color with a fixed standard modulus of 1.0 (no magnitude cycles/shading)
+            const rgb = domainColorForValue(Math.cos(phase), Math.sin(phase), {
+                ...tempState,
+                domainLightnessCycles: 0 // Keep ring clean
+            });
+
+            data[idx] = rgb[0];
+            data[idx + 1] = rgb[1];
+            data[idx + 2] = rgb[2];
+            data[idx + 3] = alpha;
+        }
+    }
+
+    ctx.putImageData(imgData, 0, 0);
+
+    // Draw grid/lines and labels
+    ctx.save();
+    
+    // Dashed crosshairs
+    const rootStyle = getComputedStyle(document.documentElement);
+    const borderColor = rootStyle.getPropertyValue('--border-color') || 'rgba(255, 255, 255, 0.15)';
+    const textColor = rootStyle.getPropertyValue('--text-color') || '#FAFAFA';
+
+    ctx.strokeStyle = borderColor;
+    ctx.lineWidth = 1;
+    ctx.setLineDash([4, 4]);
+
+    ctx.beginPath();
+    // Horizontal line
+    ctx.moveTo(cx - rOuter, cy);
+    ctx.lineTo(cx + rOuter, cy);
+    // Vertical line
+    ctx.moveTo(cx, cy - rOuter);
+    ctx.lineTo(cx, cy + rOuter);
+    ctx.stroke();
+
+    // Solid borders for ring
+    ctx.setLineDash([]);
+    ctx.strokeStyle = borderColor;
+    ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    ctx.arc(cx, cy, rOuter, 0, 2 * Math.PI);
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.arc(cx, cy, rInner, 0, 2 * Math.PI);
+    ctx.stroke();
+
+    // Labels: 0, π/2, π, 3π/2
+    ctx.fillStyle = textColor;
+    ctx.font = '500 13px Outfit, Inter, sans-serif';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+
+    // 0 (on the right)
+    ctx.fillText('0', cx + rOuter + 16, cy);
+    // π/2 (on the top)
+    ctx.fillText('π/2', cx, cy - rOuter - 16);
+    // π (on the left)
+    ctx.fillText('π', cx - rOuter - 16, cy);
+    // 3π/2 (on the bottom)
+    ctx.fillText('3π/2', cx, cy + rOuter + 16);
+
+    ctx.restore();
+}
+
+export function drawAmplitudeStrip(canvas, paletteId) {
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
+    const w = canvas.width;
+    const h = canvas.height;
+    ctx.clearRect(0, 0, w, h);
+
+    const imgData = ctx.createImageData(w, h);
+    const data = imgData.data;
+
+    // Use current state settings for preview
+    const tempState = {
+        domainPalette: paletteId,
+        domainBrightness: state.domainBrightness,
+        domainContrast: state.domainContrast,
+        domainSaturation: state.domainSaturation,
+        domainLightnessCycles: state.domainLightnessCycles
+    };
+
+    // Draw a horizontal gradient representing modulus logarithmically from 0 to 10^12
+    // We use a fixed phase angle of 0 (positive real numbers)
+    const maxLogMod = Math.log(1e12 + 1);
+    for (let x = 0; x < w; x++) {
+        const logMod = (x / w) * maxLogMod;
+        const modVal = Math.expm1(logMod);
+        
+        // Re = modVal, Im = 0
+        const rgb = domainColorForValue(modVal, 0.0, tempState);
+
+        for (let y = 0; y < h; y++) {
+            const idx = (y * w + x) * 4;
+            data[idx] = rgb[0];
+            data[idx + 1] = rgb[1];
+            data[idx + 2] = rgb[2];
+            data[idx + 3] = 255;
+        }
+    }
+
+    ctx.putImageData(imgData, 0, 0);
+
+    // Draw border
+    ctx.save();
+    const rootStyle = getComputedStyle(document.documentElement);
+    const borderColor = rootStyle.getPropertyValue('--border-color') || 'rgba(255, 255, 255, 0.15)';
+    ctx.strokeStyle = borderColor;
+    ctx.lineWidth = 1.5;
+    ctx.strokeRect(0, 0, w, h);
+    ctx.restore();
+}
+
+export function updateDomainPaletteCirclePanel() {
+    const activePalette = domainPalettes.find(p => p.id === state.domainPalette) || domainPalettes[0];
+    const title = $('domain_palette_circle_title');
+    if (title) title.textContent = activePalette.name;
+
+    const canvas = $('domain_palette_circle_canvas');
+    drawDomainPaletteCircle(canvas, state.domainPalette);
+
+    const stripCanvas = $('amplitude_strip_canvas');
+    drawAmplitudeStrip(stripCanvas, state.domainPalette);
+}
+
+function bindDomainPaletteCirclePanelListeners() {
+    const viewBtn = $('view_palette_circle_btn');
+    const closeBtn = $('close_domain_palette_circle_btn');
+    const panel = $('domain_palette_circle_panel');
+
+    if (viewBtn) {
+        bindElementListener(viewBtn, 'click', () => {
+            if (panel) {
+                panel.classList.remove('hidden');
+                updateDomainPaletteCirclePanel();
+            }
+        });
+    }
+
+    if (closeBtn) {
+        bindElementListener(closeBtn, 'click', () => {
+            if (panel) panel.classList.add('hidden');
+        });
+    }
 }

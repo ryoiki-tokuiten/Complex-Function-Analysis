@@ -169,11 +169,12 @@ main {
 }
 
 #controls_options_section {
+    /* There exist 2 main top and bottom panels, both are set to fully transparent / invisible now for visibility. */
     flex-shrink: 0;
     padding: 0.7rem;
     border-radius: 20px;
-    background: var(--card-bg-color);
-    border: 1px solid var(--border-color);
+    background: transparent;
+    border: 1px solid transparent;
     backdrop-filter: blur(20px);
     -webkit-backdrop-filter: blur(20px);
     box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.2);
@@ -586,58 +587,11 @@ main {
     margin-top: 0.1rem;
 }
 
-.vector-toolbar {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 0.6rem;
-    margin-bottom: 0.85rem;
-}
-
-.control-button {
-    padding: 0.55rem 0.85rem;
-    border-radius: 10px;
-}
-
-.particle-settings-grid {
-    display: grid;
-    grid-template-columns: 1fr;
-    gap: 0.75rem;
-}
-
-.slider-group {
-    display: grid;
-    grid-template-columns: minmax(0, 1fr) auto;
-    gap: 0.45rem 0.8rem;
-    align-items: center;
-    padding: 0.85rem 0.9rem;
+#visualization-options-panel .vector-settings-card .slider-container {
+    padding: 0.72rem 0.82rem;
     border-radius: 12px;
     border: 1px solid var(--border-color);
     background: var(--card-bg-color);
-}
-
-.slider-group .slider-label {
-    grid-column: 1 / 2;
-    font-size: 0.8rem;
-    color: var(--text-secondary-color);
-}
-
-.slider-group input[type="range"] {
-    grid-column: 1 / 2;
-    width: 100%;
-}
-
-.slider-value-display {
-    grid-column: 2 / 3;
-    grid-row: 1 / span 2;
-    align-self: center;
-    min-width: 54px;
-    padding: 0.35rem 0.55rem;
-    border-radius: 999px;
-    background: color-mix(in srgb, var(--bg-color) 60%, transparent);
-    border: 1px solid var(--border-color);
-    color: var(--text-color);
-    font-size: 0.78rem;
-    text-align: center;
 }
 
 .sphere-view-button-row {
@@ -1015,14 +969,15 @@ hr.panel-separator {
 
 
 #canvases_section {
+    /* There exist 2 main top and bottom panels, both are set to fully transparent / invisible now for visibility. */
     flex-grow: 1;
     display: flex;
     flex-direction: column;
     min-height: 0;
     padding: 0.7rem;
     border-radius: 20px;
-    background: var(--card-bg-color);
-    border: 1px solid var(--border-color);
+    background: transparent;
+    border: 1px solid transparent;
     backdrop-filter: blur(20px);
     -webkit-backdrop-filter: blur(20px);
     box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.2);
@@ -1159,11 +1114,7 @@ hr.panel-separator {
 }
 
 
-#canvases_section .plane-column .section-title,
-#laplace_3d_column .section-title {
-    flex-shrink: 0;
-    /* margin-bottom: 0.75rem; from .section-title */
-}
+
 
 .canvas-header-line {
     display: flex;
@@ -1240,15 +1191,10 @@ canvas {
     width: 100%;
     height: 100%;
     z-index: 2;
-    cursor: grab;
     touch-action: none;
     background:
         radial-gradient(circle at 50% 42%, rgba(51, 45, 91, 0.2), transparent 54%),
         #080a12;
-}
-
-.riemann-surface-canvas.is-dragging {
-    cursor: grabbing;
 }
 
 .riemann-surface-hud {
@@ -1502,10 +1448,38 @@ input[type="range"]:focus::-moz-range-thumb {
     min-width: 400px;
 }
 
-/* When a plane is collapsed in the main z/w section, let the remaining panel fill freely */
-#canvases_section .two-column-layout:has(.plane-collapsed) > div:not(.plane-collapsed) {
+/* When a plane is collapsed in the main z/w section (and there are exactly two planes), let the remaining panel fill freely */
+#canvases_section .two-column-layout:not(:has([id^="w_plane_column_"])):has(#laplace_3d_column.hidden):has(.plane-collapsed) > .plane-column:not(.plane-collapsed) {
     flex: 1 1 0%;
     min-width: 0;
+}
+
+/* Domain Palette View Guide Button */
+.view-palette-circle-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.25rem;
+    padding: 0.35rem 0.75rem;
+    font-size: 0.75rem;
+    font-weight: 600;
+    color: var(--text-color);
+    background: color-mix(in srgb, var(--accent-purple) 15%, transparent);
+    border: 1px solid color-mix(in srgb, var(--accent-purple) 30%, transparent);
+    border-radius: 8px;
+    cursor: pointer;
+    transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.view-palette-circle-btn:hover {
+    background: color-mix(in srgb, var(--accent-purple) 25%, transparent);
+    border-color: var(--accent-purple);
+    box-shadow: 0 0 8px color-mix(in srgb, var(--accent-purple) 20%, transparent);
+    transform: translateY(-1px);
+}
+
+.view-palette-circle-btn:active {
+    transform: translateY(0);
 }
 
 /* Three-column layout for Laplace mode */
@@ -4800,12 +4774,6 @@ textarea.dynamic-formula-input {
 
 .labels { display: flex; justify-content: space-between; width: 100%; font-size: 0.75rem; color: #94a3b8; text-transform: uppercase; letter-spacing: 1px; }
 
-.threejs-container {
-    cursor: grab;
-}
-.threejs-container:active {
-    cursor: grabbing;
-}
 
 /* Trio Grid layout */
 .viz-toggle-grid--trio {

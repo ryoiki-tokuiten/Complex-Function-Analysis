@@ -122,21 +122,6 @@ test('point formulas can use s and selected-function mode ignores inactive formu
     ]);
 });
 
-test('custom sources observe General Points changes without manual invalidation', () => {
-    state.generalPointsList = [{ re: 1, im: 0 }];
-    configure({
-        mode: 'map',
-        source: { kind: 'custom_points', count: 10, points: [], pointsText: '' },
-        term: { kind: 'selected-function', expression: 'selected(z)' },
-        reduction: { kind: 'none', invalidPolicy: 'stop' },
-        playback: { visibleCount: 10, playing: false, speed: 10, loop: false }
-    });
-
-    assert.equal(getDynamicPlotResult().samples.length, 1);
-    state.generalPointsList.push({ re: 2, im: 0 });
-    assert.equal(getDynamicPlotResult().samples.length, 2);
-    state.generalPointsList = [];
-});
 
 test('Basel and Euler presets evaluate finite approximations accurately', () => {
     applyDynamicPlottingPreset('basel');

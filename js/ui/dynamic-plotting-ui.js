@@ -343,9 +343,6 @@ function sourceForPreview() {
         ...source,
         points: Array.isArray(source.points) ? [...source.points] : []
     };
-    if (source.kind === 'custom_points' && Array.isArray(state.generalPointsList)) {
-        sourceConfig.points.push(...state.generalPointsList);
-    }
 
     const parameters = Object.fromEntries((config().parameters || [])
         .filter(parameter => /^[A-Za-z_][A-Za-z0-9_]*$/.test(parameter?.name || ''))
@@ -420,10 +417,7 @@ function renderSourcePreview() {
     try {
         const key = JSON.stringify({
             source: config().source,
-            parameters: config().parameters,
-            generalPoints: config().source?.kind === 'custom_points'
-                ? state.generalPointsList
-                : null
+            parameters: config().parameters
         });
         if (sourcePreviewCacheKey !== key || !sourcePreviewCache) {
             sourcePreviewCacheKey = key;

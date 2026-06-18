@@ -9,6 +9,7 @@ import {
     COLOR_STRIP_LINES, COLOR_SECTOR_LINES
 } from '../constants/colors.js';
 import { LINE_WIDTH_THIN, LINE_WIDTH_NORMAL, LINE_WIDTH_MEDIUM, LINE_WIDTH_THICK } from '../constants/rendering.js';
+import { calculateGridStep } from './canvas-primitives.js';
 
 const EPSILON = 1e-9;
 const DEG_TO_RAD = Math.PI / 180;
@@ -303,21 +304,45 @@ export function generateCartesianGridPointSets(config) {
     const sampleCount = integerAtLeast(config.curvePoints / 2, 2);
     const gridDensity = integerAtLeast(config.gridDensity, 1);
 
-    const horizontalSets = linearlySampledRange(config.yRange, gridDensity).map(y => createLineSet(
-        generateLinePoints(config.xRange[0], config.xRange[1], y, sampleCount),
-        palette.horizontal,
-        'grid-horizontal',
-        LINE_WIDTH_NORMAL
-    ));
+    const spanX = config.xRange[1] - config.xRange[0];
+    const spanY = config.yRange[1] - config.yRange[0];
 
-    const verticalSets = linearlySampledRange(config.xRange, gridDensity).map(x => createLineSet(
-        generateVerticalLinePoints(x, config.yRange[0], config.yRange[1], sampleCount),
-        config.currentFunction === 'zeta' && !config.zetaContinuationEnabled && x <= ZETA_REFLECTION_POINT_RE
-            ? palette.zetaUndefinedSumRegion
-            : palette.vertical,
-        'grid-vertical',
-        LINE_WIDTH_NORMAL
-    ));
+    const stepX = calculateGridStep(spanX, gridDensity);
+    const stepY = calculateGridStep(spanY, gridDensity);
+
+    const horizontalSets = [];
+    if (stepY > 1e-9) {
+        const yStart = Math.ceil(config.yRange[0] / stepY) * stepY;
+        const yEnd = Math.floor(config.yRange[1] / stepY) * stepY;
+        if ((yEnd - yStart) / stepY <= 200) {
+            for (let y = yStart; y <= yEnd + 1e-6; y += stepY) {
+                horizontalSets.push(createLineSet(
+                    generateLinePoints(config.xRange[0], config.xRange[1], y, sampleCount),
+                    palette.horizontal,
+                    'grid-horizontal',
+                    LINE_WIDTH_NORMAL
+                ));
+            }
+        }
+    }
+
+    const verticalSets = [];
+    if (stepX > 1e-9) {
+        const xStart = Math.ceil(config.xRange[0] / stepX) * stepX;
+        const xEnd = Math.floor(config.xRange[1] / stepX) * stepX;
+        if ((xEnd - xStart) / stepX <= 200) {
+            for (let x = xStart; x <= xEnd + 1e-6; x += stepX) {
+                verticalSets.push(createLineSet(
+                    generateVerticalLinePoints(x, config.yRange[0], config.yRange[1], sampleCount),
+                    config.currentFunction === 'zeta' && !config.zetaContinuationEnabled && x <= ZETA_REFLECTION_POINT_RE
+                        ? palette.zetaUndefinedSumRegion
+                        : palette.vertical,
+                    'grid-vertical',
+                    LINE_WIDTH_NORMAL
+                ));
+            }
+        }
+    }
 
     return [...horizontalSets, ...verticalSets];
 }
@@ -337,16 +362,20 @@ export function generatePolarGridPointSets(config) {
         );
     });
 
-    const radialSets = collect(integerAtLeast(config.gridDensity, 1), (sets, index) => {
-        const radius = ((index + 1) / config.gridDensity) * maxRadius;
+    const gridDensity = integerAtLeast(config.gridDensity, 1);
+    const step = calculateGridStep(maxRadius, gridDensity);
 
-        sets.push(createLineSet(
-            generateCirclePoints(0, 0, radius, config.curvePoints),
-            COLOR_POLAR_RADIAL,
-            'polar-radial',
-            LINE_WIDTH_NORMAL
-        ));
-    });
+    const radialSets = [];
+    if (step > 1e-9 && (maxRadius / step) <= 200) {
+        for (let radius = step; radius <= maxRadius + 1e-6; radius += step) {
+            radialSets.push(createLineSet(
+                generateCirclePoints(0, 0, radius, config.curvePoints),
+                COLOR_POLAR_RADIAL,
+                'polar-radial',
+                LINE_WIDTH_NORMAL
+            ));
+        }
+    }
 
     return [...angularSets, ...radialSets];
 }
@@ -369,18 +398,26 @@ export function generateLogPolarGridPointSets(config) {
         );
     });
 
-    const radialSets = collect(gridDensity + 1, (sets, index) => {
-        const radius = Math.exp(lerp(minLogRadius, maxLogRadius, index / gridDensity));
+    const spanLog = maxLogRadius - minLogRadius;
+    const logStep = calculateGridStep(spanLog, gridDensity);
 
-        if (radius <= maxRadius * 1.1) {
-            sets.push(createLineSet(
-                generateCirclePoints(0, 0, radius, config.curvePoints),
-                COLOR_LOGPOLAR_EXP_R,
-                'logpolar-radial',
-                LINE_WIDTH_NORMAL
-            ));
+    const radialSets = [];
+    if (logStep > 1e-9 && (spanLog / logStep) <= 200) {
+        const logStart = Math.ceil(minLogRadius / logStep) * logStep;
+        const logEnd = Math.floor(maxLogRadius / logStep) * logStep;
+
+        for (let logVal = logStart; logVal <= logEnd + 1e-6; logVal += logStep) {
+            const radius = Math.exp(logVal);
+            if (radius <= maxRadius * 1.1) {
+                radialSets.push(createLineSet(
+                    generateCirclePoints(0, 0, radius, config.curvePoints),
+                    COLOR_LOGPOLAR_EXP_R,
+                    'logpolar-radial',
+                    LINE_WIDTH_NORMAL
+                ));
+            }
         }
-    });
+    }
 
     return [...angularSets, ...radialSets];
 }

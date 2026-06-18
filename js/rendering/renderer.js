@@ -26,12 +26,10 @@ import { drawLaplaceWindingVisualization, drawLaplaceTimeDomain } from './draw-l
 import { ThreeRiemannRenderer } from './three-riemann-renderer.js';
 import { generateCurrentMappedInputShapePointSets, buildInputShapeGeometryConfig } from './shape-generators.js';
 import { hideRiemannSurface, renderRiemannSurface } from './webgl-riemann-surface.js';
-import { drawAxes, drawGridLines } from './canvas-primitives.js';
+import { drawAxes, drawGrid } from './canvas-primitives.js';
 import {
-    drawTaylorAxes,
     drawZerosAndPolesMarkers,
-    drawCriticalPointMarker,
-    drawGeneralPointsMarkers
+    drawCriticalPointMarker
 } from './draw-primitives.js';
 import {
     drawPlanarTransformedShape,
@@ -40,9 +38,9 @@ import {
     drawStreamlinesOnZPlane,
     updateAndDrawParticles,
     drawPlanarInputOverlays,
-    drawPlanarTaylorApproximation,
     drawZPlaneVectorField
 } from './draw-planar.js';
+import { drawPlanarTaylorApproximation } from './taylor-series.js';
 import { drawNavigationLayer } from '../navigation-plane.js';
 import { renderSphereDomainColoring, renderPlanarDomainColoring } from './domain-coloring.js';
 import { drawRiemannSphereBase, drawSphereGridAndShape, drawSphereProbeAndNeighborhood } from './draw-sphere.js';
@@ -137,7 +135,8 @@ const PLANAR_CACHE_FIELDS = Object.freeze([
     ['vidSize', () => toCacheKeyNumber(state.videoSize)],
     ['vidOpacity', () => toCacheKeyNumber(state.videoOpacity)],
     ['vidVer', () => state.videoFrameVersion || 0],
-    ['dynamic', () => getDynamicPlottingCacheKey()]
+    ['dynamic', () => getDynamicPlottingCacheKey()],
+    ['dc', () => state.domainColoringEnabled ? `${state.domainPalette}|${toCacheKeyNumber(state.domainBrightness)}|${toCacheKeyNumber(state.domainContrast)}|${toCacheKeyNumber(state.domainSaturation)}|${toCacheKeyNumber(state.domainLightnessCycles)}|${state.fractalOrbitColoringEnabled ? 1 : 0}` : '0']
 ]);
 
 const Z_FLOW_CACHE_FIELDS = Object.freeze([
@@ -459,12 +458,6 @@ function appendCurrentFunctionStateToCacheKey(parts) {
     FUNCTION_CACHE_KEY_BUILDERS[state.currentFunction]?.(parts);
 }
 
-function appendManualSeedPointsToCacheKey(parts, seedPoints) {
-    const points = asArray(seedPoints);
-
-    appendKey(parts, 'manualSeeds', points.length);
-    points.forEach((point, index) => appendPointToCacheKey(parts, `seed${index}`, point));
-}
 
 function appendPlaneViewportKey(parts, sourceParams, targetParams) {
     appendKey(parts, 'zX0', toCacheKeyNumber(sourceParams?.currentVisXRange?.[0]));
@@ -522,7 +515,6 @@ function buildZFlowLayerCacheKey() {
     if (state.vectorFieldEnabled && !state.streamlineFlowEnabled) {
         appendKey(parts, 'vfDomB', toCacheKeyNumber(state.domainBrightness));
     }
-    appendManualSeedPointsToCacheKey(parts, state.manualSeedPoints);
 
     return parts.join('|');
 }
@@ -816,7 +808,7 @@ function shouldDrawZReferenceGrid() {
         && !state.navigationModeEnabled
         && !state.vectorFieldEnabled
         && !state.streamlineFlowEnabled
-        && isGridInputShape();
+        && state.currentInputShape !== 'empty_grid';
 }
 
 function renderZPlanarBackground(transform) {
@@ -828,7 +820,11 @@ function renderZPlanarBackground(transform) {
         drawZetaUndefinedRegionOverlay(layerCtx, zPlaneParams);
 
         if (shouldDrawZReferenceGrid()) {
-            drawGridLines(layerCtx, zPlaneParams);
+            drawGrid(layerCtx, zPlaneParams, {
+                targetCount: state.gridDensity,
+                minorColor: 'rgba(128, 137, 255, 0.04)',
+                majorColor: 'rgba(128, 137, 255, 0.12)'
+            });
         }
     }, 'raster');
 }
@@ -940,17 +936,7 @@ function renderZMarkers() {
         'z',
         layerCtx => drawCriticalMarkers(layerCtx, zPlaneParams, state.criticalPoints, COLOR_CRITICAL_POINT_Z),
         'capture'
-    );
-
-    drawLayerWhen(
-        state.generalPointsEnabled && canDrawMarkers,
-        zCtx,
-        zPlaneParams,
-        'z',
-        layerCtx => drawGeneralPointsMarkers(layerCtx, zPlaneParams),
-        'raster'
-    );
-}
+    );}
 
 function renderZTaylorOverlay() {
     drawLayerWhen(
@@ -1205,24 +1191,23 @@ function renderPlotlyWPlane(transform, stageIndex) {
 
 function shouldDrawWReferenceGrid() {
     return !state.navigationModeEnabled
-        && state.currentInputShape !== 'empty_grid'
-        && isGridInputShape();
+        && state.currentInputShape !== 'empty_grid';
 }
 
 function renderWPlanarBackground() {
     drawPlaneLayer(wCtx, wPlaneParams, 'w', layerCtx => {
         fillCanvasBackground(layerCtx, wPlaneParams);
 
-        if (state.taylorSeriesEnabled && !state.navigationModeEnabled) {
-            return;
-        }
-
         drawAxes(layerCtx, wPlaneParams, 'Re(w)', 'Im(w)');
         drawPolynomialOriginMarkerOverlay(layerCtx, wPlaneParams);
         drawWOriginGlowOverlay(layerCtx, wPlaneParams);
 
         if (shouldDrawWReferenceGrid()) {
-            drawGridLines(layerCtx, wPlaneParams);
+            drawGrid(layerCtx, wPlaneParams, {
+                targetCount: state.gridDensity,
+                minorColor: 'rgba(128, 137, 255, 0.04)',
+                majorColor: 'rgba(128, 137, 255, 0.12)'
+            });
         }
     }, 'raster');
 }
@@ -1241,17 +1226,6 @@ function drawTaylorApproximationLayer(ctx) {
 }
 
 function renderWTaylorApproximation() {
-    drawPlaneLayer(wCtx, wPlaneParams, 'w', layerCtx => {
-        drawTaylorAxes(
-            layerCtx,
-            wPlaneParams,
-            state.taylorSeriesColorAxisX,
-            state.taylorSeriesColorAxisY,
-            'Re(w_approx)',
-            'Im(w_approx)'
-        );
-    }, 'raster');
-
     renderThroughCache({
         cache: wPlanarTransformedLayerCache,
         targetCtx: wCtx,

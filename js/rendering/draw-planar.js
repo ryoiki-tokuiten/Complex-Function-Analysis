@@ -17,7 +17,7 @@ import { LINE_WIDTH_NORMAL, PARTICLE_RADIUS } from '../constants/rendering.js';
 import { mapToCanvasCoords } from '../utils/canvas-utils.js';
 import {
     getMappedTransformProfile, evaluateMappedTransform, isNumericallyStable,
-    createTaylorApproximationTransform, transformFunctions
+    transformFunctions
 } from '../math-utils.js';
 import {
     calculateStreamline, getVectorForStreamline, getVectorFieldValueAtPoint,
@@ -31,7 +31,6 @@ import {
     generateRadialDiscreteStepPointSets
 } from './shape-generators.js';
 import { hslToRgb } from './canvas-primitives.js';
-import { drawTaylorAxes } from './draw-primitives.js';
 
 const EPSILON = 1e-9;
 const DEGENERATE_SEGMENT_EPSILON = 1e-12;
@@ -63,15 +62,6 @@ const LINEAR_SOURCE_POINT_SET_ROLES = new Set([
     'sector-radial',
     'line-horizontal',
     'line-vertical'
-]);
-
-const TAYLOR_Y_AXIS_ROLES = new Set([
-    'grid-horizontal',
-    'polar-angular',
-    'logpolar-angular',
-    'strip-boundary',
-    'line-horizontal',
-    'sector-arc'
 ]);
 
 function isFiniteNumber(value) {
@@ -314,14 +304,6 @@ function createGridSeeds(planeParams, renderState) {
         for (let col = 0; col <= cols; col++) {
             const x = xRange[0] + (col / cols) * (xRange[1] - xRange[0]);
             seeds.push(x, y);
-        }
-    }
-
-    if (Array.isArray(renderState.manualSeedPoints)) {
-        for (const seed of renderState.manualSeedPoints) {
-            if (isRenderableComplexPoint(seed)) {
-                seeds.push(seed.re, seed.im);
-            }
         }
     }
 
@@ -645,7 +627,7 @@ function drawMappedProbeNeighborhood(ctx, planeParams, center, radius, transform
 
 function getArrowColor(vector, brightness) {
     const phase = Math.atan2(vector.im, vector.re);
-    let hue = ((phase + Math.PI) / TWO_PI) % 1.0;
+    let hue = (phase / TWO_PI) % 1.0;
 
     if (hue < 0) {
         hue += 1.0;
@@ -1283,50 +1265,7 @@ export function drawPlanarTransformedShape(ctx, planeParams, tf, options = {}) {
     }
 }
 
-export function getTaylorPointSetColor(pointSet, axisColorX, axisColorY) {
-    return TAYLOR_Y_AXIS_ROLES.has(pointSet.role) ? axisColorY : axisColorX;
-}
 
-export function drawPlanarTaylorApproximation(
-    ctx,
-    wPlaneParamsOriginal,
-    originalFuncKey,
-    taylorCenter,
-    taylorOrder,
-    axisColorX,
-    axisColorY,
-    options = {}
-) {
-    if (options.includeAxes !== false) {
-        drawTaylorAxes(
-            ctx,
-            wPlaneParamsOriginal,
-            axisColorX,
-            axisColorY,
-            'Re(w_approx)',
-            'Im(w_approx)'
-        );
-    }
-
-    const taylorApproxFunc = createTaylorApproximationTransform(
-        originalFuncKey,
-        taylorCenter,
-        taylorOrder
-    );
-    const pointSets = generateCurrentInputShapePointSets(zPlaneParams, {
-        currentFunction: appState.currentFunction,
-        zetaContinuationEnabled: appState.zetaContinuationEnabled
-    });
-
-    drawPointSetCollectionOnPlane(ctx, wPlaneParamsOriginal, pointSets, {
-        transformFunc: taylorApproxFunc,
-        colorResolver: pointSet => getTaylorPointSetColor(pointSet, axisColorX, axisColorY),
-        lineWidthResolver: pointSet => pointSet.lineWidth || LINE_WIDTH_NORMAL,
-        preparePointSet: pointSet => preparePointSetForMappedPlane(pointSet, taylorApproxFunc, {
-            sampleCountResolver: () => DEFAULT_POINTS_PER_LINE
-        })
-    });
-}
 
 export function drawPlanarTransformedProbe(ctx, planeParams, tf) {
     withSavedContext(ctx, () => {

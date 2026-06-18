@@ -2,6 +2,7 @@ import { COLOR_GRID_LINES, COLOR_AXES, COLOR_TEXT_ON_CANVAS } from '../constants
 import { TWO_PI } from '../constants/numerical.js';
 import { LINE_WIDTH_THIN, LINE_WIDTH_NORMAL, LINE_WIDTH_THICK } from '../constants/rendering.js';
 import { mapToCanvasCoords } from '../utils/canvas-utils.js';
+import { state } from '../store/state.js';
 
 /**
  * Shared canvas primitives used across planar, Fourier, and Laplace renderers.
@@ -69,7 +70,7 @@ export function hslToRgb(h, s, l) {
     );
 }
 
-export function drawGridLines(ctx, params, stepX = 1, stepY = 1, color = COLOR_GRID_LINES) {
+function drawGridLines(ctx, params, stepX = 1, stepY = 1, color = COLOR_GRID_LINES) {
     const { xRange, yRange } = getCanvasPlaneRanges(params);
 
     ctx.save();
@@ -125,8 +126,9 @@ export function drawGrid(ctx, params, options = {}) {
     const spanX = xRange[1] - xRange[0];
     const spanY = yRange[1] - yRange[0];
 
-    const stepX = calculateGridStep(spanX, 10);
-    const stepY = calculateGridStep(spanY, 10);
+    const targetCount = options.targetCount ?? (state?.gridDensity ?? 10);
+    const stepX = calculateGridStep(spanX, targetCount);
+    const stepY = calculateGridStep(spanY, targetCount);
 
     let minorStepX = stepX / 5;
     let minorStepY = stepY / 5;
@@ -141,8 +143,43 @@ export function drawGrid(ctx, params, options = {}) {
         minorStepY = stepY / 4;
     }
 
-    drawGridLines(ctx, params, minorStepX, minorStepY, 'rgba(40, 60, 80, 0.15)');
-    drawGridLines(ctx, params, stepX, stepY, 'rgba(60, 80, 100, 0.3)');
+    const minorColor = options.minorColor ?? 'rgba(40, 60, 80, 0.15)';
+    const majorColor = options.majorColor ?? 'rgba(60, 80, 100, 0.3)';
+
+    // Extract alpha opacities from rgba strings
+    let minorAlpha = 0.15;
+    const minorMatch = minorColor.match(/rgba\(\s*\d+\s*,\s*\d+\s*,\s*\d+\s*,\s*([\d\.]+)\s*\)/);
+    if (minorMatch) {
+        minorAlpha = parseFloat(minorMatch[1]);
+    }
+    let majorAlpha = 0.3;
+    const majorMatch = majorColor.match(/rgba\(\s*\d+\s*,\s*\d+\s*,\s*\d+\s*,\s*([\d\.]+)\s*\)/);
+    if (majorMatch) {
+        majorAlpha = parseFloat(majorMatch[1]);
+    }
+
+    // Dynamic fade-out based on pixel spacing
+    const scaleX = params.scale?.x ?? 1;
+    const pixelSpacingX = stepX * scaleX;
+
+    // Smoothly fade out minor grid lines if they get too close (between 45 and 90 pixels)
+    const minorFade = Math.max(0, Math.min(1, (pixelSpacingX - 45) / 45));
+    const finalMinorColor = minorFade > 0 
+        ? minorColor.replace(/[\d\.]+\)$/, `${(minorAlpha * minorFade).toFixed(3)})`) 
+        : 'rgba(0,0,0,0)';
+
+    // Smoothly fade out major grid lines if they get extremely close (between 15 and 35 pixels)
+    const majorFade = Math.max(0, Math.min(1, (pixelSpacingX - 15) / 20));
+    const finalMajorColor = majorFade > 0 
+        ? majorColor.replace(/[\d\.]+\)$/, `${(majorAlpha * majorFade).toFixed(3)})`) 
+        : 'rgba(0,0,0,0)';
+
+    if (minorFade > 0) {
+        drawGridLines(ctx, params, minorStepX, minorStepY, finalMinorColor);
+    }
+    if (majorFade > 0) {
+        drawGridLines(ctx, params, stepX, stepY, finalMajorColor);
+    }
 }
 
 export function normalizeAxesOptions(labelOrOptions, maybeYLabel) {

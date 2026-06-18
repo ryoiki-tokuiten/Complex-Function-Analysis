@@ -324,10 +324,7 @@ vec2 dynamicEvaluateBasicOnSheet(
 function sourceRecords(appState) {
     const sourceConfig = JSON.parse(JSON.stringify(appState.dynamicPlotting.source || {}));
     if (sourceConfig.kind === 'custom_points') {
-        sourceConfig.points = [
-            ...(sourceConfig.points || []),
-            ...(appState.generalPointsList || [])
-        ];
+        sourceConfig.points = sourceConfig.points || [];
     }
     const parameters = parameterMap(appState);
     const source = generateDiscreteSource(sourceConfig, { parameters });
@@ -513,10 +510,7 @@ export function dynamicAggregateGLSLSignature(appState) {
         term: appState.dynamicPlotting.term,
         reduction: appState.dynamicPlotting.reduction,
         parameters: appState.dynamicPlotting.parameters,
-        visibleCount: appState.dynamicPlotting.playback?.visibleCount,
-        generalPoints: appState.dynamicPlotting.source?.kind === 'custom_points'
-            ? appState.generalPointsList
-            : null
+        visibleCount: appState.dynamicPlotting.playback?.visibleCount
     });
 }
 

@@ -675,7 +675,7 @@ export function domainColorForValue(value, snapshot) {
     const saturation = finite(style.saturation) ? style.saturation : 1;
     const lightness = Math.min(0.95, Math.max(0.05, (0.5 + (lightnessBase - 0.5) * contrast) * brightness));
     const finalSaturation = Math.min(1, Math.max(0, saturation));
-    let hue = ((phase + PI) / TWO_PI) % 1;
+    let hue = (phase / TWO_PI) % 1;
     if (hue < 0) hue += 1;
     return applyLightnessAndSaturation(paletteColor(snapshot.paletteStops, hue), lightness, finalSaturation);
 }
@@ -776,7 +776,7 @@ export function writeDomainColor(data, idx, re, im, snapshot) {
     const logMod = Math.log1p(modValue);
     const lightnessBase = magnitudeLightness(logMod, style.lightnessCycles);
     const lightness = Math.min(0.95, Math.max(0.05, (0.5 + (lightnessBase - 0.5) * style.contrast) * style.brightness));
-    let hue = ((phase + PI) / TWO_PI) % 1;
+    let hue = (phase / TWO_PI) % 1;
     if (hue < 0) hue += 1;
     const base = paletteComponents(snapshot.paletteStops, hue);
     writeStyledColor(data, idx, base.r, base.g, base.b, lightness, style.saturation);

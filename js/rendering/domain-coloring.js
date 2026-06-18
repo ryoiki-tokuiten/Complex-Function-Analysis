@@ -79,6 +79,16 @@ function parsePaletteColors(colorsStr) {
                 return [r, g, b];
             }
             return [0, 0, 0];
+        } else if (s.startsWith('rgb')) {
+            const match = s.match(/rgb\((\d+),\s*(\d+),\s*(\d+)\)/);
+            if (match) {
+                return [
+                    parseInt(match[1]) / 255,
+                    parseInt(match[2]) / 255,
+                    parseInt(match[3]) / 255
+                ];
+            }
+            return [0, 0, 0];
         } else if (s.startsWith('#')) {
             const hex = s.substring(1);
             const r = parseInt(hex.slice(0, 2), 16) / 255;
@@ -108,6 +118,10 @@ export function renderPlanarDomainColoring(tCtx, pP, isWPC, sTF) {
         cancelZPlaneDynamicsIfNeeded(isWPC);
         renderConstantPlanarDomainColoring(tCtx, pP, sourceProfile.constantValue);
         return;
+    }
+
+    if (context.domainColoringDirty) {
+        cancelPlanarDomainDynamics();
     }
 
     const dynamicsSnapshot = buildPlanarDomainDynamicsSnapshot(state, pP, { isWPlaneColoring: !!isWPC });
@@ -239,7 +253,7 @@ export function domainColorForValue(re, im, runtimeState) {
     const lContrasted = 0.5 + (lBase - 0.5) * contrast;
     const lFinal = Math.min(0.95, Math.max(0.05, lContrasted * brightness));
     const sFinal = Math.min(1.0, Math.max(0.0, saturation));
-    let h = ((phase + Math.PI) / (2.0 * Math.PI)) % 1.0;
+    let h = (phase / (2.0 * Math.PI)) % 1.0;
     if (h < 0) h += 1.0;
 
     const paletteId = (runtimeState && runtimeState.domainPalette) ? runtimeState.domainPalette : 'calming';

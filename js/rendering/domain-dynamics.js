@@ -68,6 +68,15 @@ function parsePaletteColor(color) {
         ];
     }
 
+    const rgb = value.match(/rgb\((\d+),\s*(\d+),\s*(\d+)\)/);
+    if (rgb) {
+        return [
+            parseInt(rgb[1], 10) / 255,
+            parseInt(rgb[2], 10) / 255,
+            parseInt(rgb[3], 10) / 255
+        ];
+    }
+
     const hsl = value.match(/hsl\((\d+(?:\.\d+)?),\s*(\d+(?:\.\d+)?)%,\s*(\d+(?:\.\d+)?)%\)/);
     if (!hsl) return [0, 0, 0];
 

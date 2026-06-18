@@ -85,7 +85,6 @@ const rawState = {
     streamlineMaxLength: 400,
     streamlineThickness: 1.5,
     streamlineSeedDensityFactor: 0.8,
-    manualSeedPoints: [], 
 
     imageResolution: 300,
     imageSize: 2.0,
@@ -122,8 +121,8 @@ const rawState = {
     domainBrightness: 1.0,
     domainContrast: 1.0,
     domainSaturation: 1.0,
-    domainLightnessCycles: 0.0,
-    domainPalette: 'analytic-base',
+    domainLightnessCycles: 1.0,
+    domainPalette: 'arctic-frost',
 
     themeId: 'rose',
     gridColor1: '#FB923C',
@@ -218,9 +217,6 @@ const rawState = {
             ]
         }
     ],
-
-    generalPointsEnabled: false,
-    generalPointsList: [],
 
     dynamicPlotting: {
         enabled: false,

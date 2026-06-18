@@ -546,12 +546,10 @@ function syncTaylorControls() {
     syncPointEditor('taylorCenterUI', [state.taylorSeriesCustomCenter]);
 }
 
-function syncGeneralPointControls() {
-    syncDisclosure('enableGeneralPointsCb', 'generalPointsControlsContainer', state.generalPointsEnabled);
-    syncPointEditor('generalPointsUI', state.generalPointsList);
-}
-
 function syncVectorFlowControls() {
+    setChecked('enableVectorFieldCb', state.vectorFieldEnabled);
+    setHidden('vectorFieldOptionsDiv', !state.vectorFieldEnabled);
+
     setChecked('enableStreamlineFlowCb', state.streamlineFlowEnabled);
     setHidden('streamlineOptionsDetailsDiv', !state.streamlineFlowEnabled);
     syncValueBindings(STREAMLINE_VALUE_BINDINGS);
@@ -559,9 +557,6 @@ function syncVectorFlowControls() {
     syncValueBindings(PARTICLE_VALUE_BINDINGS);
     setChecked('enableParticleAnimationCb', state.particleAnimationEnabled);
     setHidden('particleAnimationDetailsDiv', !state.particleAnimationEnabled);
-
-    setChecked('showVectorFieldPanelCb', state.showVectorFieldPanelEnabled);
-    setHidden('vectorFlowOptionsContent', !state.showVectorFieldPanelEnabled);
 }
 
 function syncRiemannAndTransformDisplays() {
@@ -581,7 +576,6 @@ export function updateSliderLabelsAndDisplay() {
         syncComplexParameterControls();
         syncNormalModeDisplays();
         syncTaylorControls();
-        syncGeneralPointControls();
         syncParameterControlsPanelVisibility();
         syncVectorFlowControls();
         syncRiemannAndTransformDisplays();

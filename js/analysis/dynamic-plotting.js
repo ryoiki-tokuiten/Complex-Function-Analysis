@@ -333,7 +333,6 @@ function sourceSignature() {
     const source = dynamicConfig().source || {};
     return stableStringify({
         source,
-        generalPoints: source.kind === 'custom_points' ? state.generalPointsList : null,
         parameters: parameterEnvironment()
     });
 }
@@ -345,10 +344,7 @@ function getSource() {
 
     const sourceConfig = clonePlain(dynamicConfig().source || {});
     if (sourceConfig.kind === 'custom_points') {
-        sourceConfig.points = [
-            ...(Array.isArray(sourceConfig.points) ? sourceConfig.points : []),
-            ...(Array.isArray(state.generalPointsList) ? clonePlain(state.generalPointsList) : [])
-        ];
+        sourceConfig.points = Array.isArray(sourceConfig.points) ? sourceConfig.points : [];
     }
 
     const source = generateDiscreteSource(sourceConfig, {
@@ -531,10 +527,7 @@ function resultSignature(selectedFunction, aggregateParameter, stageIndex) {
         aggregateParameter,
         stageIndex,
         transformId: getTransformId(selectedFunction),
-        transformEnvironment: transformEnvironmentSignature(),
-        generalPoints: config.source?.kind === 'custom_points'
-            ? state.generalPointsList
-            : null
+        transformEnvironment: transformEnvironmentSignature()
     });
 }
 
@@ -786,10 +779,7 @@ export function getDynamicPlottingCacheKey() {
         aggregateParameter: config.aggregateParameter,
         visibleCount: config.playback?.visibleCount,
         display: config.display,
-        transformEnvironment: transformEnvironmentSignature(),
-        generalPoints: config.source?.kind === 'custom_points'
-            ? state.generalPointsList
-            : null
+        transformEnvironment: transformEnvironmentSignature()
     });
 }
 
