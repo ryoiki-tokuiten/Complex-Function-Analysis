@@ -1,5 +1,6 @@
 import { eventBus } from '../store/events.js';
 import { domainPalettes } from '../ui/theme-manager.js';
+import { state, context } from '../store/state.js';
 import {
     createDomainDynamicsTileRenderer,
     domainDynamicsSignature,
@@ -9,7 +10,7 @@ import {
 
 const PASS_SCALES = Object.freeze([16, 4, 1]);
 const TILE_SIZE = 64;
-const MAX_WORKERS = 8;
+const MAX_WORKERS = 16;
 const SUPPORTED_FUNCTIONS = new Set([
     'cos',
     'sin',
@@ -157,7 +158,7 @@ function workerCount() {
     const cores = typeof navigator !== 'undefined' && Number.isFinite(navigator.hardwareConcurrency)
         ? navigator.hardwareConcurrency
         : 4;
-    return Math.max(1, Math.min(MAX_WORKERS, Math.floor(cores) || 1));
+    return Math.max(1, Math.min(MAX_WORKERS, cores));
 }
 
 function createTileList(passWidth, passHeight, scale) {
@@ -215,6 +216,26 @@ function clearTarget(targetCtx, viewport) {
     }
 }
 
+function setDomainProcessing(isWPlane, isProcessing) {
+    if (isWPlane) {
+        state.isProcessingWDomainDynamics = isProcessing;
+    } else {
+        state.isProcessingZDomainDynamics = isProcessing;
+    }
+
+    if (typeof document !== 'undefined' && typeof document.getElementById === 'function') {
+        const indicatorId = isWPlane ? 'w_plane_refining_indicator' : 'z_plane_refining_indicator';
+        const indicator = document.getElementById(indicatorId);
+        if (indicator) {
+            if (isProcessing) {
+                indicator.classList.remove('hidden');
+            } else {
+                indicator.classList.add('hidden');
+            }
+        }
+    }
+}
+
 class WorkerCpuDomainDynamicsBackend {
     constructor() {
         this.id = 'worker-cpu';
@@ -246,7 +267,10 @@ class WorkerCpuDomainDynamicsBackend {
 
     cancel(jobId = null) {
         const cancelledJobId = jobId || this.activeJob?.id || null;
-        if (this.activeJob) this.activeJob.cancelled = true;
+        if (this.activeJob && (jobId === null || this.activeJob.id === jobId)) {
+            this.activeJob.cancelled = true;
+            setDomainProcessing(this.activeJob.snapshot.isWPlaneColoring, false);
+        }
         this.queue = [];
         this.pass = null;
         if (this.inlineTimer) {
@@ -318,6 +342,12 @@ class WorkerCpuDomainDynamicsBackend {
         if (!job || job.cancelled) return;
 
         job.passIndex += 1;
+
+        if (job.passIndex > (job.maxAllowedPassIndex ?? PASS_SCALES.length - 1)) {
+            job.passIndex -= 1;
+            return;
+        }
+
         if (job.passIndex >= PASS_SCALES.length) {
             this.pass = null;
             return;
@@ -389,12 +419,19 @@ class WorkerCpuDomainDynamicsBackend {
             pass.remaining -= 1;
         } else if (message.type === 'tile') {
             const image = createImageDataFromPixels(message.pixels, message.tile.width, message.tile.height);
-            if (image) pass.ctx.putImageData(image, message.tile.x, message.tile.y);
+            if (image) {
+                pass.ctx.putImageData(image, message.tile.x, message.tile.y);
+            }
             pass.remaining -= 1;
         }
 
         if (pass.remaining <= 0) {
             drawPassToTarget(job, pass);
+            eventBus.emit('redraw:all');
+            if (job.passIndex === PASS_SCALES.length - 1) {
+                lastCompletedSnapshot[job.snapshot.isWPlaneColoring ? 'w' : 'z'] = job.snapshot;
+                setDomainProcessing(job.snapshot.isWPlaneColoring, false);
+            }
             this.startNextPass();
         }
     }
@@ -438,24 +475,139 @@ export function selectDomainDynamicsBackend() {
     return workerBackend;
 }
 
+export function domainDynamicsFuncSignature(snapshot) {
+    if (!snapshot) return '';
+    return JSON.stringify({
+        isWPlaneColoring: snapshot.isWPlaneColoring,
+        functionKey: snapshot.functionKey,
+        chainingEnabled: snapshot.chainingEnabled,
+        chainMode: snapshot.chainMode,
+        chainCount: snapshot.chainCount,
+        fractalOrbitColoringEnabled: snapshot.fractalOrbitColoringEnabled,
+        algebraicChainingEnabled: snapshot.algebraicChainingEnabled,
+        algebraicChainingTerms: snapshot.algebraicChainingTerms,
+        polynomialN: snapshot.polynomialN,
+        polynomialCoeffs: snapshot.polynomialCoeffs,
+        mobiusA: snapshot.mobiusA,
+        mobiusB: snapshot.mobiusB,
+        mobiusC: snapshot.mobiusC,
+        mobiusD: snapshot.mobiusD,
+        fractionalPowerN: snapshot.fractionalPowerN,
+        zetaContinuationEnabled: snapshot.zetaContinuationEnabled,
+        style: snapshot.style,
+        paletteStops: snapshot.paletteStops
+    });
+}
+
+export function getCurrentFuncSignature(isWPlane = false) {
+    if (!state) return '';
+    return JSON.stringify({
+        isWPlaneColoring: isWPlane,
+        functionKey: state.currentFunction,
+        chainingEnabled: !!state.chainingEnabled,
+        chainMode: state.chainingMode || 'recursion',
+        chainCount: Math.max(1, Math.floor(Number(state.chainCount) || 1)),
+        fractalOrbitColoringEnabled: !!state.fractalOrbitColoringEnabled,
+        algebraicChainingEnabled: !!state.algebraicChainingEnabled,
+        algebraicChainingTerms: state.algebraicChainingTerms,
+        polynomialN: Math.max(0, Math.floor(Number(state.polynomialN) || 0)),
+        polynomialCoeffs: state.polynomialCoeffs,
+        mobiusA: state.mobiusA,
+        mobiusB: state.mobiusB,
+        mobiusC: state.mobiusC,
+        mobiusD: state.mobiusD,
+        fractionalPowerN: state.fractionalPowerN,
+        zetaContinuationEnabled: !!state.zetaContinuationEnabled,
+        style: {
+            brightness: Number(state.domainBrightness) || 1,
+            contrast: Number(state.domainContrast) || 1,
+            saturation: Number(state.domainSaturation) || 1,
+            lightnessCycles: Number(state.domainLightnessCycles) || 0
+        },
+        paletteStops: state.domainPalette
+    });
+}
+
+const staleDomainCanvas = { z: null, w: null };
+const staleViewport = { z: null, w: null };
+const staleFuncSignature = { z: null, w: null };
+const lastCompletedSnapshot = { z: null, w: null };
+
+export function captureBeforeResize() {
+    const backend = selectDomainDynamicsBackend();
+    
+    // Z plane
+    const zJob = backend?.activeJob;
+    if (zJob && !zJob.snapshot.isWPlaneColoring) {
+        captureStaleDomain(context.zDomainColorCanvas || zJob.targetCtx.canvas, zJob.snapshot, false);
+    } else if (context.zDomainColorCanvas && lastCompletedSnapshot.z) {
+        captureStaleDomain(context.zDomainColorCanvas, lastCompletedSnapshot.z, false);
+    }
+
+    // W plane
+    const wJob = backend?.activeJob;
+    if (wJob && wJob.snapshot.isWPlaneColoring) {
+        captureStaleDomain(context.wDomainColorCanvas || wJob.targetCtx.canvas, wJob.snapshot, true);
+    } else if (context.wDomainColorCanvas && lastCompletedSnapshot.w) {
+        captureStaleDomain(context.wDomainColorCanvas, lastCompletedSnapshot.w, true);
+    }
+}
+
+export function getStaleDomainData(isWPlane = false) {
+    const key = isWPlane ? 'w' : 'z';
+    return {
+        canvas: staleDomainCanvas[key],
+        viewport: staleViewport[key],
+        signature: staleFuncSignature[key]
+    };
+}
+
+function captureStaleDomain(canvas, snapshot, isWPlane = false) {
+    if (!canvas || !snapshot || !snapshot.viewport) return;
+    const key = isWPlane ? 'w' : 'z';
+    if (!staleDomainCanvas[key]) {
+        staleDomainCanvas[key] = document.createElement('canvas');
+    }
+    staleDomainCanvas[key].width = canvas.width;
+    staleDomainCanvas[key].height = canvas.height;
+    const ctx = staleDomainCanvas[key].getContext('2d');
+    ctx.drawImage(canvas, 0, 0);
+    staleViewport[key] = JSON.parse(JSON.stringify(snapshot.viewport));
+    staleFuncSignature[key] = domainDynamicsFuncSignature(snapshot);
+}
+
+let pendingJobTimeout = null;
+
 export function renderPlanarDomainDynamics(targetCtx, planeParams, snapshot) {
     if (!targetCtx || !planeParams || !snapshot) return false;
 
     const signature = domainDynamicsSignature(snapshot);
-    if (signature === activeSignature && activeJobId) return true;
+    if (signature === activeSignature) return true;
 
-    if (activeBackend) activeBackend.cancel(activeJobId);
+    if (pendingJobTimeout) {
+        clearTimeout(pendingJobTimeout);
+        pendingJobTimeout = null;
+    }
+
+    if (activeBackend) {
+        if (activeBackend.activeJob && activeBackend.activeJob.snapshot) {
+            captureStaleDomain(targetCtx.canvas, activeBackend.activeJob.snapshot, activeBackend.activeJob.snapshot.isWPlaneColoring);
+        }
+        activeBackend.cancel(activeJobId);
+    }
 
     activeSignature = signature;
+    clearTarget(targetCtx, snapshot.viewport);
+
     activeJobId = nextJobId;
     nextJobId += 1;
-    clearTarget(targetCtx, snapshot.viewport);
 
     const job = {
         id: activeJobId,
         targetCtx,
         planeParams,
-        snapshot
+        snapshot,
+        maxAllowedPassIndex: 0 // Only run scale 16 pass instantly!
     };
 
     const selected = selectDomainDynamicsBackend(snapshot);
@@ -465,16 +617,37 @@ export function renderPlanarDomainDynamics(targetCtx, planeParams, snapshot) {
         workerBackend.start(job);
     }
 
+    setDomainProcessing(snapshot.isWPlaneColoring, true);
+
+    // Debounce the heavier passes (scale 4 and scale 1) during zoom/pan storms
+    pendingJobTimeout = setTimeout(() => {
+        const currentJob = activeBackend?.activeJob;
+        if (currentJob && currentJob.id === job.id && !currentJob.cancelled) {
+            currentJob.maxAllowedPassIndex = PASS_SCALES.length - 1; // Allow all passes
+            if (activeBackend.startNextPass) {
+                activeBackend.startNextPass();
+            }
+        }
+    }, 100);
+
     return true;
 }
 
 export function cancelPlanarDomainDynamics() {
+    if (pendingJobTimeout) {
+        clearTimeout(pendingJobTimeout);
+        pendingJobTimeout = null;
+    }
     if (activeBackend) activeBackend.cancel(activeJobId);
     activeSignature = null;
     activeJobId = 0;
 }
 
 export function disposePlanarDomainDynamics() {
+    if (pendingJobTimeout) {
+        clearTimeout(pendingJobTimeout);
+        pendingJobTimeout = null;
+    }
     workerBackend.dispose();
     activeBackend = null;
     activeSignature = null;

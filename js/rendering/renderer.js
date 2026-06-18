@@ -56,6 +56,7 @@ import {
     drawDynamicZPlane,
     getDynamicSphereSceneData
 } from './draw-dynamic-plotting.js';
+import { getStaleDomainData, getCurrentFuncSignature } from './domain-dynamics.js';
 
 let zCanvas;
 let wCanvas;
@@ -239,14 +240,27 @@ function drawPlaneLayer(ctx, planeParams, planeKey, drawCallback, mode = 'captur
         return false;
     }
 
+    // Raster mode is always faster when drawn directly to the canvas 2D context,
+    // avoiding texture uploads and copies.
+    if (mode === 'raster' || !state.webglLineRenderingEnabled) {
+        drawCallback(ctx);
+        return true;
+    }
+
     const pipeline = WEBGL_PIPELINES[mode] || WEBGL_PIPELINES.capture;
-    const rendered = pipeline.some(renderer => renderer(ctx, planeParams, planeKey, drawCallback));
+    let rendered = false;
+
+    if (state.webglLineRenderingEnabled) {
+        rendered = pipeline.some(renderer => {
+            // Skip the slow WebGL raster fallback
+            if (renderer === drawWithWebGLRaster) return false;
+            return renderer(ctx, planeParams, planeKey, drawCallback);
+        });
+    }
 
     if (!rendered) {
-        console.error(mode === 'raster'
-            ? 'WebGL raster rendering failed.'
-            : 'WebGL capture/raster rendering failed.'
-        );
+        drawCallback(ctx);
+        rendered = true;
     }
 
     return rendered;
@@ -547,7 +561,56 @@ function fillCanvasBackground(ctx, planeParams) {
 
 function drawDomainOrSolidBackground(ctx, domainCanvas, planeParams) {
     if (state.domainColoringEnabled && domainCanvas) {
-        ctx.drawImage(domainCanvas, 0, 0);
+        ctx.save();
+        try {
+            const isWPlane = !planeParams.currentVisXRange;
+            const isProcessing = isWPlane ? state.isProcessingWDomainDynamics : state.isProcessingZDomainDynamics;
+            if (isProcessing) {
+                ctx.filter = 'blur(3px)';
+            }
+
+            const stale = getStaleDomainData(isWPlane);
+            const curRanges = getPlaneRanges(planeParams);
+            const curW = planeParams.width;
+            const curH = planeParams.height;
+            const curSig = getCurrentFuncSignature(isWPlane);
+            const hasValidStale = !!(stale && stale.canvas && stale.viewport && stale.signature === curSig && curRanges);
+
+            if (hasValidStale) {
+                const oldVp = stale.viewport;
+                const oldX0 = oldVp.xRange[0];
+                const oldX1 = oldVp.xRange[1];
+                const oldY0 = oldVp.yRange[0];
+                const oldY1 = oldVp.yRange[1];
+
+                const curX0 = curRanges.xMin;
+                const curX1 = curRanges.xMax;
+                const curY0 = curRanges.yMin;
+                const curY1 = curRanges.yMax;
+
+                if (Number.isFinite(oldX0) && Number.isFinite(curX0)) {
+                    const destX = ((oldX0 - curX0) / (curX1 - curX0)) * curW;
+                    const destY = ((curY1 - oldY1) / (curY1 - curY0)) * curH;
+                    const destW = ((oldX1 - oldX0) / (curX1 - curX0)) * curW;
+                    const destH = ((oldY1 - oldY0) / (curY1 - curY0)) * curH;
+
+                    ctx.imageSmoothingEnabled = true;
+                    if (ctx.imageSmoothingQuality !== undefined) {
+                        ctx.imageSmoothingQuality = 'high';
+                    }
+                    ctx.drawImage(stale.canvas, destX, destY, destW, destH);
+                }
+            } else {
+                ctx.fillStyle = COLOR_CANVAS_BACKGROUND;
+                ctx.fillRect(0, 0, curW, curH);
+            }
+
+            if (!isProcessing || !hasValidStale) {
+                ctx.drawImage(domainCanvas, 0, 0);
+            }
+        } finally {
+            ctx.restore();
+        }
         return;
     }
 
@@ -555,8 +618,8 @@ function drawDomainOrSolidBackground(ctx, domainCanvas, planeParams) {
 }
 
 function getPlaneRanges(planeParams) {
-    const [xMin, xMax] = planeParams?.currentVisXRange || [];
-    const [yMin, yMax] = planeParams?.currentVisYRange || [];
+    const [xMin, xMax] = planeParams?.currentVisXRange || planeParams?.xRange || [];
+    const [yMin, yMax] = planeParams?.currentVisYRange || planeParams?.yRange || [];
 
     return { xMin, xMax, yMin, yMax };
 }

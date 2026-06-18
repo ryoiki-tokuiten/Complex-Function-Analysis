@@ -291,7 +291,9 @@ const rawState = {
     navigationTrailLength: 0,
     navigationKeys: {},
     navigationTrail: [],
-    navigationLastTime: 0
+    navigationLastTime: 0,
+    isProcessingZDomainDynamics: false,
+    isProcessingWDomainDynamics: false
 };
 
 function createDeepProxy(obj, path = []) {

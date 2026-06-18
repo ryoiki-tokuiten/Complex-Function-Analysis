@@ -7,9 +7,11 @@ const DOMAIN_LIGHTNESS_MIN = 0.34;
 const DOMAIN_LIGHTNESS_MAX = 0.72;
 const DOMAIN_LIGHTNESS_DETAIL_BASE = 0.72;
 const DOMAIN_LIGHTNESS_DETAIL_SCALE = 0.28;
-const DYNAMICS_ESCAPE_RADIUS = 64;
+import { createJitTileRenderer } from './domain-dynamics-jit.js';
+
+const DYNAMICS_ESCAPE_RADIUS = 1e4;
 const DYNAMICS_ESCAPE_RADIUS_SQ = DYNAMICS_ESCAPE_RADIUS * DYNAMICS_ESCAPE_RADIUS;
-const DOMAIN_COLOR_CHAIN_BAILOUT_MAGNITUDE = 1e18;
+const DOMAIN_COLOR_CHAIN_BAILOUT_MAGNITUDE = 1e8;
 const NUM_ZETA_TERMS_DIRECT_SUM = 100;
 const NUM_ZETA_TERMS_ETA_SERIES = 500;
 const NUM_ZETA_HASSE_LEVELS = 32;
@@ -516,6 +518,15 @@ function createLaurentParameterAccelerator(snapshot) {
 }
 
 function createDynamicsAccelerator(snapshot) {
+    const jit = createJitTileRenderer(
+        snapshot, 
+        writeDynamicsEscapeColor, 
+        writeBlack, 
+        writeDomainColor,
+        evaluateBuiltin
+    );
+    if (jit) return jit;
+
     return createPolynomialParameterAccelerator(snapshot) ||
         createLaurentParameterAccelerator(snapshot) ||
         NO_ACCELERATOR;
@@ -688,7 +699,7 @@ function writeRgb(data, idx, r, g, b) {
     data[idx + 3] = 255;
 }
 
-function writeBlack(data, idx) {
+export function writeBlack(data, idx) {
     writeRgb(data, idx, 0, 0, 0);
 }
 
@@ -748,7 +759,7 @@ function styleValues(snapshot) {
     };
 }
 
-function writeDomainColor(data, idx, re, im, snapshot) {
+export function writeDomainColor(data, idx, re, im, snapshot) {
     if (!finite(re) || !finite(im)) {
         writeBlack(data, idx);
         return;
@@ -771,7 +782,7 @@ function writeDomainColor(data, idx, re, im, snapshot) {
     writeStyledColor(data, idx, base.r, base.g, base.b, lightness, style.saturation);
 }
 
-function writeDynamicsEscapeColor(data, idx, smoothIteration, count, snapshot) {
+export function writeDynamicsEscapeColor(data, idx, smoothIteration, count, snapshot) {
     const style = styleValues(snapshot);
     const t = Math.max(0, Math.min(1, smoothIteration / Math.max(1, count)));
     const base = paletteComponents(snapshot.paletteStops, Math.min(t, 0.9999));
@@ -974,6 +985,13 @@ function renderPolynomialParameterTile(snapshot, tile, accelerator) {
 }
 
 export function renderDomainDynamicsTile(snapshot, tile, accelerator = createDynamicsAccelerator(snapshot)) {
+    if (accelerator.type === 'jit') {
+        return accelerator.renderTile(
+            tile, DYNAMICS_ESCAPE_RADIUS_SQ, DOMAIN_COLOR_CHAIN_BAILOUT_MAGNITUDE,
+            DYNAMICS_ESCAPE_RADIUS, writeDynamicsEscapeColor, writeBlack, writeDomainColor
+        );
+    }
+
     const accelerated = renderPolynomialParameterTile(snapshot, tile, accelerator);
     if (accelerated) return accelerated;
 

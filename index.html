@@ -449,7 +449,7 @@
                                 <output id="chain_count_value_display">1</output>
                             </label>
                             <div class="slider-container">
-                                <input type="range" id="chain_count_slider" name="chain_count_slider" min="1" max="4096"
+                                <input type="range" id="chain_count_slider" name="chain_count_slider" min="1" max="512"
                                     step="1" value="1" data-tooltip="Number of repeated applications">
                             </div>
 
@@ -2209,6 +2209,10 @@
                     </div>
                     <div id="z_plane_canvas_wrapper" style="position:relative; width: 100%; height: 100%; display: flex; flex: 1;">
                         <canvas id="z_plane_canvas"></canvas>
+                        <div id="z_plane_refining_indicator" class="refining-indicator hidden">
+                            <span class="pulsing-dot"></span>
+                            <span>Refining...</span>
+                        </div>
                         <div id="z_plane_probe_info" class="probe-info-overlay hidden"></div>
                         
                         <!-- Three.js Transformation Overlays -->
@@ -2280,6 +2284,10 @@
                     </div>
                     <div id="w_plane_canvas_wrapper" style="position: relative; width: 100%; height: 100%; display: flex; flex: 1;">
                         <canvas id="w_plane_canvas"></canvas>
+                        <div id="w_plane_refining_indicator" class="refining-indicator hidden">
+                            <span class="pulsing-dot"></span>
+                            <span>Refining...</span>
+                        </div>
                         <div id="w_plane_plotly_container" class="hidden" style="width: 100%; height: 100%;"></div>
                         <div id="w_plane_probe_info" class="probe-info-overlay hidden"></div>
                         

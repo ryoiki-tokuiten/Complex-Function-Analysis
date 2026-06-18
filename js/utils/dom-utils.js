@@ -5,6 +5,7 @@ import { updatePlaneViewportRanges } from './canvas-utils.js';
 import { initializeWebGLLineSupport } from '../rendering/webgl-planar.js';
 import { initializeWebGLDomainColoringSupport } from '../rendering/webgl-domain-coloring.js';
 import { disposeRiemannSurface } from '../rendering/webgl-riemann-surface.js';
+import { captureBeforeResize } from '../rendering/domain-dynamics.js';
 
 const { controls, polynomialCoeffUIElements } = context;
 
@@ -455,6 +456,9 @@ export function setupCanvasBaseParams(planeParams, canvasElement, sphereViewObj,
 }
 
 export function setupVisualParameters(updateZFromSlider = true, updateWFromSlider = true) {
+    if (typeof captureBeforeResize === 'function') {
+        captureBeforeResize();
+    }
     const zIsFullscreen = state.isZFullScreen;
     const wIsFullscreen = state.isWFullScreen;
 

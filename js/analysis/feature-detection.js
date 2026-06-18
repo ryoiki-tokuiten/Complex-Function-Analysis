@@ -23,12 +23,42 @@ import {
     POLE_MAGNITUDE_THRESHOLD
 } from '../constants/numerical.js';
 
+function buildFeatureDetectionCacheKey() {
+    return [
+        state.currentFunction,
+        state.chainingEnabled,
+        state.chainCount,
+        state.algebraicChainingEnabled,
+        JSON.stringify(state.algebraicChainingTerms),
+        JSON.stringify(state.polynomialCoeffs),
+        state.mobiusA?.re, state.mobiusA?.im,
+        state.mobiusB?.re, state.mobiusB?.im,
+        state.mobiusC?.re, state.mobiusC?.im,
+        state.mobiusD?.re, state.mobiusD?.im,
+        state.fractionalPowerN,
+        zPlaneParams.currentVisXRange?.[0], zPlaneParams.currentVisXRange?.[1],
+        zPlaneParams.currentVisYRange?.[0], zPlaneParams.currentVisYRange?.[1]
+    ].join('|');
+}
+
+let lastCriticalPointsKey = null;
 export function findCriticalPoints() {
+    const isZPlanar = !state.riemannSphereViewEnabled || state.splitViewEnabled; 
+    if (!state.showCriticalPoints || !isZPlanar) {
+        state.criticalPoints = [];
+        state.criticalValues = [];
+        lastCriticalPointsKey = null;
+        return;
+    }
+
+    const key = buildFeatureDetectionCacheKey();
+    if (key === lastCriticalPointsKey) {
+        return;
+    }
+    lastCriticalPointsKey = key;
+
     state.criticalPoints = [];
     state.criticalValues = [];
-    const isZPlanar = !state.riemannSphereViewEnabled || state.splitViewEnabled; 
-    if (!state.showCriticalPoints || !isZPlanar) return;
-
 
     const func = getChainedTransformFunction(state.currentFunction);
     const { currentVisXRange: xR, currentVisYRange: yR } = zPlaneParams;
@@ -104,12 +134,24 @@ export function findCriticalPoints() {
     }
 }
 
+let lastZerosPolesKey = null;
 export function findZerosAndPoles() {
+    const isZPlanar = !state.riemannSphereViewEnabled || state.splitViewEnabled;
+    if (!state.showZerosPoles || !isZPlanar) {
+        state.zeros = [];
+        state.poles = [];
+        lastZerosPolesKey = null;
+        return;
+    }
+
+    const key = buildFeatureDetectionCacheKey();
+    if (key === lastZerosPolesKey) {
+        return;
+    }
+    lastZerosPolesKey = key;
+
     state.zeros = [];
     state.poles = [];
-    const isZPlanar = !state.riemannSphereViewEnabled || state.splitViewEnabled;
-    if (!state.showZerosPoles || !isZPlanar) return;
-
 
     const funcOriginal = getChainedTransformFunction(state.currentFunction); 
     const { currentVisXRange: xR, currentVisYRange: yR } = zPlaneParams;
