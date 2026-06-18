@@ -293,7 +293,7 @@ export function applyLightnessAndSaturation(rgb, L, S) {
 
 export function domainColorForValue(re, im, runtimeState) {
     const phase = Math.atan2(im, re);
-    const modValue = Math.sqrt(re * re + im * im);
+    const modValue = Math.hypot(re, im);
     if (!Number.isFinite(modValue)) return [0, 0, 0];
 
     const logMod = Math.log1p(modValue);

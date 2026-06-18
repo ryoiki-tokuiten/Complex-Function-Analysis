@@ -21,8 +21,17 @@ import {
 const { controls } = context;
 
 export function requestRedrawAll() {
+    if (context.redrawRequest) {
+        context.redrawQueued = true;
+        return;
+    }
+
     if (!context.redrawRequest) {
         context.redrawRequest = requestAnimationFrame(() => {
+            context.redrawQueued = false;
+            context.renderingFrame = true;
+            context.domainColoringDirtyDuringFrame = false;
+
             try {
                 const zIsPlanar = !state.riemannSphereViewEnabled || state.splitViewEnabled;
                 if (state.showZerosPoles && !state.navigationModeEnabled && zIsPlanar && state.currentFunction !== 'poincare') {
@@ -52,10 +61,16 @@ export function requestRedrawAll() {
                     drawLaplace3DSurface('laplace_3d_container');
                 }
 
-                context.domainColoringDirty = false;
+                context.domainColoringDirty = context.domainColoringDirtyDuringFrame;
                 context.redrawRequest = null;
+                context.renderingFrame = false;
 
-                if (state.particleAnimationEnabled || (state.webglGpuStressMode && state.domainColoringEnabled)) {
+                if (
+                    context.redrawQueued ||
+                    context.domainColoringDirty ||
+                    state.particleAnimationEnabled ||
+                    (state.webglGpuStressMode && state.domainColoringEnabled)
+                ) {
                     if (state.webglGpuStressMode && state.domainColoringEnabled) {
                         context.domainColoringDirty = true;
                     }
@@ -63,7 +78,8 @@ export function requestRedrawAll() {
                 }
             } catch (error) {
                 console.error("Error during redraw (requestAnimationFrame):", error);
-                context.redrawRequest = null; 
+                context.redrawRequest = null;
+                context.renderingFrame = false;
             }
         });
     }

@@ -371,6 +371,12 @@ float magnitudeLightness(float logMod, float cycles) {
   return mix(0.34, 0.72, clamp(tone, 0.0, 1.0));
 }
 
+float complexLogMagnitude(vec2 value) {
+  float scale = max(abs(value.x), abs(value.y));
+  if (scale <= 0.0) return 0.0;
+  return log(scale) + log(length(value / scale));
+}
+
 vec4 invalidDomainColor() {
   return vec4(0.0, 0.0, 0.0, u_useSphere > 0.5 ? 0.0 : 1.0);
 }
@@ -515,15 +521,34 @@ bool applyConfiguredChain(inout vec2 mappedValue, vec2 parameterValue) {
 
 bool evaluateZeroSeedChain(vec2 parameterValue, out vec2 mappedValue) {
   vec2 current = vec2(0.0);
+  vec2 lastFinite = vec2(0.0);
+  bool hasLastFinite = false;
 
   for (int i = 0; i < ${CFG.maxChainStepsGlsl}; i++) {
     if (i >= u_chainCount) break;
     vec2 nextValue = vec2(0.0);
-    if (!mapDomainValue(current, parameterValue, nextValue)) return false;
-    if (!isFiniteVec2Compat(nextValue)) return false;
+    if (!mapDomainValue(current, parameterValue, nextValue)) {
+      if (hasLastFinite) {
+        mappedValue = lastFinite;
+        return true;
+      }
+      return false;
+    }
+    if (!isFiniteVec2Compat(nextValue)) {
+      if (hasLastFinite) {
+        mappedValue = lastFinite;
+        return true;
+      }
+      return false;
+    }
 
     current = nextValue;
-    if (shouldStopDomainChain(current)) return false;
+    lastFinite = current;
+    hasLastFinite = true;
+    if (shouldStopDomainChain(current)) {
+      mappedValue = current;
+      return true;
+    }
   }
 
   mappedValue = current;
@@ -535,10 +560,9 @@ ${DYNAMICS_PERTURBATION_HELPERS}
 
 vec4 domainColorForValue(vec2 value, float brightnessFactor) {
   float phase = atan(value.y, value.x);
-  float modValue = length(value);
-  if (!isFiniteFloatCompat(modValue)) return vec4(0.0);
+  float logMod = complexLogMagnitude(value);
+  if (!isFiniteFloatCompat(logMod)) return vec4(0.0);
 
-  float logMod = log(1.0 + modValue);
   float lightnessBase = magnitudeLightness(logMod, u_domainLightnessCycles);
   float lightnessContrasted = 0.5 + (lightnessBase - 0.5) * u_domainContrast;
   float lightnessFinal = clamp(lightnessContrasted * u_domainBrightness * brightnessFactor, 0.05, 0.95);
@@ -1277,6 +1301,17 @@ function currentFunctionSupported(functionName, isWPlaneColoring) {
 }
 
 export function getWebGLDomainColorRenderScale() {
+    const previewActive =
+        Boolean(state?.panStateZ?.isPanning || state?.panStateW?.isPanning) ||
+        (typeof performance !== 'undefined' && performance.now() < (Number(state?.domainRenderPreviewUntil) || 0));
+    const expensiveDynamics =
+        state?.fractalOrbitColoringEnabled ||
+        (state?.chainingEnabled && Number(state.chainCount) > 32);
+
+    if (previewActive && expensiveDynamics) {
+        return 1;
+    }
+
     const baseScale = finite(WEBGL_DOMAIN_COLOR_SUPERSAMPLE, CFG.defaultSupersample);
     const stressScale = finite(WEBGL_DOMAIN_COLOR_STRESS_SCALE, CFG.defaultStressScale);
     const requestedScale = state?.webglGpuStressMode ? Math.max(baseScale, stressScale) : baseScale;
@@ -1509,6 +1544,12 @@ export function getThreeSphereShaderConfig(planeType) {
           return mix(0.34, 0.72, clamp(tone, 0.0, 1.0));
         }
 
+        float complexLogMagnitude(vec2 value) {
+          float scale = max(abs(value.x), abs(value.y));
+          if (scale <= 0.0) return 0.0;
+          return log(scale) + log(length(value / scale));
+        }
+
         bool mapDomainValue(vec2 inputValue, vec2 parameterValue, out vec2 outputValue) {
           return evaluateMappedValueBase(
             inputValue,
@@ -1571,15 +1612,34 @@ export function getThreeSphereShaderConfig(planeType) {
 
         bool evaluateZeroSeedChain(vec2 parameterValue, out vec2 mappedValue) {
           vec2 current = vec2(0.0);
+          vec2 lastFinite = vec2(0.0);
+          bool hasLastFinite = false;
 
           for (int i = 0; i < ${CFG.maxChainStepsGlsl}; i++) {
             if (i >= u_chainCount) break;
             vec2 nextValue = vec2(0.0);
-            if (!mapDomainValue(current, parameterValue, nextValue)) return false;
-            if (!isFiniteVec2Compat(nextValue)) return false;
+            if (!mapDomainValue(current, parameterValue, nextValue)) {
+              if (hasLastFinite) {
+                mappedValue = lastFinite;
+                return true;
+              }
+              return false;
+            }
+            if (!isFiniteVec2Compat(nextValue)) {
+              if (hasLastFinite) {
+                mappedValue = lastFinite;
+                return true;
+              }
+              return false;
+            }
 
             current = nextValue;
-            if (shouldStopDomainChain(current)) return false;
+            lastFinite = current;
+            hasLastFinite = true;
+            if (shouldStopDomainChain(current)) {
+              mappedValue = current;
+              return true;
+            }
           }
           mappedValue = current;
           return true;
@@ -1589,10 +1649,9 @@ export function getThreeSphereShaderConfig(planeType) {
 
         vec4 domainColorForValue(vec2 value, float brightnessFactor) {
           float phase = atan(value.y, value.x);
-          float modValue = length(value);
-          if (!isFiniteFloatCompat(modValue)) return vec4(0.0, 0.0, 0.0, 1.0);
+          float logMod = complexLogMagnitude(value);
+          if (!isFiniteFloatCompat(logMod)) return vec4(0.0, 0.0, 0.0, 1.0);
 
-          float logMod = log(1.0 + modValue);
           float lightnessBase = magnitudeLightness(logMod, u_domainLightnessCycles);
           float lightnessContrasted = 0.5 + (lightnessBase - 0.5) * u_domainContrast;
           float lightnessFinal = clamp(lightnessContrasted * u_domainBrightness * brightnessFactor, 0.05, 0.95);

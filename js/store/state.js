@@ -124,6 +124,7 @@ const rawState = {
     domainSaturation: 1.0,
     domainLightnessCycles: 0.0,
     domainPalette: 'analytic-base',
+    domainRenderPreviewUntil: 0,
     themeId: 'rose',
     gridColor1: '#FB923C',
     gridColor2: '#C084FC',

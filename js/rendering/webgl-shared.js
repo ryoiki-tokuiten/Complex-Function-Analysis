@@ -17,7 +17,7 @@ const int ZETA_GPU_TERMS = 72;
 float safeExp(float x) { return exp(clamp(x, -60.0, 60.0)); }
 float coshCompat(float x) { return 0.5 * (safeExp(x) + safeExp(-x)); }
 float sinhCompat(float x) { return 0.5 * (safeExp(x) - safeExp(-x)); }
-bool isFiniteFloatCompat(float value) { return (value == value) && abs(value) < 1.0e19; }
+bool isFiniteFloatCompat(float value) { return (value == value) && abs(value) < 1.0e30; }
 bool isFiniteVec2Compat(vec2 value) { return isFiniteFloatCompat(value.x) && isFiniteFloatCompat(value.y); }
 vec2 complexAdd(vec2 a, vec2 b) { return a + b; }
 vec2 complexMul(vec2 a, vec2 b) { return vec2(a.x * b.x - a.y * b.y, a.x * b.y + a.y * b.x); }

@@ -29,6 +29,8 @@ const { controls = {} } = context;
 let zCanvas;
 let wCanvas;
 let uiEventListenersBound = false;
+let domainRenderIdleTimer = null;
+let domainRenderIdleFrame = null;
 
 const COMPLEX_PARTS = ['re', 'im'];
 const MOBIUS_PARAMS = ['A', 'B', 'C', 'D'];
@@ -39,6 +41,8 @@ const DOMAIN_DIRTY_STATE_KEYS = new Set([
     'imageSize', 'imageOpacity', 'videoSize', 'videoOpacity', 'vectorFieldScale',
     'zPlaneZoom', 'wPlaneZoom', 'fractionalPowerN', 'plotlySphereOpacity', 'sphereGridOpacity'
 ]);
+
+const DOMAIN_INTERACTION_PREVIEW_MS = 180;
 
 const BASIC_SLIDER_BINDINGS = [
     ['stripY1Slider', 'stripY1'], ['stripY2Slider', 'stripY2'],
@@ -405,6 +409,39 @@ function bindSimpleControlRemainder() {
 export function requestDomainRedraw(markDomainDirty = false) {
     if (markDomainDirty) context.domainColoringDirty = true;
     requestRedrawAll();
+}
+
+function nowMs() {
+    return typeof performance !== 'undefined' ? performance.now() : Date.now();
+}
+
+function scheduleIdleDomainRedraw() {
+    if (domainRenderIdleTimer) clearTimeout(domainRenderIdleTimer);
+    if (domainRenderIdleFrame) {
+        cancelAnimationFrame(domainRenderIdleFrame);
+        domainRenderIdleFrame = null;
+    }
+
+    const delay = Math.max(0, (state.domainRenderPreviewUntil || 0) - nowMs()) + 30;
+    domainRenderIdleTimer = setTimeout(() => {
+        domainRenderIdleTimer = null;
+        if (nowMs() < (state.domainRenderPreviewUntil || 0)) {
+            scheduleIdleDomainRedraw();
+            return;
+        }
+
+        state.domainRenderPreviewUntil = 0;
+        domainRenderIdleFrame = requestAnimationFrame(() => {
+            domainRenderIdleFrame = null;
+            requestDomainRedraw(true);
+        });
+    }, delay);
+}
+
+function requestInteractiveDomainRedraw(markDomainDirty = true) {
+    state.domainRenderPreviewUntil = nowMs() + DOMAIN_INTERACTION_PREVIEW_MS;
+    requestDomainRedraw(markDomainDirty);
+    scheduleIdleDomainRedraw();
 }
 
 export function syncLaplacePlayPauseButton() {
@@ -1185,7 +1222,7 @@ function panPlane(ctx, pos) {
     ctx.params.origin.x = ctx.pan.panStartOrigin.x + (pos.x - ctx.pan.panStart.x);
     ctx.params.origin.y = ctx.pan.panStartOrigin.y + (pos.y - ctx.pan.panStart.y);
     updatePlaneViewportRanges(ctx.params);
-    requestDomainRedraw(true);
+    requestInteractiveDomainRedraw(true);
 }
 
 function updateProbe(ctx, pos, active = true) {
@@ -1337,7 +1374,7 @@ function zoomPlaneAt(ctx, pos, factor) {
     ctx.params.origin.y = pos.y + world.y * ctx.params.scale.y;
 
     updatePlaneViewportRanges(ctx.params);
-    requestDomainRedraw(true);
+    requestInteractiveDomainRedraw(true);
 }
 
 function handleCanvasWheel(ctx, event) {
@@ -1848,7 +1885,7 @@ function handleFullScreenToggle(planeType, index = 0) {
         }
     }
 
-    setupVisualParameters(true, true);
+    setupVisualParameters(false, false);
 
     if (target.isPlotly) {
         laterFrame(() => {
