@@ -10,7 +10,7 @@ import { captureBeforeResize } from '../rendering/domain-dynamics.js';
 const { controls, polynomialCoeffUIElements } = context;
 
 let zCanvas, wCanvas, zCtx, wCtx, zDomainColorCanvas, wDomainColorCanvas, zDomainColorCtx, wDomainColorCtx;
-let wCanvasList, wCtxList, wPlaneParamsList, wPlanePlotlyContainersList, sphereViewWParamsList;
+let wCanvasList, wCtxList, wPlaneParamsList, wPlaneThreeContainersList, sphereViewWParamsList;
 
 const DOM_BINDINGS = [
     { key: 'controlsOptionsSection', id: 'controls_options_section' },
@@ -39,6 +39,7 @@ const DOM_BINDINGS = [
     { key: 'chainCountSlider', id: 'chain_count_slider' },
     { key: 'chainCountValueDisplay', id: 'chain_count_value_display' },
     { key: 'algebraicChainingParamsBlock', id: 'algebraic_chaining_params' },
+    { key: 'dynamicPlottingParams', id: 'dynamic_plotting_params' },
     { key: 'enableAlgebraicChainingCb', id: 'enable_algebraic_chaining_cb' },
     { key: 'algebraicChainingControlsContainer', id: 'algebraic_chaining_controls_container' },
     { key: 'algebraicTermsList', id: 'algebraic_terms_list' },
@@ -207,16 +208,16 @@ const DOM_BINDINGS = [
     { key: 'radialDiscreteStepsCountSlider', id: 'radial_discrete_steps_count_slider' },
     { key: 'radialDiscreteStepsCountValueDisplay', id: 'radial_discrete_steps_count_value_display' },
     { key: 'enableSplitViewCb', id: 'enable_split_view_cb' },
-    { key: 'enablePlotly3DCb', id: 'enable_plotly_3d_cb' },
-    { key: 'wPlanePlotlyContainer', id: 'w_plane_plotly_container' },
-    { key: 'plotly3DOptionsDiv', id: 'plotly_3d_options_div' },
+    { key: 'enableThreeSphereCb', id: 'enable_three_sphere_cb' },
+    { key: 'wPlaneThreeContainer', id: 'w_plane_three_container' },
+    { key: 'threeSphereOptionsDiv', id: 'three_sphere_options_div' },
     { key: 'riemannSphereOptionsDiv', id: 'riemann_sphere_options_div' },
     { key: 'enableRiemannTransformationCb', id: 'enable_riemann_transformation_cb' },
     { key: 'zPlaneTransformationOverlay', id: 'z_plane_transformation_overlay' },
     { key: 'transformationPlayPauseBtn', id: 'transformation_play_pause_btn' },
     { key: 'transformationProgressSlider', id: 'transformation_progress_slider' },
-    { key: 'plotlySphereOpacitySlider', id: 'plotly_sphere_opacity_slider' },
-    { key: 'plotlySphereOpacityValueDisplay', id: 'plotly_sphere_opacity_value_display' },
+    { key: 'threeSphereOpacitySlider', id: 'three_sphere_opacity_slider' },
+    { key: 'threeSphereOpacityValueDisplay', id: 'three_sphere_opacity_value_display' },
     { key: 'sphereGridOpacitySlider', id: 'sphere_grid_opacity_slider' },
     { key: 'sphereGridOpacityValueDisplay', id: 'sphere_grid_opacity_value_display' },
     { key: 'sphereViewControlsDiv', id: 'sphere_view_controls_div' },
@@ -255,7 +256,6 @@ const DOM_BINDINGS = [
     { key: 'laplaceAnimationLoopCb', id: 'laplace_animation_loop_cb' },
     { key: 'laplacePlayPauseBtn', id: 'laplace_play_pause_btn' },
     { key: 'laplaceShowFullBtn', id: 'laplace_show_full_btn' },
-    { key: 'laplaceWindingSyncBtn', id: 'laplace_winding_sync_btn' },
     { key: 'toggleFullscreenLaplace3DBtn', id: 'toggle_fullscreen_laplace_3d_btn' },
     { key: 'laplaceResetBtn', id: 'laplace_reset_btn' },
     { key: 'laplace3DColumn', id: 'laplace_3d_column' },
@@ -354,7 +354,7 @@ export function setupDOMReferences() {
     wCanvasList = [wCanvas];
     wCtxList = [wCtx];
     wPlaneParamsList = [wPlaneParams];
-    wPlanePlotlyContainersList = [controls.wPlanePlotlyContainer];
+    wPlaneThreeContainersList = [controls.wPlaneThreeContainer];
     sphereViewWParamsList = [sphereViewParams.w];
 
     sliderParamKeys.forEach(key => {
@@ -416,7 +416,7 @@ export function setupDOMReferences() {
     context.wCanvasList = wCanvasList;
     context.wCtxList = wCtxList;
     context.wPlaneParamsList = wPlaneParamsList;
-    context.wPlanePlotlyContainersList = wPlanePlotlyContainersList;
+    context.wPlaneThreeContainersList = wPlaneThreeContainersList;
     context.sphereViewWParamsList = sphereViewWParamsList;
 }
 
@@ -480,8 +480,6 @@ export function setupVisualParameters(updateZFromSlider = true, updateWFromSlide
         const initialYSpanZ = zPlaneInitialRanges.y[1] - zPlaneInitialRanges.y[0];
         const currentXSpanZ = initialXSpanZ / zoomZ;
         const currentYSpanZ = initialYSpanZ / zoomZ;
-        zWorldCenterX = (zPlaneInitialRanges.x[0] + zPlaneInitialRanges.x[1]) / 2; 
-        zWorldCenterY = (zPlaneInitialRanges.y[0] + zPlaneInitialRanges.y[1]) / 2;
         zPlaneParams.currentVisXRange[0] = zWorldCenterX - currentXSpanZ / 2;
         zPlaneParams.currentVisXRange[1] = zWorldCenterX + currentXSpanZ / 2;
         zPlaneParams.currentVisYRange[0] = zWorldCenterY - currentYSpanZ / 2;
@@ -503,8 +501,6 @@ export function setupVisualParameters(updateZFromSlider = true, updateWFromSlide
         const initialYSpanW = wPlaneInitialRanges.y[1] - wPlaneInitialRanges.y[0];
         const currentXSpanW = initialXSpanW / zoomW;
         const currentYSpanW = initialYSpanW / zoomW;
-        wWorldCenterX = (wPlaneInitialRanges.x[0] + wPlaneInitialRanges.x[1]) / 2; 
-        wWorldCenterY = (wPlaneInitialRanges.y[0] + wPlaneInitialRanges.y[1]) / 2;
         wPlaneParams.xRange[0] = wWorldCenterX - currentXSpanW / 2;
         wPlaneParams.xRange[1] = wWorldCenterX + currentXSpanW / 2;
         wPlaneParams.yRange[0] = wWorldCenterY - currentYSpanW / 2;
@@ -568,7 +564,7 @@ export function updateChainingTitles() {
 function getChainedOutputLabel() {
     if (state.riemannSurfaceEnabled) return 'Riemann surface';
     if (state.riemannSphereViewEnabled || state.splitViewEnabled) {
-        return state.plotly3DEnabled ? '3D w-sphere' : 'w-sphere';
+        return state.threeSphereEnabled ? '3D w-sphere' : 'w-sphere';
     }
     return 'w-plane';
 }
@@ -578,7 +574,7 @@ export function updateChainingColumns(count) {
         wCanvasList = [wCanvas];
         wCtxList = [wCtx];
         wPlaneParamsList = [wPlaneParams];
-        wPlanePlotlyContainersList = [controls.wPlanePlotlyContainer];
+        wPlaneThreeContainersList = [controls.wPlaneThreeContainer];
         sphereViewWParamsList = [sphereViewParams.w];
     }
     
@@ -612,9 +608,9 @@ export function updateChainingColumns(count) {
             newCanvas.id = `w_plane_canvas_${i}`;
         }
         
-        const newPlotly = newCol.querySelector('#w_plane_plotly_container');
-        if (newPlotly) {
-            newPlotly.id = `w_plane_plotly_container_${i}`;
+        const newThreeContainer = newCol.querySelector('#w_plane_three_container');
+        if (newThreeContainer) {
+            newThreeContainer.id = `w_plane_three_container_${i}`;
         }
 
         // Make fullscreen toggle IDs unique for event delegation
@@ -658,7 +654,7 @@ export function updateChainingColumns(count) {
         wCanvasList.push(newCanvas);
         wCtxList.push(ctx);
         wPlaneParamsList.push(params);
-        wPlanePlotlyContainersList.push(newPlotly);
+        wPlaneThreeContainersList.push(newThreeContainer);
         sphereViewWParamsList.push(sphereParams);
     }
     
@@ -667,13 +663,14 @@ export function updateChainingColumns(count) {
         const i = wCanvasList.length - 1;
         const colToRemove = document.getElementById(`w_plane_column_${i}`);
         disposeRiemannSurface(wCanvasList[i]);
+        wPlaneThreeContainersList[i]?.__threeRiemannRenderer?.dispose();
         if (colToRemove) {
             canvasesRow.removeChild(colToRemove);
         }
         wCanvasList.pop();
         wCtxList.pop();
         wPlaneParamsList.pop();
-        wPlanePlotlyContainersList.pop();
+        wPlaneThreeContainersList.pop();
         sphereViewWParamsList.pop();
     }
     
@@ -687,6 +684,6 @@ export function updateChainingColumns(count) {
     context.wCanvasList = wCanvasList;
     context.wCtxList = wCtxList;
     context.wPlaneParamsList = wPlaneParamsList;
-    context.wPlanePlotlyContainersList = wPlanePlotlyContainersList;
+    context.wPlaneThreeContainersList = wPlaneThreeContainersList;
     context.sphereViewWParamsList = sphereViewWParamsList;
 }

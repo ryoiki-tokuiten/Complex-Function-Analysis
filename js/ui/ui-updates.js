@@ -2,7 +2,7 @@ import { state, context, sliderParamKeys } from '../store/state.js';
 import { getChainedTransformFunction, numericDerivative } from '../math-utils.js';
 import { DEFAULT_TAYLOR_SERIES_CENTER, CRITICAL_POINT_EPSILON } from '../constants/numerical.js';
 import { updatePolynomialCoeffDisplays } from './polynomial-ui.js';
-import { syncLaplacePlayPauseButton, syncLaplaceWindingSyncButton } from './event-listeners.js';
+import { syncLaplacePlayPauseButton } from './event-listeners.js';
 import { syncVideoPlaybackUI } from '../utils/raster-media.js';
 import { findTaylorCenterPreset, formatTaylorNumericValue, getChainingTitleHTML } from '../utils/dom-utils.js';
 import { syncNavigationControls } from '../navigation-plane.js';
@@ -28,7 +28,10 @@ const TRANSFORM_MODE_PARAMETER_GROUPS = Object.freeze([
     'fractionalPowerParamsSliders',
     'shapeParamsSliders',
     'stripHorizontalParamsSliders',
-    'sectorAngularParamsSliders'
+    'sectorAngularParamsSliders',
+    'chainingParamsBlock',
+    'algebraicChainingParamsBlock',
+    'dynamicPlottingParams'
 ]);
 
 const TRANSFORM_MODE_VISUALIZATION_PANELS = Object.freeze([
@@ -112,8 +115,8 @@ const FUNCTION_ARGUMENT_HTML = Object.freeze({
 const NORMAL_MODE_VALUE_BINDINGS = Object.freeze([
     { display: 'gridDensityValueDisplay', key: 'gridDensity' },
     { display: 'neighborhoodSizeValueDisplay', key: 'probeNeighborhoodSize', digits: 2 },
-    { display: 'zPlaneZoomValueDisplay', key: 'zPlaneZoom', digits: 2 },
-    { display: 'wPlaneZoomValueDisplay', key: 'wPlaneZoom', digits: 2 },
+    { display: 'zPlaneZoomValueDisplay', get: () => formatZoomValue(state.zPlaneZoom) },
+    { display: 'wPlaneZoomValueDisplay', get: () => formatZoomValue(state.wPlaneZoom) },
     { display: 'vectorFieldScaleValueDisplay', key: 'vectorFieldScale', digits: 2 },
     { display: 'vectorArrowThicknessValueDisplay', key: 'vectorArrowThickness', digits: 1, companion: 'vectorArrowThicknessSlider' },
     { display: 'vectorArrowHeadSizeValueDisplay', key: 'vectorArrowHeadSize', digits: 1, companion: 'vectorArrowHeadSizeSlider' },
@@ -150,7 +153,7 @@ const PARTICLE_VALUE_BINDINGS = Object.freeze([
 ]);
 
 const RIEMANN_VIEW_VALUE_BINDINGS = Object.freeze([
-    { display: 'plotlySphereOpacityValueDisplay', key: 'plotlySphereOpacity', digits: 2, companion: 'plotlySphereOpacitySlider' },
+    { display: 'threeSphereOpacityValueDisplay', key: 'threeSphereOpacity', digits: 2, companion: 'threeSphereOpacitySlider' },
     { display: 'sphereGridOpacityValueDisplay', key: 'sphereGridOpacity', digits: 2, companion: 'sphereGridOpacitySlider' },
     { display: 'taylorSeriesOrderValueDisplay', key: 'taylorSeriesOrder', companion: 'taylorSeriesOrderSlider' },
     { display: 'riemannSurfaceSheetsValueDisplay', key: 'riemannSurfaceSheets' },
@@ -328,7 +331,6 @@ function syncPointEditor(editorKey, points) {
 function syncDelegates() {
     for (const delegate of [
         syncLaplacePlayPauseButton,
-        syncLaplaceWindingSyncButton,
         syncVideoPlaybackUI,
         syncNavigationControls
     ]) {
@@ -469,6 +471,10 @@ function syncComplexParameterControls() {
         return;
     }
 
+    setHidden('chainingParamsBlock', false);
+    setHidden('algebraicChainingParamsBlock', false);
+    setHidden('dynamicPlottingParams', false);
+
     const shape = state.currentInputShape;
     const activeFunctions = collectActiveFunctionKeys();
     const isLine = shape === 'line';
@@ -530,8 +536,8 @@ function syncNormalModeDisplays() {
     }
 
     syncValueBindings(NORMAL_MODE_VALUE_BINDINGS);
-    setValue('zPlaneZoomSlider', state.zPlaneZoom);
-    setValue('wPlaneZoomSlider', state.wPlaneZoom);
+    setValue('zPlaneZoomSlider', Math.log10(state.zPlaneZoom || 1));
+    setValue('wPlaneZoomSlider', Math.log10(state.wPlaneZoom || 1));
 }
 
 function syncTaylorControls() {
@@ -632,6 +638,12 @@ export function formatProbeValue(v) {
         : v.toExponential(3);
 }
 
+export function formatZoomValue(v) {
+    if (typeof v !== 'number' || Number.isNaN(v)) return '1.00';
+    if (v >= 1e6 || v < 0.01) return v.toExponential(2);
+    return v.toFixed(2);
+}
+
 export function formatProbeComplex(re, im) {
     const reStr = formatProbeValue(re);
     const imAbs = Math.abs(im);
@@ -686,7 +698,12 @@ function transformedProbeHtml() {
         : null;
 
     if (!finiteComplex(pW)) {
-        return 'w is undefined or infinite.<br>Conformality: N/A<br>';
+        return [
+            '<strong class="probe-output-error">Output unavailable at this point</strong>',
+            'The map reaches a pole or diverges to ∞, so no finite <em>w</em> can be plotted.',
+            'Choose another input point or reduce the output-chain depth.',
+            'Conformality: unavailable for a non-finite output.'
+        ].join('<br>');
     }
 
     return `w = ${formatProbeComplex(pW.re, pW.im)}<br>${derivativeProbeHtml()}`;
@@ -1049,7 +1066,7 @@ function splitViewZPlaneTitle(fND) {
 }
 
 function sphereWPlaneTitle(model) {
-    const sphereLabel = state.plotly3DEnabled ? '3D w-sphere' : 'w-sphere';
+    const sphereLabel = state.threeSphereEnabled ? '3D w-sphere' : 'w-sphere';
 
     return state.domainColoringEnabled
         ? `${sphereLabel} (Codomain coloring; ${model.mappedWOutputDescriptor})`
@@ -1158,8 +1175,8 @@ function syncRiemannSurfaceControls() {
     }
 
     setHidden(
-        'plotly3DOptionsDiv',
-        !(state.riemannSphereViewEnabled && state.plotly3DEnabled)
+        'threeSphereOptionsDiv',
+        !(state.riemannSphereViewEnabled && state.threeSphereEnabled)
     );
     setHidden(
         'sphereViewControlsDiv',

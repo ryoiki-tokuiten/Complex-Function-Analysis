@@ -34,9 +34,12 @@ export class ThreeRiemannRenderer {
         this.isDragging = false;
         this.probePoint = null;
         this.animationHandle = null;
+        this.transformFunction = null;
+        this.chainCount = 1;
 
         this.initScene();
         this.initInteraction();
+        this.container.__threeRiemannRenderer = this;
     }
 
     initScene() {
@@ -210,6 +213,11 @@ export class ThreeRiemannRenderer {
         }
     }
 
+    setTransform(transformFunction, chainCount = 1) {
+        this.transformFunction = typeof transformFunction === 'function' ? transformFunction : null;
+        this.chainCount = Math.max(1, Math.min(512, Math.floor(chainCount) || 1));
+    }
+
     buildGridFromPointSets(pointSets, progressOverride = undefined) {
         this.resize();
 
@@ -224,7 +232,9 @@ export class ThreeRiemannRenderer {
         // Constant mathematical scale factor where unit circle projects to equator
         this.scale = 2 * SPHERE_RADIUS;
 
-        const transformFunc = this.planeType === 'w' ? getChainedTransformFunction() : null;
+        const transformFunc = this.planeType === 'w'
+            ? (this.transformFunction || getChainedTransformFunction())
+            : null;
 
         for (const pointSet of pointSets) {
             if (!pointSet || !pointSet.points || pointSet.points.length < 2) continue;
@@ -443,7 +453,7 @@ export class ThreeRiemannRenderer {
             }
         } else {
             if (this.ghostSphere.material) {
-                const maxOpacity = state.plotlySphereOpacity !== undefined ? state.plotlySphereOpacity : 0.15;
+                const maxOpacity = state.threeSphereOpacity !== undefined ? state.threeSphereOpacity : 0.15;
                 this.ghostSphere.material.opacity = Math.pow(easedProgress, 2) * maxOpacity;
             }
         }
@@ -576,7 +586,9 @@ export class ThreeRiemannRenderer {
         uniforms.u_zetaContinuationEnabled.value = state.zetaContinuationEnabled ? 1.0 : 0.0;
         uniforms.u_zetaReflectionBoundary.value = 0.5;
         uniforms.u_fracPower.value = state.fractionalPowerN !== undefined ? state.fractionalPowerN : 0.5;
-        uniforms.u_chainCount.value = state.chainingEnabled ? Math.max(1, Math.min(512, state.chainCount || 1)) : 1;
+        uniforms.u_chainCount.value = state.chainingEnabled
+            ? (this.planeType === 'w' ? this.chainCount : Math.max(1, Math.min(512, state.chainCount || 1)))
+            : 1;
         
         const chainModeVal = CHAIN_MODE_IDS[state.chainingMode];
         uniforms.u_chainMode.value = chainModeVal !== undefined ? chainModeVal : 1;
@@ -620,7 +632,7 @@ export class ThreeRiemannRenderer {
             }
         } else {
             if (this.ghostSphere.material) {
-                const maxOpacity = state.plotlySphereOpacity !== undefined ? state.plotlySphereOpacity : 0.15;
+                const maxOpacity = state.threeSphereOpacity !== undefined ? state.threeSphereOpacity : 0.15;
                 this.ghostSphere.material.opacity = maxOpacity;
             }
         }
@@ -659,6 +671,9 @@ export class ThreeRiemannRenderer {
             if (this.renderer.domElement && this.renderer.domElement.parentNode) {
                 this.renderer.domElement.parentNode.removeChild(this.renderer.domElement);
             }
+        }
+        if (this.container?.__threeRiemannRenderer === this) {
+            delete this.container.__threeRiemannRenderer;
         }
     }
 }

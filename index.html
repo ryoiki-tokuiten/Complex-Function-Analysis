@@ -7,7 +7,6 @@
     <title>Complex Analysis Visualization</title>
     <link rel="stylesheet" href="css/styles.css">
     <link rel="stylesheet" href="css/control-sections.css">
-    <script src="https://cdn.plot.ly/plotly-2.29.1.min.js"></script>
     <script src="https://unpkg.com/lucide@latest"></script>
 </head>
 
@@ -243,10 +242,10 @@
                                     data-tooltip="Select the time domain signal type">
                                     <optgroup label="Basic Signals">
                                         <option value="step">Unit Step u(t)</option>
-                                        <option value="exponential">Exponential e^(-at)</option>
+                                        <option value="exponential" selected>Exponential e^(-at)</option>
                                         <option value="sine">Sine Wave</option>
                                         <option value="cosine">Cosine Wave</option>
-                                        <option value="damped_sine" selected>Damped Sine</option>
+                                        <option value="damped_sine">Damped Sine</option>
                                     </optgroup>
                                     <optgroup label="Advanced">
                                         <option value="ramp">Ramp t·u(t)</option>
@@ -1645,8 +1644,8 @@
                                 <output id="z_plane_zoom_value_display">1.00</output>x
                             </label>
                             <div class="slider-container">
-                                <input type="range" id="z_plane_zoom_slider" name="z_plane_zoom_slider" min="0.01"
-                                    max="1e24" step="any" value="1.0" data-tooltip="Zoom level for the z-plane view">
+                                <input type="range" id="z_plane_zoom_slider" name="z_plane_zoom_slider" min="-3"
+                                    max="4" step="any" value="0" data-tooltip="Zoom level for the z-plane view (log scale)">
                             </div>
                         </div>
                         <div class="control-group"> <!-- W-Plane Zoom -->
@@ -1655,8 +1654,8 @@
                                 <output id="w_plane_zoom_value_display">1.00</output>x
                             </label>
                             <div class="slider-container">
-                                <input type="range" id="w_plane_zoom_slider" name="w_plane_zoom_slider" min="0.01"
-                                    max="1e24" step="any" value="1.0" data-tooltip="Zoom level for the w-plane view">
+                                <input type="range" id="w_plane_zoom_slider" name="w_plane_zoom_slider" min="-3"
+                                    max="4" step="any" value="0" data-tooltip="Zoom level for the w-plane view (log scale)">
                             </div>
                         </div>
                     </div>
@@ -1947,9 +1946,9 @@
                         <div id="riemann_sphere_options_div"
                             class="dependent-settings-block hidden control-group-indent viz-detail-block viz-stacked-options">
                             <div class="viz-toggle-grid viz-toggle-grid--trio viz-toggle-grid--compact">
-                                <label for="enable_plotly_3d_cb"
+                                <label for="enable_three_sphere_cb"
                                     class="control-label tooltip-label viz-toggle-card viz-toggle-card--compact">
-                                    <input type="checkbox" id="enable_plotly_3d_cb" class="control-checkbox"
+                                    <input type="checkbox" id="enable_three_sphere_cb" class="control-checkbox"
                                         data-tooltip="Toggle interactive 3D Riemann Sphere rendering using Three.js for the w-plane">
                                     <span class="custom-checkbox-visual"></span>
                                     <span class="viz-toggle-card-content">
@@ -1980,17 +1979,17 @@
                                     </span>
                                 </label>
                             </div>
-                            <div id="plotly_3d_options_div"
+                            <div id="three_sphere_options_div"
                                 class="dependent-settings-block hidden control-group-indent viz-subdetail-block">
                                 <div class="viz-settings-grid">
                                     <div class="control-group">
-                                        <label for="plotly_sphere_opacity_slider">
+                                        <label for="three_sphere_opacity_slider">
                                             Sphere Opacity:
-                                            <output id="plotly_sphere_opacity_value_display">0.10</output>
+                                            <output id="three_sphere_opacity_value_display">0.10</output>
                                         </label>
                                         <div class="slider-container">
-                                            <input type="range" id="plotly_sphere_opacity_slider"
-                                                name="plotly_sphere_opacity_slider" min="0" max="1" step="0.05"
+                                            <input type="range" id="three_sphere_opacity_slider"
+                                                name="three_sphere_opacity_slider" min="0" max="1" step="0.05"
                                                 value="0.10"
                                                 data-tooltip="Adjust opacity of the base Riemann sphere mesh in 3D view">
                                         </div>
@@ -2338,13 +2337,8 @@
                             <span class="pulsing-dot"></span>
                             <span>Refining...</span>
                         </div>
-                        <div id="w_plane_plotly_container" class="hidden" style="width: 100%; height: 100%;"></div>
+                        <div id="w_plane_three_container" class="hidden" style="width: 100%; height: 100%;"></div>
                         <div id="w_plane_probe_info" class="probe-info-overlay hidden"></div>
-
-                        <!-- Three.js Transformation Overlays -->
-                        <div id="w_plane_threejs_container" class="threejs-container hidden"
-                            style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; z-index: 10; border-radius: inherit; overflow: hidden;">
-                        </div>
 
                         <div id="w_plane_transformation_overlay" class="ui-layer hidden">
                             <h1>Stereographic Projection</h1>
@@ -2366,23 +2360,6 @@
                         </div>
                         <div id="cauchy_integral_results_info" class="cauchy-info-overlay hidden"
                             style="font-size: 0.8rem; line-height:1.3;"></div>
-                        <button id="laplace_winding_sync_btn" title="Sync zoom between spiral and vector panels" style="
-                                display: none;
-                                position: absolute;
-                                top: 8px;
-                                right: 8px;
-                                z-index: 10;
-                                padding: 4px 10px;
-                                font-size: 11px;
-                                font-family: 'SF Mono', monospace;
-                                background: rgba(20, 30, 50, 0.85);
-                                color: rgba(150, 200, 255, 0.9);
-                                border: 1px solid rgba(80, 120, 180, 0.5);
-                                border-radius: 4px;
-                                cursor: pointer;
-                                letter-spacing: 0.03em;
-                                backdrop-filter: blur(4px);
-                            ">Sync Zoom: On</button>
                     </div>
                 </div>
                 <div id="laplace_3d_column" class="hidden" style="flex: 1; display: flex; flex-direction: column;">

@@ -23,7 +23,7 @@ const DEFAULT_CAMERA = Object.freeze({ rotX: -0.82, rotY: 0.62, distance: 3.8 })
 
 const LIMITS = Object.freeze({
   minStage: 1,
-  maxStage: 25,
+  maxStage: 512,
   minResolution: 42,
   maxResolution: 254,
   resolutionBase: 128,
@@ -528,7 +528,7 @@ ${buildAlgebraicBranchBody(appState)}
 ) {
   if (chainMode == 7) {
     mapped = vec2(0.0);
-    for (int i = 0; i < 25; i++) {
+    for (int i = 0; i < 512; i++) {
       if (i >= stage) break;
       bool seedOk = evaluateSurfaceBase(
         mapped, c, functionId, branchIndex, branchCutWidth, mA, mB, mC, mD,
@@ -547,7 +547,7 @@ ${buildAlgebraicBranchBody(appState)}
   );
   if (!ok) return false;
   vec2 baseValue = mapped;
-  for (int i = 1; i < 25; i++) {
+  for (int i = 1; i < 512; i++) {
     if (i >= stage) break;
     if (chainMode == 1) {
       ok = evaluateSurfaceBase(

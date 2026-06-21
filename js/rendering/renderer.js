@@ -67,9 +67,9 @@ let wDomainColorCtx;
 let wCanvasList;
 let wCtxList;
 let wPlaneParamsList;
-let wPlanePlotlyContainersList;
+let wPlaneThreeContainersList;
 let sphereViewWParamsList;
-let wStaticThreeRenderer = null;
+const wStaticThreeRenderers = new WeakMap();
 
 const { controls } = context;
 
@@ -224,7 +224,7 @@ function syncRenderContext() {
     wCanvasList = context.wCanvasList;
     wCtxList = context.wCtxList;
     wPlaneParamsList = context.wPlaneParamsList;
-    wPlanePlotlyContainersList = context.wPlanePlotlyContainersList;
+    wPlaneThreeContainersList = context.wPlaneThreeContainersList;
     sphereViewWParamsList = context.sphereViewWParamsList;
 
     if (Array.isArray(context.wPlanarTransformedLayerCacheList)) {
@@ -1019,7 +1019,7 @@ function withWPlaneScope(index, render) {
         canvas: wCanvas,
         ctx: wCtx,
         params: wPlaneParams,
-        plotlyContainer: controls.wPlanePlotlyContainer,
+        threeContainer: controls.wPlaneThreeContainer,
         sphereParams: sphereViewParams.w,
         cache: wPlanarTransformedLayerCache
     };
@@ -1027,7 +1027,7 @@ function withWPlaneScope(index, render) {
     wCanvas = wCanvasList?.[index];
     wCtx = wCtxList?.[index];
     wPlaneParams = wPlaneParamsList?.[index];
-    controls.wPlanePlotlyContainer = wPlanePlotlyContainersList?.[index];
+    controls.wPlaneThreeContainer = wPlaneThreeContainersList?.[index];
     sphereViewParams.w = sphereViewWParamsList?.[index];
     wPlanarTransformedLayerCache = ensureWPlaneCache(index);
 
@@ -1037,7 +1037,7 @@ function withWPlaneScope(index, render) {
         wCanvas = previous.canvas;
         wCtx = previous.ctx;
         wPlaneParams = previous.params;
-        controls.wPlanePlotlyContainer = previous.plotlyContainer;
+        controls.wPlaneThreeContainer = previous.threeContainer;
         sphereViewParams.w = previous.sphereParams;
         wPlanarTransformedLayerCache = previous.cache;
     }
@@ -1062,19 +1062,17 @@ function hideCanvas(canvas) {
     setHidden(canvas, true);
 }
 
-function showPlotlyContainer() {
-    setHidden(controls.wPlanePlotlyContainer, false);
+function showThreeContainer() {
+    setHidden(controls.wPlaneThreeContainer, false);
 }
 
-function hidePlotlyContainer() {
-    setHidden(controls.wPlanePlotlyContainer, true);
-    if (wStaticThreeRenderer) {
-        wStaticThreeRenderer.stopAnimationLoop();
-    }
+function hideThreeContainer() {
+    setHidden(controls.wPlaneThreeContainer, true);
+    wStaticThreeRenderers.get(controls.wPlaneThreeContainer)?.stopAnimationLoop();
 }
 
-function setPlotlyContainerSize() {
-    const container = controls.wPlanePlotlyContainer;
+function setThreeContainerSize() {
+    const container = controls.wPlaneThreeContainer;
 
     if (!container?.style || !wPlaneParams?.width || !wPlaneParams?.height) {
         return;
@@ -1111,7 +1109,7 @@ function* iterWPlaneTransforms() {
 function renderSpecialWPlaneMode() {
     hideRiemannSurface(wCanvas);
     showCanvas(wCanvas);
-    hidePlotlyContainer();
+    hideThreeContainer();
     renderFirstSignalMode(W_SIGNAL_RENDERERS, wCtx, wPlaneParams, 'w');
 }
 
@@ -1121,9 +1119,12 @@ function renderRiemannSurfaceIfEnabled(index) {
         return false;
     }
 
-    hidePlotlyContainer();
+    hideThreeContainer();
 
-    if (wCanvas && renderRiemannSurface(wCanvas, index + 1)) {
+    const stage = state.chainingEnabled && state.chainCount > 25
+        ? state.chainCount
+        : index + 1;
+    if (wCanvas && renderRiemannSurface(wCanvas, stage)) {
         hideCanvas(wCanvas);
         return true;
     }
@@ -1132,8 +1133,8 @@ function renderRiemannSurfaceIfEnabled(index) {
     return false;
 }
 
-function renderPlotlyWPlane(transform, stageIndex) {
-    const container = controls.wPlanePlotlyContainer;
+function renderThreeWPlane(transform, stageIndex) {
+    const container = controls.wPlaneThreeContainer;
 
     if (!container) {
         showCanvas(wCanvas);
@@ -1141,26 +1142,33 @@ function renderPlotlyWPlane(transform, stageIndex) {
     }
 
     hideCanvas(wCanvas);
-    showPlotlyContainer();
-    setPlotlyContainerSize();
+    showThreeContainer();
+    setThreeContainerSize();
 
-    if (!wStaticThreeRenderer) {
-        wStaticThreeRenderer = new ThreeRiemannRenderer(container, 'w');
+    let threeRenderer = wStaticThreeRenderers.get(container);
+    if (!threeRenderer) {
+        threeRenderer = new ThreeRiemannRenderer(container, 'w');
+        wStaticThreeRenderers.set(container, threeRenderer);
     }
+
+    const stage = state.chainingEnabled && state.chainCount > 25
+        ? Math.max(0, state.chainCount - 1)
+        : stageIndex;
+    threeRenderer.setTransform(transform, stage + 1);
 
     const gridConfigObj = buildInputShapeGeometryConfig(zPlaneParams, {
         currentFunction: state.currentFunction,
         zetaContinuationEnabled: state.zetaContinuationEnabled,
         gridDensity: state.gridDensity
     });
-    const gridConfigKey = JSON.stringify(gridConfigObj);
+    const gridConfigKey = `${stage}:${JSON.stringify(gridConfigObj)}`;
 
-    if (wStaticThreeRenderer.lastGridConfigKey !== gridConfigKey) {
+    if (threeRenderer.lastGridConfigKey !== gridConfigKey) {
         // Skip rebuilding heavy 3D geometries continuously during 2D canvas drag-panning
         if (state.panStateZ.isPanning || state.panStateW.isPanning) {
             // We'll catch it on the pointerup event which triggers a redraw
         } else {
-            wStaticThreeRenderer.lastGridConfigKey = gridConfigKey;
+            threeRenderer.lastGridConfigKey = gridConfigKey;
 
             const wPointSets = generateCurrentMappedInputShapePointSets(zPlaneParams, {
                 currentFunction: state.currentFunction,
@@ -1169,24 +1177,24 @@ function renderPlotlyWPlane(transform, stageIndex) {
                 gridDensity: state.gridDensity
             });
 
-            wStaticThreeRenderer.buildGridFromPointSets(wPointSets, 1.0);
+            threeRenderer.buildGridFromPointSets(wPointSets, 1.0);
         }
     }
 
-    wStaticThreeRenderer.updateGeometry(1.0);
-    wStaticThreeRenderer.setDynamicOverlay(
+    threeRenderer.updateGeometry(1.0);
+    threeRenderer.setDynamicOverlay(
         getDynamicSphereSceneData({ transform, stageIndex }),
         `${stageIndex}:${getDynamicPlottingCacheKey()}`
     );
 
     if (state.probeActive && state.probeZ) {
         const wProbe = transform(state.probeZ.re, state.probeZ.im);
-        wStaticThreeRenderer.updateProbe(wProbe);
+        threeRenderer.updateProbe(wProbe);
     } else {
-        wStaticThreeRenderer.updateProbe(null);
+        threeRenderer.updateProbe(null);
     }
 
-    wStaticThreeRenderer.startAnimationLoop();
+    threeRenderer.startAnimationLoop();
 }
 
 function shouldDrawWReferenceGrid() {
@@ -1365,13 +1373,13 @@ function renderNormalWPlane(index, transform) {
 
     const isRiemannW = state.riemannSphereViewEnabled || state.splitViewEnabled;
 
-    if (state.plotly3DEnabled && isRiemannW) {
-        renderPlotlyWPlane(transform, index);
+    if (state.threeSphereEnabled && isRiemannW) {
+        renderThreeWPlane(transform, index);
         return;
     }
 
     showCanvas(wCanvas);
-    hidePlotlyContainer();
+    hideThreeContainer();
 
     if (!isRiemannW) {
         renderWPlanarBackground();

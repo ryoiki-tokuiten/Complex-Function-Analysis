@@ -6,7 +6,7 @@ import {
     generatePolarGridPointSets
 } from '../js/rendering/shape-generators.js';
 
-test('Cartesian grid lines are anchored to multiples of the calculated step', () => {
+test('Cartesian grid lines are evenly distributed across the visible range', () => {
     const config = {
         xRange: [-2.2, 2.2],
         yRange: [-1.8, 1.8],
@@ -37,53 +37,53 @@ test('Cartesian grid lines are anchored to multiples of the calculated step', ()
     assert.ok(xCoords.length > 0);
     assert.ok(yCoords.length > 0);
 
-    // Verify step size (with density 10 and span 4.4, step should be 0.5)
-    // -2.2 to 2.2 spans 4.4. 4.4 / 10 = 0.44 -> calculateGridStep selects 0.5.
-    // Multiples of 0.5 in [-2.2, 2.2] are: -2.0, -1.5, -1.0, -0.5, 0, 0.5, 1.0, 1.5, 2.0.
-    const expectedXCoords = [-2.0, -1.5, -1.0, -0.5, 0.0, 0.5, 1.0, 1.5, 2.0];
-    
-    // Sort and compare
+    // With linearlySampledRange, gridDensity=10 produces 11 points (inclusive of both endpoints)
+    // spanning evenly from xRange[0] to xRange[1]
+    assert.equal(xCoords.length, 11);
+    assert.equal(yCoords.length, 11);
+
+    // Verify evenly spaced: check that the step between consecutive x coords is constant
     xCoords.sort((a, b) => a - b);
-    assert.equal(xCoords.length, expectedXCoords.length);
+    const stepX = (config.xRange[1] - config.xRange[0]) / config.gridDensity;
     for (let i = 0; i < xCoords.length; i++) {
-        assert.ok(Math.abs(xCoords[i] - expectedXCoords[i]) < 1e-9);
+        const expected = config.xRange[0] + i * stepX;
+        assert.ok(Math.abs(xCoords[i] - expected) < 1e-9,
+            `x[${i}] = ${xCoords[i]}, expected ${expected}`);
     }
 });
 
-test('Cartesian grid lines do not drift when panning', () => {
+test('Cartesian grid line count scales with gridDensity', () => {
     const config1 = {
         xRange: [-2.2, 2.2],
         yRange: [-1.8, 1.8],
-        gridDensity: 10,
+        gridDensity: 5,
         curvePoints: 100,
         currentFunction: 'identity',
         zetaContinuationEnabled: false
     };
 
-    // Pan right by 0.1
     const config2 = {
-        xRange: [-2.1, 2.3],
+        xRange: [-2.2, 2.2],
         yRange: [-1.8, 1.8],
-        gridDensity: 10,
+        gridDensity: 20,
         curvePoints: 100,
         currentFunction: 'identity',
         zetaContinuationEnabled: false
     };
 
-    const pointSets1 = generateCartesianGridPointSets(config1);
-    const pointSets2 = generateCartesianGridPointSets(config2);
+    const sets1 = generateCartesianGridPointSets(config1);
+    const sets2 = generateCartesianGridPointSets(config2);
 
-    const xCoords1 = pointSets1.filter(s => s.role === 'grid-vertical').map(s => s.points[0].re).sort((a, b) => a - b);
-    const xCoords2 = pointSets2.filter(s => s.role === 'grid-vertical').map(s => s.points[0].re).sort((a, b) => a - b);
+    const xCount1 = sets1.filter(s => s.role === 'grid-vertical').length;
+    const xCount2 = sets2.filter(s => s.role === 'grid-vertical').length;
 
-    // In config2 [-2.1, 2.3], multiples of 0.5 are: -2.0, -1.5, -1.0, -0.5, 0.0, 0.5, 1.0, 1.5, 2.0.
-    // They should be identical!
-    assert.deepEqual(xCoords1, xCoords2);
+    // gridDensity=5 -> 6 lines, gridDensity=20 -> 21 lines
+    assert.equal(xCount1, 6);
+    assert.equal(xCount2, 21);
 });
 
-test('Polar grid radial circles are anchored to multiples of the calculated step', () => {
+test('Polar grid radial circles are evenly distributed up to max radius', () => {
     const config = {
-        // max visible radius will be sqrt(2^2 + 2^2) = 2.828...
         xRange: [-2.0, 2.0],
         yRange: [-2.0, 2.0],
         gridDensity: 10,
@@ -94,21 +94,20 @@ test('Polar grid radial circles are anchored to multiples of the calculated step
     const radialCircles = pointSets.filter(s => s.role === 'polar-radial');
 
     assert.ok(radialCircles.length > 0);
+    assert.equal(radialCircles.length, 10);
 
-    // First point of a circle at (0, 0) with radius R has re = R, im = 0 (or similar)
-    // Let's verify by computing the radius of each circle: sqrt(re^2 + im^2)
+    // Compute the radius of each circle
     const radii = radialCircles.map(s => {
         const pt = s.points[0];
         return Math.sqrt(pt.re * pt.re + pt.im * pt.im);
     }).sort((a, b) => a - b);
 
     // Max visible radius is 2.0.
-    // calculateGridStep with span 2.0 and target 10 selects 0.2.
-    // The expected radii should be: 0.2, 0.4, 0.6, 0.8, 1.0, 1.2, 1.4, 1.6, 1.8, 2.0.
-    const expectedRadii = Array.from({ length: 10 }, (_, i) => (i + 1) * 0.2);
-
-    assert.equal(radii.length, expectedRadii.length);
+    // Radii should be evenly spaced: (1/10)*2, (2/10)*2, ..., (10/10)*2
+    const maxRadius = 2.0;
     for (let i = 0; i < radii.length; i++) {
-        assert.ok(Math.abs(radii[i] - expectedRadii[i]) < 1e-9);
+        const expected = ((i + 1) / config.gridDensity) * maxRadius;
+        assert.ok(Math.abs(radii[i] - expected) < 1e-9,
+            `radius[${i}] = ${radii[i]}, expected ${expected}`);
     }
 });

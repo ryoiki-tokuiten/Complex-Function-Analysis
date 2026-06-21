@@ -1,7 +1,7 @@
 import { state } from '../store/state.js';
 import { COLOR_TEXT_ON_CANVAS, COLOR_CANVAS_BACKGROUND } from '../constants/colors.js';
 import { mapToCanvasCoords } from '../utils/canvas-utils.js';
-import { drawAxes } from './canvas-primitives.js';
+import { drawAxes, drawGrid } from './canvas-primitives.js';
 import { drawLaplaceWindingPremium } from './draw-laplace-winding-3b1b.js';
 
 // Laplace Transform 3-Panel Visualization
@@ -28,28 +28,12 @@ export function drawLaplaceTimeDomain(ctx, signal, planeParams) {
     ctx.fillStyle = COLOR_CANVAS_BACKGROUND;
     ctx.fillRect(0, 0, planeParams.width, planeParams.height);
 
-    // Draw axes
+    // All transform panes use the shared Cartesian grid and world-coordinate zoom.
+    drawGrid(ctx, planeParams);
     drawAxes(ctx, planeParams, "Time (t)", "f(t)");
 
     const sigma = state.laplaceSigma || 0;
-    const timeWindow = 5.0;
-    const maxAmp = Math.max(...signal.map(pt => Math.abs(pt.value))) * 1.2;
-
-    const xRange = planeParams.currentVisXRange || [0, 5];
-    const yRange = planeParams.currentVisYRange || [-3, 3];
-
-    // Draw grid
-    ctx.strokeStyle = 'rgba(255, 255, 255, 0.05)';
-    ctx.lineWidth = 1;
-    const gridSpacing = 1.0;
-    for (let x = 0; x <= timeWindow; x += gridSpacing) {
-        const worldX = xRange[0] + (x / timeWindow) * (xRange[1] - xRange[0]);
-        const canvasX = mapToCanvasCoords(worldX, 0, planeParams).x;
-        ctx.beginPath();
-        ctx.moveTo(canvasX, 0);
-        ctx.lineTo(canvasX, planeParams.height);
-        ctx.stroke();
-    }
+    const maxAmp = Math.max(1, ...signal.map(pt => Math.abs(pt.value)));
 
     // Draw ORIGINAL signal f(t) in light blue
     ctx.beginPath();
@@ -59,9 +43,7 @@ export function drawLaplaceTimeDomain(ctx, signal, planeParams) {
 
     for (let i = 0; i < signal.length; i++) {
         const pt = signal[i];
-        const worldX = xRange[0] + (pt.t / timeWindow) * (xRange[1] - xRange[0]);
-        const worldY = (pt.value / maxAmp) * (yRange[1] - yRange[0]) * 0.4;
-        const canvasPos = mapToCanvasCoords(worldX, worldY, planeParams);
+        const canvasPos = mapToCanvasCoords(pt.t, pt.value, planeParams);
 
         if (i === 0) {
             ctx.moveTo(canvasPos.x, canvasPos.y);
@@ -83,9 +65,7 @@ export function drawLaplaceTimeDomain(ctx, signal, planeParams) {
         const weight = Math.exp(-sigma * pt.t);
         const weightedValue = pt.value * weight;
 
-        const worldX = xRange[0] + (pt.t / timeWindow) * (xRange[1] - xRange[0]);
-        const worldY = (weightedValue / maxAmp) * (yRange[1] - yRange[0]) * 0.4;
-        const canvasPos = mapToCanvasCoords(worldX, worldY, planeParams);
+        const canvasPos = mapToCanvasCoords(pt.t, weightedValue, planeParams);
 
         // Gradient stroke based on position
         const t = i / signal.length;
@@ -96,9 +76,7 @@ export function drawLaplaceTimeDomain(ctx, signal, planeParams) {
             const prevPt = signal[i - 1];
             const prevWeight = Math.exp(-sigma * prevPt.t);
             const prevWeightedValue = prevPt.value * prevWeight;
-            const prevWorldX = xRange[0] + (prevPt.t / timeWindow) * (xRange[1] - xRange[0]);
-            const prevWorldY = (prevWeightedValue / maxAmp) * (yRange[1] - yRange[0]) * 0.4;
-            const prevCanvasPos = mapToCanvasCoords(prevWorldX, prevWorldY, planeParams);
+            const prevCanvasPos = mapToCanvasCoords(prevPt.t, prevWeightedValue, planeParams);
 
             ctx.beginPath();
             ctx.moveTo(prevCanvasPos.x, prevCanvasPos.y);
@@ -117,11 +95,8 @@ export function drawLaplaceTimeDomain(ctx, signal, planeParams) {
 
         for (let i = 0; i < signal.length; i++) {
             const pt = signal[i];
-            const envelope = Math.exp(-sigma * pt.t) * maxAmp * 0.4;
-
-            const worldX = xRange[0] + (pt.t / timeWindow) * (xRange[1] - xRange[0]);
-            const worldY = (envelope / maxAmp) * (yRange[1] - yRange[0]) * 0.4;
-            const canvasPos = mapToCanvasCoords(worldX, worldY, planeParams);
+            const envelope = Math.exp(-sigma * pt.t) * maxAmp;
+            const canvasPos = mapToCanvasCoords(pt.t, envelope, planeParams);
 
             if (i === 0) {
                 ctx.moveTo(canvasPos.x, canvasPos.y);
@@ -135,11 +110,8 @@ export function drawLaplaceTimeDomain(ctx, signal, planeParams) {
         ctx.beginPath();
         for (let i = 0; i < signal.length; i++) {
             const pt = signal[i];
-            const envelope = -Math.exp(-sigma * pt.t) * maxAmp * 0.4;
-
-            const worldX = xRange[0] + (pt.t / timeWindow) * (xRange[1] - xRange[0]);
-            const worldY = (envelope / maxAmp) * (yRange[1] - yRange[0]) * 0.4;
-            const canvasPos = mapToCanvasCoords(worldX, worldY, planeParams);
+            const envelope = -Math.exp(-sigma * pt.t) * maxAmp;
+            const canvasPos = mapToCanvasCoords(pt.t, envelope, planeParams);
 
             if (i === 0) {
                 ctx.moveTo(canvasPos.x, canvasPos.y);
@@ -157,9 +129,7 @@ export function drawLaplaceTimeDomain(ctx, signal, planeParams) {
         const weight = Math.exp(-sigma * pt.t);
         const weightedValue = pt.value * weight;
 
-        const worldX = xRange[0] + (pt.t / timeWindow) * (xRange[1] - xRange[0]);
-        const worldY = (weightedValue / maxAmp) * (yRange[1] - yRange[0]) * 0.4;
-        const canvasPos = mapToCanvasCoords(worldX, worldY, planeParams);
+        const canvasPos = mapToCanvasCoords(pt.t, weightedValue, planeParams);
 
         const t = i / signal.length;
         const dampingIntensity = sigma > 0 ? weight : Math.min(1, weight);

@@ -383,6 +383,38 @@ export function findPolesZeros(funcType, params) {
             
         case 'impulse': // F(s) = 1 → no poles or zeros
             break;
+            
+        case 'exponential_sine': { // e^(at)sin(ωt) -> a_es = damping * 0.3
+            const a_es = damping * 0.3;
+            poles.push({ sigma: a_es, omega: omega, label: `s = ${a_es.toFixed(2)} + j${omega.toFixed(2)}` });
+            poles.push({ sigma: a_es, omega: -omega, label: `s = ${a_es.toFixed(2)} - j${omega.toFixed(2)}` });
+            break;
+        }
+            
+        case 'underdamped': {
+            const zeta = 0.3;
+            const wd = omega * Math.sqrt(1 - zeta * zeta);
+            const a_ud = -zeta * omega;
+            poles.push({ sigma: a_ud, omega: wd, label: `s = ${a_ud.toFixed(2)} + j${wd.toFixed(2)}` });
+            poles.push({ sigma: a_ud, omega: -wd, label: `s = ${a_ud.toFixed(2)} - j${wd.toFixed(2)}` });
+            break;
+        }
+            
+        case 'critically_damped': {
+            const a_cd = -omega;
+            poles.push({ sigma: a_cd, omega: 0, label: `s = ${a_cd.toFixed(2)} (×2)`, order: 2 });
+            break;
+        }
+            
+        case 'overdamped': {
+            const zeta2 = 1.5;
+            const root = Math.sqrt(zeta2 * zeta2 - 1);
+            const a1 = (-zeta2 + root) * omega;
+            const a2 = (-zeta2 - root) * omega;
+            poles.push({ sigma: a1, omega: 0, label: `s = ${a1.toFixed(2)}` });
+            poles.push({ sigma: a2, omega: 0, label: `s = ${a2.toFixed(2)}` });
+            break;
+        }
     }
     
     return { poles, zeros };
@@ -470,7 +502,7 @@ export function computeROC(poles) {
 export function updateLaplaceEvaluationPoint() {
     if (!state.laplaceModeEnabled) return;
     
-    const funcType = state.laplaceFunction || 'damped_sine';
+    const funcType = state.laplaceFunction || 'exponential';
     const frequency = state.laplaceFrequency || 2.0;
     const damping = state.laplaceDamping || 0.5;
     const amplitude = state.laplaceAmplitude || 1.0;
@@ -490,7 +522,7 @@ export function updateLaplaceEvaluationPoint() {
 export function updateLaplaceTransform() {
     if (!state.laplaceModeEnabled) return;
     
-    const funcType = state.laplaceFunction || 'damped_sine';
+    const funcType = state.laplaceFunction || 'exponential';
     const frequency = state.laplaceFrequency || 2.0;
     const damping = state.laplaceDamping || 0.5;
     const amplitude = state.laplaceAmplitude || 1.0;
@@ -513,10 +545,39 @@ export function updateLaplaceTransform() {
     // Analyze stability
     state.laplaceStability = analyzeStability(pz.poles);
     
+    // Dynamically calculate grid boundaries based on poles
+    let minSigma = -3, maxSigma = 2;
+    let maxOmegaMag = 5;
+
+    if (pz.poles && pz.poles.length > 0) {
+        let poleMinSigma = Infinity;
+        let poleMaxSigma = -Infinity;
+        
+        for (const pole of pz.poles) {
+            poleMinSigma = Math.min(poleMinSigma, pole.sigma);
+            poleMaxSigma = Math.max(poleMaxSigma, pole.sigma);
+            maxOmegaMag = Math.max(maxOmegaMag, Math.abs(pole.omega));
+        }
+        
+        // Add padding around poles
+        minSigma = Math.min(-1, poleMinSigma - 2);
+        maxSigma = Math.max(1, poleMaxSigma + 2);
+        // Ensure ROC boundary is well-visible
+        if (state.laplaceROC && state.laplaceROC.boundary !== null) {
+            maxSigma = Math.max(maxSigma, state.laplaceROC.boundary + 3);
+            minSigma = Math.min(minSigma, state.laplaceROC.boundary - 3);
+        }
+    } else {
+        // Fallback bounds
+        maxOmegaMag = Math.max(5, frequency * 2);
+        minSigma = -damping * 2 - 1;
+        maxSigma = Math.max(2, damping + 1);
+    }
+    
     // Compute surface for 3D visualization with higher resolution
     const grid = {
-        sigmaRange: [-3, 2],
-        omegaRange: [-10, 10],
+        sigmaRange: [minSigma, maxSigma],
+        omegaRange: [-(maxOmegaMag + 2), maxOmegaMag + 2],
         sigmaSteps: 70,  // Increased for smoother surface
         omegaSteps: 70   // Increased for smoother surface
     };

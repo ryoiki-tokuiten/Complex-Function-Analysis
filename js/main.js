@@ -20,6 +20,27 @@ import {
 
 const { controls } = context;
 
+function syncLaplaceSurfaceColumn() {
+    const column = controls.laplace3DColumn;
+    if (!column) return;
+
+    const shouldHide = !state.laplaceModeEnabled;
+    const changed = column.classList.contains('hidden') !== shouldHide;
+    if (!changed) return;
+    column.classList.toggle('hidden', shouldHide);
+
+    // The column count changes between two and three. Resize the bitmap-backed
+    // planes after the browser has committed that layout, not during the old one.
+    const refreshPlanes = () => {
+        setupVisualParameters(false, false);
+        requestRedrawAll();
+    };
+    requestAnimationFrame(() => {
+        refreshPlanes();
+        setTimeout(refreshPlanes, 360);
+    });
+}
+
 export function requestRedrawAll() {
     if (context.redrawRequest) {
         context.redrawQueued = true;
@@ -55,9 +76,7 @@ export function requestRedrawAll() {
             drawWPlaneContent();
             updateTitlesAndGlobalUI();
 
-            if (controls.laplace3DColumn) {
-                controls.laplace3DColumn.classList.toggle('hidden', !state.laplaceModeEnabled);
-            }
+            syncLaplaceSurfaceColumn();
             if (state.laplaceModeEnabled && typeof drawLaplace3DSurface === 'function') {
                 drawLaplace3DSurface('laplace_3d_container');
             }

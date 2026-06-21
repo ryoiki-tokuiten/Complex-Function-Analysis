@@ -15,7 +15,7 @@ import { toggleRiemannTransformationAnimationZ, toggleRiemannTransformationAnima
 import { setNavigationModeEnabled, followNavigationViewports, resetNavigationVehicle, setNavigationKey, stopNavigationLoop, initializeNavigationStateFromControls } from '../navigation-plane.js';
 import { toggleAnimation } from './animation.js';
 import { initializePolynomialCoeffs, generatePolynomialCoeffSliders } from './polynomial-ui.js';
-import { updateLaplace3DSurface } from '../rendering/laplace-3d-surface.js';
+import { updateLaplace3DSurface, resizeLaplace3DSurface } from '../rendering/laplace-3d-surface.js';
 import { getRiemannSurfaceCanvas, resetRiemannSurfaceViews } from '../rendering/webgl-riemann-surface.js';
 import { applyTheme, renderThemesList, renderDomainPalettesUI, domainPalettes } from './theme-manager.js';
 import { applyFractalPreset, isFractalPresetKey } from '../analysis/fractal-presets.js';
@@ -30,6 +30,7 @@ const { controls = {} } = context;
 let zCanvas;
 let wCanvas;
 let uiEventListenersBound = false;
+let transformViewportSnapshot = null;
 
 const COMPLEX_PARTS = ['re', 'im'];
 const MOBIUS_PARAMS = ['A', 'B', 'C', 'D'];
@@ -38,7 +39,7 @@ const DOMAIN_DIRTY_STATE_KEYS = new Set([
     'a0', 'b0', 'circleR', 'ellipseA', 'ellipseB', 'hyperbolaA', 'hyperbolaB',
     'stripY1', 'stripY2', 'sectorAngle1', 'sectorAngle2', 'sectorRMin', 'sectorRMax',
     'imageSize', 'imageOpacity', 'videoSize', 'videoOpacity', 'vectorFieldScale',
-    'zPlaneZoom', 'wPlaneZoom', 'fractionalPowerN', 'plotlySphereOpacity', 'sphereGridOpacity'
+    'zPlaneZoom', 'wPlaneZoom', 'fractionalPowerN', 'threeSphereOpacity', 'sphereGridOpacity'
 ]);
 
 const BASIC_SLIDER_BINDINGS = [
@@ -55,7 +56,7 @@ const BASIC_SLIDER_BINDINGS = [
     ['streamlineThicknessSlider', 'streamlineThickness'],
     ['streamlineSeedDensityFactorSlider', 'streamlineSeedDensityFactor'],
     ['radialDiscreteStepsCountSlider', 'radialDiscreteStepsCount', parseInteger],
-    ['plotlySphereOpacitySlider', 'plotlySphereOpacity'],
+    ['threeSphereOpacitySlider', 'threeSphereOpacity'],
     ['sphereGridOpacitySlider', 'sphereGridOpacity'],
     ['taylorSeriesOrderSlider', 'taylorSeriesOrder', parseInteger],
     ['particleDensitySlider', 'particleDensity', parseInteger],
@@ -68,8 +69,6 @@ const BASIC_SLIDER_BINDINGS = [
     ['videoFpsSlider', 'videoProcessingFps', parseInteger],
     ['videoSizeSlider', 'videoSize'],
     ['videoOpacitySlider', 'videoOpacity'],
-    ['zPlaneZoomSlider', 'zPlaneZoom'],
-    ['wPlaneZoomSlider', 'wPlaneZoom'],
     ['laplaceAnimationSpeedSlider', 'laplaceAnimationSpeed'],
     ['fourierFrequencySlider', 'fourierFrequency'],
     ['fourierAmplitudeSlider', 'fourierAmplitude'],
@@ -97,7 +96,7 @@ const BASIC_CHECKBOX_BINDINGS = [
     ['enableStreamlineFlowCb', 'streamlineFlowEnabled'],
     ['enableRadialDiscreteStepsCb', 'radialDiscreteStepsEnabled'],
     ['enableRiemannSphereCb', 'riemannSphereViewEnabled'],
-    ['enablePlotly3DCb', 'plotly3DEnabled'],
+    ['enableThreeSphereCb', 'threeSphereEnabled'],
     ['enableRiemannTransformationCb', 'riemannTransformationEnabled'],
     ['enableTaylorSeriesCb', 'taylorSeriesEnabled'],
     ['enableTaylorSeriesCustomCenterCb', 'taylorSeriesCustomCenterEnabled'],
@@ -137,7 +136,7 @@ const SPECIAL_SLIDERS = new Set([
 const SPECIAL_CHECKBOXES = new Set([
     'enableSplitViewCb', 'enableVectorFieldCb', 'enableStreamlineFlowCb',
     'enableRadialDiscreteStepsCb', 'enableRiemannSphereCb', 'enableRiemannSurfaceCb',
-    'enablePlotly3DCb', 'enableTaylorSeriesCb', 'enableTaylorSeriesCustomCenterCb',
+    'enableThreeSphereCb', 'enableTaylorSeriesCb', 'enableTaylorSeriesCustomCenterCb',
     'laplaceShowROCCb', 'laplaceShowPolesZerosCb',
     'laplaceShowFourierLineCb', 'laplaceAnimationLoopCb', 'enableParticleAnimationCb',
     'enableDomainColoringCb'
@@ -420,16 +419,6 @@ export function syncLaplacePlayPauseButton() {
     }
 }
 
-export function syncLaplaceWindingSyncButton() {
-    const button = controls.laplaceWindingSyncBtn;
-    if (!button) return;
-
-    const enabled = Boolean(state.laplaceWindingSyncZoom);
-    button.textContent = enabled ? 'Sync Zoom: On' : 'Sync Zoom: Off';
-    button.style.color = enabled ? 'rgba(150, 200, 255, 0.9)' : 'rgba(180, 180, 180, 0.6)';
-    button.style.borderColor = enabled ? 'rgba(80, 120, 180, 0.5)' : 'rgba(80, 80, 80, 0.4)';
-}
-
 export function setActiveFunctionButton(activeKey) {
     Object.entries(controls.funcButtons || {}).forEach(([key, button]) => {
         if (!button) return;
@@ -443,9 +432,7 @@ export function setActiveFunctionButton(activeKey) {
 function updateModePanels() {
     hidden(controls.fourierSpecificControlsDiv, !state.fourierModeEnabled);
     hidden(controls.laplaceSpecificControlsDiv, !state.laplaceModeEnabled);
-    display(controls.laplaceWindingSyncBtn, state.laplaceModeEnabled);
     syncLaplacePlayPauseButton();
-    syncLaplaceWindingSyncButton();
 }
 
 function disableAlgebraicChaining() {
@@ -496,10 +483,13 @@ function syncInputShapeControlFromState() {
 }
 
 function activateFractalPreset(key) {
+    const leavingTransform = state.fourierModeEnabled || state.laplaceModeEnabled;
+    if (state.laplaceModeEnabled) call(stopLaplaceAnimation);
+
     const preset = applyFractalPreset(state, key);
     if (!preset) return false;
 
-    if (state.laplaceModeEnabled) call(stopLaplaceAnimation);
+    if (leavingTransform) restoreNormalViewports();
     syncChainingControlsFromState();
     syncAlgebraicControlsFromState();
     syncDomainControlsFromState();
@@ -514,14 +504,120 @@ function activateFractalPreset(key) {
     return true;
 }
 
+function setPlaneViewport(planeParams, xRange, yRange) {
+    const xSpan = Math.max(1e-6, xRange[1] - xRange[0]);
+    const ySpan = Math.max(1e-6, yRange[1] - yRange[0]);
+    const scale = Math.min(planeParams.width / xSpan, planeParams.height / ySpan);
+    const centerX = (xRange[0] + xRange[1]) * 0.5;
+    const centerY = (yRange[0] + yRange[1]) * 0.5;
+    const targetXRange = planeParams.currentVisXRange || planeParams.xRange;
+    const targetYRange = planeParams.currentVisYRange || planeParams.yRange;
+
+    targetXRange[0] = xRange[0];
+    targetXRange[1] = xRange[1];
+    targetYRange[0] = yRange[0];
+    targetYRange[1] = yRange[1];
+    planeParams.scale.x = planeParams.scale.y = scale;
+    planeParams.origin.x = planeParams.width * 0.5 - centerX * scale;
+    planeParams.origin.y = planeParams.height * 0.5 + centerY * scale;
+    updatePlaneViewportRanges(planeParams);
+}
+
+function copyRange(range) {
+    return Array.isArray(range) ? [...range] : null;
+}
+
+function snapshotNormalViewports() {
+    if (transformViewportSnapshot) return;
+
+    transformViewportSnapshot = {
+        z: {
+            xRange: copyRange(zPlaneParams.currentVisXRange),
+            yRange: copyRange(zPlaneParams.currentVisYRange)
+        },
+        w: {
+            xRange: copyRange(wPlaneParams.xRange),
+            yRange: copyRange(wPlaneParams.yRange)
+        },
+        zZoom: state.zPlaneZoom,
+        wZoom: state.wPlaneZoom
+    };
+}
+
+function restoreNormalViewports() {
+    const snapshot = transformViewportSnapshot;
+    transformViewportSnapshot = null;
+    if (!snapshot) return;
+
+    if (snapshot.z.xRange && snapshot.z.yRange) {
+        zPlaneParams.currentVisXRange.splice(0, 2, ...snapshot.z.xRange);
+        zPlaneParams.currentVisYRange.splice(0, 2, ...snapshot.z.yRange);
+    }
+    if (snapshot.w.xRange && snapshot.w.yRange) {
+        wPlaneParams.xRange.splice(0, 2, ...snapshot.w.xRange);
+        wPlaneParams.yRange.splice(0, 2, ...snapshot.w.yRange);
+    }
+
+    state.zPlaneZoom = snapshot.zZoom;
+    state.wPlaneZoom = snapshot.wZoom;
+    if (controls.zPlaneZoomSlider) controls.zPlaneZoomSlider.value = String(Math.log10(snapshot.zZoom || 1));
+    if (controls.wPlaneZoomSlider) controls.wPlaneZoomSlider.value = String(Math.log10(snapshot.wZoom || 1));
+}
+
+function fitTransformViewports() {
+    const signal = state.fourierModeEnabled
+        ? state.fourierTimeDomainSignal
+        : state.laplaceTimeDomainSignal;
+    if (!signal?.length) return;
+
+    setupVisualParameters(false, false);
+    const timeWindow = Math.max(1, signal.at(-1)?.t || state.fourierTimeWindow || 5);
+    const amplitude = Math.max(1, ...signal.map(point => Math.abs(point.value)));
+    const timePadding = Math.max(0.25, timeWindow * 0.06);
+    const amplitudePadding = Math.max(0.35, amplitude * 0.24);
+
+    setPlaneViewport(
+        zPlaneParams,
+        [-timePadding, timeWindow + timePadding],
+        [-amplitude - amplitudePadding, amplitude + amplitudePadding]
+    );
+
+    let windingRadius = amplitude * 1.35;
+    if (state.laplaceModeEnabled) {
+        const dt = signal.length > 1 ? signal[1].t - signal[0].t : 0.01;
+        let sumRe = 0;
+        let sumIm = 0;
+        signal.forEach(point => {
+            const weight = Math.exp(-(state.laplaceSigma || 0) * point.t);
+            const angle = -(state.laplaceOmega || 1) * point.t;
+            const re = point.value * weight * Math.cos(angle);
+            const im = point.value * weight * Math.sin(angle);
+            sumRe += re * dt;
+            sumIm += im * dt;
+            windingRadius = Math.max(windingRadius, Math.hypot(re, im), Math.hypot(sumRe, sumIm));
+        });
+    }
+    windingRadius = Math.max(1, windingRadius * 1.35);
+    setPlaneViewport(wPlaneParams, [-windingRadius, windingRadius], [-windingRadius, windingRadius]);
+
+    state.zPlaneZoom = 1;
+    state.wPlaneZoom = 1;
+    if (controls.zPlaneZoomSlider) controls.zPlaneZoomSlider.value = '0';
+    if (controls.wPlaneZoomSlider) controls.wPlaneZoomSlider.value = '0';
+}
+
 function activateFunctionMode(key) {
     if (isFractalPresetKey(key) && activateFractalPreset(key)) return;
 
     const enteringFourier = key === 'fourier';
     const enteringLaplace = key === 'laplace';
+    const enteringTransform = enteringFourier || enteringLaplace;
+    const leavingTransform = (state.fourierModeEnabled || state.laplaceModeEnabled) && !enteringTransform;
 
     if (state.laplaceModeEnabled && !enteringLaplace) call(stopLaplaceAnimation);
-    if ((enteringFourier || enteringLaplace) && state.currentInputShape === 'video') call(pauseUploadedVideoPlayback);
+    if (enteringTransform && state.currentInputShape === 'video') call(pauseUploadedVideoPlayback);
+
+    if (enteringTransform) snapshotNormalViewports();
 
     disableAlgebraicChaining();
     disableOutputChaining();
@@ -532,19 +628,16 @@ function activateFunctionMode(key) {
     state.fourierModeEnabled = enteringFourier;
     state.laplaceModeEnabled = enteringLaplace;
 
-    if ((enteringFourier || enteringLaplace) && state.navigationModeEnabled) call(setNavigationModeEnabled, false);
+    if (enteringTransform && state.navigationModeEnabled) call(setNavigationModeEnabled, false);
     if (enteringFourier) call(updateFourierTransform);
 
     if (enteringLaplace) {
-        Object.assign(state, {
-            laplaceTopVP: null,
-            lapaceBotVP: null,
-            laplaceDragging: null,
-            laplaceNeedViewportReset: true
-        });
         call(updateLaplaceTransform);
         call(showFullLaplaceSpiral);
     }
+
+    if (enteringTransform) fitTransformViewports();
+    else if (leavingTransform) restoreNormalViewports();
 
     updateModePanels();
     setActiveFunctionButton(key);
@@ -807,7 +900,7 @@ function bindViewControls() {
     [
         ['zPlaneZoomSlider', 'zPlaneZoom', [true, false]],
         ['wPlaneZoomSlider', 'wPlaneZoom', [false, true]]
-    ].forEach(([controlKey, stateKey, args]) => bindSlider(controlKey, stateKey, parseFloat, () => {
+    ].forEach(([controlKey, stateKey, args]) => bindSlider(controlKey, stateKey, (val) => Math.pow(10, parseFloat(val)), () => {
         setupVisualParameters(...args);
         requestDomainRedraw(true);
     }));
@@ -816,10 +909,10 @@ function bindViewControls() {
         if (state.riemannSphereViewEnabled) {
             if (state.riemannSurfaceEnabled) disableRiemannSurface();
             
-            if (!state.plotly3DEnabled) {
-                state.plotly3DEnabled = true;
-                checked('enablePlotly3DCb', true);
-                hidden(controls.plotly3DOptionsDiv, false);
+            if (!state.threeSphereEnabled) {
+                state.threeSphereEnabled = true;
+                checked('enableThreeSphereCb', true);
+                hidden(controls.threeSphereOptionsDiv, false);
             }
             if (!state.splitViewEnabled) {
                 state.splitViewEnabled = true;
@@ -828,7 +921,7 @@ function bindViewControls() {
         } else {
             state.riemannTransformationEnabled = false;
             checked('enableRiemannTransformationCb', false);
-            hidden(controls.plotly3DOptionsDiv, true);
+            hidden(controls.threeSphereOptionsDiv, true);
         }
         hidden(controls.riemannSphereOptionsDiv, !state.riemannSphereViewEnabled);
         call(syncRiemannTransformationUI);
@@ -836,15 +929,15 @@ function bindViewControls() {
         requestDomainRedraw(true);
     });
 
-    bindCheckbox('enablePlotly3DCb', 'plotly3DEnabled', () => {
-        if (state.plotly3DEnabled) {
+    bindCheckbox('enableThreeSphereCb', 'threeSphereEnabled', () => {
+        if (state.threeSphereEnabled) {
             if (state.riemannTransformationEnabled) {
                 state.riemannTransformationEnabled = false;
                 checked('enableRiemannTransformationCb', false);
                 call(syncRiemannTransformationUI);
             }
         }
-        hidden(controls.plotly3DOptionsDiv, !state.plotly3DEnabled);
+        hidden(controls.threeSphereOptionsDiv, !state.threeSphereEnabled);
         call(updateChainingTitles);
         requestRedrawAll();
     });
@@ -870,10 +963,10 @@ function bindViewControls() {
                 state.splitViewEnabled = false;
                 checked('enableSplitViewCb', false);
             }
-            if (state.plotly3DEnabled) {
-                state.plotly3DEnabled = false;
-                checked('enablePlotly3DCb', false);
-                hidden(controls.plotly3DOptionsDiv, true);
+            if (state.threeSphereEnabled) {
+                state.threeSphereEnabled = false;
+                checked('enableThreeSphereCb', false);
+                hidden(controls.threeSphereOptionsDiv, true);
             }
         }
         call(syncRiemannTransformationUI);
@@ -883,8 +976,8 @@ function bindViewControls() {
 
     bindCheckbox('enableRiemannSurfaceCb', 'riemannSurfaceEnabled', () => {
         if (state.riemannSurfaceEnabled) {
-            Object.assign(state, { riemannSphereViewEnabled: false, riemannTransformationEnabled: false, splitViewEnabled: false, plotly3DEnabled: false });
-            ['enableRiemannSphereCb', 'enableRiemannTransformationCb', 'enableSplitViewCb', 'enablePlotly3DCb'].forEach(key => checked(key, false));
+            Object.assign(state, { riemannSphereViewEnabled: false, riemannTransformationEnabled: false, splitViewEnabled: false, threeSphereEnabled: false });
+            ['enableRiemannSphereCb', 'enableRiemannTransformationCb', 'enableSplitViewCb', 'enableThreeSphereCb'].forEach(key => checked(key, false));
             if (state.navigationModeEnabled) call(setNavigationModeEnabled, false);
         }
 
@@ -1117,7 +1210,7 @@ function bindLaplaceControls() {
     bindControlListener('laplaceFindPolesZerosBtn', 'click', () => {
         if (!state.laplaceModeEnabled) return;
 
-        const result = findPolesZeros(state.laplaceFunction || 'damped_sine', {
+        const result = findPolesZeros(state.laplaceFunction || 'exponential', {
             frequency: state.laplaceFrequency || 2.0,
             damping: state.laplaceDamping || 0.5,
             amplitude: state.laplaceAmplitude || 1.0
@@ -1134,10 +1227,6 @@ function bindLaplaceControls() {
         requestRedrawAll();
     });
 
-    bindControlListener('laplaceWindingSyncBtn', 'click', () => {
-        state.laplaceWindingSyncZoom = !state.laplaceWindingSyncZoom;
-        syncLaplaceWindingSyncButton();
-    });
 }
 
 function canvasContext(planeType) {
@@ -1155,35 +1244,6 @@ function isSphereInteractionActive(isZCanvas) {
 function mouse(canvas, event) {
     const rect = canvas.getBoundingClientRect();
     return { x: event.clientX - rect.left, y: event.clientY - rect.top, rect };
-}
-
-function updateLaplaceViewportRanges(viewport) {
-    const originWorldX = -viewport.origin.x / viewport.scale.x;
-    const originWorldY = (viewport.origin.y - viewport.offsetY - viewport.height / 2) / viewport.scale.y;
-    viewport.currentVisXRange = [originWorldX, originWorldX + viewport.width / viewport.scale.x];
-    viewport.currentVisYRange = [
-        originWorldY - viewport.height / (2 * viewport.scale.y),
-        originWorldY + viewport.height / (2 * viewport.scale.y)
-    ];
-}
-
-function getLaplaceViewportAtY(mouseY) {
-    if (!state.laplaceTopVP || !state.lapaceBotVP) return null;
-    const top = mouseY < state.laplaceTopVP.height;
-    return { panel: top ? 'top' : 'bot', viewport: top ? state.laplaceTopVP : state.lapaceBotVP };
-}
-
-function zoomLaplaceViewport(viewport, mouseX, mouseY, factor, centered = false) {
-    const anchorX = centered ? viewport.width / 2 : mouseX;
-    const anchorY = centered ? viewport.offsetY + viewport.height / 2 : mouseY;
-    const worldX = (anchorX - viewport.origin.x) / viewport.scale.x;
-    const worldY = (viewport.origin.y - anchorY) / viewport.scale.y;
-
-    viewport.scale.x *= factor;
-    viewport.scale.y *= factor;
-    viewport.origin.x = anchorX - worldX * viewport.scale.x;
-    viewport.origin.y = anchorY + worldY * viewport.scale.y;
-    updateLaplaceViewportRanges(viewport);
 }
 
 function panPlane(ctx, pos) {
@@ -1221,17 +1281,6 @@ function handleCanvasMove(ctx, event) {
 
     const pos = mouse(ctx.canvas, event);
 
-    if (!ctx.isZ && state.laplaceModeEnabled && state.laplaceDragging) {
-        const viewport = state.laplaceDragging.panel === 'top' ? state.laplaceTopVP : state.lapaceBotVP;
-        if (!viewport) return;
-
-        viewport.origin.x = state.laplaceDragging.startOrigin.x + (pos.x - state.laplaceDragging.startX);
-        viewport.origin.y = state.laplaceDragging.startOrigin.y + (pos.y - state.laplaceDragging.startY);
-        updateLaplaceViewportRanges(viewport);
-        requestRedrawAll();
-        return;
-    }
-
     if (ctx.pan.isPanning) {
         panPlane(ctx, pos);
         return;
@@ -1248,39 +1297,16 @@ function handleCanvasMove(ctx, event) {
     }
 }
 
-function tryStartLaplaceDrag(ctx, pos) {
-    if (ctx.isZ || !state.laplaceModeEnabled || !state.laplaceTopVP || !state.lapaceBotVP) return false;
-
-    const target = getLaplaceViewportAtY(pos.y);
-    if (!target) return false;
-
-    state.laplaceDragging = {
-        panel: target.panel,
-        startX: pos.x,
-        startY: pos.y,
-        startOrigin: { x: target.viewport.origin.x, y: target.viewport.origin.y }
-    };
-    ctx.canvas.style.cursor = 'grabbing';
-    return true;
-}
-
 function handleCanvasDown(ctx, event) {
     if (isSphereInteractionActive(ctx.isZ)) return;
 
     const pos = mouse(ctx.canvas, event);
-    if (event.button === 0 && tryStartLaplaceDrag(ctx, pos)) return;
     if (event.button !== 0) return;
     startPan(ctx, pos);
 }
 
 function handleCanvasUp(ctx, event) {
     if (isSphereInteractionActive(ctx.isZ)) return;
-
-    if (!ctx.isZ && state.laplaceDragging) {
-        state.laplaceDragging = null;
-        ctx.canvas.style.cursor = 'crosshair';
-        return;
-    }
 
     if (event.button !== 0 || !ctx.pan.isPanning) return;
 
@@ -1302,11 +1328,6 @@ function handleCanvasUp(ctx, event) {
 
 function handleCanvasLeave(ctx) {
     if (isSphereInteractionActive(ctx.isZ)) return;
-
-    if (!ctx.isZ && state.laplaceDragging) {
-        state.laplaceDragging = null;
-        ctx.canvas.style.cursor = 'crosshair';
-    }
 
     if (ctx.pan.isPanning) {
         ctx.pan.isPanning = false;
@@ -1341,20 +1362,6 @@ function handleCanvasWheel(ctx, event) {
     event.preventDefault();
     const pos = mouse(ctx.canvas, event);
     const factor = event.deltaY < 0 ? ZOOM_IN_FACTOR : ZOOM_OUT_FACTOR;
-
-    if (!ctx.isZ && state.laplaceModeEnabled && state.laplaceTopVP && state.lapaceBotVP) {
-        const target = getLaplaceViewportAtY(pos.y);
-        if (!target) return;
-
-        zoomLaplaceViewport(target.viewport, pos.x, pos.y, factor, false);
-
-        if (state.laplaceWindingSyncZoom) {
-            zoomLaplaceViewport(target.panel === 'top' ? state.lapaceBotVP : state.laplaceTopVP, pos.x, pos.y, factor, true);
-        }
-
-        requestRedrawAll();
-        return;
-    }
 
     zoomPlaneAt(ctx, pos, factor);
 }
@@ -1466,7 +1473,7 @@ function toggleLaplace3DFullscreen() {
         if (column3d) column3d.classList.remove('hidden-visually');
     }
 
-    laterFrame(() => resizePlotly(container3d, 'Laplace 3D Plotly surface'), state.isLaplace3DFullScreen ? 150 : 100);
+    laterFrame(() => resizeLaplace3DSurface(container3d), state.isLaplace3DFullScreen ? 150 : 100);
 }
 
 function syncTopControlsCollapseState() {
@@ -1622,34 +1629,6 @@ function bindThemeControls() {
     });
 }
 
-function resizePlotly(plotlyDiv, label = 'Plotly surface') {
-    if (!plotlyDiv || !globalThis.Plotly?.Plots?.resize) return false;
-
-    try {
-        globalThis.Plotly.Plots.resize(plotlyDiv);
-        return true;
-    } catch (error) {
-        console.error(`Error resizing ${label}:`, error);
-        return false;
-    }
-}
-
-function attemptPlotlyResize(plotlyDiv, maxAttempts = 3, delay = 100, currentAttempt = 1) {
-    if (!plotlyDiv) return;
-
-    if (plotlyDiv.offsetWidth > 0 && plotlyDiv.offsetHeight > 0) {
-        resizePlotly(plotlyDiv, `Plotly container ${plotlyDiv.id || ''}`);
-        return;
-    }
-
-    if (currentAttempt >= maxAttempts) {
-        console.warn(`Plotly container ${plotlyDiv.id} still has zero dimensions after ${maxAttempts} attempts.`);
-        return;
-    }
-
-    setTimeout(() => attemptPlotlyResize(plotlyDiv, maxAttempts, delay, currentAttempt + 1), delay);
-}
-
 function sphereParams(planeType) {
     return planeType === 'z' ? sphereViewParams.z : sphereViewParams.w;
 }
@@ -1739,7 +1718,7 @@ function fullscreenTarget(planeType, index = 0) {
     if (isZ) {
         return {
             isZ: true,
-            isPlotly: false,
+            isThree: false,
             element: controls.zCanvasWrapper || zCanvas,
             card: controls.zCanvasCard
         };
@@ -1747,12 +1726,12 @@ function fullscreenTarget(planeType, index = 0) {
 
     const canvas = (context.wCanvasList && context.wCanvasList[index]) || wCanvas;
     const card = index === 0 ? controls.wCanvasCard : document.getElementById(`w_plane_column_${index}`);
-    const plotly = (context.wPlanePlotlyContainersList && context.wPlanePlotlyContainersList[index]) || controls.wPlanePlotlyContainer;
+    const threeContainer = (context.wPlaneThreeContainersList && context.wPlaneThreeContainersList[index]) || controls.wPlaneThreeContainer;
     const surface = state.riemannSurfaceEnabled ? getRiemannSurfaceCanvas(canvas) : null;
-    const isPlotly = state.plotly3DEnabled && state.riemannSphereViewEnabled && plotly;
+    const isThree = state.threeSphereEnabled && state.riemannSphereViewEnabled && threeContainer;
 
-    let element = surface || (isPlotly ? plotly : canvas);
-    if (!surface && !isPlotly) {
+    let element = surface || (isThree ? threeContainer : canvas);
+    if (!surface && !isThree) {
         if (index === 0 && controls.wCanvasWrapper) {
             element = controls.wCanvasWrapper;
         } else if (canvas && canvas.parentElement) {
@@ -1762,7 +1741,7 @@ function fullscreenTarget(planeType, index = 0) {
 
     return {
         isZ: false,
-        isPlotly,
+        isThree,
         element,
         card,
         canvas
@@ -1826,34 +1805,24 @@ function handleFullScreenToggle(planeType, index = 0) {
         if (target.card) target.card.classList.add('hidden-visually');
         setStyles(target.element, { width: '100%', height: '100%' });
 
-        if (target.isPlotly && target.canvas) target.canvas.classList.add('hidden');
-        if (!target.isZ && controls.laplaceWindingSyncBtn && index === 0) {
-            shell.appendChild(controls.laplaceWindingSyncBtn);
-            setStyles(controls.laplaceWindingSyncBtn, { top: '50px', right: '20px' });
-        }
+        if (target.isThree && target.canvas) target.canvas.classList.add('hidden');
     } else {
         restoreFullscreenOrigin(target.isZ, target.element, target.card, index);
         resetFullscreenShell(shell);
         if (target.card) target.card.classList.remove('hidden-visually');
-        if (target.isPlotly && target.canvas) target.canvas.classList.remove('hidden');
+        if (target.isThree && target.canvas) target.canvas.classList.remove('hidden');
 
-        if (!target.isZ && controls.laplaceWindingSyncBtn && state.originalWParent && index === 0) {
-            state.originalWParent.appendChild(controls.laplaceWindingSyncBtn);
-            setStyles(controls.laplaceWindingSyncBtn, { top: '8px', right: '8px' });
-        }
     }
 
     setupVisualParameters(false, false);
 
-    if (target.isPlotly) {
+    if (target.isThree) {
         laterFrame(() => {
             if (entering) {
                 target.element.classList.remove('hidden');
                 setStyles(target.element, { width: '100%', height: '100%' });
-                attemptPlotlyResize(target.element, 5, 150);
-            } else {
-                attemptPlotlyResize(target.element, 3, 100);
             }
+            window.dispatchEvent(new Event('resize'));
         }, entering ? 100 : 50);
     }
 

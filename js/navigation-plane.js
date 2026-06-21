@@ -111,10 +111,10 @@ export function setNavigationModeEnabled(enabled) {
     if (enabled) {
         state.riemannSphereViewEnabled = false;
         state.splitViewEnabled = false;
-        state.plotly3DEnabled = false;
+        state.threeSphereEnabled = false;
         if (controls.enableRiemannSphereCb) controls.enableRiemannSphereCb.checked = false;
         if (controls.enableSplitViewCb) controls.enableSplitViewCb.checked = false;
-        if (controls.enablePlotly3DCb) controls.enablePlotly3DCb.checked = false;
+        if (controls.enableThreeSphereCb) controls.enableThreeSphereCb.checked = false;
         followNavigationViewports();
     } else {
         state.navigationKeys = {};

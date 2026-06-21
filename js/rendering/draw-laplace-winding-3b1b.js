@@ -1,6 +1,6 @@
 import { state } from '../store/state.js';
 import { COLOR_TEXT_ON_CANVAS } from '../constants/colors.js';
-import { mapToCanvasCoords, updatePlaneViewportRanges } from '../utils/canvas-utils.js';
+import { mapToCanvasCoords } from '../utils/canvas-utils.js';
 import { drawAxes, drawGrid, drawTipToTailVectors, drawSpiral } from './canvas-primitives.js';
 
 // 3Blue1Brown-Quality Laplace Winding Visualization
@@ -10,40 +10,6 @@ import { drawAxes, drawGrid, drawTipToTailVectors, drawSpiral } from './canvas-p
  * Draw unified full-canvas Laplace winding visualization
  * Shows f(t)·e^(-st) spiral AND tip-to-tail integral geometry in one view
  */
-/**
- * Compute auto-fitting viewport params for one panel of the winding view.
- * boxOffsetY is the top-left Y of the panel in canvas coordinates.
- */
-export function autoFitLaplacePanel(minRe, maxRe, minIm, maxIm, boxW, boxH, boxOffsetY) {
-    const pad = 0.4;
-    let spanRe = maxRe - minRe;
-    let spanIm = maxIm - minIm;
-    const pRe = Math.max(spanRe * pad, 0.5);
-    const pIm = Math.max(spanIm * pad, 0.5);
-    minRe -= pRe; maxRe += pRe;
-    minIm -= pIm; maxIm += pIm;
-    spanRe = maxRe - minRe;
-    spanIm = maxIm - minIm;
-    if (spanRe < 1) { const c = (minRe + maxRe) / 2; minRe = c - 0.5; maxRe = c + 0.5; spanRe = 1; }
-    if (spanIm < 1) { const c = (minIm + maxIm) / 2; minIm = c - 0.5; maxIm = c + 0.5; spanIm = 1; }
-    const maxSpan = Math.max(spanRe, spanIm);
-    const cRe = (minRe + maxRe) / 2;
-    const cIm = (minIm + maxIm) / 2;
-    const scale = Math.min(boxW, boxH) / maxSpan;
-    return {
-        width: boxW,
-        height: boxH,
-        offsetY: boxOffsetY,
-        origin: {
-            x: boxW / 2 - cRe * scale,
-            y: boxOffsetY + boxH / 2 + cIm * scale
-        },
-        scale: { x: scale, y: scale },
-        currentVisXRange: [cRe - maxSpan / 2, cRe + maxSpan / 2],
-        currentVisYRange: [cIm - maxSpan / 2, cIm + maxSpan / 2]
-    };
-}
-
 export function drawLaplaceWindingPremium(ctx, signal, planeParams) {
     if (!signal || signal.length === 0) {
         ctx.save();
@@ -62,104 +28,25 @@ export function drawLaplaceWindingPremium(ctx, signal, planeParams) {
 
     ctx.save();
 
-    const W = planeParams.width;
-    const H = planeParams.height;
-
     ctx.fillStyle = 'rgba(8, 10, 18, 1)';
-    ctx.fillRect(0, 0, W, H);
+    ctx.fillRect(0, 0, planeParams.width, planeParams.height);
 
     const sigma = state.laplaceSigma || 0;
     const omega = state.laplaceOmega || 1;
     const windingData = computeLaplaceWindingData(signal, sigma, omega);
-    const pts = windingData.points;
+    if (windingData.points.length === 0) { ctx.restore(); return; }
 
-    if (pts.length === 0) { ctx.restore(); return; }
-
-    // --- Layout: 50/50 split ---
-    const gap = 4;
-    const topH = Math.floor((H - gap) / 2);
-    const botH = H - topH - gap;
-    const botY = topH + gap;
-    const borderColor = 'rgba(80, 120, 180, 0.45)';
-
-    // --- Auto-fit top panel (spiral) only on first render or reset ---
-    if (!state.laplaceTopVP || state.laplaceNeedViewportReset) {
-        let sMinRe = 0, sMaxRe = 0, sMinIm = 0, sMaxIm = 0;
-        for (const p of pts) {
-            if (p.real < sMinRe) sMinRe = p.real;
-            if (p.real > sMaxRe) sMaxRe = p.real;
-            if (p.imag < sMinIm) sMinIm = p.imag;
-            if (p.imag > sMaxIm) sMaxIm = p.imag;
-        }
-        state.laplaceTopVP = autoFitLaplacePanel(sMinRe, sMaxRe, sMinIm, sMaxIm, W, topH, 0);
-    } else {
-        // Update geometry if canvas resized
-        state.laplaceTopVP.width = W;
-        state.laplaceTopVP.height = topH;
-        state.laplaceTopVP.offsetY = 0;
-    }
-
-    // --- Auto-fit bottom panel (vectors) only on first render or reset ---
-    if (!state.lapaceBotVP || state.laplaceNeedViewportReset) {
-        const dt = pts.length > 1 ? (pts[1].t - pts[0].t) : 0.01;
-        const vstep = Math.max(1, Math.floor(pts.length / 12));
-        let runRe = 0, runIm = 0;
-        let vMinRe = 0, vMaxRe = 0, vMinIm = 0, vMaxIm = 0;
-        const maxIdx = Math.floor(pts.length * (windingData.animTime || 1.0));
-        for (let i = 0; i < pts.length && i < maxIdx; i += vstep) {
-            runRe += pts[i].real * dt * vstep;
-            runIm += pts[i].imag * dt * vstep;
-            if (runRe < vMinRe) vMinRe = runRe;
-            if (runRe > vMaxRe) vMaxRe = runRe;
-            if (runIm < vMinIm) vMinIm = runIm;
-            if (runIm > vMaxIm) vMaxIm = runIm;
-        }
-        const integ = windingData.integral;
-        if (integ.real < vMinRe) vMinRe = integ.real;
-        if (integ.real > vMaxRe) vMaxRe = integ.real;
-        if (integ.imag < vMinIm) vMinIm = integ.imag;
-        if (integ.imag > vMaxIm) vMaxIm = integ.imag;
-        state.lapaceBotVP = autoFitLaplacePanel(vMinRe, vMaxRe, vMinIm, vMaxIm, W, botH, botY);
-    } else {
-        state.lapaceBotVP.width = W;
-        state.lapaceBotVP.height = botH;
-        state.lapaceBotVP.offsetY = botY;
-    }
-
-    if (state.laplaceNeedViewportReset) state.laplaceNeedViewportReset = false;
-
-    const topParams = state.laplaceTopVP;
-    const botParams = state.lapaceBotVP;
-
-    // --- TOP PANEL: Spiral path ---
-    ctx.save();
-    ctx.beginPath();
-    ctx.rect(0, 0, W, topH);
-    ctx.clip();
-    drawGrid(ctx, topParams);
-    drawAxes(ctx, topParams);
-    drawSpiral(ctx, windingData, topParams);
-    ctx.strokeStyle = borderColor;
-    ctx.lineWidth = 1.5;
-    ctx.strokeRect(0, 0, W, topH);
-    ctx.restore();
-
-    // --- DIVIDER ---
-    ctx.fillStyle = 'rgba(40, 60, 80, 0.5)';
-    ctx.fillRect(0, topH, W, gap);
-
-    // --- BOTTOM PANEL: Tip-to-tail vectors ---
-    ctx.save();
-    ctx.beginPath();
-    ctx.rect(0, botY, W, botH);
-    ctx.clip();
-    drawGrid(ctx, botParams);
-    drawAxes(ctx, botParams);
-    drawTipToTailVectors(ctx, windingData, botParams, { style: 'enhanced', numVectors: 12, showLabels: (botParams.scale.x + botParams.scale.y) / 2 > 800 });
-    ctx.strokeStyle = borderColor;
-    ctx.lineWidth = 1.5;
-    ctx.strokeRect(0, botY, W, botH);
-    ctx.restore();
+    // A single shared viewport keeps panning and zoom identical to the app's
+    // planar/domain-coloring pipeline. The spiral and its integral remain
+    // distinct through their rendering styles rather than separate canvases.
+    drawGrid(ctx, planeParams);
+    drawAxes(ctx, planeParams, 'Re', 'Im');
+    drawSpiral(ctx, windingData, planeParams);
+    drawTipToTailVectors(ctx, windingData, planeParams, {
+        style: 'enhanced',
+        numVectors: 12,
+        showLabels: (planeParams.scale.x + planeParams.scale.y) / 2 > 800
+    });
 
     ctx.restore();
 }
@@ -261,91 +148,6 @@ export function computeLaplaceWindingData(signal, sigma, omega) {
         animTime: animTime
     };
 }
-
-/**
- * Setup viewport to show winding nicely - ONLY on first init, preserve pan/zoom after
- */
-export function setupWindingViewport(planeParams, windingData, includeIntegral = false) {
-    if (planeParams.scale && planeParams.origin && !state.laplaceNeedViewportReset) {
-        updatePlaneViewportRanges(planeParams);
-        return;
-    }
-
-    const points = windingData.points;
-    if (points.length === 0) return;
-
-    let minReal = includeIntegral ? 0 : Infinity, maxReal = includeIntegral ? 0 : -Infinity;
-    let minImag = includeIntegral ? 0 : Infinity, maxImag = includeIntegral ? 0 : -Infinity;
-
-    for (const pt of points) {
-        minReal = Math.min(minReal, pt.real);
-        maxReal = Math.max(maxReal, pt.real);
-        minImag = Math.min(minImag, pt.imag);
-        maxImag = Math.max(maxImag, pt.imag);
-    }
-
-    if (includeIntegral) {
-        const integral = windingData.integral;
-        minReal = Math.min(minReal, integral.real);
-        maxReal = Math.max(maxReal, integral.real);
-        minImag = Math.min(minImag, integral.imag);
-        maxImag = Math.max(maxImag, integral.imag);
-    }
-
-    const padding = includeIntegral ? 0.4 : 0.2;
-    const rangeReal = maxReal - minReal;
-    const rangeImag = maxImag - minImag;
-
-    minReal -= rangeReal * padding;
-    maxReal += rangeReal * padding;
-    minImag -= rangeImag * padding;
-    maxImag += rangeImag * padding;
-
-    const minSize = 1.0;
-    if (maxReal - minReal < minSize) {
-        const center = (maxReal + minReal) / 2;
-        minReal = center - minSize / 2;
-        maxReal = center + minSize / 2;
-    }
-    if (maxImag - minImag < minSize) {
-        const center = (maxImag + minImag) / 2;
-        minImag = center - minSize / 2;
-        maxImag = center + minSize / 2;
-    }
-
-    if (includeIntegral) {
-        const xSpan = maxReal - minReal;
-        const ySpan = maxImag - minImag;
-        const maxSpan = Math.max(xSpan, ySpan);
-        const scale = planeParams.width / maxSpan;
-        const centerX = (minReal + maxReal) / 2;
-        const centerY = (minImag + maxImag) / 2;
-        planeParams.scale = { x: scale, y: scale };
-        planeParams.origin = {
-            x: planeParams.width / 2 - centerX * scale,
-            y: planeParams.height / 2 + centerY * scale
-        };
-        planeParams.currentVisXRange = [centerX - maxSpan / 2, centerX + maxSpan / 2];
-        planeParams.currentVisYRange = [centerY - maxSpan / 2, centerY + maxSpan / 2];
-    } else {
-        planeParams.currentVisXRange = [minReal, maxReal];
-        planeParams.currentVisYRange = [minImag, maxImag];
-        planeParams.scale = {
-            x: planeParams.width / (maxReal - minReal),
-            y: planeParams.height / (maxImag - minImag)
-        };
-        planeParams.origin = {
-            x: -minReal * planeParams.scale.x,
-            y: planeParams.height + minImag * planeParams.scale.y
-        };
-    }
-    state.laplaceNeedViewportReset = false;
-}
-
-export function setupWindingViewportSplit(params, windingData) {
-    setupWindingViewport(params, windingData, true);
-}
-
 
 /**
  * Draw the winding spiral path with progressive coloring (3b1b style!)
@@ -620,4 +422,3 @@ export function drawIntegralResult(ctx, windingData, planeParams) {
     ctx.fillStyle = 'rgba(180, 255, 200, 0.95)';
     ctx.fillText(`F(s) = ${magnitude.toFixed(3)}`, labelX, labelY);
 }
-

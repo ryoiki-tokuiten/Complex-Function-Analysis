@@ -1169,10 +1169,6 @@ hr.panel-separator {
 
 
 canvas {
-    width: 100%;
-    /* Fallback for non-flex scenarios, or can be primary if parent isn't flex column */
-    height: 100%;
-    /* Similar to width */
     /* object-fit: contain; /* Not applicable to canvas, content is drawn */
     display: block;
     /* Good default */
@@ -1856,15 +1852,24 @@ button.active {
     box-sizing: border-box;
 }
 
-#fullscreen_container>#w_plane_plotly_container {
+#fullscreen_container>#w_plane_three_container {
     width: 100%;
     height: 100%;
     display: block;
     position: relative;
 }
 
-/* Removed !important and specific internal Plotly element targeting for now,
-   as the issue might be more related to resize timing or Plotly's own handling. */
+/* The native Three.js canvas owns its own responsive sizing. */
+
+.three-surface-placeholder {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 100%;
+    height: 100%;
+    color: rgba(200, 220, 255, 0.8);
+    font-family: "SF Pro Text", sans-serif;
+}
 
 #close_fullscreen_btn {
     position: fixed;
@@ -2158,6 +2163,11 @@ select:focus {
 
 .probe-info-overlay.hidden {
     display: none !important;
+}
+
+.probe-info-overlay .probe-output-error {
+    color: #ffb4a5;
+    font-weight: 700;
 }
 
 .cauchy-info-overlay {
@@ -4838,4 +4848,3 @@ textarea.dynamic-formula-input {
         opacity: 0.5;
     }
 }
-

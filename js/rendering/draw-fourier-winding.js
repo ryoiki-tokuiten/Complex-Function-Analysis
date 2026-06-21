@@ -1,7 +1,7 @@
 import { state } from '../store/state.js';
 import { COLOR_TEXT_ON_CANVAS, COLOR_CANVAS_BACKGROUND } from '../constants/colors.js';
 import { mapToCanvasCoords } from '../utils/canvas-utils.js';
-import { drawAxes } from './canvas-primitives.js';
+import { drawAxes, drawGrid } from './canvas-primitives.js';
 
 
 // 3Blue1Brown-style Fourier "Winding" Visualization
@@ -30,7 +30,8 @@ export function drawWindingVisualization(ctx, signal, planeParams) {
     ctx.fillStyle = COLOR_CANVAS_BACKGROUND;
     ctx.fillRect(0, 0, planeParams.width, planeParams.height);
 
-    // Draw axes for complex plane
+    // The transform view uses the same world-coordinate grid as every other plane.
+    drawGrid(ctx, planeParams);
     drawAxes(ctx, planeParams, "Real", "Imaginary");
 
     // Get winding parameters
@@ -257,61 +258,13 @@ export function drawTimeDomainSignal(ctx, signal, planeParams) {
 
     ctx.save();
 
-    const W = planeParams.width;
-    const H = planeParams.height;
-
-    // Clear canvas
     ctx.fillStyle = COLOR_CANVAS_BACKGROUND;
-    ctx.fillRect(0, 0, W, H);
+    ctx.fillRect(0, 0, planeParams.width, planeParams.height);
 
-    const timeWindow = state.fourierTimeWindow;
-    const maxAmp = Math.max(...signal.map(pt => Math.abs(pt.value))) * 1.2 || 1;
+    const timeWindow = state.fourierTimeWindow || signal.at(-1)?.t || 1;
     const windingTime = state.fourierWindingTime || 1.0;
-
-    // Independent scaling — fill canvas properly
-    const pad = { l: 50, r: 20, t: 25, b: 30 };
-    const plotW = W - pad.l - pad.r;
-    const plotH = H - pad.t - pad.b;
-    const tMin = 0, tMax = timeWindow;
-    const yMin = -maxAmp, yMax = maxAmp;
-
-    function tToX(t) { return pad.l + (t / tMax) * plotW; }
-    function vToY(v) { return pad.t + plotH / 2 - (v / maxAmp) * (plotH / 2); }
-
-    // Subtle grid
-    ctx.strokeStyle = 'rgba(255, 255, 255, 0.05)';
-    ctx.lineWidth = 1;
-    const numGridX = 8;
-    for (let i = 0; i <= numGridX; i++) {
-        const gx = pad.l + (i / numGridX) * plotW;
-        ctx.beginPath();
-        ctx.moveTo(gx, pad.t);
-        ctx.lineTo(gx, pad.t + plotH);
-        ctx.stroke();
-    }
-
-    // Axes
-    ctx.strokeStyle = 'rgba(100, 180, 255, 0.5)';
-    ctx.lineWidth = 1;
-    // x-axis (zero line)
-    const zeroY = vToY(0);
-    ctx.beginPath();
-    ctx.moveTo(pad.l, zeroY);
-    ctx.lineTo(pad.l + plotW, zeroY);
-    ctx.stroke();
-    // y-axis
-    ctx.beginPath();
-    ctx.moveTo(pad.l, pad.t);
-    ctx.lineTo(pad.l, pad.t + plotH);
-    ctx.stroke();
-
-    // Axis labels
-    ctx.fillStyle = 'rgba(150, 200, 255, 0.7)';
-    ctx.font = '10px sans-serif';
-    ctx.textAlign = 'center';
-    ctx.fillText('t', pad.l + plotW / 2, H - 8);
-    ctx.textAlign = 'right';
-    ctx.fillText('g(t)', pad.l - 8, pad.t + 12);
+    drawGrid(ctx, planeParams);
+    drawAxes(ctx, planeParams, 'Time (t)', 'g(t)');
 
     // Draw the signal curve
     ctx.beginPath();
@@ -325,8 +278,7 @@ export function drawTimeDomainSignal(ctx, signal, planeParams) {
     let firstPoint = true;
     for (let i = 0; i < signal.length; i++) {
         const pt = signal[i];
-        const cx = tToX(pt.t);
-        const cy = vToY(pt.value);
+        const { x: cx, y: cy } = mapToCanvasCoords(pt.t, pt.value, planeParams);
 
         if (firstPoint) { ctx.moveTo(cx, cy); firstPoint = false; }
         else ctx.lineTo(cx, cy);
@@ -335,10 +287,10 @@ export function drawTimeDomainSignal(ctx, signal, planeParams) {
     ctx.shadowBlur = 0;
 
     // Draw sample points
-    for (let i = 0; i < signal.length; i++) {
+    const pointStep = Math.max(1, Math.floor(signal.length / 90));
+    for (let i = 0; i < signal.length; i += pointStep) {
         const pt = signal[i];
-        const cx = tToX(pt.t);
-        const cy = vToY(pt.value);
+        const { x: cx, y: cy } = mapToCanvasCoords(pt.t, pt.value, planeParams);
         const isPast = pt.t <= windingTime * timeWindow;
 
         if (isPast) {
@@ -370,8 +322,8 @@ export function drawTimeDomainSignal(ctx, signal, planeParams) {
 
     // Time cursor
     if (windingTime > 0 && windingTime <= 1) {
-        const cursorX = tToX(windingTime * timeWindow);
-        const gradient = ctx.createLinearGradient(cursorX, pad.t, cursorX, pad.t + plotH);
+        const cursorX = mapToCanvasCoords(windingTime * timeWindow, 0, planeParams).x;
+        const gradient = ctx.createLinearGradient(cursorX, 0, cursorX, planeParams.height);
         gradient.addColorStop(0, 'rgba(255, 180, 100, 0.3)');
         gradient.addColorStop(0.5, 'rgba(255, 150, 100, 0.9)');
         gradient.addColorStop(1, 'rgba(255, 180, 100, 0.3)');
@@ -381,26 +333,16 @@ export function drawTimeDomainSignal(ctx, signal, planeParams) {
         ctx.shadowColor = 'rgba(255, 150, 100, 0.6)';
         ctx.shadowBlur = 10;
         ctx.beginPath();
-        ctx.moveTo(cursorX, pad.t);
-        ctx.lineTo(cursorX, pad.t + plotH);
+        ctx.moveTo(cursorX, 0);
+        ctx.lineTo(cursorX, planeParams.height);
         ctx.stroke();
         ctx.shadowBlur = 0;
 
         ctx.fillStyle = 'rgba(255, 200, 150, 1)';
         ctx.font = 'bold 11px "SF Pro Text", sans-serif';
         ctx.textAlign = 'center';
-        ctx.fillText(`t = ${(windingTime * timeWindow).toFixed(2)}s`, cursorX, pad.t - 6);
+        ctx.fillText(`t = ${(windingTime * timeWindow).toFixed(2)}s`, cursorX, 16);
     }
-
-    // Draw zero line (dashed)
-    ctx.strokeStyle = 'rgba(255, 255, 255, 0.3)';
-    ctx.lineWidth = 1;
-    ctx.setLineDash([5, 5]);
-    ctx.beginPath();
-    ctx.moveTo(pad.l, zeroY);
-    ctx.lineTo(pad.l + plotW, zeroY);
-    ctx.stroke();
-    ctx.setLineDash([]);
 
     ctx.restore();
 }

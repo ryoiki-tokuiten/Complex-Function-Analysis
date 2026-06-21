@@ -13,7 +13,7 @@ The application architecture is split into math and analysis components that eva
 
 For example, for the image mapping, the software looks at a pixel on the left side (the z-plane). It calculates the function for that point and moves the color of that pixel to the resulting coordinates on the right side (the w-plane). Because these functions are continuous, neighboring pixels stay near each other, but the space between them can be stretched, compressed, or rotated.
 
-There is no build step or backend required. All calculations and rendering happen in the browser using vanilla JavaScript, WebGL, and HTML5 Canvas, supplemented by a few external libraries via CDN (`math.js`, `lodash`, and `plotly.js`).
+There is no build step or backend required. All calculations and rendering happen in the browser using vanilla JavaScript, WebGL, HTML5 Canvas, and Three.js.
 
 ## Calculation & Analysis
 
@@ -27,9 +27,9 @@ The core mathematical operations live in the `js/analysis/` and `js/math-utils.j
 
 ## Rendering & Display
 
-The rendering engine (`js/rendering/`) is highly modular, splitting responsibilities between 2D Canvas contexts, WebGL, and Plotly depending on the performance and topological requirements:
+The rendering engine (`js/rendering/`) is highly modular, splitting responsibilities between 2D Canvas contexts, WebGL, and Three.js depending on the performance and topological requirements:
 
 *   **HTML5 Canvas (2D):** Used for lightweight, interactive rendering. It parses UI inputs to draw Cartesian/polar grids, user-defined shapes (circles, lines, strips), contour endpoints, and hover-probe info overlays on both the z-plane and w-plane.
 *   **WebGL:** Essential for continuous plane evaluations, particularly **Domain Coloring**. WebGL shaders map the argument (angle) of a complex number to a hue, and its magnitude to lightness/saturation. WebGL is also utilized for drawing densely transformed user-images mapping from the z-plane to the w-plane, ensuring 60fps performance during heavy pixel mathematical operations.
-*   **Plotly (3D):** Integrated for three-dimensional topological concepts. This includes projecting the complex plane onto a 3D Riemann sphere viewing interface, and mapping the magnitude of the Laplace transform ($|F(s)|$) into a 3D surface plot.
+*   **Three.js (3D):** Drives interactive Riemann spheres and the Laplace transform surface ($|F(s)|$), with a shared WebGL scene and interaction model.
 *   **Animation System:** Handles time-domain progressions. Frame-requested loops drive particle flows through vector fields, simulate drawing out Taylor series approximations, and animate winding frequencies for integral transforms.
