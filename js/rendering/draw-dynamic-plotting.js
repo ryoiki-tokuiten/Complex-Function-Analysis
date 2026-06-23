@@ -76,7 +76,17 @@ function drawLabel(ctx, point, label, radius) {
     ctx.strokeStyle = 'rgba(255,255,255,0.16)';
     ctx.lineWidth = 1;
     ctx.beginPath();
-    ctx.roundRect(x, y, width, height, 4);
+    const corner = Math.min(4, width / 2, height / 2);
+    ctx.moveTo(x + corner, y);
+    ctx.lineTo(x + width - corner, y);
+    ctx.arcTo(x + width, y, x + width, y + corner, corner);
+    ctx.lineTo(x + width, y + height - corner);
+    ctx.arcTo(x + width, y + height, x + width - corner, y + height, corner);
+    ctx.lineTo(x + corner, y + height);
+    ctx.arcTo(x, y + height, x, y + height - corner, corner);
+    ctx.lineTo(x, y + corner);
+    ctx.arcTo(x, y, x + corner, y, corner);
+    ctx.closePath();
     ctx.fill();
     ctx.stroke();
     ctx.fillStyle = COLORS.label;

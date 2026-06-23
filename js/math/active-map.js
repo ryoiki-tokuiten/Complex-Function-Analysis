@@ -7,6 +7,7 @@ export const MAP_PRESENTATION = Object.freeze({
 });
 
 const DERIVATIVE_STEP = 1e-6;
+const NESTED_DERIVATIVE_STEP_MULTIPLIER = 100;
 const INVALID = Object.freeze({ re: NaN, im: NaN });
 
 function finiteComplex(value) {
@@ -17,8 +18,8 @@ function normalizeStageIndex(stageIndex) {
     return Math.max(0, Math.floor(Number.isFinite(stageIndex) ? stageIndex : 0));
 }
 
-function derivativeStep(re, im) {
-    return DERIVATIVE_STEP * Math.max(1, Math.abs(re), Math.abs(im));
+function derivativeStep(re, im, multiplier = 1) {
+    return DERIVATIVE_STEP * multiplier * Math.max(1, Math.abs(re), Math.abs(im));
 }
 
 function sourceSignature() {
@@ -41,13 +42,13 @@ export function getFinalMapStageIndex(runtimeState = state) {
     return normalizeStageIndex((runtimeState.chainCount || 1) - 1);
 }
 
-export function createDerivativeTransform(transform) {
+export function createDerivativeTransform(transform, stepMultiplier = 1) {
     return (re, im) => {
         if (typeof transform !== 'function' || !Number.isFinite(re) || !Number.isFinite(im)) {
             return INVALID;
         }
 
-        const h = derivativeStep(re, im);
+        const h = derivativeStep(re, im, stepMultiplier);
         const right = transform(re + h, im);
         const left = transform(re - h, im);
 
@@ -62,18 +63,21 @@ export function createDerivativeTransform(transform) {
 
 export function resolveActiveMap(stageIndex = getFinalMapStageIndex()) {
     const stage = normalizeStageIndex(stageIndex);
-    const source = getChainedStageTransformFunction(state.currentFunction, stage);
-    const derivative = createDerivativeTransform(source);
+    const baseMap = getChainedStageTransformFunction(state.currentFunction, stage);
+    const baseDerivative = createDerivativeTransform(baseMap);
     const presentation = state.mapPresentation === MAP_PRESENTATION.derivative
         ? MAP_PRESENTATION.derivative
         : MAP_PRESENTATION.function;
+    const evaluate = presentation === MAP_PRESENTATION.derivative ? baseDerivative : baseMap;
+    const derivative = presentation === MAP_PRESENTATION.derivative
+        ? createDerivativeTransform(baseDerivative, NESTED_DERIVATIVE_STEP_MULTIPLIER)
+        : baseDerivative;
 
     return Object.freeze({
         stage,
         presentation,
-        source,
         derivative,
-        evaluate: presentation === MAP_PRESENTATION.derivative ? derivative : source,
+        evaluate,
         signature: `${presentation}:${stage}:${sourceSignature()}`
     });
 }

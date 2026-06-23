@@ -5,6 +5,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Complex Analysis Visualization</title>
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml">
     <link rel="stylesheet" href="css/styles.css">
     <link rel="stylesheet" href="css/control-sections.css">
     <script src="https://unpkg.com/lucide@latest"></script>
@@ -1655,8 +1656,8 @@
                                 <output id="z_plane_zoom_value_display">1.00</output>x
                             </label>
                             <div class="slider-container">
-                                <input type="range" id="z_plane_zoom_slider" name="z_plane_zoom_slider" min="-3"
-                                    max="4" step="any" value="0" data-tooltip="Zoom level for the z-plane view (log scale)">
+                                <input type="range" id="z_plane_zoom_slider" name="z_plane_zoom_slider" min="-3" max="4"
+                                    step="any" value="0" data-tooltip="Zoom level for the z-plane view (log scale)">
                             </div>
                         </div>
                         <div class="control-group"> <!-- W-Plane Zoom -->
@@ -1665,8 +1666,8 @@
                                 <output id="w_plane_zoom_value_display">1.00</output>x
                             </label>
                             <div class="slider-container">
-                                <input type="range" id="w_plane_zoom_slider" name="w_plane_zoom_slider" min="-3"
-                                    max="4" step="any" value="0" data-tooltip="Zoom level for the w-plane view (log scale)">
+                                <input type="range" id="w_plane_zoom_slider" name="w_plane_zoom_slider" min="-3" max="4"
+                                    step="any" value="0" data-tooltip="Zoom level for the w-plane view (log scale)">
                             </div>
                         </div>
                     </div>
@@ -1726,8 +1727,7 @@
                                 </span>
                             </label>
                         </div>
-                        <div id="radial_discrete_steps_options_div"
-                            class="dependent-settings-block hidden viz-detail-block">
+                        <div id="radial_discrete_steps_options_div" class="dependent-settings-block hidden">
                             <div class="control-group">
                                 <label for="radial_discrete_steps_count_slider">
                                     Discrete steps:
@@ -1741,7 +1741,7 @@
                             </div>
                         </div>
                         <div id="taylor_series_options_detail_div"
-                            class="dependent-settings-block hidden taylor-series-panel viz-detail-block">
+                            class="dependent-settings-block hidden taylor-series-panel">
                             <div class="taylor-series-header">
                                 <div class="taylor-series-header-copy">
                                     <span class="taylor-series-eyebrow">Local Approximation</span>
@@ -1789,11 +1789,12 @@
                         <div class="viz-toggle-grid">
                             <label for="enable_conformal_grid_cb" class="control-label tooltip-label viz-toggle-card">
                                 <input type="checkbox" id="enable_conformal_grid_cb" class="control-checkbox"
-                                    data-tooltip="Show Tissot indicatrices from the selected map and its derivative">
+                                    data-tooltip="Show matching source circles in z and locally mapped circles in w; spokes reveal the derivative rotation">
                                 <span class="custom-checkbox-visual"></span>
                                 <span class="viz-toggle-card-content">
                                     <span class="viz-toggle-card-title">Conformal Grid</span>
-                                    <span class="viz-toggle-card-copy">Local circles transformed by the map derivative.</span>
+                                    <span class="viz-toggle-card-copy">Source circles and rotated, scaled local
+                                        images.</span>
                                 </span>
                             </label>
                             <label for="enable_domain_coloring_cb" class="control-label tooltip-label viz-toggle-card">
@@ -1827,7 +1828,7 @@
                             </label>
                         </div>
                         <div id="riemann_surface_options_div"
-                            class="dependent-settings-block hidden control-group-indent viz-detail-block">
+                            class="dependent-settings-block hidden control-group-indent">
                             <div class="viz-settings-grid">
                                 <div class="control-group">
                                     <label for="riemann_surface_component_selector">Surface Height</label>
@@ -1896,18 +1897,20 @@
                                 <button id="riemann_surface_reset_view_btn" type="button">Reset View</button>
                             </div>
                         </div>
-                        <div id="domain_coloring_options_div" class="dependent-settings-block hidden viz-detail-block">
+                        <div id="domain_coloring_options_div" class="dependent-settings-block hidden">
                             <div class="viz-settings-grid">
                                 <div class="domain-palette-selector-container">
-                                    <div class="domain-palette-header-row" style="display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 0.5rem; width: 100%;">
-                                        <span class="domain-palette-selector-label" style="margin: 0; justify-content: flex-start; gap: 0.5rem;">
+                                    <div class="domain-palette-header-row"
+                                        style="display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 0.5rem; width: 100%;">
+                                        <span class="domain-palette-selector-label"
+                                            style="margin: 0; justify-content: flex-start; gap: 0.5rem;">
                                             <span>Domain Palette:</span>
                                             <span id="active_domain_palette_name"
                                                 style="color: var(--accent-purple); font-family: monospace; font-weight: bold;">Analytic
                                                 Base</span>
                                         </span>
-                                        <button id="view_palette_circle_btn" class="view-palette-circle-btn" type="button"
-                                            data-tooltip="View color guide circle for active palette">
+                                        <button id="view_palette_circle_btn" class="view-palette-circle-btn"
+                                            type="button" data-tooltip="View color guide circle for active palette">
                                             View Color Circle
                                         </button>
                                     </div>
@@ -1963,7 +1966,7 @@
                             </div>
                         </div>
                         <div id="riemann_sphere_options_div"
-                            class="dependent-settings-block hidden control-group-indent viz-detail-block viz-stacked-options">
+                            class="dependent-settings-block hidden control-group-indent viz-stacked-options">
                             <div class="viz-toggle-grid viz-toggle-grid--trio viz-toggle-grid--compact">
                                 <label for="enable_three_sphere_cb"
                                     class="control-label tooltip-label viz-toggle-card viz-toggle-card--compact">
@@ -2034,7 +2037,7 @@
                         <div class="viz-feature-section-header">
                             <span class="viz-feature-section-title">Vector Field</span>
                         </div>
-                        <div id="vector_flow_options_content" class="viz-detail-block vector-flow-workspace">
+                        <div id="vector_flow_options_content" class="vector-flow-workspace">
                             <div class="viz-toggle-grid viz-toggle-grid--duo vector-flow-toggle-grid">
                                 <label for="enable_vector_field_cb" class="control-label tooltip-label viz-toggle-card">
                                     <input type="checkbox" id="enable_vector_field_cb" class="control-checkbox"
@@ -2042,7 +2045,8 @@
                                     <span class="custom-checkbox-visual"></span>
                                     <span class="viz-toggle-card-content">
                                         <span class="viz-toggle-card-title">Vector Field</span>
-                                        <span class="viz-toggle-card-copy">Sample arrows from the active map or its reciprocal.</span>
+                                        <span class="viz-toggle-card-copy">Sample arrows from the active map or its
+                                            reciprocal.</span>
                                     </span>
                                 </label>
                                 <label for="enable_streamline_flow_cb"
@@ -2067,12 +2071,9 @@
                                     </span>
                                 </label>
                             </div>
-                            <div id="vector_field_options_div"
-                                class="dependent-settings-block hidden vector-settings-card">
+                            <div id="vector_field_options_div" class="dependent-settings-block hidden">
                                 <div class="vector-settings-header">
                                     <span class="vector-settings-title">Vector Field Settings</span>
-                                    <span class="vector-settings-copy">Choose the source function and tune arrow
-                                        rendering.</span>
                                 </div>
                                 <div class="vector-settings-grid">
                                     <div class="control-group">
@@ -2120,12 +2121,9 @@
                                     </div>
                                 </div>
                             </div>
-                            <div id="streamline_options_details_div"
-                                class="dependent-settings-block hidden vector-settings-card">
+                            <div id="streamline_options_details_div" class="dependent-settings-block hidden">
                                 <div class="vector-settings-header">
                                     <span class="vector-settings-title">Streamline Settings</span>
-                                    <span class="vector-settings-copy">Control seeding, thickness, and integration
-                                        quality.</span>
                                 </div>
                                 <div class="vector-settings-grid">
                                     <div class="control-group">
@@ -2177,12 +2175,9 @@
                                     </div>
                                 </div>
                             </div>
-                            <div class="control-group-detail hidden vector-settings-card"
-                                id="particle_animation_details_div">
+                            <div class="dependent-settings-block hidden" id="particle_animation_details_div">
                                 <div class="vector-settings-header">
                                     <span class="vector-settings-title">Particle Settings</span>
-                                    <span class="vector-settings-copy">Tune density, speed, and particle
-                                        lifetime.</span>
                                 </div>
                                 <div class="particle-settings-grid">
                                     <div class="control-group">
@@ -2452,8 +2447,8 @@
         </div>
     </div>
     <!-- Domain Palette Color Wheel Guide Panel (Root Level) -->
-    <div id="domain_palette_circle_panel" class="dynamic-plotting-controls hidden"
-        role="dialog" aria-modal="false" aria-label="Domain Coloring Guide">
+    <div id="domain_palette_circle_panel" class="dynamic-plotting-controls hidden" role="dialog" aria-modal="false"
+        aria-label="Domain Coloring Guide">
         <div class="dynamic-studio-header">
             <div class="dynamic-studio-identity">
                 <span class="dynamic-section-eyebrow">Domain Coloring Guide</span>
@@ -2465,32 +2460,40 @@
                     aria-label="Close Domain Coloring Guide">Close</button>
             </div>
         </div>
-        
+
         <div class="dynamic-intro" style="margin-bottom: 1rem;">
             <div>
                 <div class="dynamic-intro-title">Color Guide Wheel</div>
                 <div class="dynamic-intro-copy">
-                    Shows how complex phase angles map to colors (ring) and how modulus magnitude maps to lightness/shading.
+                    Shows how complex phase angles map to colors (ring) and how modulus magnitude maps to
+                    lightness/shading.
                 </div>
             </div>
         </div>
 
         <!-- Phase Angle Ring Canvas -->
-        <div class="color-wheel-canvas-container" style="display: flex; justify-content: center; align-items: center; padding: 2rem; background: rgba(0, 0, 0, 0.25); border: 1px solid var(--border-color); border-radius: 12px; margin-bottom: 1.5rem;">
-            <canvas id="domain_palette_circle_canvas" width="360" height="360" style="max-width: 100%; height: auto; aspect-ratio: 1;"></canvas>
+        <div class="color-wheel-canvas-container"
+            style="display: flex; justify-content: center; align-items: center; padding: 2rem; background: rgba(0, 0, 0, 0.25); border: 1px solid var(--border-color); border-radius: 12px; margin-bottom: 1.5rem;">
+            <canvas id="domain_palette_circle_canvas" width="360" height="360"
+                style="max-width: 100%; height: auto; aspect-ratio: 1;"></canvas>
         </div>
 
         <!-- Modulus (Amplitude) vs Lightness Strip -->
         <div class="amplitude-strip-container" style="margin-top: 1rem;">
-            <div class="dynamic-intro-title" style="font-size: 0.85rem; margin-bottom: 0.35rem; font-weight: 600; color: var(--text-color);">
+            <div class="dynamic-intro-title"
+                style="font-size: 0.85rem; margin-bottom: 0.35rem; font-weight: 600; color: var(--text-color);">
                 Modulus (Amplitude) vs. Lightness
             </div>
-            <div class="dynamic-intro-copy" style="font-size: 0.75rem; margin-bottom: 0.75rem; color: var(--text-muted);">
+            <div class="dynamic-intro-copy"
+                style="font-size: 0.75rem; margin-bottom: 0.75rem; color: var(--text-muted);">
                 Shows how magnitude |z| maps to lightness cycles and shading (from |z| = 0 to 10¹², logarithmic).
             </div>
-            <div style="position: relative; background: rgba(0, 0, 0, 0.25); border: 1px solid var(--border-color); border-radius: 8px; padding: 1rem 1.25rem 0.75rem;">
-                <canvas id="amplitude_strip_canvas" width="320" height="24" style="width: 100%; height: 24px; display: block; border-radius: 4px;"></canvas>
-                <div style="position: relative; height: 16px; margin-top: 0.35rem; font-size: 0.75rem; color: var(--text-muted); font-family: monospace;">
+            <div
+                style="position: relative; background: rgba(0, 0, 0, 0.25); border: 1px solid var(--border-color); border-radius: 8px; padding: 1rem 1.25rem 0.75rem;">
+                <canvas id="amplitude_strip_canvas" width="320" height="24"
+                    style="width: 100%; height: 24px; display: block; border-radius: 4px;"></canvas>
+                <div
+                    style="position: relative; height: 16px; margin-top: 0.35rem; font-size: 0.75rem; color: var(--text-muted); font-family: monospace;">
                     <span style="position: absolute; left: 0%; transform: translateX(0%);">|z| = 0</span>
                     <span style="position: absolute; left: 2.5%; transform: translateX(-50%);">1</span>
                     <span style="position: absolute; left: 25%; transform: translateX(-50%);">10³</span>

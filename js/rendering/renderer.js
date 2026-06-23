@@ -32,7 +32,7 @@ import {
     drawPlanarTransformedShape,
     drawPlanarProbe,
     drawPlanarTransformedProbe,
-    drawConformalCircleGrid,
+    drawConformalIndicatrices,
     drawStreamlinesOnZPlane,
     updateAndDrawParticles,
     drawPlanarInputOverlays,
@@ -53,6 +53,7 @@ import {
     getDynamicSphereSceneData
 } from './draw-dynamic-plotting.js';
 import { getStaleDomainData, getCurrentFuncSignature } from './domain-dynamics.js';
+import { generateTissotIndicatrices, selectStableTissotIndicatrices } from '../analysis/tissot.js';
 
 let zCanvas;
 let wCanvas;
@@ -79,6 +80,7 @@ let wPlanarTransformedLayerCacheList = [];
 
 const zPlanarInputLayerCache = createLayerCache();
 const zFlowLayerCache = createLayerCache();
+const conformalIndicatrixCache = { key: null, value: [] };
 
 const GRID_INPUT_SHAPES = new Set([
     'grid_cartesian',
@@ -811,6 +813,31 @@ function shouldDrawZReferenceGrid() {
         && state.currentInputShape !== 'empty_grid';
 }
 
+function visiblePlaneRange(planeParams, currentKey, fallbackKey) {
+    const range = planeParams?.[currentKey] || planeParams?.[fallbackKey];
+    return Array.isArray(range) && range.length >= 2 ? range : [-1, 1];
+}
+
+function getConformalIndicatrixData(map) {
+    const xRange = visiblePlaneRange(zPlaneParams, 'currentVisXRange', 'xRange');
+    const yRange = visiblePlaneRange(zPlaneParams, 'currentVisYRange', 'yRange');
+    const key = [
+        map.signature || getCurrentFuncSignature(),
+        state.gridDensity,
+        xRange[0], xRange[1],
+        yRange[0], yRange[1]
+    ].join('|');
+
+    if (conformalIndicatrixCache.key !== key) {
+        conformalIndicatrixCache.key = key;
+        conformalIndicatrixCache.value = selectStableTissotIndicatrices(
+            generateTissotIndicatrices(map, xRange, yRange, state.gridDensity, 72)
+        );
+    }
+
+    return conformalIndicatrixCache.value;
+}
+
 function renderZPlanarBackground(map) {
     refreshZPlanarDomainColoring(map);
 
@@ -888,6 +915,24 @@ function renderZPlanarInputOverlays() {
         'z',
         layerCtx => drawPlanarInputOverlays(layerCtx, zPlaneParams),
         'raster'
+    );
+}
+
+function renderZConformalIndicatrices(map) {
+    if (!state.conformalGridEnabled) return;
+
+    const indicatrices = getConformalIndicatrixData(map);
+    drawPlaneLayer(
+        zCtx,
+        zPlaneParams,
+        'z',
+        layerCtx => drawConformalIndicatrices(
+            layerCtx,
+            zPlaneParams,
+            indicatrices,
+            'source'
+        ),
+        'capture'
     );
 }
 
@@ -983,6 +1028,7 @@ function renderZPlanar(map) {
         'raster'
     );
     renderZMarkers();
+    renderZConformalIndicatrices(map);
     renderZTaylorOverlay();
     renderZProbeOverlay(map);
     renderZParticles(map);
@@ -1362,8 +1408,14 @@ function renderWCommonOverlays(index, map, isRiemannW) {
     renderWProbe(map, index, isRiemannW);
 
     if (state.conformalGridEnabled && !isRiemannW) {
+        const indicatrices = getConformalIndicatrixData(map);
         drawPlaneLayer(wCtx, wPlaneParams, 'w', layerCtx => {
-            drawConformalCircleGrid(layerCtx, wPlaneParams, map);
+            drawConformalIndicatrices(
+                layerCtx,
+                wPlaneParams,
+                indicatrices,
+                'mapped'
+            );
         }, 'capture');
     }
 

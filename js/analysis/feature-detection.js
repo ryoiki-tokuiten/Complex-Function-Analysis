@@ -26,6 +26,7 @@ import {
 function buildFeatureDetectionCacheKey() {
     return [
         state.currentFunction,
+        state.mapPresentation,
         state.chainingEnabled,
         state.chainCount,
         state.algebraicChainingEnabled,
@@ -60,8 +61,9 @@ export function findCriticalPoints() {
     state.criticalPoints = [];
     state.criticalValues = [];
 
-    const func = getChainedTransformFunction(state.currentFunction);
-    const derivative = resolveActiveMap().derivative;
+    const activeMap = resolveActiveMap();
+    const func = activeMap.evaluate;
+    const derivative = activeMap.derivative;
     const { currentVisXRange: xR, currentVisYRange: yR } = zPlaneParams;
     
     const cpCheckDist = (xR[1] - xR[0]) / CRITICAL_POINT_FIND_GRID_SIZE * ZP_CP_CHECK_DISTANCE_FACTOR;
@@ -89,24 +91,26 @@ export function findCriticalPoints() {
 
     
     
-    if (['exp', 'tan', 'reciprocal', 'ln', 'poincare'].includes(state.currentFunction)) {
-        state.criticalPoints = []; state.criticalValues = []; return;
-    }
-    
-    if (state.currentFunction === 'sin') { 
-        for (let n = Math.ceil(xR[0] / Math.PI - 0.5) - 1; n <= Math.floor(xR[1] / Math.PI - 0.5) + 1; n++) {
-            addCritPoint((n + 0.5) * Math.PI, 0);
-        } return;
-    }
-    if (state.currentFunction === 'cos') { 
-        for (let n = Math.ceil(xR[0] / Math.PI) - 1; n <= Math.floor(xR[1] / Math.PI) + 1; n++) {
-            addCritPoint(n * Math.PI, 0);
-        } return;
-    }
-     if (state.currentFunction === 'sec') { 
-        for (let n = Math.ceil(xR[0] / Math.PI) -1; n <= Math.floor(xR[1] / Math.PI) +1; n++) {
-            addCritPoint(n * Math.PI, 0);
-        } return;
+    if (activeMap.presentation !== 'derivative') {
+        if (['exp', 'tan', 'reciprocal', 'ln', 'poincare'].includes(state.currentFunction)) {
+            state.criticalPoints = []; state.criticalValues = []; return;
+        }
+
+        if (state.currentFunction === 'sin') {
+            for (let n = Math.ceil(xR[0] / Math.PI - 0.5) - 1; n <= Math.floor(xR[1] / Math.PI - 0.5) + 1; n++) {
+                addCritPoint((n + 0.5) * Math.PI, 0);
+            } return;
+        }
+        if (state.currentFunction === 'cos') {
+            for (let n = Math.ceil(xR[0] / Math.PI) - 1; n <= Math.floor(xR[1] / Math.PI) + 1; n++) {
+                addCritPoint(n * Math.PI, 0);
+            } return;
+        }
+        if (state.currentFunction === 'sec') {
+            for (let n = Math.ceil(xR[0] / Math.PI) - 1; n <= Math.floor(xR[1] / Math.PI) + 1; n++) {
+                addCritPoint(n * Math.PI, 0);
+            } return;
+        }
     }
     
 

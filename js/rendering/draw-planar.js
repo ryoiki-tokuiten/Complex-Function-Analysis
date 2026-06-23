@@ -31,7 +31,6 @@ import {
     generateRadialDiscreteStepPointSets
 } from './shape-generators.js';
 import { hslToRgb } from './canvas-primitives.js';
-import { generateTissotIndicatrices } from '../analysis/tissot.js';
 
 const EPSILON = 1e-9;
 const DEGENERATE_SEGMENT_EPSILON = 1e-12;
@@ -1271,14 +1270,42 @@ export function drawPlanarTransformedProbe(ctx, planeParams, map) {
     });
 }
 
-export function drawConformalCircleGrid(ctx, planeParams, map) {
-    const xRange = getPlaneXRanges(zPlaneParams);
-    const yRange = getPlaneYRanges(zPlaneParams);
-    const circles = generateTissotIndicatrices(map, xRange, yRange, appState.gridDensity);
+function drawCriticalIndicatrixMarker(ctx, planeParams, center) {
+    const point = toCanvasPoint(center, planeParams);
+    if (!isFiniteCanvasPoint(point)) return;
+
+    ctx.beginPath();
+    ctx.moveTo(point.x - 4, point.y - 4);
+    ctx.lineTo(point.x + 4, point.y + 4);
+    ctx.moveTo(point.x - 4, point.y + 4);
+    ctx.lineTo(point.x + 4, point.y - 4);
+    ctx.stroke();
+}
+
+export function drawConformalIndicatrices(ctx, planeParams, indicatrices, view) {
+    if (!Array.isArray(indicatrices) || indicatrices.length === 0) return;
+
+    const isSource = view === 'source';
+    const circleKey = isSource ? 'sourceCircle' : 'mappedCircle';
+    const spokeKey = isSource ? 'sourceSpoke' : 'mappedSpoke';
+    const arrowheadKey = isSource ? 'sourceArrowhead' : 'mappedArrowhead';
 
     withSavedContext(ctx, () => {
-        configureRoundStroke(ctx, 'rgba(255, 255, 255, 0.78)', 1.1);
-        circles.forEach(points => drawComplexLineSetOnPlane(ctx, planeParams, points));
+        indicatrices.forEach(indicatrix => {
+            configureRoundStroke(ctx, indicatrix.color, 1.25);
+            drawComplexLineSetOnPlane(ctx, planeParams, indicatrix[circleKey]);
+            configureRoundStroke(ctx, indicatrix.color, 1.65);
+            drawComplexLineSetOnPlane(ctx, planeParams, indicatrix[spokeKey]);
+            drawComplexLineSetOnPlane(ctx, planeParams, indicatrix[arrowheadKey]);
+        });
+
+        if (!isSource) {
+            configureRoundStroke(ctx, 'rgba(255, 121, 161, 0.98)', 1.6);
+            indicatrices
+                .filter(indicatrix => indicatrix.isCritical)
+                .forEach(indicatrix => drawCriticalIndicatrixMarker(ctx, planeParams, indicatrix.mappedCenter));
+        }
+
     });
 }
 

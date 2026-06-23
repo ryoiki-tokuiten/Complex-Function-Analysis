@@ -1,4 +1,4 @@
-import { state, context, zPlaneParams, wPlaneParams, sphereViewParams, sliderParamKeys } from '../store/state.js';
+import { state, context, zPlaneParams, wPlaneParams, wPlaneInitialRanges, sphereViewParams, sliderParamKeys } from '../store/state.js';
 import { eventBus } from '../store/events.js';
 import { setupVisualParameters, updateChainingColumns, updateChainingTitles } from '../utils/dom-utils.js';
 import { processUploadedImageSource, loadUploadedVideoFile, toggleUploadedVideoPlayback, pauseUploadedVideoPlayback, startVideoProcessingLoop, syncVideoPlaybackUI, processUploadedVideoFrame } from '../utils/raster-media.js';
@@ -24,6 +24,12 @@ import {
     syncDynamicPlottingUI
 } from './dynamic-plotting-ui.js';
 import { domainColorForValue } from '../rendering/domain-coloring.js';
+import { resolveActiveMap } from '../math/active-map.js';
+import {
+    generateTissotIndicatrices,
+    selectStableTissotIndicatrices,
+    getTissotViewportBounds
+} from '../analysis/tissot.js';
 
 const { controls = {} } = context;
 
@@ -893,8 +899,46 @@ function bindDerivativeControls() {
     });
 }
 
+function fitConformalGridOutputViewport() {
+    const indicatrices = selectStableTissotIndicatrices(generateTissotIndicatrices(
+        resolveActiveMap(),
+        zPlaneParams.currentVisXRange,
+        zPlaneParams.currentVisYRange,
+        state.gridDensity,
+        72
+    ));
+    const bounds = getTissotViewportBounds(indicatrices);
+    if (!bounds) return;
+
+    setPlaneViewport(wPlaneParams, bounds.xRange, bounds.yRange);
+
+    const span = Math.max(
+        bounds.xRange[1] - bounds.xRange[0],
+        bounds.yRange[1] - bounds.yRange[0]
+    );
+    const initialSpan = Math.max(
+        wPlaneInitialRanges.x[1] - wPlaneInitialRanges.x[0],
+        wPlaneInitialRanges.y[1] - wPlaneInitialRanges.y[0]
+    );
+    state.wPlaneZoom = clamp(initialSpan / span, MIN_STATE_ZOOM_LEVEL, MAX_STATE_ZOOM_LEVEL);
+    if (controls.wPlaneZoomSlider) {
+        controls.wPlaneZoomSlider.value = String(Math.log10(state.wPlaneZoom));
+    }
+}
+
 function bindConformalGridControls() {
-    bindCheckbox('enableConformalGridCb', 'conformalGridEnabled', () => requestRedrawAll());
+    bindCheckbox('enableConformalGridCb', 'conformalGridEnabled', () => {
+        if (state.conformalGridEnabled) {
+            if (state.currentInputShape === 'video' && state.videoIsPlaying) {
+                call(pauseUploadedVideoPlayback);
+            }
+            state.currentInputShape = 'empty_grid';
+            if (controls.inputShapeSelector) controls.inputShapeSelector.value = 'empty_grid';
+            fitConformalGridOutputViewport();
+            call(updateTitlesAndGlobalUI);
+        }
+        requestRedrawAll();
+    });
 }
 
 function disableRiemannSurface() {

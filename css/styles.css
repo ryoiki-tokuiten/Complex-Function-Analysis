@@ -379,11 +379,19 @@ main {
 }
 
 .viz-feature-section-header,
-.viz-detail-header,
+.viz-detail-header {
+    display: flex;
+    flex-direction: column;
+    gap: 0.18rem;
+}
+
 .vector-settings-header {
     display: flex;
     flex-direction: column;
     gap: 0.18rem;
+    margin-bottom: 1rem;
+    padding-bottom: 0.5rem;
+    border-bottom: 1px solid color-mix(in srgb, var(--border-color) 40%, transparent);
 }
 
 .viz-feature-section-title,
@@ -516,17 +524,6 @@ main {
     color: var(--text-secondary-color);
 }
 
-#visualization-options-panel .viz-detail-block,
-#visualization-options-panel .vector-settings-card {
-    margin-top: 0;
-    margin-bottom: 0;
-    padding: 0.95rem 1rem;
-    border-radius: 14px;
-    border: 1px solid var(--border-color);
-    background: var(--card-bg-color);
-    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.03);
-}
-
 #visualization-options-panel .viz-subdetail-block {
     margin-top: 0.7rem;
     margin-bottom: 0;
@@ -576,13 +573,6 @@ main {
 
 .vector-flow-toggle-grid {
     margin-top: 0.1rem;
-}
-
-#visualization-options-panel .vector-settings-card .slider-container {
-    padding: 0.72rem 0.82rem;
-    border-radius: 12px;
-    border: 1px solid var(--border-color);
-    background: var(--card-bg-color);
 }
 
 .sphere-view-button-row {
@@ -694,9 +684,7 @@ main {
         grid-template-columns: 1fr;
     }
 
-    .viz-feature-section,
-    #visualization-options-panel .viz-detail-block,
-    #visualization-options-panel .vector-settings-card {
+    .viz-feature-section {
         padding: 0.85rem;
     }
 
@@ -712,22 +700,20 @@ hr.panel-separator {
 }
 
 .dependent-settings-block {
-    background-color: rgba(12, 12, 25, 0.7);
+    background: color-mix(in srgb, var(--card-bg-color) 90%, black);
+    border: 1px solid color-mix(in srgb, var(--border-color) 88%, transparent);
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04), 0 10px 24px rgba(0, 0, 0, 0.14);
     padding: 1.15rem;
-    /* Increased padding */
-    border-radius: 6px;
+    border-radius: 16px;
     backdrop-filter: blur(10px);
     -webkit-backdrop-filter: blur(10px);
     margin-top: 0.25rem;
-    /* Keep margin-top as is, or adjust if needed relative to panel gap */
     margin-bottom: 1rem;
     transition: opacity 0.3s ease-out, transform 0.3s ease-out, max-height 0.3s ease-out;
-    /* For animations */
 }
 
 .dependent-settings-block .control-group {
     margin-bottom: 0.75rem;
-    /* Increased margin */
 }
 
 .dependent-settings-block .control-group:last-child {
@@ -740,10 +726,6 @@ hr.panel-separator {
 
 #parameter-controls-panel .dependent-settings-block {
     margin: 0;
-    border-radius: 16px;
-    border: 1px solid color-mix(in srgb, var(--border-color) 88%, transparent);
-    background: color-mix(in srgb, var(--card-bg-color) 90%, black);
-    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04), 0 10px 24px rgba(0, 0, 0, 0.14);
 }
 
 #parameter-controls-panel .control-group {
@@ -1325,18 +1307,16 @@ input[type="range"] {
     appearance: none;
     width: 100%;
     height: 6px;
-    background: rgba(160, 168, 216, 0.3);
+    background: color-mix(in srgb, var(--text-color) 12%, transparent);
     border-radius: 3px;
     outline: none;
     transition: background-color var(--transition-speed), box-shadow var(--transition-speed);
-    /* Smooth transition for background and shadow */
 }
 
 input[type="range"]::-moz-range-track {
-    /* Basic track styling for Firefox */
     width: 100%;
     height: 6px;
-    background: rgba(160, 168, 216, 0.3);
+    background: color-mix(in srgb, var(--text-color) 12%, transparent);
     border-radius: 3px;
     border: none;
 }
@@ -1344,54 +1324,54 @@ input[type="range"]::-moz-range-track {
 input[type="range"]::-webkit-slider-thumb {
     -webkit-appearance: none;
     appearance: none;
-    width: 18px;
-    height: 18px;
+    height: 20px;
+    width: 20px;
     border-radius: 50%;
-    background: var(--accent-purple);
+    background: transparent;
+    border: 2px solid var(--accent-purple);
     cursor: pointer;
-    border: 2px solid #FFFFFF;
-    transition: transform 0.15s ease, box-shadow 0.2s ease, background-color 0.2s ease;
+    box-shadow: 0 0 10px color-mix(in srgb, var(--accent-purple) 40%, transparent), inset 0 0 4px rgba(0, 0, 0, 0.2);
+    transition: transform 0.15s cubic-bezier(0.4, 0, 0.2, 1), box-shadow 0.15s ease;
 }
 
 input[type="range"]:hover::-webkit-slider-thumb {
-    transform: scale(1.1);
-    box-shadow: 0 0 10px color-mix(in srgb, var(--accent-purple) 70%, transparent);
+    transform: scale(1.15);
+    box-shadow: 0 0 15px color-mix(in srgb, var(--accent-purple) 50%, transparent), inset 0 0 4px rgba(0, 0, 0, 0.2);
 }
 
 input[type="range"]:active::-webkit-slider-thumb {
     transform: scale(1.05);
-    background-color: var(--accent-purple-dark);
-    box-shadow: 0 0 5px var(--accent-purple-dark);
+    box-shadow: 0 0 8px color-mix(in srgb, var(--accent-purple) 60%, transparent), inset 0 0 6px rgba(0, 0, 0, 0.3);
 }
 
 input[type="range"]:focus::-webkit-slider-thumb {
-    box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent-purple) 50%, white 50%), 0 0 8px var(--accent-purple);
+    box-shadow: 0 0 15px color-mix(in srgb, var(--accent-purple) 60%, transparent), inset 0 0 4px rgba(0, 0, 0, 0.2);
 }
 
 /* Firefox Thumb Styles */
 input[type="range"]::-moz-range-thumb {
-    width: 18px;
-    height: 18px;
+    height: 20px;
+    width: 20px;
     border-radius: 50%;
-    background: var(--accent-purple);
+    background: transparent;
+    border: 2px solid var(--accent-purple);
     cursor: pointer;
-    border: 2px solid #FFFFFF;
-    transition: transform 0.15s ease, box-shadow 0.2s ease, background-color 0.2s ease;
+    box-shadow: 0 0 10px color-mix(in srgb, var(--accent-purple) 40%, transparent), inset 0 0 4px rgba(0, 0, 0, 0.2);
+    transition: transform 0.15s cubic-bezier(0.4, 0, 0.2, 1), box-shadow 0.15s ease;
 }
 
 input[type="range"]:hover::-moz-range-thumb {
-    transform: scale(1.1);
-    box-shadow: 0 0 10px color-mix(in srgb, var(--accent-purple) 70%, transparent);
+    transform: scale(1.15);
+    box-shadow: 0 0 15px color-mix(in srgb, var(--accent-purple) 50%, transparent), inset 0 0 4px rgba(0, 0, 0, 0.2);
 }
 
 input[type="range"]:active::-moz-range-thumb {
     transform: scale(1.05);
-    background-color: var(--accent-purple-dark);
-    box-shadow: 0 0 5px var(--accent-purple-dark);
+    box-shadow: 0 0 8px color-mix(in srgb, var(--accent-purple) 60%, transparent), inset 0 0 6px rgba(0, 0, 0, 0.3);
 }
 
 input[type="range"]:focus::-moz-range-thumb {
-    box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent-purple) 50%, white 50%), 0 0 8px var(--accent-purple);
+    box-shadow: 0 0 15px color-mix(in srgb, var(--accent-purple) 60%, transparent), inset 0 0 4px rgba(0, 0, 0, 0.2);
 }
 
 /* Specific inputA and inputB styles are removed to use the general style or specific classes if needed */
@@ -4763,15 +4743,7 @@ textarea.dynamic-formula-input {
 
 .slider-container { flex-grow: 1; display: flex; align-items: center; }
 
-.slider-container input[type=range] { -webkit-appearance: none; width: 100%; background: transparent; }
-.slider-container input[type=range]::-webkit-slider-thumb {
-    -webkit-appearance: none; height: 16px; width: 16px; border-radius: 50%;
-    background: #fcd34d; cursor: pointer; margin-top: -6px;
-    box-shadow: 0 0 10px rgba(252, 211, 77, 0.5);
-}
-.slider-container input[type=range]::-webkit-slider-runnable-track {
-    width: 100%; height: 4px; cursor: pointer; background: rgba(255, 255, 255, 0.2); border-radius: 2px;
-}
+
 
 .labels { display: flex; justify-content: space-between; width: 100%; font-size: 0.75rem; color: #94a3b8; text-transform: uppercase; letter-spacing: 1px; }
 

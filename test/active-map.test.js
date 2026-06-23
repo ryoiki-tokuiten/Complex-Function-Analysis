@@ -50,3 +50,32 @@ test('active derivative map differentiates the exact output-chain stage', () => 
         Object.assign(state, previous);
     }
 });
+
+test('the derivative of the active derivative map is the second derivative', () => {
+    const previous = {
+        currentFunction: state.currentFunction,
+        chainingEnabled: state.chainingEnabled,
+        chainingMode: state.chainingMode,
+        chainCount: state.chainCount,
+        mapPresentation: state.mapPresentation
+    };
+
+    try {
+        Object.assign(state, {
+            currentFunction: 'cos',
+            chainingEnabled: false,
+            mapPresentation: 'derivative'
+        });
+
+        const map = resolveActiveMap();
+        const value = map.evaluate(0, 0);
+        const localDerivative = map.derivative(0, 0);
+
+        assert.ok(Math.abs(value.re) < 1e-8);
+        assert.ok(Math.abs(value.im) < 1e-8);
+        assert.ok(Math.abs(localDerivative.re + 1) < 1e-5);
+        assert.ok(Math.abs(localDerivative.im) < 1e-5);
+    } finally {
+        Object.assign(state, previous);
+    }
+});

@@ -673,9 +673,11 @@ function derivativeProbeHtml() {
         ].join('<br>') + '<br>';
     }
 
-    const deriv = resolveActiveMap().derivative(state.probeZ.re, state.probeZ.im);
+    const activeMap = resolveActiveMap();
+    const derivativeLabel = activeMap.presentation === 'derivative' ? "f''(z)" : "f'(z)";
+    const deriv = activeMap.derivative(state.probeZ.re, state.probeZ.im);
     if (!finiteComplex(deriv)) {
-        return "f'(z) calculation failed.<br>Conformality: Unknown<br>";
+        return `${derivativeLabel} calculation failed.<br>Conformality: Unknown<br>`;
     }
 
     const magDerivSq = deriv.re * deriv.re + deriv.im * deriv.im;
@@ -685,10 +687,10 @@ function derivativeProbeHtml() {
     const argD = argR * 180 / Math.PI;
 
     return [
-        `f'(z) ≈ ${formatProbeComplex(deriv.re, deriv.im)}`,
-        isConformal ? 'Conformal at z' : "Not conformal (f'(z) ≈ 0)",
-        `|f'(z)| ≈ ${formatProbeValue(mag)} (mag.)`,
-        `arg(f'(z)) ≈ ${argR.toFixed(3)}rad (${argD.toFixed(2)}°) (rot.)`
+        `${derivativeLabel} ≈ ${formatProbeComplex(deriv.re, deriv.im)}`,
+        isConformal ? 'Conformal at z' : `Not conformal (${derivativeLabel} ≈ 0)`,
+        `|${derivativeLabel}| ≈ ${formatProbeValue(mag)} (mag.)`,
+        `arg(${derivativeLabel}) ≈ ${argR.toFixed(3)}rad (${argD.toFixed(2)}°) (rot.)`
     ].join('<br>');
 }
 
