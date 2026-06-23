@@ -1568,7 +1568,10 @@ function refreshCanvasLayoutAfterTopControlsToggle() {
         requestDomainRedraw(true);
     };
     frame(refresh);
+    setTimeout(refresh, 50);
+    setTimeout(refresh, 150);
     setTimeout(refresh, 280);
+    setTimeout(refresh, 350);
 }
 
 function bindTopControlsToggle() {
@@ -1691,6 +1694,32 @@ function bindThemeControls() {
         renderThemesList(themeListContainer);
         requestDomainRedraw(true);
     });
+
+    const verticalLayoutCb = $('enable_vertical_layout_cb');
+    if (verticalLayoutCb) {
+        if (state.verticalLayoutEnabled === undefined) {
+            state.verticalLayoutEnabled = localStorage.getItem('complex_verticalLayoutEnabled') === 'true';
+        }
+        verticalLayoutCb.checked = state.verticalLayoutEnabled;
+        document.body.classList.toggle('vertical-layout', state.verticalLayoutEnabled);
+
+        const triggerResize = () => window.dispatchEvent(new Event('resize'));
+        if (state.verticalLayoutEnabled) {
+            setTimeout(triggerResize, 50);
+            setTimeout(triggerResize, 150);
+        }
+        
+        bindElementListener(verticalLayoutCb, 'change', event => {
+            state.verticalLayoutEnabled = event.target.checked;
+            localStorage.setItem('complex_verticalLayoutEnabled', state.verticalLayoutEnabled);
+            document.body.classList.toggle('vertical-layout', state.verticalLayoutEnabled);
+            
+            triggerResize();
+            setTimeout(triggerResize, 50);
+            setTimeout(triggerResize, 150);
+            setTimeout(triggerResize, 350);
+        });
+    }
 }
 
 function sphereParams(planeType) {

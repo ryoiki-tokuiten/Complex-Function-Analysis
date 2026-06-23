@@ -149,7 +149,7 @@ export function generatePolynomialCoeffSliders() {
 }
 
 export function updatePolynomialCoeffDisplays() {
-    if (state.currentFunction !== 'polynomial' || !state.polynomialCoeffs) return;
+    if (!state.polynomialCoeffs) return;
     for (let k = 0; k <= state.polynomialN; ++k) {
         if (state.polynomialCoeffs[k] && polynomialCoeffUIElements[k]) {
             const ui = polynomialCoeffUIElements[k];

@@ -1084,6 +1084,8 @@ hr.panel-separator {
     border-radius: 12px;
     overflow: hidden;
     background: rgba(0, 0, 0, 0.15);
+    isolation: isolate;
+    transform: translateZ(0);
 }
 
 
@@ -4810,4 +4812,203 @@ textarea.dynamic-formula-input {
         transform: scale(0.8);
         opacity: 0.5;
     }
+}
+
+/* --- Vertical Layout (Desmos-like) --- */
+body.vertical-layout main {
+    flex-direction: row;
+    height: 100vh;
+}
+
+body.vertical-layout #controls_options_section {
+    flex-basis: 380px;
+    min-width: 380px;
+    max-width: 380px;
+    height: 100%;
+    flex-direction: column;
+    overflow-y: auto;
+    padding: 0.7rem;
+    gap: 1rem;
+    transition: flex-basis 0.32s cubic-bezier(0.4, 0, 0.2, 1),
+                min-width 0.32s cubic-bezier(0.4, 0, 0.2, 1),
+                max-width 0.32s cubic-bezier(0.4, 0, 0.2, 1),
+                padding 0.32s cubic-bezier(0.4, 0, 0.2, 1);
+    scrollbar-width: thin;
+    scrollbar-color: var(--border-color) rgba(0, 0, 0, 0.1);
+}
+
+body.vertical-layout #controls_options_section::-webkit-scrollbar {
+    width: 6px;
+}
+
+body.vertical-layout #controls_options_section::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+body.vertical-layout #controls_options_section::-webkit-scrollbar-thumb {
+    background-color: var(--border-color);
+    border-radius: 3px;
+}
+
+body.vertical-layout #controls_options_section.is-collapsed {
+    flex-basis: 60px;
+    min-width: 60px;
+    max-width: 60px;
+    padding: 0.7rem 0.5rem;
+}
+
+body.vertical-layout #controls_options_section.is-collapsed .controls-collapsed-bar {
+    flex-direction: column;
+}
+
+body.vertical-layout #controls_options_section.is-collapsed .controls-collapsed-label {
+    writing-mode: vertical-rl;
+    transform: rotate(180deg);
+}
+
+body.vertical-layout #controls_panels_row {
+    flex-direction: column;
+    max-height: none;
+    overflow: visible;
+    flex-grow: 1;
+}
+
+body.vertical-layout #controls_options_section.is-collapsed #controls_panels_row {
+    opacity: 0;
+    pointer-events: none;
+    height: 0;
+    min-height: 0;
+    overflow: hidden;
+}
+
+body.vertical-layout .controls-panel {
+    min-height: 260px;
+    flex: 0 0 auto;
+}
+
+body.vertical-layout #visualization-options-panel {
+    flex: 1 1 auto;
+}
+
+body.vertical-layout #canvases_section {
+    flex-direction: column;
+    overflow-y: auto;
+    height: 100%;
+    padding: 0.7rem;
+}
+
+body.vertical-layout #canvases_section::-webkit-scrollbar {
+    width: 6px;
+}
+
+body.vertical-layout #canvases_section::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+body.vertical-layout #canvases_section::-webkit-scrollbar-thumb {
+    background-color: var(--border-color);
+    border-radius: 3px;
+}
+
+body.vertical-layout #canvases_section .two-column-layout {
+    flex-direction: column;
+    overflow-x: hidden !important;
+    overflow-y: visible !important;
+    gap: 1.5rem;
+    min-height: 100%;
+    padding-bottom: 0 !important;
+}
+
+/* Ensure divs stack correctly and expand if one is collapsed */
+body.vertical-layout #canvases_section .two-column-layout > div,
+body.vertical-layout #canvases_section .two-column-layout > .plane-column,
+body.vertical-layout #canvases_section .two-column-layout:has(#laplace_3d_column:not(.hidden)) > div {
+    flex: 1 1 0% !important;
+    min-height: 350px !important;
+    height: auto !important;
+    width: 100% !important;
+    min-width: 0 !important;
+    max-width: none !important;
+}
+
+body.vertical-layout #canvases_section .plane-column.plane-collapsed {
+    flex: 0 0 48px !important;
+    min-height: 48px !important;
+    max-height: 48px !important;
+    height: 48px !important;
+    min-width: 0 !important;
+    max-width: none !important;
+    padding: 0 1.5rem;
+    flex-direction: row;
+    align-items: center;
+}
+
+body.vertical-layout #canvases_section .plane-column.plane-collapsed .collapsed-placeholder-content {
+    flex-direction: row;
+    width: 100%;
+    height: 48px;
+    padding-top: 0;
+    align-items: center;
+}
+
+body.vertical-layout #canvases_section .plane-column.plane-collapsed .collapsed-vertical-title {
+    writing-mode: horizontal-tb !important;
+    transform: none !important;
+    white-space: nowrap;
+}
+
+/* Force specific horizontal multi-column grids in sidebars to stack vertically */
+body.vertical-layout #fourier_specific_controls,
+body.vertical-layout #laplace_specific_controls {
+    grid-template-columns: 1fr !important;
+    gap: 12px !important;
+}
+
+/* Trio Grid stack layout for Riemann Sphere options */
+body.vertical-layout #controls_options_section .viz-toggle-grid--trio {
+    grid-template-columns: 1fr !important;
+    gap: 0.75rem !important;
+}
+
+/* Force all controls panels to auto height and prevent double scrollbars */
+body.vertical-layout .controls-panel {
+    height: auto !important;
+    min-height: 0 !important;
+    max-height: none !important;
+    overflow: visible !important;
+    flex: 0 0 auto !important;
+}
+
+/* Stack Möbius and Polynomial coefficient rows vertically */
+body.vertical-layout #parameter-controls-panel .mobius-coeff-row,
+body.vertical-layout #parameter-controls-panel .polynomial-coeff-row {
+    flex-direction: column !important;
+    gap: 0.95rem !important;
+    align-items: stretch !important;
+}
+
+body.vertical-layout #parameter-controls-panel .mobius-coeff-row > .control-group,
+body.vertical-layout #parameter-controls-panel .polynomial-coeff-row > .control-group {
+    width: 100% !important;
+}
+
+/* Stack slider controls inside narrow sidebars cleanly */
+body.vertical-layout #controls_options_section .slider-container:has(button) {
+    display: grid !important;
+    grid-template-columns: 1fr 1fr !important;
+    gap: 0.5rem !important;
+}
+
+body.vertical-layout #controls_options_section .slider-container:has(button) input[type="range"] {
+    grid-column: span 2 !important;
+    width: 100% !important;
+    margin-top: 0.65rem !important;
+    margin-bottom: 0.65rem !important;
+}
+
+/* Stack multi-column slider grids in the sidebar */
+body.vertical-layout #controls_options_section .viz-settings-grid,
+body.vertical-layout #controls_options_section .vector-settings-grid {
+    grid-template-columns: 1fr !important;
+    gap: 0.9rem !important;
 }
