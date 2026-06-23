@@ -966,7 +966,8 @@ hr.panel-separator {
 }
 
 #canvases_section .plane-column,
-#laplace_3d_column {
+#laplace_3d_column,
+#real_plots_column {
     display: flex;
     flex-direction: column;
     min-height: 0;
@@ -1068,7 +1069,8 @@ hr.panel-separator {
 
 /* Styling for the direct container of each canvas. */
 #canvases_section .plane-column>div:not(.canvas-header-line):not(.collapsed-placeholder-content),
-#laplace_3d_column>div:not(.canvas-header-line):not(.collapsed-placeholder-content) {
+#laplace_3d_column>div:not(.canvas-header-line):not(.collapsed-placeholder-content),
+#real_plots_column>div:not(.canvas-header-line):not(.collapsed-placeholder-content) {
     flex-grow: 1;
     /* Allows this container to take up available space in the column */
     min-height: 0;

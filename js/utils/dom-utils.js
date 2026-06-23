@@ -478,6 +478,15 @@ export function setupVisualParameters(updateZFromSlider = true, updateWFromSlide
 
     let zWorldCenterX = (zPlaneParams.currentVisXRange[0] + zPlaneParams.currentVisXRange[1]) / 2;
     let zWorldCenterY = (zPlaneParams.currentVisYRange[0] + zPlaneParams.currentVisYRange[1]) / 2;
+
+    if (state.realPlotsEnabled && state.realPlotsCameraTargetMath) {
+        zWorldCenterX = state.realPlotsCameraTargetMath.x;
+        zWorldCenterY = state.realPlotsCameraTargetMath.y;
+        // Signal that the physical camera must be reset to match the new math center
+        state.realPlotsCameraNeedsReset = true;
+        state.realPlotsCameraTargetMath = null;
+    }
+
     let wWorldCenterX = (wPlaneParams.xRange[0] + wPlaneParams.xRange[1]) / 2;
     let wWorldCenterY = (wPlaneParams.yRange[0] + wPlaneParams.yRange[1]) / 2;
 

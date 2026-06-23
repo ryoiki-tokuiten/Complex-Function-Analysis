@@ -130,34 +130,24 @@ class RealPlots3DRenderer {
         this.controls.maxDistance = 200;
         this.controls.update();
 
-        // Sync 3D Interactions to Mathematical Bounds
-        this.controls.addEventListener('end', () => {
-            let changed = false;
-            
-            // 1. Math Panning from Camera Target Shift (due to zoomToCursor or right-click pan)
-            if (this.controls.target.x !== 0 || this.controls.target.z !== 0) {
+        // Using standard professional 3D viewport controls.
+        // Physical camera flying is decoupled from mathematical axis zooming.
+        // We track the physical camera target to allow smart UI-slider math centering.
+        this.controls.addEventListener('change', () => {
+            const target = this.controls.target;
+            if (Math.abs(target.x) > 0.001 || Math.abs(target.z) > 0.001) {
                 const xSpan = zPlaneParams.currentVisXRange[1] - zPlaneParams.currentVisXRange[0];
                 const ySpan = zPlaneParams.currentVisYRange[1] - zPlaneParams.currentVisYRange[0];
-                
-                const mathOffsetX = (this.controls.target.x / SURFACE_SIZE) * xSpan;
-                const mathOffsetY = (this.controls.target.z / SURFACE_SIZE) * ySpan;
-                
-                zPlaneParams.origin.x -= mathOffsetX * zPlaneParams.scale.x;
-                zPlaneParams.origin.y += mathOffsetY * zPlaneParams.scale.y;
-                
-                updatePlaneViewportRanges(zPlaneParams);
-                
-                // Teleport camera backward visually so the view stays perfectly continuous
-                this.camera.position.x -= this.controls.target.x;
-                this.camera.position.z -= this.controls.target.z;
-                this.controls.target.set(0, 0, 0);
-                this.controls.update();
-                
-                changed = true;
-            }
-            
-            if (changed) {
-                requestRedrawAll();
+                const mathOffsetX = (target.x / SURFACE_SIZE) * xSpan;
+                const mathOffsetY = (target.z / SURFACE_SIZE) * ySpan;
+                const zWorldCenterX = (zPlaneParams.currentVisXRange[0] + zPlaneParams.currentVisXRange[1]) / 2;
+                const zWorldCenterY = (zPlaneParams.currentVisYRange[0] + zPlaneParams.currentVisYRange[1]) / 2;
+                state.realPlotsCameraTargetMath = {
+                    x: zWorldCenterX + mathOffsetX,
+                    y: zWorldCenterY - mathOffsetY
+                };
+            } else {
+                state.realPlotsCameraTargetMath = null;
             }
         });
 
@@ -198,6 +188,38 @@ class RealPlots3DRenderer {
         requestAnimationFrame(this.animate);
     }
 
+    createCoordinateLabel(color) {
+        const canvas = document.createElement('canvas');
+        canvas.width = 512;
+        canvas.height = 128;
+        const context = canvas.getContext('2d');
+        const texture = new THREE.CanvasTexture(canvas);
+        texture.colorSpace = THREE.SRGBColorSpace;
+        const sprite = new THREE.Sprite(new THREE.SpriteMaterial({
+            map: texture,
+            transparent: true,
+            depthWrite: false
+        }));
+        // Scale physically to match 4:1 aspect ratio of the 512x128 texture
+        sprite.scale.set(2.0, 0.5, 1);
+        
+        return {
+            sprite,
+            canvas,
+            context,
+            texture,
+            updateText(text) {
+                context.clearRect(0, 0, canvas.width, canvas.height);
+                context.font = '500 48px "STIX Two Math", serif';
+                context.textAlign = 'center';
+                context.textBaseline = 'middle';
+                context.fillStyle = color;
+                context.fillText(text, 256, 64);
+                texture.needsUpdate = true;
+            }
+        };
+    }
+
     addReferenceFrame() {
         // Grid helper at floor
         const grid = new THREE.GridHelper(8, 16, 0x41436e, 0x22243d);
@@ -224,6 +246,30 @@ class RealPlots3DRenderer {
         this.zLabel.position.set(0, SURFACE_HEIGHT * 0.5 + 0.4, 0);
 
         this.scene.add(xLabel, yLabel, this.zLabel);
+
+        // Dynamic coordinate bounds labels for the 4 corners of the surface
+        this.coordLabels = {
+            bottomLeft: this.createCoordinateLabel('rgba(216, 228, 255, 0.6)'),  // (xMin, yMin)
+            bottomRight: this.createCoordinateLabel('rgba(216, 228, 255, 0.6)'), // (xMax, yMin)
+            topLeft: this.createCoordinateLabel('rgba(216, 228, 255, 0.6)'),     // (xMin, yMax)
+            topRight: this.createCoordinateLabel('rgba(216, 228, 255, 0.6)')     // (xMax, yMax)
+        };
+
+        const yLevel = -SURFACE_HEIGHT * 0.5 - 0.05;
+        const offset = 0.5; // push them slightly outside the grid corners
+        
+        // Mathematical Y corresponds to negative Z in Three.js when viewed from above
+        this.coordLabels.bottomLeft.sprite.position.set(-SURFACE_SIZE * 0.5 - offset, yLevel, -SURFACE_SIZE * 0.5 - offset);
+        this.coordLabels.bottomRight.sprite.position.set(SURFACE_SIZE * 0.5 + offset, yLevel, -SURFACE_SIZE * 0.5 - offset);
+        this.coordLabels.topLeft.sprite.position.set(-SURFACE_SIZE * 0.5 - offset, yLevel, SURFACE_SIZE * 0.5 + offset);
+        this.coordLabels.topRight.sprite.position.set(SURFACE_SIZE * 0.5 + offset, yLevel, SURFACE_SIZE * 0.5 + offset);
+
+        this.scene.add(
+            this.coordLabels.bottomLeft.sprite,
+            this.coordLabels.bottomRight.sprite,
+            this.coordLabels.topLeft.sprite,
+            this.coordLabels.topRight.sprite
+        );
     }
 
     resetCamera() {
@@ -245,10 +291,20 @@ class RealPlots3DRenderer {
         if (!width || !height) return;
         this.camera.aspect = width / height;
         this.camera.updateProjectionMatrix();
-        this.renderer.setSize(width, height, false);
+        this.renderer.setSize(width, height);
     }
 
     updateSurface(transformFunc) {
+        if (state.realPlotsCameraNeedsReset) {
+            // The math bounds were just recentered on the user's focal point.
+            // Teleport the physical camera to keep looking at that focal point!
+            this.camera.position.x -= this.controls.target.x;
+            this.camera.position.z -= this.controls.target.z;
+            this.controls.target.set(0, 0, 0);
+            this.controls.update();
+            state.realPlotsCameraNeedsReset = false;
+        }
+
         // Update Z axis label sprite dynamically
         if (this.zLabel) {
             this.scene.remove(this.zLabel);
@@ -280,6 +336,24 @@ class RealPlots3DRenderer {
         const xMax = zPlaneParams.currentVisXRange[1];
         const yMin = zPlaneParams.currentVisYRange[0];
         const yMax = zPlaneParams.currentVisYRange[1];
+
+        if (this.coordLabels) {
+            const formatCoord = (val) => {
+                if (Math.abs(val) < 1e-10) return '0';
+                if (Math.abs(val) >= 1000 || Math.abs(val) < 0.01) return val.toExponential(2);
+                const str = val.toFixed(2);
+                return str.endsWith('.00') ? str.slice(0, -3) : str;
+            };
+            const fXMin = formatCoord(xMin);
+            const fXMax = formatCoord(xMax);
+            const fYMin = formatCoord(yMin);
+            const fYMax = formatCoord(yMax);
+            
+            this.coordLabels.bottomLeft.updateText(`(${fXMin}, ${fYMin})`);
+            this.coordLabels.bottomRight.updateText(`(${fXMax}, ${fYMin})`);
+            this.coordLabels.topLeft.updateText(`(${fXMin}, ${fYMax})`);
+            this.coordLabels.topRight.updateText(`(${fXMax}, ${fYMax})`);
+        }
 
         let minZ = Infinity;
         let maxZ = -Infinity;

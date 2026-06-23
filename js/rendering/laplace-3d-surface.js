@@ -333,7 +333,7 @@ class LaplaceSurfaceRenderer {
         if (!width || !height) return;
         this.camera.aspect = width / height;
         this.camera.updateProjectionMatrix();
-        this.renderer.setSize(width, height, false);
+        this.renderer.setSize(width, height);
         this.render();
     }
 

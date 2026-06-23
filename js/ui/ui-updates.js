@@ -1463,6 +1463,15 @@ export function syncRealPlotsUI() {
     if (outputCompEl && state.realPlotsOutputComponent) {
         outputCompEl.value = state.realPlotsOutputComponent;
     }
+
+    const heightScaleSlider = document.getElementById('real_plots_height_scale_slider');
+    const heightScaleDisplay = document.getElementById('real_plots_height_scale_value_display');
+    if (heightScaleSlider && state.realPlotsHeightScale !== undefined) {
+        heightScaleSlider.value = String(state.realPlotsHeightScale);
+        if (heightScaleDisplay) {
+            heightScaleDisplay.textContent = state.realPlotsHeightScale.toFixed(2);
+        }
+    }
 }
 
 export function updateCustomFormulaPreview(inputEl, displayEl) {
