@@ -2,7 +2,7 @@ import { state, zPlaneParams } from '../store/state.js';
 import { requestRedrawAll } from '../main.js';
 import { ThreeRiemannRenderer } from './three-riemann-renderer.js';
 import { generateCurrentInputShapePointSets, generateCurrentMappedInputShapePointSets } from './shape-generators.js';
-import { getMappedTransformProfile } from '../math-utils.js';
+import { resolveActiveMap } from '../math/active-map.js';
 
 /**
  * ARCHITECTURAL DESIGN: Polymorphic Component Encapsulation (High Performance)
@@ -33,9 +33,7 @@ const PLANE_CONFIGS = {
         buttonId: 'z_transformation_play_pause_btn',
         progressKey: 'riemannTransformationProgressZ',
         playingKey: 'riemannTransformationPlayingZ',
-        generator: generateCurrentInputShapePointSets,
-        // The Z-plane evaluates directly to itself
-        evaluateProbe: (probeZ, mathCache) => probeZ 
+        generator: generateCurrentInputShapePointSets
     },
     w: {
         containerId: 'w_plane_threejs_container',
@@ -43,15 +41,7 @@ const PLANE_CONFIGS = {
         buttonId: 'w_transformation_play_pause_btn',
         progressKey: 'riemannTransformationProgressW',
         playingKey: 'riemannTransformationPlayingW',
-        generator: generateCurrentMappedInputShapePointSets,
-        // The W-plane memoizes the complex transformation map against the current global function
-        evaluateProbe: (probeZ, mathCache) => {
-            if (state.currentFunction !== mathCache.currentFunction) {
-                mathCache.tfProfile = getMappedTransformProfile(state.currentFunction);
-                mathCache.currentFunction = state.currentFunction;
-            }
-            return mathCache.tfProfile ? mathCache.tfProfile.evaluate(probeZ.re, probeZ.im) : null;
-        }
+        generator: generateCurrentMappedInputShapePointSets
     }
 };
 
@@ -72,8 +62,8 @@ class PlaneController {
         this.cache = {
             progress: null,
             playing: null,
-            currentFunction: null,
-            tfProfile: null
+            mapSignature: null,
+            map: null
         };
     }
 
@@ -88,6 +78,9 @@ class PlaneController {
 
     build() {
         if (!this.renderer) return;
+        this.cache.map = this.id === 'w' ? resolveActiveMap() : null;
+        this.cache.mapSignature = this.cache.map?.signature || 'source';
+        this.renderer.setTransform(this.cache.map?.evaluate || null);
         const pointSets = this.config.generator(zPlaneParams, {
             currentFunction: state.currentFunction,
             zetaContinuationEnabled: state.zetaContinuationEnabled,
@@ -136,7 +129,9 @@ class PlaneController {
             return;
         }
         
-        const mappedProbe = this.config.evaluateProbe(probeZ, this.cache);
+        const mappedProbe = this.id === 'w'
+            ? this.cache.map?.evaluate?.(probeZ.re, probeZ.im)
+            : probeZ;
         this.renderer.updateProbe(mappedProbe);
     }
 

@@ -439,15 +439,6 @@ main {
     box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04), 0 0 0 1px color-mix(in srgb, var(--accent-purple) 8%, transparent), 0 12px 24px rgba(0, 0, 0, 0.18);
 }
 
-.viz-toggle-card--hero {
-    min-height: 96px;
-    background: var(--card-bg-color);
-}
-
-.viz-toggle-card--wide {
-    grid-column: 1 / -1;
-}
-
 .viz-toggle-card--compact {
     min-height: 74px;
     padding: 0.78rem 0.82rem;

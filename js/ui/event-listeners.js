@@ -185,6 +185,8 @@ const BINDERS = [
     bindImageControls,
     bindVideoControls,
     bindPolynomialControls,
+    bindDerivativeControls,
+    bindConformalGridControls,
     bindDomainColoringControls,
     bindViewControls,
     bindNavigationControls,
@@ -875,6 +877,24 @@ function bindDomainColoringControls() {
 
     ['domainBrightness', 'domainContrast', 'domainSaturation', 'domainLightnessCycles']
         .forEach(key => bindSlider(`${key}Slider`, key, parseFloat, () => requestDomainRedraw(true)));
+}
+
+function bindDerivativeControls() {
+    if (controls.enableDerivativeCb) {
+        controls.enableDerivativeCb.checked = state.mapPresentation === 'derivative';
+    }
+
+    bindElementListener(controls.enableDerivativeCb, 'change', event => {
+        state.mapPresentation = event.target.checked ? 'derivative' : 'function';
+        context.domainColoringDirty = true;
+        call(syncRiemannTransformationUI);
+        call(updateChainingTitles);
+        requestRedrawAll();
+    });
+}
+
+function bindConformalGridControls() {
+    bindCheckbox('enableConformalGridCb', 'conformalGridEnabled', () => requestRedrawAll());
 }
 
 function disableRiemannSurface() {

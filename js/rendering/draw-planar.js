@@ -20,17 +20,18 @@ import {
     transformFunctions
 } from '../math-utils.js';
 import {
-    calculateStreamline, getVectorForStreamline, getVectorFieldValueAtPoint,
+    calculateStreamline, getVectorFieldValueAtPoint,
     getStreamlineColorByMagnitude, getVectorEvaluator
 } from '../analysis/streamline.js';
 import { isRasterInputShape } from '../utils/raster-media.js';
-import { drawImageWithWebGL, drawVectorFieldWithWebGL } from './draw-image-webgl.js';
+import { drawImageWithWebGL } from './draw-image-webgl.js';
 import {
     generateCurrentInputShapePointSets,
     generateCurrentMappedInputShapePointSets,
     generateRadialDiscreteStepPointSets
 } from './shape-generators.js';
 import { hslToRgb } from './canvas-primitives.js';
+import { generateTissotIndicatrices } from '../analysis/tissot.js';
 
 const EPSILON = 1e-9;
 const DEGENERATE_SEGMENT_EPSILON = 1e-12;
@@ -407,16 +408,8 @@ function syncParticlePool(renderState, planeParams) {
     }
 }
 
-function getNormalizedParticleVector(x, y, renderState, vectorEvaluator = null) {
-    const vector = vectorEvaluator
-        ? vectorEvaluator(x, y)
-        : getVectorForStreamline(
-            x,
-            y,
-            renderState.currentFunction,
-            renderState.vectorFieldFunction,
-            renderState
-        );
+function getNormalizedParticleVector(x, y, vectorEvaluator) {
+    const vector = vectorEvaluator ? vectorEvaluator(x, y) : null;
 
     if (!vector || !isFiniteNumber(vector.vx) || !isFiniteNumber(vector.vy)) {
         return null;
@@ -434,14 +427,14 @@ function getNormalizedParticleVector(x, y, renderState, vectorEvaluator = null) 
 }
 
 function advanceParticleRK2(particle, speed, renderState, vectorEvaluator = null) {
-    const first = getNormalizedParticleVector(particle.x, particle.y, renderState, vectorEvaluator);
+    const first = getNormalizedParticleVector(particle.x, particle.y, vectorEvaluator);
     if (!first) {
         return false;
     }
 
     const midpointX = particle.x + first.x * speed * 0.5;
     const midpointY = particle.y + first.y * speed * 0.5;
-    const second = getNormalizedParticleVector(midpointX, midpointY, renderState, vectorEvaluator) || first;
+    const second = getNormalizedParticleVector(midpointX, midpointY, vectorEvaluator) || first;
 
     particle.x += second.x * speed;
     particle.y += second.y * speed;
@@ -570,26 +563,6 @@ function getAdaptiveSamplingBounds() {
         minPoints: Math.max(700, Math.floor(MIN_POINTS_ADAPTIVE * 0.58)),
         maxPoints: Math.max(3500, Math.floor(MAX_POINTS_ADAPTIVE_DEFAULT * 0.6)),
         anchorDensity: Math.max(360, Math.floor(ADAPTIVE_ANCHOR_DENSITY * 0.65))
-    };
-}
-
-function getEffectiveProbeTransform(transformFunc) {
-    let effectiveTransformFunc = transformFunc;
-
-    if (appState.taylorSeriesEnabled && (!appState.riemannSphereViewEnabled || appState.splitViewEnabled)) {
-        effectiveTransformFunc = createTaylorApproximationTransform(
-            appState.currentFunction,
-            appState.taylorSeriesCenter,
-            appState.taylorSeriesOrder
-        );
-    }
-
-    const profile = getMappedTransformProfile(appState.currentFunction, effectiveTransformFunc);
-
-    return {
-        transformFunc: effectiveTransformFunc,
-        profile,
-        evaluate: createProfileEvaluator(profile)
     };
 }
 
@@ -748,7 +721,7 @@ export function drawRadialDiscreteSteps(ctx, planeParams, currentFunctionKey, st
     });
 }
 
-export function drawStreamlinesOnZPlane(ctx, planeParams, state, options = null) {
+export function drawStreamlinesOnZPlane(ctx, planeParams, state, map, options = null) {
     const progressKey = getStreamlineProgressKey(planeParams, state, options);
     if (options?.fresh || streamlineProgressState.key !== progressKey) {
         resetStreamlineProgress(progressKey);
@@ -772,7 +745,7 @@ export function drawStreamlinesOnZPlane(ctx, planeParams, state, options = null)
             () => []
         );
 
-        const vectorEvaluator = getVectorEvaluator(state.currentFunction, state.vectorFieldFunction, state);
+        const vectorEvaluator = getVectorEvaluator(map, state.vectorFieldFunction);
         const budget = getStreamlineRenderBudget();
         const deadline = nowMs() + budget.frameMs;
 
@@ -880,7 +853,7 @@ export function initializeSingleParticle(planeParams) {
     return getRandomPointInView(planeParams);
 }
 
-export function updateAndDrawParticles(ctx, planeParams, state) {
+export function updateAndDrawParticles(ctx, planeParams, state, map) {
     if (!state.particleAnimationEnabled) {
         state.particles = [];
         return;
@@ -894,7 +867,7 @@ export function updateAndDrawParticles(ctx, planeParams, state) {
 
         const speed = getParticleSpeed(planeParams, state);
 
-        const vectorEvaluator = getVectorEvaluator(state.currentFunction, state.vectorFieldFunction, state);
+        const vectorEvaluator = getVectorEvaluator(map, state.vectorFieldFunction);
 
         for (let i = 0; i < state.particles.length; i++) {
             let particle = state.particles[i];
@@ -957,7 +930,7 @@ export function drawConformalityProbeSegments(ctx, planeParams, center_world, tf
     });
 }
 
-export function drawPlanarProbe(ctx, planeParams) {
+export function drawPlanarProbe(ctx, planeParams, _map = null) {
     if (!isRenderableComplexPoint(appState.probeZ)) {
         return;
     }
@@ -1234,7 +1207,7 @@ export function drawPlanarTransformedShape(ctx, planeParams, tf, options = {}) {
 
     if (includeGeometry) {
         if (isRasterInputShape(inputShape)) {
-            drawImageWithWebGL(ctx, planeParams, true, options.index || 0);
+            drawImageWithWebGL(ctx, planeParams, true, options.index || 0, options.map || null);
         } else {
             const pointSets = generateCurrentMappedInputShapePointSets(zPlaneParams, {
                 currentFunction: appState.currentFunction,
@@ -1267,11 +1240,12 @@ export function drawPlanarTransformedShape(ctx, planeParams, tf, options = {}) {
 
 
 
-export function drawPlanarTransformedProbe(ctx, planeParams, tf) {
+export function drawPlanarTransformedProbe(ctx, planeParams, map) {
     withSavedContext(ctx, () => {
         const renderLimit = getPlanarTransformRenderLimit(planeParams);
-        const effectiveTransform = getEffectiveProbeTransform(tf);
-        const probeWorldPoint = effectiveTransform.evaluate(appState.probeZ.re, appState.probeZ.im);
+        const transform = map?.evaluate;
+        if (typeof transform !== 'function') return;
+        const probeWorldPoint = transform(appState.probeZ.re, appState.probeZ.im);
 
         if (isStableRenderableComplexPoint(probeWorldPoint)) {
             const probeCanvasPoint = mapToCanvasCoords(probeWorldPoint.re, probeWorldPoint.im, planeParams);
@@ -1284,28 +1258,35 @@ export function drawPlanarTransformedProbe(ctx, planeParams, tf) {
             planeParams,
             appState.probeZ,
             appState.probeNeighborhoodSize,
-            effectiveTransform.evaluate,
+            transform,
             renderLimit
         );
         drawConformalityProbeSegments(
             ctx,
             planeParams,
             appState.probeZ,
-            effectiveTransform.evaluate,
+            transform,
             true
         );
     });
 }
 
-export function drawZPlaneVectorField(ctx, planeParams, currentFunctionStr, vectorFuncType) {
-    const rendered = drawVectorFieldWithWebGL(ctx, planeParams);
+export function drawConformalCircleGrid(ctx, planeParams, map) {
+    const xRange = getPlaneXRanges(zPlaneParams);
+    const yRange = getPlaneYRanges(zPlaneParams);
+    const circles = generateTissotIndicatrices(map, xRange, yRange, appState.gridDensity);
 
-    if (!rendered) {
-        drawVectorFieldCPU(ctx, planeParams, currentFunctionStr, vectorFuncType);
-    }
+    withSavedContext(ctx, () => {
+        configureRoundStroke(ctx, 'rgba(255, 255, 255, 0.78)', 1.1);
+        circles.forEach(points => drawComplexLineSetOnPlane(ctx, planeParams, points));
+    });
 }
 
-export function drawVectorFieldCPU(ctx, planeParams, currentFunctionStr, vectorFuncType) {
+export function drawZPlaneVectorField(ctx, planeParams, map) {
+    drawVectorFieldCPU(ctx, planeParams, map);
+}
+
+export function drawVectorFieldCPU(ctx, planeParams, map) {
     const xRange = getPlaneXRanges(planeParams);
     const yRange = getPlaneYRanges(planeParams);
     const density = clamp(Math.floor(finiteOr(appState.gridDensity, 0) * 0.75), 5, 25);
@@ -1315,7 +1296,6 @@ export function drawVectorFieldCPU(ctx, planeParams, currentFunctionStr, vectorF
     const thickness = appState.vectorArrowThickness || 1.5;
     const headSize = appState.vectorArrowHeadSize || 8;
     const brightness = appState.domainBrightness || 1;
-    const transformProfile = getMappedTransformProfile(currentFunctionStr);
     const cellPixels = Math.min(planeParams.width / density, planeParams.height / density);
     const arrowLength = cellPixels * 0.38 * arrowScale;
     const arrowHeadSize = cellPixels * headSize * 0.04;
@@ -1331,10 +1311,8 @@ export function drawVectorFieldCPU(ctx, planeParams, currentFunctionStr, vectorF
                 const vector = getVectorFieldValueAtPoint(
                     x,
                     y,
-                    currentFunctionStr,
-                    vectorFuncType,
-                    appState,
-                    transformProfile
+                    map,
+                    appState.vectorFieldFunction
                 );
 
                 if (!vector) {

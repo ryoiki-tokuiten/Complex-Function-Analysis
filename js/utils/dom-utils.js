@@ -128,6 +128,8 @@ const DOM_BINDINGS = [
     { key: 'neighborhoodSizeSlider', id: 'neighborhood_size_slider' },
     { key: 'neighborhoodSizeValueDisplay', id: 'neighborhood_size_value_display' },
     { key: 'enableRiemannSphereCb', id: 'enable_riemann_sphere_cb' },
+    { key: 'enableDerivativeCb', id: 'enable_derivative_cb' },
+    { key: 'enableConformalGridCb', id: 'enable_conformal_grid_cb' },
     { key: 'enableRiemannSurfaceCb', id: 'enable_riemann_surface_cb' },
     { key: 'riemannSurfaceOptionsDiv', id: 'riemann_surface_options_div' },
     { key: 'riemannSurfaceComponentSelector', id: 'riemann_surface_component_selector' },
@@ -556,7 +558,8 @@ export function updateChainingTitles() {
         const titleSpan = document.getElementById(`w-plane-title_${i}`);
         if (titleSpan) {
             const outputLabel = getChainedOutputLabel();
-            titleSpan.innerHTML = `${outputLabel} (Chain ${i}: <code id="w-plane-title-func_${i}">${getChainingTitleHTML(i, state.chainingMode)}</code>)`;
+            const derivativePrefix = state.mapPresentation === 'derivative' ? 'Derivative of ' : '';
+            titleSpan.innerHTML = `${outputLabel} (Chain ${i}: ${derivativePrefix}<code id="w-plane-title-func_${i}">${getChainingTitleHTML(i, state.chainingMode)}</code>)`;
         }
     }
 }

@@ -37,8 +37,7 @@ const CHAIN_MODE = Object.freeze({
 
 const VECTOR_MODE = Object.freeze({
     'f(z)': 0,
-    '1/f(z)': 1,
-    "f'(z)": 2
+    '1/f(z)': 1
 });
 
 const webglImageSupport = {
@@ -797,15 +796,16 @@ function uploadForwardMesh(renderer, dimensions) {
     renderer.forwardMeshDimensions = dimensions;
 }
 
-function shouldUseCpuForwardEvaluation(isWP, snapshot) {
-    return Boolean(isWP && snapshot.chainingEnabled && (
+function shouldUseCpuForwardEvaluation(isWP, snapshot, map) {
+    if (!isWP) return false;
+    return map?.presentation === 'derivative' || Boolean(snapshot.chainingEnabled && (
         snapshot.chainCount > 1 ||
         snapshot.chainingMode === 'zero_seed'
     ));
 }
 
-function getForwardTransform(isWP) {
-    return isWP ? getChainedTransformFunction() : (re, im) => ({ re, im });
+function getForwardTransform(isWP, map) {
+    return isWP ? (map?.evaluate || getChainedTransformFunction()) : (re, im) => ({ re, im });
 }
 
 function clipMappedPoint(value, bounds) {
@@ -819,7 +819,7 @@ function clipMappedPoint(value, bounds) {
     ];
 }
 
-function buildCpuMappedPositions(renderer, planeParams, currentShape, isWP, snapshot) {
+function buildCpuMappedPositions(renderer, planeParams, currentShape, isWP, snapshot, map) {
     const dimensions = renderer.forwardMeshDimensions;
     if (!dimensions) return null;
 
@@ -827,7 +827,7 @@ function buildCpuMappedPositions(renderer, planeParams, currentShape, isWP, snap
     if (!hasUsableBounds(bounds)) return null;
 
     const media = getRasterDisplayDimensions(currentShape);
-    const transform = getForwardTransform(isWP);
+    const transform = getForwardTransform(isWP, map);
     const mapped = new Float32Array(dimensions.resX * dimensions.resY * 2);
     let offset = 0;
 
@@ -871,8 +871,8 @@ function bindInverseGeometry(renderer, locs) {
     return vaoBound || configureAttribute(gl, locs.aPosition, 2, renderer.quadBuffer);
 }
 
-function uploadCpuMappedPositions(renderer, planeParams, currentShape, isWP, snapshot) {
-    const mappedPositions = buildCpuMappedPositions(renderer, planeParams, currentShape, isWP, snapshot);
+function uploadCpuMappedPositions(renderer, planeParams, currentShape, isWP, snapshot, map) {
+    const mappedPositions = buildCpuMappedPositions(renderer, planeParams, currentShape, isWP, snapshot, map);
     if (!mappedPositions) return false;
 
     const gl = renderer.gl;
@@ -911,13 +911,13 @@ function bindForwardGeometry(renderer, locs, useCpuEval) {
     return true;
 }
 
-function prepareForwardGeometry(renderer, locs, planeParams, currentShape, isWP, snapshot, useCpuEval) {
+function prepareForwardGeometry(renderer, locs, planeParams, currentShape, isWP, snapshot, useCpuEval, map) {
     const gl = renderer.gl;
 
     setUniform1fIfPresent(gl, locs.uUseCpuEval, useCpuEval ? 1.0 : 0.0);
     setUniform1fIfPresent(gl, locs.uInvalidClip, DEFAULT_INVALID_CLIP);
 
-    if (useCpuEval && !uploadCpuMappedPositions(renderer, planeParams, currentShape, isWP, snapshot)) return false;
+    if (useCpuEval && !uploadCpuMappedPositions(renderer, planeParams, currentShape, isWP, snapshot, map)) return false;
 
     return bindForwardGeometry(renderer, locs, useCpuEval);
 }
@@ -966,7 +966,7 @@ function drawInverseImagePath(renderer, planeParams, isWP, currentShape, chainIn
     return true;
 }
 
-function drawForwardImagePath(renderer, planeParams, isWP, currentShape, snapshot) {
+function drawForwardImagePath(renderer, planeParams, isWP, currentShape, snapshot, map) {
     if (!renderer.forwardProgram || !renderer.forwardLocs) return false;
 
     const currentRes = getRasterResolutionForShape(currentShape) || DEFAULT_RASTER_RESOLUTION;
@@ -975,10 +975,10 @@ function drawForwardImagePath(renderer, planeParams, isWP, currentShape, snapsho
 
     const gl = renderer.gl;
     const locs = renderer.forwardLocs;
-    const useCpuEval = shouldUseCpuForwardEvaluation(isWP, snapshot);
+    const useCpuEval = shouldUseCpuForwardEvaluation(isWP, snapshot, map);
 
     gl.useProgram(renderer.forwardProgram);
-    if (!prepareForwardGeometry(renderer, locs, planeParams, currentShape, isWP, snapshot, useCpuEval)) {
+    if (!prepareForwardGeometry(renderer, locs, planeParams, currentShape, isWP, snapshot, useCpuEval, map)) {
         unbindVao(renderer);
         return false;
     }
@@ -1095,15 +1095,6 @@ function createVectorFragmentShader(snapshot) {
         '    float m2 = dot(fz, fz);',
         '    if (m2 < 1e-12) return false;',
         '    fz = vec2(fz.x / m2, -fz.y / m2);',
-        '  }',
-        '',
-        '  if (u_vectorMode > 1.5) {',
-        '    float h = 1e-5;',
-        '    vec2 fr;',
-        '    vec2 fl;',
-        '    evaluateMappedValueBase(cc + vec2(h, 0), cc + vec2(h, 0), 0.0, u_functionId, u_mobiusA, u_mobiusB, u_mobiusC, u_mobiusD, u_polyDegree, u_polyCoeffs, u_zetaContinuationEnabled, u_zetaReflectionBoundary, u_fracPower, fr);',
-        '    evaluateMappedValueBase(cc - vec2(h, 0), cc - vec2(h, 0), 0.0, u_functionId, u_mobiusA, u_mobiusB, u_mobiusC, u_mobiusD, u_polyDegree, u_polyCoeffs, u_zetaContinuationEnabled, u_zetaReflectionBoundary, u_fracPower, fl);',
-        '    fz = (fr - fl) / (2.0 * h);',
         '  }',
         '',
         '  return true;',
@@ -1409,7 +1400,7 @@ export function setImageUniforms(gl, locs, planeParams, isWP, currentShape) {
     setImageUniformsForSnapshot(gl, locs, planeParams, isWP, currentShape, readRenderState());
 }
 
-export function drawImageWithWebGL(targetCtx, planeParams, isWP, chainIndex) {
+export function drawImageWithWebGL(targetCtx, planeParams, isWP, chainIndex, map = null) {
     const snapshot = readRenderState();
 
     invalidateImageRendererForDynamicAlgebra(snapshot);
@@ -1431,7 +1422,7 @@ export function drawImageWithWebGL(targetCtx, planeParams, isWP, chainIndex) {
     enablePremultipliedAlphaBlend(gl);
     bindTextureUnit0(gl, renderer.texture);
 
-    const rendered = shouldUseInverseImagePath(isWP, snapshot)
+    const rendered = map?.presentation !== 'derivative' && shouldUseInverseImagePath(isWP, snapshot)
         ? drawInverseImagePath(
             renderer,
             planeParams,
@@ -1442,7 +1433,7 @@ export function drawImageWithWebGL(targetCtx, planeParams, isWP, chainIndex) {
             size.height,
             snapshot
         )
-        : drawForwardImagePath(renderer, planeParams, isWP, raster.currentShape, snapshot);
+        : drawForwardImagePath(renderer, planeParams, isWP, raster.currentShape, snapshot, map);
 
     if (!rendered) return false;
 

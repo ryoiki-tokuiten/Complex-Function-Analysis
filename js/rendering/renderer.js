@@ -11,10 +11,7 @@ import {
 import { MAX_POLY_DEGREE, ZETA_REFLECTION_POINT_RE } from '../constants/numerical.js';
 import { ORIGIN_GLOW_DURATION_MS } from '../constants/rendering.js';
 import { mapToCanvasCoords } from '../utils/canvas-utils.js';
-import {
-    getChainedTransformFunction,
-    getChainedStageTransformFunction
-} from '../math-utils.js';
+import { resolveActiveMap } from '../math/active-map.js';
 import {
     drawWithWebGLRaster,
     drawWithWebGLCapture,
@@ -35,6 +32,7 @@ import {
     drawPlanarTransformedShape,
     drawPlanarProbe,
     drawPlanarTransformedProbe,
+    drawConformalCircleGrid,
     drawStreamlinesOnZPlane,
     updateAndDrawParticles,
     drawPlanarInputOverlays,
@@ -109,6 +107,8 @@ const FUNCTION_CACHE_KEY_BUILDERS = Object.freeze({
 
 const PLANAR_CACHE_FIELDS = Object.freeze([
     ['f', () => state.currentFunction],
+    ['mapPresentation', () => state.mapPresentation],
+    ['tissot', () => state.conformalGridEnabled ? 1 : 0],
     ['shape', () => state.currentInputShape],
     ['grid', () => state.gridDensity],
     ['zetaC', () => state.zetaContinuationEnabled ? 1 : 0],
@@ -765,22 +765,22 @@ function renderFirstSignalMode(renderers, ctx, planeParams, planeKey) {
     return true;
 }
 
-function refreshZSphereDomainColoring(transform) {
+function refreshZSphereDomainColoring(map) {
     if (state.domainColoringEnabled && context.domainColoringDirty && zDomainColorCtx) {
-        renderSphereDomainColoring(zDomainColorCtx, sphereViewParams.z, zPlaneParams, false, transform);
+        renderSphereDomainColoring(zDomainColorCtx, sphereViewParams.z, zPlaneParams, false, map);
     }
 }
 
-function refreshZPlanarDomainColoring(transform) {
+function refreshZPlanarDomainColoring(map) {
     if (state.domainColoringEnabled && context.domainColoringDirty && zDomainColorCtx) {
-        renderPlanarDomainColoring(zDomainColorCtx, zPlaneParams, false, transform);
+        renderPlanarDomainColoring(zDomainColorCtx, zPlaneParams, false, map);
     }
 }
 
-function renderZSphere(transform) {
+function renderZSphere(map) {
     const sphereParams = sphereViewParams.z;
 
-    refreshZSphereDomainColoring(transform);
+    refreshZSphereDomainColoring(map);
 
     drawPlaneLayer(zCtx, zPlaneParams, 'z', layerCtx => {
         drawDomainOrSolidBackground(layerCtx, zDomainColorCanvas, zPlaneParams);
@@ -811,8 +811,8 @@ function shouldDrawZReferenceGrid() {
         && state.currentInputShape !== 'empty_grid';
 }
 
-function renderZPlanarBackground(transform) {
-    refreshZPlanarDomainColoring(transform);
+function renderZPlanarBackground(map) {
+    refreshZPlanarDomainColoring(map);
 
     drawPlaneLayer(zCtx, zPlaneParams, 'z', layerCtx => {
         drawDomainOrSolidBackground(layerCtx, zDomainColorCanvas, zPlaneParams);
@@ -829,7 +829,7 @@ function renderZPlanarBackground(transform) {
     }, 'raster');
 }
 
-function renderZPlaneFlowLayer(targetCtx, planeParams, cacheMeta = null) {
+function renderZPlaneFlowLayer(targetCtx, planeParams, map, cacheMeta = null) {
     if (state.streamlineFlowEnabled) {
         let complete = true;
         const streamOptions = {
@@ -837,17 +837,17 @@ function renderZPlaneFlowLayer(targetCtx, planeParams, cacheMeta = null) {
             fresh: cacheMeta ? !!cacheMeta.fresh : true
         };
         const rendered = drawPlaneLayer(targetCtx, planeParams, 'z', layerCtx => {
-            complete = drawStreamlinesOnZPlane(layerCtx, planeParams, state, streamOptions) !== false;
+            complete = drawStreamlinesOnZPlane(layerCtx, planeParams, state, map, streamOptions) !== false;
         }, 'capture');
 
         return rendered && complete;
     }
 
-    drawZPlaneVectorField(targetCtx, planeParams, state.currentFunction, state.vectorFieldFunction);
+    drawZPlaneVectorField(targetCtx, planeParams, map);
     return true;
 }
 
-function renderZFlowContent() {
+function renderZFlowContent(map) {
     invalidateCache(zPlanarInputLayerCache);
 
     renderThroughCache({
@@ -856,8 +856,8 @@ function renderZFlowContent() {
         planeParams: zPlaneParams,
         cacheKey: buildZFlowLayerCacheKey(),
         enabled: shouldUseZFlowLayerCache(),
-        render: (cacheCtx, cacheMeta) => renderZPlaneFlowLayer(cacheCtx, zPlaneParams, cacheMeta),
-        renderDirect: (targetCtx, cacheMeta) => renderZPlaneFlowLayer(targetCtx, zPlaneParams, cacheMeta)
+        render: (cacheCtx, cacheMeta) => renderZPlaneFlowLayer(cacheCtx, zPlaneParams, map, cacheMeta),
+        renderDirect: (targetCtx, cacheMeta) => renderZPlaneFlowLayer(targetCtx, zPlaneParams, map, cacheMeta)
     });
 }
 
@@ -891,14 +891,14 @@ function renderZPlanarInputOverlays() {
     );
 }
 
-function renderZPrimaryPlanarContent() {
+function renderZPrimaryPlanarContent(map) {
     if (state.navigationModeEnabled) {
         renderZNavigationContent();
         return;
     }
 
     if (state.vectorFieldEnabled || state.streamlineFlowEnabled) {
-        renderZFlowContent();
+        renderZFlowContent(map);
         return;
     }
 
@@ -949,31 +949,31 @@ function renderZTaylorOverlay() {
     );
 }
 
-function renderZProbeOverlay() {
+function renderZProbeOverlay(map) {
     drawLayerWhen(
         state.probeActive && !state.navigationModeEnabled && !isPanning(state.panStateZ),
         zCtx,
         zPlaneParams,
         'z',
-        layerCtx => drawPlanarProbe(layerCtx, zPlaneParams),
+        layerCtx => drawPlanarProbe(layerCtx, zPlaneParams, map),
         'capture'
     );
 }
 
-function renderZParticles() {
+function renderZParticles(map) {
     drawLayerWhen(
         state.particleAnimationEnabled && !state.navigationModeEnabled,
         zCtx,
         zPlaneParams,
         'z',
-        layerCtx => updateAndDrawParticles(layerCtx, zPlaneParams, state),
+        layerCtx => updateAndDrawParticles(layerCtx, zPlaneParams, state, map),
         'raster'
     );
 }
 
-function renderZPlanar(transform) {
-    renderZPlanarBackground(transform);
-    renderZPrimaryPlanarContent();
+function renderZPlanar(map) {
+    renderZPlanarBackground(map);
+    renderZPrimaryPlanarContent(map);
     drawLayerWhen(
         state.dynamicPlotting?.enabled,
         zCtx,
@@ -984,8 +984,8 @@ function renderZPlanar(transform) {
     );
     renderZMarkers();
     renderZTaylorOverlay();
-    renderZProbeOverlay();
-    renderZParticles();
+    renderZProbeOverlay(map);
+    renderZParticles(map);
 }
 
 export function drawZPlaneContent() {
@@ -995,14 +995,14 @@ export function drawZPlaneContent() {
         return;
     }
 
-    const transform = getChainedTransformFunction(state.currentFunction);
+    const map = resolveActiveMap();
 
     if (state.riemannSphereViewEnabled && !state.splitViewEnabled) {
-        renderZSphere(transform);
+        renderZSphere(map);
         return;
     }
 
-    renderZPlanar(transform);
+    renderZPlanar(map);
 }
 
 function ensureWPlaneCache(index) {
@@ -1097,12 +1097,12 @@ function* iterWPlaneTransforms() {
     const count = getWPlaneRenderCount();
 
     if (state.chainingEnabled && state.chainCount > 25) {
-        yield [0, getChainedTransformFunction(state.currentFunction)];
+        yield [0, resolveActiveMap(Math.max(0, state.chainCount - 1))];
         return;
     }
 
     for (let index = 0; index < count; index += 1) {
-        yield [index, getChainedStageTransformFunction(state.currentFunction, index)];
+        yield [index, resolveActiveMap(index)];
     }
 }
 
@@ -1113,7 +1113,7 @@ function renderSpecialWPlaneMode() {
     renderFirstSignalMode(W_SIGNAL_RENDERERS, wCtx, wPlaneParams, 'w');
 }
 
-function renderRiemannSurfaceIfEnabled(index) {
+function renderRiemannSurfaceIfEnabled(index, map) {
     if (!state.riemannSurfaceEnabled) {
         hideRiemannSurface(wCanvas);
         return false;
@@ -1124,7 +1124,7 @@ function renderRiemannSurfaceIfEnabled(index) {
     const stage = state.chainingEnabled && state.chainCount > 25
         ? state.chainCount
         : index + 1;
-    if (wCanvas && renderRiemannSurface(wCanvas, stage)) {
+    if (wCanvas && renderRiemannSurface(wCanvas, { stage, map })) {
         hideCanvas(wCanvas);
         return true;
     }
@@ -1133,7 +1133,7 @@ function renderRiemannSurfaceIfEnabled(index) {
     return false;
 }
 
-function renderThreeWPlane(transform, stageIndex) {
+function renderThreeWPlane(map, stageIndex) {
     const container = controls.wPlaneThreeContainer;
 
     if (!container) {
@@ -1154,14 +1154,14 @@ function renderThreeWPlane(transform, stageIndex) {
     const stage = state.chainingEnabled && state.chainCount > 25
         ? Math.max(0, state.chainCount - 1)
         : stageIndex;
-    threeRenderer.setTransform(transform, stage + 1);
+    threeRenderer.setTransform(map.evaluate, stage + 1);
 
     const gridConfigObj = buildInputShapeGeometryConfig(zPlaneParams, {
         currentFunction: state.currentFunction,
         zetaContinuationEnabled: state.zetaContinuationEnabled,
         gridDensity: state.gridDensity
     });
-    const gridConfigKey = `${stage}:${JSON.stringify(gridConfigObj)}`;
+    const gridConfigKey = `${map.signature}:${JSON.stringify(gridConfigObj)}`;
 
     if (threeRenderer.lastGridConfigKey !== gridConfigKey) {
         // Skip rebuilding heavy 3D geometries continuously during 2D canvas drag-panning
@@ -1183,12 +1183,12 @@ function renderThreeWPlane(transform, stageIndex) {
 
     threeRenderer.updateGeometry(1.0);
     threeRenderer.setDynamicOverlay(
-        getDynamicSphereSceneData({ transform, stageIndex }),
+        getDynamicSphereSceneData({ transform: map.evaluate, stageIndex }),
         `${stageIndex}:${getDynamicPlottingCacheKey()}`
     );
 
     if (state.probeActive && state.probeZ) {
-        const wProbe = transform(state.probeZ.re, state.probeZ.im);
+        const wProbe = map.evaluate(state.probeZ.re, state.probeZ.im);
         threeRenderer.updateProbe(wProbe);
     } else {
         threeRenderer.updateProbe(null);
@@ -1253,7 +1253,7 @@ function refreshWSphereDomainColoring() {
     }
 }
 
-function renderWCanvasRiemannSphere(transform, index) {
+function renderWCanvasRiemannSphere(map, index) {
     const sphereParams = sphereViewParams.w;
 
     refreshWSphereDomainColoring();
@@ -1264,28 +1264,28 @@ function renderWCanvasRiemannSphere(transform, index) {
 
     drawPlaneLayer(wCtx, wPlaneParams, 'w', layerCtx => {
         drawRiemannSphereBase(layerCtx, sphereParams);
-        drawSphereGridAndShape(layerCtx, sphereParams, true, transform);
+        drawSphereGridAndShape(layerCtx, sphereParams, true, map.evaluate);
         drawDynamicSphere(layerCtx, sphereParams, {
             isWPlane: true,
-            transform,
+            transform: map.evaluate,
             stageIndex: index
         });
     }, 'capture');
 }
 
-function drawWTransformedShape(index, transform, targetCtx) {
+function drawWTransformedShape(index, map, targetCtx) {
     if (index === 0) {
-        drawPlanarTransformedShapeHybrid(targetCtx, wPlaneParams, transform, 'w');
+        drawPlanarTransformedShapeHybrid(targetCtx, wPlaneParams, map.evaluate, 'w', map);
         return;
     }
 
-    drawPlanarTransformedShape(targetCtx, wPlaneParams, transform, { index });
+    drawPlanarTransformedShape(targetCtx, wPlaneParams, map.evaluate, { index, map });
 }
 
-function renderWPlanarTransformedShape(index, transform) {
+function renderWPlanarTransformedShape(index, map) {
     if (state.navigationModeEnabled) {
         invalidateCache(wPlanarTransformedLayerCache);
-        drawNavigationLayer(wCtx, wPlaneParams, 'w', transform);
+        drawNavigationLayer(wCtx, wPlaneParams, 'w', map.evaluate);
         return;
     }
 
@@ -1295,22 +1295,22 @@ function renderWPlanarTransformedShape(index, transform) {
         planeParams: wPlaneParams,
         cacheKey: buildPlanarLayerCacheKey(true),
         enabled: shouldUseWPlanarTransformedLayerCache(),
-        render: cacheCtx => drawWTransformedShape(index, transform, cacheCtx)
+        render: cacheCtx => drawWTransformedShape(index, map, cacheCtx)
     });
 }
 
-function renderWPrimaryContent(index, transform, isRiemannW) {
-    if (state.taylorSeriesEnabled && !isRiemannW && !state.navigationModeEnabled) {
+function renderWPrimaryContent(index, map, isRiemannW) {
+    if (state.taylorSeriesEnabled && map.presentation !== 'derivative' && !isRiemannW && !state.navigationModeEnabled) {
         renderWTaylorApproximation();
         return;
     }
 
     if (isRiemannW) {
-        renderWCanvasRiemannSphere(transform, index);
+        renderWCanvasRiemannSphere(map, index);
         return;
     }
 
-    renderWPlanarTransformedShape(index, transform);
+    renderWPlanarTransformedShape(index, map);
 }
 
 function renderWCriticalValueMarkers(isRiemannW) {
@@ -1327,7 +1327,7 @@ function renderWCriticalValueMarkers(isRiemannW) {
     );
 }
 
-function renderWProbe(transform, index, isRiemannW) {
+function renderWProbe(map, index, isRiemannW) {
     if (!state.probeActive || state.navigationModeEnabled) {
         return;
     }
@@ -1339,7 +1339,7 @@ function renderWProbe(transform, index, isRiemannW) {
                 sphereViewParams.w,
                 state.probeZ,
                 state.probeNeighborhoodSize,
-                transform
+                map.evaluate
             );
         }, 'capture');
 
@@ -1347,34 +1347,46 @@ function renderWProbe(transform, index, isRiemannW) {
     }
 
     drawPlaneLayer(wCtx, wPlaneParams, 'w', layerCtx => {
-        drawPlanarTransformedProbe(layerCtx, wPlaneParams, transform);
+        drawPlanarTransformedProbe(layerCtx, wPlaneParams, map);
     }, 'capture');
 }
 
-function renderWCommonOverlays(index, transform, isRiemannW) {
+function renderWCommonOverlays(index, map, isRiemannW) {
     if (!isRiemannW && state.dynamicPlotting?.enabled) {
         drawPlaneLayer(wCtx, wPlaneParams, 'w', layerCtx => {
-            drawDynamicWPlane(layerCtx, wPlaneParams, transform, index);
+            drawDynamicWPlane(layerCtx, wPlaneParams, map.evaluate, index);
         }, 'raster');
     }
 
     renderWCriticalValueMarkers(isRiemannW);
-    renderWProbe(transform, index, isRiemannW);
+    renderWProbe(map, index, isRiemannW);
+
+    if (state.conformalGridEnabled && !isRiemannW) {
+        drawPlaneLayer(wCtx, wPlaneParams, 'w', layerCtx => {
+            drawConformalCircleGrid(layerCtx, wPlaneParams, map);
+        }, 'capture');
+    }
 
     if (!isRiemannW && index === 0) {
-        updateWindingNumberDisplay(transform);
+        updateWindingNumberDisplay(map.evaluate);
     }
 }
 
-function renderNormalWPlane(index, transform) {
-    if (renderRiemannSurfaceIfEnabled(index)) {
+function renderNormalWPlane(index, map) {
+    if (renderRiemannSurfaceIfEnabled(index, map)) {
+        return;
+    }
+
+    if (state.riemannTransformationEnabled) {
+        hideCanvas(wCanvas);
+        hideThreeContainer();
         return;
     }
 
     const isRiemannW = state.riemannSphereViewEnabled || state.splitViewEnabled;
 
     if (state.threeSphereEnabled && isRiemannW) {
-        renderThreeWPlane(transform, index);
+        renderThreeWPlane(map, index);
         return;
     }
 
@@ -1385,8 +1397,8 @@ function renderNormalWPlane(index, transform) {
         renderWPlanarBackground();
     }
 
-    renderWPrimaryContent(index, transform, isRiemannW);
-    renderWCommonOverlays(index, transform, isRiemannW);
+    renderWPrimaryContent(index, map, isRiemannW);
+    renderWCommonOverlays(index, map, isRiemannW);
 }
 
 function _renderSingleWPlaneMode(index, curFunc, isSpecialMode) {

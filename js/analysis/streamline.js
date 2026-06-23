@@ -1,10 +1,3 @@
-import { state } from '../store/state.js';
-import {
-    getChainedTransformFunction,
-    getMappedTransformProfile,
-    evaluateMappedTransform,
-    numericDerivative
-} from '../math-utils.js';
 import {
     STREAMLINE_COLOR_MIN_MAG,
     STREAMLINE_COLOR_MAX_MAG,
@@ -13,7 +6,6 @@ import {
     COLOR_STREAMLINE
 } from '../constants/colors.js';
 
-const ZERO_COMPLEX = Object.freeze({ re: 0, im: 0 });
 const ZERO_VECTOR = Object.freeze({ vx: 0, vy: 0 });
 const MIN_VECTOR_MAG_SQ = 1e-18;
 
@@ -31,10 +23,6 @@ function isFiniteVector(value) {
 
 function finiteOr(value, fallback) {
     return isFiniteNumber(value) ? value : fallback;
-}
-
-function safeComplex(value, fallback = ZERO_COMPLEX) {
-    return isFiniteComplex(value) ? value : fallback;
 }
 
 function safeVector(value, fallback = ZERO_VECTOR) {
@@ -72,49 +60,24 @@ function inverseVectorFromComplex(value) {
     };
 }
 
-function safeDerivativeVector(currentFunctionStr, x, y) {
-    if (!isFiniteNumber(x) || !isFiniteNumber(y)) return ZERO_VECTOR;
-
-    try {
-        return vectorFromComplex(numericDerivative(currentFunctionStr, { re: x, im: y }));
-    } catch (_error) {
-        return ZERO_VECTOR;
-    }
-}
-
-function safeEvaluateVector(evaluate, x, y, currentFunctionStr, vectorFieldTypeStr, runtimeState) {
+function safeEvaluateVector(evaluate, x, y) {
     if (typeof evaluate !== 'function') return ZERO_VECTOR;
 
     try {
-        return safeVector(evaluate(x, y, currentFunctionStr, vectorFieldTypeStr, runtimeState));
+        return safeVector(evaluate(x, y));
     } catch (_error) {
         return ZERO_VECTOR;
     }
 }
 
-export function getVectorFieldValueAtPoint(x, y, currentFunctionStr, vectorFieldTypeStr, runtimeState = state, transformProfile = null) {
-    let f_z;
-    const isChained = runtimeState.chainingEnabled && runtimeState.chainCount > 1;
-    if (isChained) {
-        const chainedFunc = getChainedTransformFunction(currentFunctionStr);
-        f_z = safeEvaluateComplex(chainedFunc, x, y);
-    } else {
-        const profile = transformProfile || getMappedTransformProfile(currentFunctionStr);
-        if (!profile || !profile.transformFunc) {
-            return { re: 0, im: 0 };
-        }
-        try {
-            f_z = evaluateMappedTransform(profile, x, y, currentFunctionStr);
-        } catch (_error) {
-            f_z = null;
-        }
-    }
+export function getVectorFieldValueAtPoint(x, y, map, vectorFieldType = 'f(z)') {
+    const f_z = safeEvaluateComplex(map?.evaluate, x, y);
 
     if (!isFiniteComplex(f_z)) {
         return { re: 0, im: 0 };
     }
 
-    switch (vectorFieldTypeStr) {
+    switch (vectorFieldType) {
         case 'f(z)':
             return { re: f_z.re, im: f_z.im };
         case '1/f(z)': {
@@ -127,77 +90,17 @@ export function getVectorFieldValueAtPoint(x, y, currentFunctionStr, vectorField
                 im: -f_z.im / magnitudeSquared
             };
         }
-        case "f'(z)": {
-            if (!isChained) {
-                const profile = transformProfile || getMappedTransformProfile(currentFunctionStr);
-                if (profile && profile.isConstant) {
-                    return { re: 0, im: 0 };
-                }
-            }
-            const derivative = safeDerivativeVector(currentFunctionStr, x, y);
-            return { re: derivative.vx, im: derivative.vy };
-        }
         default:
             return { re: 0, im: 0 };
     }
 }
 
-export function getVectorForStreamline(x, y, currentFunctionStr, vectorFieldTypeStr, runtimeState = state) {
-    const vector = getVectorFieldValueAtPoint(x, y, currentFunctionStr, vectorFieldTypeStr, runtimeState);
-    return { vx: vector.re, vy: vector.im };
-}
-
-export function getVectorEvaluator(currentFunctionStr, vectorFieldTypeStr, runtimeState = state) {
-    const isChained = runtimeState.chainingEnabled && runtimeState.chainCount > 1;
-    let evalFunc;
-    
-    if (isChained) {
-        const chainedFunc = getChainedTransformFunction(currentFunctionStr);
-        evalFunc = (x, y) => safeEvaluateComplex(chainedFunc, x, y);
-    } else {
-        const profile = getMappedTransformProfile(currentFunctionStr);
-        if (!profile || !profile.transformFunc) {
-            evalFunc = () => ZERO_COMPLEX;
-        } else if (profile.isConstant && profile.constantValue) {
-            const val = safeComplex(profile.constantValue);
-            evalFunc = () => val;
-        } else {
-            evalFunc = (x, y) => {
-                try {
-                    return safeComplex(
-                        evaluateMappedTransform(profile, x, y, currentFunctionStr),
-                        null
-                    );
-                } catch (_error) {
-                    return null;
-                }
-            };
-        }
-    }
-    
-    switch (vectorFieldTypeStr) {
+export function getVectorEvaluator(map, vectorFieldType = 'f(z)') {
+    switch (vectorFieldType) {
         case 'f(z)':
-            return (x, y) => {
-                const f_z = evalFunc(x, y);
-                return vectorFromComplex(f_z);
-            };
+            return (x, y) => vectorFromComplex(safeEvaluateComplex(map?.evaluate, x, y));
         case '1/f(z)':
-            return (x, y) => {
-                const f_z = evalFunc(x, y);
-                return inverseVectorFromComplex(f_z);
-            };
-        case "f'(z)": {
-            const isChainedVal = isChained;
-            const profile = isChainedVal ? null : getMappedTransformProfile(currentFunctionStr);
-            const isConstant = profile && profile.isConstant;
-            
-            return (x, y) => {
-                if (!isChainedVal && isConstant) {
-                    return ZERO_VECTOR;
-                }
-                return safeDerivativeVector(currentFunctionStr, x, y);
-            };
-        }
+            return (x, y) => inverseVectorFromComplex(safeEvaluateComplex(map?.evaluate, x, y));
         default:
             return () => ZERO_VECTOR;
     }
@@ -240,14 +143,7 @@ export function calculateStreamline(startX, startY, getVectorAtPointCallback, zP
         if (shouldContinue && i > 0 && (i & 7) === 0 && !shouldContinue()) break;
         if (currentX < xMin || currentX > xMax || currentY < yMin || currentY > yMax) break;
 
-        const k1 = safeEvaluateVector(
-            getVectorAtPointCallback,
-            currentX,
-            currentY,
-            state.currentFunction,
-            state.vectorFieldFunction,
-            state
-        );
+        const k1 = safeEvaluateVector(getVectorAtPointCallback, currentX, currentY);
         const k1Mag = Math.hypot(k1.vx, k1.vy);
 
         if (!isFiniteNumber(k1Mag) || k1Mag < 1e-9) break;
@@ -261,14 +157,7 @@ export function calculateStreamline(startX, startY, getVectorAtPointCallback, zP
         const midY = currentY + k1ny * step * 0.5;
         if (!isFiniteNumber(midX) || !isFiniteNumber(midY)) break;
 
-        const k2 = safeEvaluateVector(
-            getVectorAtPointCallback,
-            midX,
-            midY,
-            state.currentFunction,
-            state.vectorFieldFunction,
-            state
-        );
+        const k2 = safeEvaluateVector(getVectorAtPointCallback, midX, midY);
         const k2Mag = Math.hypot(k2.vx, k2.vy);
 
         if (!isFiniteNumber(k2Mag) || k2Mag < 1e-9) {

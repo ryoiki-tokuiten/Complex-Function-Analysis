@@ -600,32 +600,6 @@ function algebraicParameter(context, fallback) {
     return toComplex(context?.c ?? fallback);
 }
 
-export function numericDerivative(funcName, z, h = 1e-7) {
-    const func = getChainedTransformFunction(funcName);
-    if (!func) return { re: NaN, im: NaN };
-
-    const point = toComplex(z);
-    const step = finite(h) ? h : 1e-7;
-
-    if (
-        funcName === 'zeta' &&
-        !state.zetaContinuationEnabled &&
-        (
-            point.re <= ZETA_REFLECTION_POINT_RE ||
-            point.re + step <= ZETA_REFLECTION_POINT_RE ||
-            point.re - step <= ZETA_REFLECTION_POINT_RE
-        )
-    ) {
-        return { re: NaN, im: NaN };
-    }
-
-    const plus = func(point.re + step, point.im);
-    const minus = func(point.re - step, point.im);
-
-    if (invalidComplex(plus) || invalidComplex(minus)) return { re: NaN, im: NaN };
-    return complexDivide(complexSub(plus, minus), { re: 2 * step, im: 0 });
-}
-
 export function evaluateFunctionBlock(block, z_re, z_im, context = null) {
     if (!block || block.func === 'none') {
         return isObject(z_re) ? z_re : { re: z_re, im: z_im };

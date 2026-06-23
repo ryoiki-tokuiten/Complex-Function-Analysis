@@ -47,6 +47,8 @@ const rawState = {
     polynomialCoeffs: [], 
     fractionalPowerN: 0.5,
     currentFunction: 'cos', 
+    mapPresentation: 'function',
+    conformalGridEnabled: false,
     currentInputShape: 'grid_cartesian',
     domainColoringEnabled: false,
     gridDensity: 15,

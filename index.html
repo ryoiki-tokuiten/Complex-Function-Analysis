@@ -420,6 +420,17 @@
                         </div>
                     </div>
 
+                    <!-- Derivative Panel -->
+                    <div id="derivative_params" class="control-group"
+                        style="padding-bottom: 0.5rem; border-bottom: 1px solid var(--border-color); margin-bottom: 0.5rem;">
+                        <label for="enable_derivative_cb" class="control-label tooltip-label slider-label"
+                            data-tooltip="Show the numerical derivative of the active map in map visualizations">
+                            <input type="checkbox" id="enable_derivative_cb" class="control-checkbox">
+                            <span class="custom-checkbox-visual"></span>
+                            Show Derivative
+                        </label>
+                    </div>
+
                     <!-- Output Chaining Panel -->
                     <div id="chaining_params" class="control-group"
                         style="padding-bottom: 0.5rem; border-bottom: 1px solid var(--border-color); margin-bottom: 0.5rem;">
@@ -1776,6 +1787,15 @@
                             <span class="viz-feature-section-title">Surface & Projection</span>
                         </div>
                         <div class="viz-toggle-grid">
+                            <label for="enable_conformal_grid_cb" class="control-label tooltip-label viz-toggle-card">
+                                <input type="checkbox" id="enable_conformal_grid_cb" class="control-checkbox"
+                                    data-tooltip="Show Tissot indicatrices from the selected map and its derivative">
+                                <span class="custom-checkbox-visual"></span>
+                                <span class="viz-toggle-card-content">
+                                    <span class="viz-toggle-card-title">Conformal Grid</span>
+                                    <span class="viz-toggle-card-copy">Local circles transformed by the map derivative.</span>
+                                </span>
+                            </label>
                             <label for="enable_domain_coloring_cb" class="control-label tooltip-label viz-toggle-card">
                                 <input type="checkbox" id="enable_domain_coloring_cb" class="control-checkbox"
                                     data-tooltip="Toggle domain coloring visualization (color indicates argument, lightness indicates magnitude)">
@@ -1795,8 +1815,7 @@
                                     <span class="viz-toggle-card-copy">Project the mapped output onto the sphere.</span>
                                 </span>
                             </label>
-                            <label for="enable_riemann_surface_cb"
-                                class="control-label tooltip-label viz-toggle-card viz-toggle-card--hero viz-toggle-card--wide">
+                            <label for="enable_riemann_surface_cb" class="control-label tooltip-label viz-toggle-card">
                                 <input type="checkbox" id="enable_riemann_surface_cb" class="control-checkbox"
                                     data-tooltip="Render the branch-aware Riemann surface of the current function on the GPU">
                                 <span class="custom-checkbox-visual"></span>
@@ -2023,8 +2042,7 @@
                                     <span class="custom-checkbox-visual"></span>
                                     <span class="viz-toggle-card-content">
                                         <span class="viz-toggle-card-title">Vector Field</span>
-                                        <span class="viz-toggle-card-copy">Sample arrows from f(z), 1/f(z), or
-                                            f'(z).</span>
+                                        <span class="viz-toggle-card-copy">Sample arrows from the active map or its reciprocal.</span>
                                     </span>
                                 </label>
                                 <label for="enable_streamline_flow_cb"
@@ -2061,10 +2079,9 @@
                                         <label for="vector_field_function_selector">Vector
                                             Function:</label>
                                         <select id="vector_field_function_selector"
-                                            data-tooltip="Select function for the z-plane vector field (f(z), 1/f(z), or f'(z))">
+                                            data-tooltip="Select the active map or its reciprocal for the z-plane vector field">
                                             <option value="f(z)" selected>f(z)</option>
                                             <option value="1/f(z)">1/f(z)</option>
-                                            <option value="f'(z)">f'(z)</option>
                                         </select>
                                     </div>
                                     <div class="control-group">
@@ -2333,6 +2350,9 @@
                     <div id="w_plane_canvas_wrapper"
                         style="position: relative; width: 100%; height: 100%; display: flex; flex: 1;">
                         <canvas id="w_plane_canvas"></canvas>
+                        <div id="w_plane_threejs_container" class="threejs-container hidden"
+                            style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; z-index: 10; border-radius: inherit; overflow: hidden;">
+                        </div>
                         <div id="w_plane_refining_indicator" class="refining-indicator hidden">
                             <span class="pulsing-dot"></span>
                             <span>Refining...</span>

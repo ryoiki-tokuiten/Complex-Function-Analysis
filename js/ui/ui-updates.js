@@ -1,5 +1,6 @@
 import { state, context, sliderParamKeys } from '../store/state.js';
-import { getChainedTransformFunction, numericDerivative } from '../math-utils.js';
+import { getChainedTransformFunction } from '../math-utils.js';
+import { resolveActiveMap } from '../math/active-map.js';
 import { DEFAULT_TAYLOR_SERIES_CENTER, CRITICAL_POINT_EPSILON } from '../constants/numerical.js';
 import { updatePolynomialCoeffDisplays } from './polynomial-ui.js';
 import { syncLaplacePlayPauseButton } from './event-listeners.js';
@@ -672,7 +673,7 @@ function derivativeProbeHtml() {
         ].join('<br>') + '<br>';
     }
 
-    const deriv = numericDerivative(state.currentFunction, state.probeZ);
+    const deriv = resolveActiveMap().derivative(state.probeZ.re, state.probeZ.im);
     if (!finiteComplex(deriv)) {
         return "f'(z) calculation failed.<br>Conformality: Unknown<br>";
     }
@@ -692,7 +693,7 @@ function derivativeProbeHtml() {
 }
 
 function transformedProbeHtml() {
-    const transform = getChainedTransformFunction(state.currentFunction);
+    const transform = resolveActiveMap().evaluate;
     const pW = typeof transform === 'function'
         ? transform(state.probeZ.re, state.probeZ.im)
         : null;
@@ -1016,13 +1017,15 @@ function outputFormulaModel() {
 
     const chainLabel = isSinglePanelChain ? `Chain ${state.chainCount - 1}` : 'Chain 0';
     const mappedChainLabel = isSinglePanelChain ? `mapped chain ${state.chainCount - 1}` : 'mapped chain 0';
+    const derivativePrefix = state.mapPresentation === 'derivative' ? 'Derivative of ' : '';
 
     return {
         fND,
         hasOutputChain,
         wOutputFormula,
-        wOutputDescriptor: `${hasOutputChain ? chainLabel : 'Output'}: <code id="w-plane-title-func">${wOutputFormula}</code>`,
-        mappedWOutputDescriptor: `${hasOutputChain ? mappedChainLabel : 'mapped output'}: <code id="w-plane-title-func">${wOutputFormula}</code>`
+        derivativePrefix,
+        wOutputDescriptor: `${hasOutputChain ? chainLabel : 'Output'}: ${derivativePrefix}<code id="w-plane-title-func">${wOutputFormula}</code>`,
+        mappedWOutputDescriptor: `${hasOutputChain ? mappedChainLabel : 'mapped output'}: ${derivativePrefix}<code id="w-plane-title-func">${wOutputFormula}</code>`
     };
 }
 
@@ -1030,15 +1033,16 @@ function defaultZPlaneTitle(fND) {
     const suffix = INPUT_SHAPE_TITLE_SUFFIX[state.currentInputShape] ?? ')';
     let title = `z-plane (Input${suffix})`;
     const showRadialSteps = state.radialDiscreteStepsEnabled && state.currentFunction !== 'poincare';
+    const derivativePrefix = state.mapPresentation === 'derivative' ? 'Derivative of ' : '';
 
     if (state.domainColoringEnabled) {
         const prefix = state.riemannSphereViewEnabled && !state.splitViewEnabled ? 'z-sphere' : 'z-plane';
-        title = `${prefix} (Output: Domain Coloring of <code id="z-plane-title-func">w = ${fND}</code>)`;
+        title = `${prefix} (Output: Domain Coloring of ${derivativePrefix}<code id="z-plane-title-func">w = ${fND}</code>)`;
     } else if (state.vectorFieldEnabled || state.streamlineFlowEnabled) {
         const typeStr = state.streamlineFlowEnabled ? 'Streamlines' : 'Vector Field';
-        title = `z-plane (Output: ${typeStr} [${state.vectorFieldFunction}] of <code id="z-plane-title-func">w = ${fND}</code>)`;
+        title = `z-plane (Output: ${typeStr} [${state.vectorFieldFunction}] of ${derivativePrefix}<code id="z-plane-title-func">w = ${fND}</code>)`;
     } else if (showRadialSteps) {
-        title = `z-plane (Output: Radial Discrete Steps of <code id="z-plane-title-func">w = ${fND}</code>)`;
+        title = `z-plane (Output: Radial Discrete Steps of ${derivativePrefix}<code id="z-plane-title-func">w = ${fND}</code>)`;
     } else if (state.navigationModeEnabled && (!state.riemannSphereViewEnabled || state.splitViewEnabled)) {
         title = 'z-plane (Navigation)';
     }
@@ -1048,18 +1052,19 @@ function defaultZPlaneTitle(fND) {
 
 function splitViewZPlaneTitle(fND) {
     const showRadialSteps = state.radialDiscreteStepsEnabled && state.currentFunction !== 'poincare';
+    const derivativePrefix = state.mapPresentation === 'derivative' ? 'Derivative of ' : '';
 
     if (state.domainColoringEnabled) {
-        return `z-plane (Output: Domain Coloring of <code id="z-plane-title-func">w = ${fND}</code>)`;
+        return `z-plane (Output: Domain Coloring of ${derivativePrefix}<code id="z-plane-title-func">w = ${fND}</code>)`;
     }
 
     if (state.vectorFieldEnabled || state.streamlineFlowEnabled) {
         const typeStr = state.streamlineFlowEnabled ? 'Streamlines' : 'Vector Field';
-        return `z-plane (Output: ${typeStr} [${state.vectorFieldFunction}] of <code id="z-plane-title-func">w = ${fND}</code>)`;
+        return `z-plane (Output: ${typeStr} [${state.vectorFieldFunction}] of ${derivativePrefix}<code id="z-plane-title-func">w = ${fND}</code>)`;
     }
 
     if (showRadialSteps) {
-        return `z-plane (Output: Radial Discrete Steps of <code id="z-plane-title-func">w = ${fND}</code>)`;
+        return `z-plane (Output: Radial Discrete Steps of ${derivativePrefix}<code id="z-plane-title-func">w = ${fND}</code>)`;
     }
 
     return `z-plane (Input Grid: ${String(state.currentInputShape ?? '').replace(/_/g, ' ')})`;
@@ -1093,7 +1098,8 @@ function syncPrimaryPlaneTitles() {
 
     if (state.riemannSphereViewEnabled && state.riemannTransformationEnabled && !state.splitViewEnabled) {
         setHtml('zPlaneTitle', 'z-sphere (Input: Transforming Flat Grid to Sphere)');
-        setHtml('wPlaneTitle', 'w-sphere (Output: Transforming Mapped Grid to Sphere)');
+        const mappedGridLabel = state.mapPresentation === 'derivative' ? 'Derivative Grid' : 'Mapped Grid';
+        setHtml('wPlaneTitle', `w-sphere (Output: Transforming ${mappedGridLabel} to Sphere)`);
         setHidden('cauchy_integral_results_info', true);
         return;
     }
@@ -1102,7 +1108,7 @@ function syncPrimaryPlaneTitles() {
         setHtml(
             'zPlaneTitle',
             state.domainColoringEnabled
-                ? `z-sphere (Output: Domain Coloring of <code id="z-plane-title-func">w = ${model.fND}</code>)`
+                ? `z-sphere (Output: Domain Coloring of ${model.derivativePrefix}<code id="z-plane-title-func">w = ${model.fND}</code>)`
                 : 'z-sphere (Input)'
         );
         setHtml('wPlaneTitle', sphereWPlaneTitle(model));
@@ -1114,7 +1120,7 @@ function syncPrimaryPlaneTitles() {
     setHtml(
         'wPlaneTitle',
         state.navigationModeEnabled
-            ? `w-plane (Mapped Navigation: <code id="w-plane-title-func">${model.wOutputFormula}</code>)`
+            ? `w-plane (Mapped Navigation: ${model.derivativePrefix}<code id="w-plane-title-func">${model.wOutputFormula}</code>)`
             : `w-plane (${model.wOutputDescriptor})`
     );
 }

@@ -993,14 +993,14 @@ export function drawWithWebGLRaster(ctx, planeParams, planeKey, drawCallback, op
     return true;
 }
 
-export function drawPlanarTransformedShapeHybrid(ctx, planeParams, tf, planeKey) {
+export function drawPlanarTransformedShapeHybrid(ctx, planeParams, tf, planeKey, map = null) {
     let geometryRendered = drawWithWebGLCapture(ctx, planeParams, planeKey, (captureCtx) => {
-        drawPlanarTransformedShape(captureCtx, planeParams, tf, { includeOverlays: false });
+        drawPlanarTransformedShape(captureCtx, planeParams, tf, { includeOverlays: false, map });
     });
 
     if (!geometryRendered) {
         geometryRendered = drawWithWebGLRaster(ctx, planeParams, planeKey, (rasterCtx) => {
-            drawPlanarTransformedShape(rasterCtx, planeParams, tf, { includeOverlays: false });
+            drawPlanarTransformedShape(rasterCtx, planeParams, tf, { includeOverlays: false, map });
         });
     }
 
@@ -1008,7 +1008,7 @@ export function drawPlanarTransformedShapeHybrid(ctx, planeParams, tf, planeKey)
 
     if (shouldDrawPlanarFunctionFociOverlay()) {
         drawWithWebGLRaster(ctx, planeParams, planeKey, (rasterCtx) => {
-            drawPlanarTransformedShape(rasterCtx, planeParams, tf, { includeGeometry: false });
+            drawPlanarTransformedShape(rasterCtx, planeParams, tf, { includeGeometry: false, map });
         });
     }
 

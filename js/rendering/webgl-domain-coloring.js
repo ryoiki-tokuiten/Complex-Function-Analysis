@@ -108,6 +108,7 @@ const UNIFORM_ALIASES = Object.freeze({
     uFracPower: 'u_fracPower',
     uChainCount: 'u_chainCount',
     uChainMode: 'u_chainMode',
+    uDerivativeMode: 'u_derivativeMode',
     uUseOrbitColoring: 'u_useOrbitColoring'
 });
 
@@ -174,6 +175,7 @@ const FRAGMENT_UNIFORMS = lines(
     'uniform float u_fracPower;',
     'uniform int u_chainCount;',
     'uniform int u_chainMode;',
+    'uniform float u_derivativeMode;',
     'uniform float u_useOrbitColoring;'
 );
 
@@ -481,6 +483,37 @@ bool evaluateZeroSeedChain(vec2 parameterValue, out vec2 mappedValue) {
   return true;
 }
 
+bool evaluateConfiguredMap(vec2 inputValue, out vec2 mappedValue) {
+  if (u_isWPlaneColoring >= 0.5) {
+    mappedValue = inputValue;
+    return true;
+  }
+
+  if (u_chainMode == 7) {
+    return evaluateZeroSeedChain(inputValue, mappedValue);
+  }
+
+  if (!mapDomainValue(inputValue, inputValue, mappedValue) || !isFiniteVec2Compat(mappedValue)) {
+    return false;
+  }
+
+  return applyConfiguredChain(mappedValue, inputValue) && isFiniteVec2Compat(mappedValue);
+}
+
+bool evaluateActiveMap(vec2 inputValue, out vec2 mappedValue) {
+  if (u_derivativeMode < 0.5 || u_isWPlaneColoring >= 0.5) {
+    return evaluateConfiguredMap(inputValue, mappedValue);
+  }
+
+  float h = 1.0e-6 * max(1.0, max(abs(inputValue.x), abs(inputValue.y)));
+  vec2 rightValue = vec2(0.0);
+  vec2 leftValue = vec2(0.0);
+  if (!evaluateConfiguredMap(inputValue + vec2(h, 0.0), rightValue)) return false;
+  if (!evaluateConfiguredMap(inputValue - vec2(h, 0.0), leftValue)) return false;
+  mappedValue = (rightValue - leftValue) / (2.0 * h);
+  return isFiniteVec2Compat(mappedValue);
+}
+
 ${DYNAMICS_COLOR_HELPERS}
 
 vec4 domainColorForValue(vec2 value, float brightnessFactor) {
@@ -513,26 +546,12 @@ void main() {
   }
 
   vec2 mappedValue = vec2(0.0);
-  if (u_useOrbitColoring > 0.5 && u_isWPlaneColoring < 0.5 && u_chainCount > 1 && (u_chainMode == 1 || u_chainMode == 7)) {
+  if (u_derivativeMode < 0.5 && u_useOrbitColoring > 0.5 && u_isWPlaneColoring < 0.5 && u_chainCount > 1 && (u_chainMode == 1 || u_chainMode == 7)) {
     gl_FragColor = iteratedDynamicsColor(zInput, u_chainMode, brightnessFactor);
     return;
   }
 
-  if (u_isWPlaneColoring < 0.5 && u_chainMode == 7) {
-    if (!evaluateZeroSeedChain(zInput, mappedValue)) {
-      gl_FragColor = invalidDomainColor();
-      return;
-    }
-    gl_FragColor = domainColorForValue(mappedValue, brightnessFactor);
-    return;
-  }
-
-  if (!mapDomainValue(zInput, zInput, mappedValue) || !isFiniteVec2Compat(mappedValue)) {
-    gl_FragColor = invalidDomainColor();
-    return;
-  }
-
-  if (!applyConfiguredChain(mappedValue, zInput)) {
+  if (!evaluateActiveMap(zInput, mappedValue)) {
     gl_FragColor = invalidDomainColor();
     return;
   }
@@ -869,7 +888,8 @@ function resolveRenderJob(targetCtx, planeParams, options) {
         xRange: bounds.xRange,
         yRange: bounds.yRange,
         isWPlaneColoring: !!opts.isWPlaneColoring,
-        sphereParams: opts.sphereParams || null
+        sphereParams: opts.sphereParams || null,
+        map: opts.map || null
     };
 }
 
@@ -1003,6 +1023,7 @@ function uploadRenderUniforms(gl, renderer, job, metrics) {
     uploadSphereUniforms(gl, renderer, job, metrics);
     uploadLightingUniforms(gl, renderer);
     gl.uniform1f(renderer.uIsWPlaneColoring, job.isWPlaneColoring ? 1 : 0);
+    gl.uniform1f(renderer.uDerivativeMode, job.map?.presentation === 'derivative' ? 1 : 0);
     setComplexFunctionUniformsShared(gl, renderer, state);
     uploadChainingUniforms(gl, renderer);
 }
@@ -1238,6 +1259,7 @@ export function getThreeSphereShaderConfig(planeType) {
         uniform float u_fracPower;
         uniform int u_chainCount;
         uniform int u_chainMode;
+        uniform float u_derivativeMode;
         uniform float u_useOrbitColoring;
     `;
 
@@ -1392,6 +1414,29 @@ export function getThreeSphereShaderConfig(planeType) {
           return true;
         }
 
+        bool evaluateConfiguredMap(vec2 inputValue, out vec2 mappedValue) {
+          if (u_isWPlaneColoring >= 0.5) {
+            mappedValue = inputValue;
+            return true;
+          }
+          if (u_chainMode == 7) return evaluateZeroSeedChain(inputValue, mappedValue);
+          if (!mapDomainValue(inputValue, inputValue, mappedValue) || !isFiniteVec2Compat(mappedValue)) return false;
+          return applyConfiguredChain(mappedValue, inputValue) && isFiniteVec2Compat(mappedValue);
+        }
+
+        bool evaluateActiveMap(vec2 inputValue, out vec2 mappedValue) {
+          if (u_derivativeMode < 0.5 || u_isWPlaneColoring >= 0.5) {
+            return evaluateConfiguredMap(inputValue, mappedValue);
+          }
+          float h = 1.0e-6 * max(1.0, max(abs(inputValue.x), abs(inputValue.y)));
+          vec2 rightValue = vec2(0.0);
+          vec2 leftValue = vec2(0.0);
+          if (!evaluateConfiguredMap(inputValue + vec2(h, 0.0), rightValue)) return false;
+          if (!evaluateConfiguredMap(inputValue - vec2(h, 0.0), leftValue)) return false;
+          mappedValue = (rightValue - leftValue) / (2.0 * h);
+          return isFiniteVec2Compat(mappedValue);
+        }
+
         ${DYNAMICS_COLOR_HELPERS}
 
         vec4 domainColorForValue(vec2 value, float brightnessFactor) {
@@ -1422,26 +1467,12 @@ export function getThreeSphereShaderConfig(planeType) {
             vec2 zInput = vec2(vLocalPosition.x / den, vLocalPosition.z / den);
             
             vec2 mappedValue = vec2(0.0);
-            if (u_useOrbitColoring > 0.5 && u_isWPlaneColoring < 0.5 && u_chainCount > 1 && (u_chainMode == 1 || u_chainMode == 7)) {
+            if (u_derivativeMode < 0.5 && u_useOrbitColoring > 0.5 && u_isWPlaneColoring < 0.5 && u_chainCount > 1 && (u_chainMode == 1 || u_chainMode == 7)) {
                 gl_FragColor = iteratedDynamicsColor(zInput, u_chainMode, 1.0);
                 return;
             }
 
-            if (u_isWPlaneColoring < 0.5 && u_chainMode == 7) {
-                if (!evaluateZeroSeedChain(zInput, mappedValue)) {
-                    gl_FragColor = vec4(0.0, 0.0, 0.0, 1.0);
-                    return;
-                }
-                gl_FragColor = domainColorForValue(mappedValue, 1.0);
-                return;
-            }
-
-            if (!mapDomainValue(zInput, zInput, mappedValue) || !isFiniteVec2Compat(mappedValue)) {
-                gl_FragColor = vec4(0.0, 0.0, 0.0, 1.0);
-                return;
-            }
-            
-            if (!applyConfiguredChain(mappedValue, zInput)) {
+            if (!evaluateActiveMap(zInput, mappedValue)) {
                 gl_FragColor = vec4(0.0, 0.0, 0.0, 1.0);
                 return;
             }

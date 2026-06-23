@@ -32,8 +32,10 @@ test('streamline tracing stops immediately on garbage vectors', () => {
     assert.deepEqual(path, []);
 });
 
-test('Poincare vector evaluator sanitizes invalid half-plane values', () => {
-    const evaluate = getVectorEvaluator('poincare', 'f(z)', streamlineState);
+test('vector evaluator sanitizes invalid map values', () => {
+    const evaluate = getVectorEvaluator({
+        evaluate: (_re, im) => im > 0 ? { re: 0, im: 1 } : { re: NaN, im: NaN }
+    }, 'f(z)');
 
     assert.deepEqual(evaluate(0, -1), { vx: 0, vy: 0 });
 

@@ -1,9 +1,4 @@
 import { state, context } from '../store/state.js';
-import {
-    getMappedTransformProfile,
-    getEffectiveBaseTransformFunction,
-    evaluateDomainColoringMappedTransform
-} from '../math-utils.js';
 import { renderDomainColoringWithWebGL } from './webgl-domain-coloring.js';
 import {
     buildPlanarDomainDynamicsSnapshot,
@@ -32,17 +27,13 @@ function magnitudeLightness(logMod, cycles) {
     return DOMAIN_LIGHTNESS_MIN + (DOMAIN_LIGHTNESS_MAX - DOMAIN_LIGHTNESS_MIN) * tone;
 }
 
-function getDomainColoringEvaluator(isWPC, sourceProfile, sTF) {
+function getDomainColoringEvaluator(isWPC, map) {
     if (isWPC) {
         return (x, y) => ({ re: x, im: y });
     }
-    if (sourceProfile) {
-        return (x, y) => evaluateDomainColoringMappedTransform(sourceProfile, x, y, state.currentFunction) || { re: NaN, im: NaN };
-    }
-    if (typeof sTF === 'function') {
-        return (x, y) => evaluateDomainColoringMappedTransform(sTF, x, y, state.currentFunction) || { re: NaN, im: NaN };
-    }
-    return (x, y) => ({ re: x, im: y });
+    return typeof map?.evaluate === 'function'
+        ? map.evaluate
+        : () => ({ re: NaN, im: NaN });
 }
 
 function cancelZPlaneDynamicsIfNeeded(isWPlaneColoring) {
@@ -106,25 +97,16 @@ export function getDomainColorPlaneKey(targetCtx) {
     return 'z';
 }
 
-export function renderPlanarDomainColoring(tCtx, pP, isWPC, sTF) {
+export function renderPlanarDomainColoring(tCtx, pP, isWPC, map) {
     const w = pP.width; const h = pP.height; if (w === 0 || h === 0) return;
-    const profileTransform = state.chainingEnabled
-        ? getEffectiveBaseTransformFunction(state.currentFunction)
-        : sTF;
-    const sourceProfile = (!isWPC && typeof profileTransform === 'function')
-        ? getMappedTransformProfile(state.currentFunction, profileTransform)
-        : null;
-    if (sourceProfile && sourceProfile.isConstant && !state.chainingEnabled) {
-        cancelZPlaneDynamicsIfNeeded(isWPC);
-        renderConstantPlanarDomainColoring(tCtx, pP, sourceProfile.constantValue);
-        return;
-    }
 
     if (context.domainColoringDirty) {
         cancelPlanarDomainDynamics();
     }
 
-    const dynamicsSnapshot = buildPlanarDomainDynamicsSnapshot(state, pP, { isWPlaneColoring: !!isWPC });
+    const dynamicsSnapshot = map?.presentation === 'derivative'
+        ? null
+        : buildPlanarDomainDynamicsSnapshot(state, pP, { isWPlaneColoring: !!isWPC });
     if (dynamicsSnapshot && renderPlanarDomainDynamics(tCtx, pP, dynamicsSnapshot)) {
         return;
     }
@@ -133,7 +115,7 @@ export function renderPlanarDomainColoring(tCtx, pP, isWPC, sTF) {
         planeKey: getDomainColorPlaneKey(tCtx),
         isWPlaneColoring: !!isWPC,
         sphereParams: null,
-        sourceTransformFn: sTF
+        map
     });
     if (ok) {
         cancelZPlaneDynamicsIfNeeded(isWPC);
@@ -141,29 +123,19 @@ export function renderPlanarDomainColoring(tCtx, pP, isWPC, sTF) {
     }
 
     cancelZPlaneDynamicsIfNeeded(isWPC);
-    renderPlanarDomainColoringCPU(tCtx, pP, isWPC, sTF, sourceProfile);
+    renderPlanarDomainColoringCPU(tCtx, pP, isWPC, map);
 }
 
-export function renderSphereDomainColoring(tCtx, cSP, cDOMP, isWPC, sTF) {
+export function renderSphereDomainColoring(tCtx, cSP, cDOMP, isWPC, map) {
     const w = cDOMP.width; const h = cDOMP.height; if (w === 0 || h === 0) return;
-    const profileTransform = state.chainingEnabled
-        ? getEffectiveBaseTransformFunction(state.currentFunction)
-        : sTF;
-    const sourceProfile = (!isWPC && typeof profileTransform === 'function')
-        ? getMappedTransformProfile(state.currentFunction, profileTransform)
-        : null;
-    if (sourceProfile && sourceProfile.isConstant && !state.chainingEnabled) {
-        renderSphereDomainColoringCPU(tCtx, cSP, cDOMP, isWPC, sTF, sourceProfile);
-        return;
-    }
     const ok = renderDomainColoringWithWebGL(tCtx, cDOMP, {
         planeKey: getDomainColorPlaneKey(tCtx),
         isWPlaneColoring: !!isWPC,
         sphereParams: cSP,
-        sourceTransformFn: sTF
+        map
     });
     if (!ok) {
-        renderSphereDomainColoringCPU(tCtx, cSP, cDOMP, isWPC, sTF, sourceProfile);
+        renderSphereDomainColoringCPU(tCtx, cSP, cDOMP, isWPC, map);
     }
 }
 
@@ -270,7 +242,7 @@ export function renderConstantPlanarDomainColoring(tCtx, pP, value) {
     tCtx.restore();
 }
 
-export function renderPlanarDomainColoringCPU(tCtx, pP, isWPC, sTF, sourceProfile = null) {
+export function renderPlanarDomainColoringCPU(tCtx, pP, isWPC, map) {
     const targetW = pP.width;
     const targetH = pP.height;
     const w = Math.max(1, Math.floor(targetW));
@@ -286,7 +258,7 @@ export function renderPlanarDomainColoringCPU(tCtx, pP, isWPC, sTF, sourceProfil
     const xRange = pP.currentVisXRange || pP.xRange;
     const yRange = pP.currentVisYRange || pP.yRange;
 
-    const evalFunc = getDomainColoringEvaluator(isWPC, sourceProfile, sTF);
+    const evalFunc = getDomainColoringEvaluator(isWPC, map);
 
     for (let py = 0; py < h; py++) {
         const unitY = py / h;
@@ -317,7 +289,7 @@ export function renderPlanarDomainColoringCPU(tCtx, pP, isWPC, sTF, sourceProfil
     tCtx.restore();
 }
 
-export function renderSphereDomainColoringCPU(tCtx, cSP, cDOMP, isWPC, sTF, sourceProfile = null) {
+export function renderSphereDomainColoringCPU(tCtx, cSP, cDOMP, isWPC, map) {
     const targetW = cDOMP.width;
     const targetH = cDOMP.height;
     const w = Math.max(1, Math.floor(targetW));
@@ -336,7 +308,7 @@ export function renderSphereDomainColoringCPU(tCtx, cSP, cDOMP, isWPC, sTF, sour
     const rotX = cSP.rotX || 0;
     const rotY = cSP.rotY || 0;
 
-    const evalFunc = getDomainColoringEvaluator(isWPC, sourceProfile, sTF);
+    const evalFunc = getDomainColoringEvaluator(isWPC, map);
 
     for (let py = 0; py < h; py++) {
         for (let px = 0; px < w; px++) {

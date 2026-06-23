@@ -146,6 +146,7 @@ const UNIFORM_NAMES = Object.freeze({
   uFracPower: 'u_fracPower',
   uStage: 'u_stage',
   uChainMode: 'u_chainMode',
+  uDerivativeMode: 'u_derivativeMode',
   uBranchIndex: 'u_branchIndex',
   uBranchCutWidth: 'u_branchCutWidth',
   uSurfaceComponent: 'u_surfaceComponent',
@@ -646,12 +647,33 @@ ${emitPaletteBranches()}
   mapSurfacePoint: {
     deps: ['surfaceHeight'],
     source: `bool mapSurfacePoint(vec2 z, out vec2 mapped, out float height) {
-  bool ok = evaluateSurfaceStage(
-    z, z, u_stage, u_chainMode, u_functionId, u_branchIndex, u_branchCutWidth,
-    u_mobiusA, u_mobiusB, u_mobiusC, u_mobiusD, u_polyDegree, u_polyCoeffs,
-    u_zetaContinuationEnabled, u_zetaReflectionBoundary, u_fracPower,
-    u_useTaylor, u_taylorCenter, u_taylorOrder, u_taylorCoefficients, mapped
-  );
+  bool ok;
+  if (u_derivativeMode > 0.5) {
+    float h = 1.0e-6 * max(1.0, max(abs(z.x), abs(z.y)));
+    vec2 rightValue = vec2(0.0);
+    vec2 leftValue = vec2(0.0);
+    bool rightOk = evaluateSurfaceStage(
+      z + vec2(h, 0.0), z + vec2(h, 0.0), u_stage, u_chainMode, u_functionId, u_branchIndex, u_branchCutWidth,
+      u_mobiusA, u_mobiusB, u_mobiusC, u_mobiusD, u_polyDegree, u_polyCoeffs,
+      u_zetaContinuationEnabled, u_zetaReflectionBoundary, u_fracPower,
+      u_useTaylor, u_taylorCenter, u_taylorOrder, u_taylorCoefficients, rightValue
+    );
+    bool leftOk = evaluateSurfaceStage(
+      z - vec2(h, 0.0), z - vec2(h, 0.0), u_stage, u_chainMode, u_functionId, u_branchIndex, u_branchCutWidth,
+      u_mobiusA, u_mobiusB, u_mobiusC, u_mobiusD, u_polyDegree, u_polyCoeffs,
+      u_zetaContinuationEnabled, u_zetaReflectionBoundary, u_fracPower,
+      u_useTaylor, u_taylorCenter, u_taylorOrder, u_taylorCoefficients, leftValue
+    );
+    ok = rightOk && leftOk;
+    mapped = (rightValue - leftValue) / (2.0 * h);
+  } else {
+    ok = evaluateSurfaceStage(
+      z, z, u_stage, u_chainMode, u_functionId, u_branchIndex, u_branchCutWidth,
+      u_mobiusA, u_mobiusB, u_mobiusC, u_mobiusD, u_polyDegree, u_polyCoeffs,
+      u_zetaContinuationEnabled, u_zetaReflectionBoundary, u_fracPower,
+      u_useTaylor, u_taylorCenter, u_taylorOrder, u_taylorCoefficients, mapped
+    );
+  }
   if (!ok) return false;
   height = clamp(surfaceHeight(mapped) / max(u_heightClip, 1.0e-4), -1.0, 1.0) * u_heightScale;
   return isFiniteFloatCompat(height);
@@ -783,6 +805,7 @@ uniform float u_zetaReflectionBoundary;
 uniform float u_fracPower;
 uniform int u_stage;
 uniform int u_chainMode;
+uniform float u_derivativeMode;
 uniform float u_branchIndex;
 uniform float u_branchCutWidth;
 uniform int u_surfaceComponent;
@@ -1236,6 +1259,7 @@ function setCommonUniforms(renderer, options) {
 
   gl.uniform1i(locations.uStage, options.stage);
   gl.uniform1i(locations.uChainMode, getChainModeId(state.chainingMode));
+  gl.uniform1f(locations.uDerivativeMode, options.map?.presentation === 'derivative' ? 1 : 0);
   gl.uniform1i(locations.uSurfaceComponent, getSurfaceComponentId(state.riemannSurfaceComponent));
   gl.uniform1f(locations.uHeightScale, finiteNumber(state.riemannSurfaceHeightScale, 1));
   gl.uniform1f(
@@ -1385,14 +1409,17 @@ class RiemannSurfaceRendererFactory {
   #rendererByBaseCanvas = new WeakMap();
   #activeRenderers = new Set();
 
-  render(baseCanvas, stage = 1) {
+  render(baseCanvas, options = {}) {
     if (!baseCanvas) return false;
 
     const renderer = this.#ensure(baseCanvas);
     if (!renderer) return false;
 
     showRenderer(renderer);
-    renderer.lastOptions = { stage: normalizeStage(stage) };
+    renderer.lastOptions = {
+      stage: normalizeStage(options.stage),
+      map: options.map || null
+    };
 
     const rendered = drawRenderer(renderer);
 
@@ -1496,7 +1523,7 @@ class RiemannSurfaceRendererFactory {
 
 const rendererFactory = new RiemannSurfaceRendererFactory();
 
-export function renderRiemannSurface(baseCanvas, stage = 1) {
+export function renderRiemannSurface(baseCanvas, options = {}) {
   if (isDynamicAggregateGLSLActive(state)) {
     const dynamic = buildDynamicAggregateGLSL(
       state,
@@ -1504,7 +1531,7 @@ export function renderRiemannSurface(baseCanvas, stage = 1) {
     );
     if (!dynamic.source || dynamic.error) return false;
   }
-  return rendererFactory.render(baseCanvas, stage);
+  return rendererFactory.render(baseCanvas, options);
 }
 
 export function hideRiemannSurface(baseCanvas) {

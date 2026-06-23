@@ -1,13 +1,13 @@
 import { state, zPlaneParams } from '../store/state.js';
 import {
     getChainedTransformFunction,
-    numericDerivative,
     complexDivide,
     estimateResidue,
     numericDerivativeNthOrder,
     factorial,
     Complex
 } from '../math-utils.js';
+import { resolveActiveMap } from '../math/active-map.js';
 import {
     findPolynomialRoots_DurandKerner,
     findGeneralRoots_Subdivision
@@ -61,6 +61,7 @@ export function findCriticalPoints() {
     state.criticalValues = [];
 
     const func = getChainedTransformFunction(state.currentFunction);
+    const derivative = resolveActiveMap().derivative;
     const { currentVisXRange: xR, currentVisYRange: yR } = zPlaneParams;
     
     const cpCheckDist = (xR[1] - xR[0]) / CRITICAL_POINT_FIND_GRID_SIZE * ZP_CP_CHECK_DISTANCE_FACTOR;
@@ -123,7 +124,7 @@ export function findCriticalPoints() {
             if (state.currentFunction === 'zeta' && !state.zetaContinuationEnabled && z_test.re <= ZETA_REFLECTION_POINT_RE) {
                 continue;
             }
-            const deriv = numericDerivative(state.currentFunction, z_test);
+            const deriv = derivative(z_test.re, z_test.im);
             if (isNaN(deriv.re) || isNaN(deriv.im) || !isFinite(deriv.re) || !isFinite(deriv.im)) continue;
 
             const modDerivSq = deriv.re * deriv.re + deriv.im * deriv.im;
