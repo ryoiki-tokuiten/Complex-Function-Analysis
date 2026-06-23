@@ -261,12 +261,28 @@ const DOM_BINDINGS = [
     { key: 'toggleFullscreenLaplace3DBtn', id: 'toggle_fullscreen_laplace_3d_btn' },
     { key: 'laplaceResetBtn', id: 'laplace_reset_btn' },
     { key: 'laplace3DColumn', id: 'laplace_3d_column' },
-    { key: 'laplace3DTitleLabel', id: 'laplace_3d_title_label' },
     { key: 'laplace3DContainer', id: 'laplace_3d_container' },
+    { key: 'realPlotsColumn', id: 'real_plots_column' },
+    { key: 'enableRealPlotsCb', id: 'enable_real_plots_cb' },
+    { key: 'realPlotsControlsContainer', id: 'real_plots_controls_container' },
+    { key: 'realPlotsInputPreset', id: 'real_plots_input_preset' },
+    { key: 'realPlotsCustomInputContainer', id: 'real_plots_custom_input_container' },
+    { key: 'realPlotsCustomInput', id: 'real_plots_custom_input' },
+    { key: 'realPlotsCustomInputMath', id: 'real_plots_custom_input_math' },
+    { key: 'realPlotsImagPreset', id: 'real_plots_imag_preset' },
+    { key: 'realPlotsCustomImagContainer', id: 'real_plots_custom_imag_container' },
+    { key: 'realPlotsCustomImag', id: 'real_plots_custom_imag' },
+    { key: 'realPlotsCustomImagMath', id: 'real_plots_custom_imag_math' },
+    { key: 'realPlotsOutputComponent', id: 'real_plots_output_component' },
+    { key: 'realPlotsColorMode', id: 'real_plots_color_mode' },
+    { key: 'toggleFullscreenRealPlotsBtn', id: 'toggle_fullscreen_real_plots_btn' },
+    { key: 'realPlotsContainer', id: 'real_plots_container' },
     { key: 'preloader', id: 'preloader' },
     { key: 'functionControlsPanel', id: 'function-controls-panel' },
     { key: 'parameterControlsPanel', id: 'parameter-controls-panel' },
-    { key: 'visualizationOptionsPanel', id: 'visualization-options-panel' }
+    { key: 'visualizationOptionsPanel', id: 'visualization-options-panel' },
+    { key: 'realPlotsHeightScaleSlider', id: 'real_plots_height_scale_slider' },
+    { key: 'realPlotsHeightScaleValueDisplay', id: 'real_plots_height_scale_value_display' }
 ];
 
 export function formatTaylorNumericValue(value) {
@@ -540,15 +556,30 @@ export function getChainingTitleHTML(i, mode) {
         return mode === 'zero_seed' ? `w = f(0; c=z)` : `w = f(z)`;
     }
     const prevSub = i === 1 ? `0` : `${i-1}`;
+    
+    // Abstracted helper to generate standard nesting string (e.g. f(f(... f(z))))
+    const getNestedHTML = (count, innerText) => {
+        if (count <= 3) {
+            let res = innerText;
+            for(let k = 0; k < count; k++) res = `f(${res})`;
+            return `w = ${res}`;
+        }
+        let res = '';
+        for (let k = 0; k < 3; k++) res += 'f(';
+        res += `... f(${innerText})`;
+        for (let k = 0; k < 3; k++) res += ')';
+        return `w = ${res}`;
+    };
+
     switch (mode) {
-        case 'recursion': return `w = f<sup>${i+1}</sup>(z)`;
-        case 'zero_seed': return `w = f<sup>${i+1}</sup>(0; c=z)`;
+        case 'recursion': return getNestedHTML(i + 1, 'z');
+        case 'zero_seed': return getNestedHTML(i + 1, '0');
         case 'power': return `w = f(z)<sup>${i+1}</sup>`;
         case 'sqrt': return `w = &radic;w<sub>${prevSub}</sub>`;
         case 'ln': return `w = ln(w<sub>${prevSub}</sub>)`;
         case 'exp': return `w = e<sup>w<sub>${prevSub}</sub></sup>`;
         case 'reciprocal': return `w = 1 / w<sub>${prevSub}</sub>`;
-        default: return `w = f<sup>${i+1}</sup>(z)`;
+        default: return getNestedHTML(i + 1, 'z');
     }
 }
 

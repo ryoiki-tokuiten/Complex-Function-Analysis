@@ -741,8 +741,7 @@ hr.panel-separator {
 }
 
 #parameter-controls-panel .control-group>label.panel-formula-label {
-    justify-content: flex-start;
-    align-items: baseline;
+    display: block;
     font-size: 0.9rem;
     font-weight: 500;
     letter-spacing: 0;
@@ -1455,6 +1454,13 @@ input[type="range"]:focus::-moz-range-thumb {
 .two-column-layout:has(#laplace_3d_column:not(.hidden)) > div {
     flex: 0 0 calc(33.333% - 1rem);
     min-width: 300px;
+}
+
+/* Single-column full-width layout for Real Plots mode */
+.two-column-layout:has(#real_plots_column:not(.hidden)) > div:not(.hidden) {
+    flex: 1 1 100% !important;
+    width: 100% !important;
+    max-width: 100% !important;
 }
 
 /* Output Chaining Grid View Override */

@@ -12,9 +12,10 @@ import {
     getVisibleBranchIndices,
     surfaceStageHasBranches
 } from '../analysis/riemann-surface.js';
-import { renderDomainPalettesUI, domainPalettes } from './theme-manager.js';
+import { renderDomainPalettesUI, domainPalettes, renderRealPlotsPalettesUI, realPlotsPalettes } from './theme-manager.js';
 import { startRiemannTransformationAnimation, stopRiemannTransformationAnimation, syncRiemannTransformationPlayPauseButton, initThreeJSRenderers, buildThreeJSMeshes, syncRiemannSliders, disposeThreeJSRenderers } from '../rendering/riemann-transformation-animation.js';
 import { getDynamicFunctionFormulaHtml } from '../analysis/dynamic-plotting.js';
+import { createExpressionMathML } from '../math/expression/index.js';
 
 const { controls = {} } = context;
 
@@ -961,9 +962,12 @@ function compositionSymbol() {
 
 function recursiveChainFormula(baseFormula, chainCount) {
     if (chainCount > 3 || state.currentFunction === 'algebraic_chaining') {
-        return state.currentFunction === 'algebraic_chaining'
-            ? `f<sup>${chainCount}</sup>(z) <span style="font-size:0.85em; opacity:0.8;">[where f(z) = ${baseFormula}]</span>`
-            : `${compactRecursionSymbol()}<sup>${chainCount}</sup>(z)`;
+        let repeatedF = '';
+        for (let i = 0; i < Math.min(chainCount, 3); i++) repeatedF += 'f(';
+        repeatedF += '... f(z)';
+        for (let i = 0; i < Math.min(chainCount, 3); i++) repeatedF += ')';
+        
+        return `${repeatedF} <span style="font-size:0.85em; opacity:0.8;">[${chainCount} times, where f(z) = ${baseFormula}]</span>`;
     }
 
     const symbol = compositionSymbol();
@@ -985,9 +989,12 @@ function getChainedFormula(baseFormula, chainingMode, chainCount) {
 
     switch (chainingMode) {
         case 'zero_seed':
-            return state.currentFunction === 'algebraic_chaining'
-                ? `f<sup>${chainCount}</sup>(0; c = z) <span style="font-size:0.85em; opacity:0.8;">[where f(z, c) = ${baseFormula}]</span>`
-                : `${compactRecursionSymbol()}<sup>${chainCount}</sup>(0; c = z)`;
+            let repeatedFZero = '';
+            for (let i = 0; i < Math.min(chainCount, 3); i++) repeatedFZero += 'f(';
+            repeatedFZero += '... f(0)';
+            for (let i = 0; i < Math.min(chainCount, 3); i++) repeatedFZero += ')';
+            
+            return `${repeatedFZero} <span style="font-size:0.85em; opacity:0.8;">[${chainCount} times, where f(z, c) = ${baseFormula}]</span>`;
         case 'power':
             return `(${baseFormula})<sup>${chainCount}</sup>`;
         case 'sqrt':
@@ -1082,6 +1089,55 @@ function sphereWPlaneTitle(model) {
 
 function syncPrimaryPlaneTitles() {
     const model = outputFormulaModel();
+
+    const chainText = document.getElementById('enable_chaining_text');
+    const algText = document.getElementById('enable_algebraic_chaining_text');
+    const algLabel = document.querySelector('label[for="enable_algebraic_chaining_cb"]');
+    const powerOption = document.querySelector('#chain_mode_selector option[value="power"]');
+
+    if (state.realPlotsEnabled) {
+        syncRealPlotsUI();
+        if (chainText) chainText.textContent = 'Enable Output Chaining (z)';
+        if (algText) algText.textContent = 'Enable Algebraic Chaining (z)';
+        if (algLabel) algLabel.setAttribute('data-tooltip', 'Sum multiple functions together: a*f(z)*g(z) + b*h(z)...');
+        if (powerOption) powerOption.textContent = 'Higher Powers: w * f(z)';
+
+        const label = document.getElementById('real_plots_title_label');
+        if (label) {
+            let compPrefix = 'Re';
+            if (state.realPlotsOutputComponent === 'imag') compPrefix = 'Im';
+            else if (state.realPlotsOutputComponent === 'magnitude') compPrefix = '|';
+
+            let fND = model.fND;
+            let formulaText = '';
+            if (model.hasOutputChain) {
+                formulaText = `w = ${model.fND}`;
+            } else {
+                formulaText = `f(z) = ${model.fND}`;
+            }
+
+            let displayFormula = `z = ${compPrefix}( ${model.hasOutputChain ? 'w' : 'f(z)'} )`;
+            if (state.realPlotsOutputComponent === 'magnitude') {
+                displayFormula = `z = | ${model.hasOutputChain ? 'w' : 'f(z)'} |`;
+            }
+
+            let zinText = '';
+            if (state.realPlotsImagExpr === '0') {
+                zinText = state.realPlotsInputExpr;
+            } else {
+                zinText = `${state.realPlotsInputExpr} + i·${state.realPlotsImagExpr}`;
+            }
+
+            label.innerHTML = `Real Plot (3D Surface): ${displayFormula}, where ${formulaText}, z = ${zinText}`;
+        }
+        return;
+    } else {
+        if (chainText) chainText.textContent = 'Enable Output Chaining';
+        if (algText) algText.textContent = 'Enable Algebraic Chaining';
+        if (algLabel) algLabel.setAttribute('data-tooltip', 'Sum multiple complex functions together: a*f(z)*g(z) + b*h(z)...');
+        if (powerOption) powerOption.textContent = 'Higher Powers: w * f(z)';
+    }
+
     const zPlaneTitle = defaultZPlaneTitle(model.fND);
 
     if (state.riemannSurfaceEnabled) {
@@ -1345,5 +1401,80 @@ export function syncRiemannTransformationUI() {
     } else {
         stopRiemannTransformationAnimation();
         disposeThreeJSRenderers();
+    }
+}
+
+export function syncRealPlotsUI() {
+    const inputPreset = document.getElementById('real_plots_input_preset');
+    const imagPreset = document.getElementById('real_plots_imag_preset');
+    const customInputContainer = document.getElementById('real_plots_custom_input_container');
+    const customImagContainer = document.getElementById('real_plots_custom_imag_container');
+    const customInput = document.getElementById('real_plots_custom_input');
+    const customImag = document.getElementById('real_plots_custom_imag');
+    const customInputMath = document.getElementById('real_plots_custom_input_math');
+    const customImagMath = document.getElementById('real_plots_custom_imag_math');
+
+    if (!inputPreset || !imagPreset) return;
+
+    const uVal = state.realPlotsInputExpr || 'x';
+    const vVal = state.realPlotsImagExpr || '0';
+
+    if (!state.realPlotsInputIsCustom) {
+        inputPreset.value = uVal;
+        if (customInputContainer) customInputContainer.classList.add('hidden');
+    } else {
+        inputPreset.value = 'custom';
+        if (customInputContainer) customInputContainer.classList.remove('hidden');
+        if (customInput && customInput.value !== uVal) {
+            customInput.value = uVal;
+        }
+        updateCustomFormulaPreview(customInput, customInputMath);
+    }
+
+    if (!state.realPlotsImagIsCustom) {
+        imagPreset.value = vVal;
+        if (customImagContainer) customImagContainer.classList.add('hidden');
+    } else {
+        imagPreset.value = 'custom';
+        if (customImagContainer) customImagContainer.classList.remove('hidden');
+        if (customImag && customImag.value !== vVal) {
+            customImag.value = vVal;
+        }
+        updateCustomFormulaPreview(customImag, customImagMath);
+    }
+
+    const paletteCirclesContainer = document.getElementById('real_plots_palette_circles');
+    if (paletteCirclesContainer && typeof renderRealPlotsPalettesUI === 'function') {
+        renderRealPlotsPalettesUI(paletteCirclesContainer);
+    }
+
+    const paletteNameLabel = document.getElementById('active_real_plots_palette_name');
+    if (paletteNameLabel) {
+        const activePalette = realPlotsPalettes.find(p => p.id === state.realPlotsPalette) || realPlotsPalettes.find(p => p.id === 'viridis');
+        if (activePalette) paletteNameLabel.textContent = activePalette.name;
+    }
+
+    const colorModeEl = document.getElementById('real_plots_color_mode');
+    if (colorModeEl && state.realPlotsColorMode) {
+        colorModeEl.value = state.realPlotsColorMode;
+    }
+
+    const outputCompEl = document.getElementById('real_plots_output_component');
+    if (outputCompEl && state.realPlotsOutputComponent) {
+        outputCompEl.value = state.realPlotsOutputComponent;
+    }
+}
+
+export function updateCustomFormulaPreview(inputEl, displayEl) {
+    if (!inputEl || !displayEl) return;
+    displayEl.replaceChildren();
+    const source = inputEl.value.trim() || '0';
+    try {
+        const mathNode = createExpressionMathML(source);
+        displayEl.appendChild(mathNode);
+        displayEl.classList.remove('dynamic-math-error');
+    } catch (error) {
+        displayEl.textContent = error?.message || String(error);
+        displayEl.classList.add('dynamic-math-error');
     }
 }

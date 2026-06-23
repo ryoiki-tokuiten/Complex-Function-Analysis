@@ -6,6 +6,7 @@ import { performCauchyAnalysis } from './analysis/cauchy.js';
 import { drawZPlaneContent, drawWPlaneContent } from './rendering/renderer.js';
 import { updateTitlesAndGlobalUI } from './ui/ui-updates.js';
 import { drawLaplace3DSurface } from './rendering/laplace-3d-surface.js';
+import { drawRealPlot } from './rendering/real-plots-renderer.js';
 import { setupDOMReferences, setupVisualParameters } from './utils/dom-utils.js';
 import { initializePolynomialCoeffs, generatePolynomialCoeffSliders } from './ui/polynomial-ui.js';
 import { setupEventListeners, setActiveFunctionButton, initializeStateFromControls } from './ui/event-listeners.js';
@@ -31,6 +32,25 @@ function syncLaplaceSurfaceColumn() {
 
     // The column count changes between two and three. Resize the bitmap-backed
     // planes after the browser has committed that layout, not during the old one.
+    const refreshPlanes = () => {
+        setupVisualParameters(false, false);
+        requestRedrawAll();
+    };
+    requestAnimationFrame(() => {
+        refreshPlanes();
+        setTimeout(refreshPlanes, 360);
+    });
+}
+
+function syncRealPlotsColumn() {
+    const column = controls.realPlotsColumn;
+    if (!column) return;
+
+    const shouldHide = !state.realPlotsEnabled;
+    const changed = column.classList.contains('hidden') !== shouldHide;
+    if (!changed) return;
+    column.classList.toggle('hidden', shouldHide);
+
     const refreshPlanes = () => {
         setupVisualParameters(false, false);
         requestRedrawAll();
@@ -79,6 +99,11 @@ export function requestRedrawAll() {
             syncLaplaceSurfaceColumn();
             if (state.laplaceModeEnabled && typeof drawLaplace3DSurface === 'function') {
                 drawLaplace3DSurface('laplace_3d_container');
+            }
+
+            syncRealPlotsColumn();
+            if (state.realPlotsEnabled && typeof drawRealPlot === 'function') {
+                drawRealPlot();
             }
 
             context.domainColoringDirty = context.domainColoringDirtyQueued;

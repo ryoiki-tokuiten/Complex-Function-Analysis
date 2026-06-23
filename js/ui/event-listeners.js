@@ -9,7 +9,7 @@ import { updateLaplaceTransform, updateLaplaceEvaluationPoint, analyzeStability,
 import { ComplexPointsUI } from './complex-points-ui.js';
 import { TAYLOR_CENTER_PRESET_GROUPS, ZOOM_IN_FACTOR, ZOOM_OUT_FACTOR, MIN_STATE_ZOOM_LEVEL, MAX_STATE_ZOOM_LEVEL } from '../constants/numerical.js';
 import { SPHERE_SENSITIVITY, SPHERE_INITIAL_ROT_X, SPHERE_INITIAL_ROT_Y } from '../constants/rendering.js';
-import { updateTitlesAndGlobalUI, syncTaylorSeriesCenterStatus, updateDomainColoringKey, syncParameterControlsPanelVisibility, syncRiemannTransformationUI } from './ui-updates.js';
+import { updateTitlesAndGlobalUI, syncTaylorSeriesCenterStatus, updateDomainColoringKey, syncParameterControlsPanelVisibility, syncRiemannTransformationUI, updateCustomFormulaPreview } from './ui-updates.js';
 import { stopLaplaceAnimation, toggleLaplaceAnimation, resetLaplaceAnimation, showFullLaplaceSpiral } from '../rendering/laplace-animation.js';
 import { toggleRiemannTransformationAnimationZ, toggleRiemannTransformationAnimationW, syncRiemannTransformationPlayPauseButton } from '../rendering/riemann-transformation-animation.js';
 import { setNavigationModeEnabled, followNavigationViewports, resetNavigationVehicle, setNavigationKey, stopNavigationLoop, initializeNavigationStateFromControls } from '../navigation-plane.js';
@@ -17,7 +17,7 @@ import { toggleAnimation } from './animation.js';
 import { initializePolynomialCoeffs, generatePolynomialCoeffSliders } from './polynomial-ui.js';
 import { updateLaplace3DSurface, resizeLaplace3DSurface } from '../rendering/laplace-3d-surface.js';
 import { getRiemannSurfaceCanvas, resetRiemannSurfaceViews } from '../rendering/webgl-riemann-surface.js';
-import { applyTheme, renderThemesList, renderDomainPalettesUI, domainPalettes } from './theme-manager.js';
+import { applyTheme, renderThemesList, renderDomainPalettesUI, domainPalettes, renderRealPlotsPalettesUI, realPlotsPalettes } from './theme-manager.js';
 import { applyFractalPreset, isFractalPresetKey } from '../analysis/fractal-presets.js';
 import {
     initializeDynamicPlottingUI,
@@ -30,6 +30,7 @@ import {
     selectStableTissotIndicatrices,
     getTissotViewportBounds
 } from '../analysis/tissot.js';
+import { drawRealPlot, disposeRealPlotsRenderer } from '../rendering/real-plots-renderer.js';
 
 const { controls = {} } = context;
 
@@ -209,7 +210,9 @@ const BINDERS = [
     bindTopControlsToggle,
     bindFullscreenControls,
     bindThemeControls,
-    bindDomainPaletteCirclePanelListeners
+    bindDomainPaletteCirclePanelListeners,
+    bindRealPlotsPaletteCirclePanelListeners,
+    bindRealPlotsControls
 ];
 
 function bindDynamicPlottingControls() {
@@ -460,6 +463,32 @@ function disableOutputChaining() {
     call(updateChainingColumns, 1);
 }
 
+function disableRealPlots() {
+    if (!state.realPlotsEnabled) return;
+    state.realPlotsEnabled = false;
+    checked('enableRealPlotsCb', false);
+    hidden(controls.realPlotsControlsContainer, true);
+
+    const dynamicParams = document.getElementById('dynamic_plotting_params');
+    const algParams = document.getElementById('algebraic_chaining_params');
+    const chainParams = document.getElementById('chaining_params');
+    if (dynamicParams && algParams && chainParams) {
+        dynamicParams.parentNode.insertBefore(chainParams, dynamicParams);
+        dynamicParams.parentNode.insertBefore(algParams, dynamicParams);
+    }
+
+    if (controls.zCanvasCard) controls.zCanvasCard.classList.remove('hidden');
+    if (controls.wCanvasCard) controls.wCanvasCard.classList.remove('hidden');
+    const refreshPlanes = () => {
+        setupVisualParameters(false, false);
+        requestRedrawAll();
+    };
+    requestAnimationFrame(() => {
+        refreshPlanes();
+        setTimeout(refreshPlanes, 360);
+    });
+}
+
 function syncChainingControlsFromState() {
     checked('enableChainingCb', state.chainingEnabled);
     display(controls.chainingControlsContainer, state.chainingEnabled);
@@ -615,6 +644,7 @@ function fitTransformViewports() {
 }
 
 function activateFunctionMode(key) {
+    disableRealPlots();
     if (isFractalPresetKey(key) && activateFractalPreset(key)) return;
 
     const enteringFourier = key === 'fourier';
@@ -2015,11 +2045,12 @@ function algebraicSymbol(func) {
 }
 
 function factorText(factor) {
+    const inputVar = 'z';
     let text = factor.func === 'c'
         ? 'c'
         : factor.chainedFunc && factor.chainedFunc !== 'none'
-            ? `${algebraicSymbol(factor.func)}(${algebraicSymbol(factor.chainedFunc)}(z))`
-            : `${algebraicSymbol(factor.func)}(z)`;
+            ? `${algebraicSymbol(factor.func)}(${algebraicSymbol(factor.chainedFunc)}(${inputVar}))`
+            : `${algebraicSymbol(factor.func)}(${inputVar})`;
 
     if (factor.power !== undefined && factor.power !== 1) text = `(${text})^${Number(factor.power).toFixed(1)}`;
     if (factor.reciprocal) text = `1/(${text})`;
@@ -2402,3 +2433,294 @@ function bindDomainPaletteCirclePanelListeners() {
         });
     }
 }
+
+export function drawRealPlotsPaletteCircle(canvas, paletteId) {
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
+    const w = canvas.width;
+    const h = canvas.height;
+    ctx.clearRect(0, 0, w, h);
+
+    const cx = w / 2;
+    const cy = h / 2;
+    const rOuter = 130;
+    const rInner = 95;
+
+    const palette = realPlotsPalettes.find(p => p.id === paletteId) || realPlotsPalettes.find(p => p.id === 'viridis');
+    if (!palette) return;
+    
+    // CSS gradient colors string parsing
+    const colors = palette.colors.split(',').map(c => c.trim());
+
+    // Conic gradient: createConicGradient(angle, x, y).
+    // angle 0 is straight UP (12 o'clock). 
+    // In our 3D math, phase -PI is at 9 o'clock.
+    // To match 9 o'clock, we use angle = -Math.PI/2
+    const grad = ctx.createConicGradient(-Math.PI / 2, cx, cy);
+    
+    colors.forEach((color, i) => {
+        const ratio = i / (colors.length - 1);
+        grad.addColorStop(ratio, color);
+    });
+
+    // Draw donut
+    ctx.beginPath();
+    ctx.arc(cx, cy, rOuter, 0, Math.PI * 2);
+    ctx.arc(cx, cy, rInner, Math.PI * 2, 0, true);
+    ctx.closePath();
+    ctx.fillStyle = grad;
+    ctx.fill();
+
+    // Draw grid/lines and labels exactly like domain coloring
+    ctx.save();
+    
+    const rootStyle = getComputedStyle(document.documentElement);
+    const borderColor = rootStyle.getPropertyValue('--border-color') || 'rgba(255, 255, 255, 0.15)';
+    const textColor = rootStyle.getPropertyValue('--text-color') || '#FAFAFA';
+
+    ctx.strokeStyle = borderColor;
+    ctx.lineWidth = 1;
+    ctx.setLineDash([4, 4]);
+
+    ctx.beginPath();
+    ctx.moveTo(cx - rOuter, cy);
+    ctx.lineTo(cx + rOuter, cy);
+    ctx.moveTo(cx, cy - rOuter);
+    ctx.lineTo(cx, cy + rOuter);
+    ctx.stroke();
+
+    ctx.setLineDash([]);
+    ctx.strokeStyle = borderColor;
+    ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    ctx.arc(cx, cy, rOuter, 0, 2 * Math.PI);
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.arc(cx, cy, rInner, 0, 2 * Math.PI);
+    ctx.stroke();
+
+    ctx.fillStyle = textColor;
+    ctx.font = '500 13px Outfit, Inter, sans-serif';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+
+    ctx.fillText('0', cx + rOuter + 16, cy);
+    ctx.fillText('π/2', cx, cy - rOuter - 16);
+    ctx.fillText('π', cx - rOuter - 16, cy);
+    ctx.fillText('3π/2', cx, cy + rOuter + 16);
+
+    ctx.restore();
+}
+
+export function drawRealPlotsAmplitudeStrip(canvas, paletteId) {
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
+    const w = canvas.width;
+    const h = canvas.height;
+    ctx.clearRect(0, 0, w, h);
+
+    const palette = realPlotsPalettes.find(p => p.id === paletteId) || realPlotsPalettes.find(p => p.id === 'viridis');
+    if (!palette) return;
+
+    const colors = palette.colors.split(',').map(c => c.trim());
+    const grad = ctx.createLinearGradient(0, 0, w, 0);
+
+    colors.forEach((color, i) => {
+        const ratio = i / (colors.length - 1);
+        grad.addColorStop(ratio, color);
+    });
+
+    ctx.fillStyle = grad;
+    ctx.fillRect(0, 0, w, h);
+}
+
+export function updateRealPlotsPaletteCirclePanel() {
+    const activePalette = realPlotsPalettes.find(p => p.id === state.realPlotsPalette) || realPlotsPalettes.find(p => p.id === 'viridis');
+    const title = $('real_plots_palette_circle_title');
+    if (title && activePalette) title.textContent = activePalette.name;
+
+    const canvas = $('real_plots_palette_circle_canvas');
+    drawRealPlotsPaletteCircle(canvas, state.realPlotsPalette);
+
+    const stripCanvas = $('real_plots_amplitude_strip_canvas');
+    drawRealPlotsAmplitudeStrip(stripCanvas, state.realPlotsPalette);
+}
+
+function bindRealPlotsPaletteCirclePanelListeners() {
+    const viewBtn = $('view_real_plots_palette_circle_btn');
+    const closeBtn = $('close_real_plots_palette_circle_btn');
+    const panel = $('real_plots_palette_circle_panel');
+
+    if (viewBtn) {
+        bindElementListener(viewBtn, 'click', () => {
+            if (panel) {
+                panel.classList.remove('hidden');
+                updateRealPlotsPaletteCirclePanel();
+            }
+        });
+    }
+
+    if (closeBtn) {
+        bindElementListener(closeBtn, 'click', () => {
+            if (panel) panel.classList.add('hidden');
+        });
+    }
+}
+
+function bindRealPlotsControls() {
+    bindCheckbox('enableRealPlotsCb', 'realPlotsEnabled', (event, val) => {
+        state.realPlotsEnabled = val;
+        hidden(controls.realPlotsControlsContainer, !val);
+        
+        if (val) {
+            const rpContainer = controls.realPlotsControlsContainer;
+            const algParams = document.getElementById('algebraic_chaining_params');
+            const chainParams = document.getElementById('chaining_params');
+            if (rpContainer && algParams && chainParams) {
+                rpContainer.appendChild(algParams);
+                rpContainer.appendChild(chainParams);
+            }
+
+            if (controls.zCanvasCard) controls.zCanvasCard.classList.add('hidden');
+            if (controls.wCanvasCard) controls.wCanvasCard.classList.add('hidden');
+        } else {
+            const dynamicParams = document.getElementById('dynamic_plotting_params');
+            const algParams = document.getElementById('algebraic_chaining_params');
+            const chainParams = document.getElementById('chaining_params');
+            if (dynamicParams && algParams && chainParams) {
+                dynamicParams.parentNode.insertBefore(chainParams, dynamicParams);
+                dynamicParams.parentNode.insertBefore(algParams, dynamicParams);
+            }
+
+            if (controls.zCanvasCard) controls.zCanvasCard.classList.remove('hidden');
+            if (controls.wCanvasCard) controls.wCanvasCard.classList.remove('hidden');
+            disposeRealPlotsRenderer();
+        }
+        
+        const refreshPlanes = () => {
+            setupVisualParameters(false, false);
+            requestRedrawAll();
+        };
+        requestAnimationFrame(() => {
+            refreshPlanes();
+            setTimeout(refreshPlanes, 360);
+        });
+    });
+
+    bindSelector('realPlotsInputPreset', 'realPlotsInputPreset', (event, val) => {
+        if (val === 'custom') {
+            state.realPlotsInputIsCustom = true;
+            controls.realPlotsCustomInputContainer?.classList.remove('hidden');
+            const customVal = controls.realPlotsCustomInput?.value || 'x';
+            state.realPlotsInputExpr = customVal;
+            updateCustomFormulaPreview(controls.realPlotsCustomInput, controls.realPlotsCustomInputMath);
+        } else {
+            state.realPlotsInputIsCustom = false;
+            controls.realPlotsCustomInputContainer?.classList.add('hidden');
+            state.realPlotsInputExpr = val;
+        }
+        requestRedrawAll();
+    });
+
+    bindControlListener('realPlotsCustomInput', 'input', () => {
+        const val = controls.realPlotsCustomInput?.value || 'x';
+        state.realPlotsInputExpr = val;
+        state.realPlotsInputIsCustom = true;
+        updateCustomFormulaPreview(controls.realPlotsCustomInput, controls.realPlotsCustomInputMath);
+        requestRedrawAll();
+    });
+
+    bindSelector('realPlotsImagPreset', 'realPlotsImagPreset', (event, val) => {
+        if (val === 'custom') {
+            state.realPlotsImagIsCustom = true;
+            controls.realPlotsCustomImagContainer?.classList.remove('hidden');
+            const customVal = controls.realPlotsCustomImag?.value || '0';
+            state.realPlotsImagExpr = customVal;
+            updateCustomFormulaPreview(controls.realPlotsCustomImag, controls.realPlotsCustomImagMath);
+        } else {
+            state.realPlotsImagIsCustom = false;
+            controls.realPlotsCustomImagContainer?.classList.add('hidden');
+            state.realPlotsImagExpr = val;
+        }
+        requestRedrawAll();
+    });
+
+    bindControlListener('realPlotsCustomImag', 'input', () => {
+        const val = controls.realPlotsCustomImag?.value || '0';
+        state.realPlotsImagExpr = val;
+        state.realPlotsImagIsCustom = true;
+        updateCustomFormulaPreview(controls.realPlotsCustomImag, controls.realPlotsCustomImagMath);
+        requestRedrawAll();
+    });
+
+    bindSelector('realPlotsOutputComponent', 'realPlotsOutputComponent', (event, val) => {
+        state.realPlotsOutputComponent = val;
+        requestRedrawAll();
+    });
+
+    const rpPaletteContainer = document.getElementById('real_plots_palette_circles');
+    if (rpPaletteContainer) {
+        renderRealPlotsPalettesUI(rpPaletteContainer);
+        rpPaletteContainer.addEventListener('click', event => {
+            const button = event.target.closest('.domain-palette-circle-btn');
+            if (!button) return;
+            state.realPlotsPalette = button.dataset.paletteId;
+            renderRealPlotsPalettesUI(rpPaletteContainer);
+            
+            const panel = document.getElementById('real_plots_palette_circle_panel');
+            if (panel && !panel.classList.contains('hidden')) {
+                updateRealPlotsPaletteCirclePanel();
+            }
+            
+            requestRedrawAll();
+        });
+    }
+
+    bindSelector('realPlotsColorMode', 'realPlotsColorMode', (event, val) => {
+        state.realPlotsColorMode = val;
+        requestRedrawAll();
+    });
+
+    bindSlider('realPlotsHeightScaleSlider', 'realPlotsHeightScale', parseFloat, (val) => {
+        if (controls.realPlotsHeightScaleValueDisplay) {
+            controls.realPlotsHeightScaleValueDisplay.textContent = val.toFixed(2);
+        }
+        requestRedrawAll();
+    });
+
+
+
+    bindControlListener('toggleFullscreenRealPlotsBtn', 'click', toggleRealPlotsFullscreen);
+}
+
+function toggleRealPlotsFullscreen() {
+    const container = controls.realPlotsContainer;
+    const column = controls.realPlotsColumn;
+    const shell = controls.fullscreenContainer;
+
+    if (!container || !shell) return;
+
+    state.isRealPlotsFullScreen = !state.isRealPlotsFullScreen;
+
+    if (state.isRealPlotsFullScreen) {
+        state.originalRealPlotsParent = container.parentElement;
+        setStyles(shell, fullscreenStyles('#000'));
+        attachCloseButton(shell, () => controls.toggleFullscreenRealPlotsBtn.click());
+        setStyles(container, { width: '100%', height: '100%' });
+        shell.appendChild(container);
+        document.body.appendChild(shell);
+        shell.classList.remove('hidden');
+        if (column) column.classList.add('hidden-visually');
+    } else {
+        if (state.originalRealPlotsParent) state.originalRealPlotsParent.appendChild(container);
+        setStyles(container, { width: '100%', height: '100%' });
+        resetFullscreenShell(shell);
+        if (column) column.classList.remove('hidden-visually');
+    }
+
+    laterFrame(() => {
+        setupVisualParameters(false, false);
+        requestRedrawAll();
+    }, state.isRealPlotsFullScreen ? 150 : 100);
+}
+
