@@ -6,7 +6,20 @@ import {
 import { parseExpression } from './parser.js';
 
 const MAX_SHADER_CACHE_ENTRIES = 12;
+const MAX_EXPRESSION_CACHE_ENTRIES = 64;
+const MAX_CSE_EXPRESSION_CACHE_ENTRIES = 128;
+const CSE_MIN_COST = 20;
 const aggregateShaderCache = new Map();
+const expressionCache = new Map();
+const cseExpressionCache = new Map();
+const ZERO_VEC = 'vec2(0.0)';
+const ONE_VEC = 'vec2(1.0, 0.0)';
+const I_VEC = 'vec2(0.0, 1.0)';
+const PI_VEC = 'vec2(PI, 0.0)';
+const E_VEC = 'vec2(2.718281828459045, 0.0)';
+const TRUE_VEC = 'vec2(1.0, 0.0)';
+const FALSE_VEC = ZERO_VEC;
+const BOOLEAN_BINARY_OPERATORS = new Set(['&&', '||', '==', '!=', '<', '<=', '>', '>=']);
 const GPU_ARITY = Object.freeze({
     sin: [1, 1], cos: [1, 1], tan: [1, 1], sec: [1, 1],
     exp: [1, 1], ln: [1, 1], log: [1, 1],
@@ -19,12 +32,14 @@ const GPU_ARITY = Object.freeze({
     pow: [2, 2], selected: [1, 1], selectedFunction: [1, 1], f: [1, 1]
 });
 
-function cacheShaderResult(key, result) {
-    aggregateShaderCache.set(key, result);
-    if (aggregateShaderCache.size > MAX_SHADER_CACHE_ENTRIES) {
-        aggregateShaderCache.delete(aggregateShaderCache.keys().next().value);
-    }
+function cacheMapResult(cache, limit, key, result) {
+    cache.set(key, result);
+    if (cache.size > limit) cache.delete(cache.keys().next().value);
     return result;
+}
+
+function cacheShaderResult(key, result) {
+    return cacheMapResult(aggregateShaderCache, MAX_SHADER_CACHE_ENTRIES, key, result);
 }
 
 function glslFloat(value) {
@@ -39,14 +54,21 @@ function vec2(value) {
     return `vec2(${glslFloat(value?.re)}, ${glslFloat(value?.im)})`;
 }
 
+function assertExpressionNode(node) {
+    if (!node || typeof node !== 'object' || typeof node.type !== 'string') {
+        throw new Error('Invalid expression AST node received by the GPU expression compiler');
+    }
+}
+
 function assertGPUArity(node) {
+    const args = Array.isArray(node.args) ? node.args : [];
     const [minimum, maximum] = GPU_ARITY[node.name] || [1, 1];
-    if (node.args.length < minimum || node.args.length > maximum) {
+    if (args.length < minimum || args.length > maximum) {
         const expected = minimum === maximum
             ? String(minimum)
             : `${minimum} to ${maximum === Infinity ? 'many' : maximum}`;
         throw new Error(
-            `Function "${node.name}" expects ${expected} argument(s), received ${node.args.length}`
+            `Function "${node.name}" expects ${expected} argument(s), received ${args.length}`
         );
     }
 }
@@ -66,154 +88,399 @@ function parameterMap(appState) {
         .map(parameter => [parameter.name, { re: Number(parameter.value) || 0, im: 0 }]));
 }
 
-function compileCall(node, context) {
+function nodeChildren(node) {
+    switch (node?.type) {
+        case 'group': return node.expression ? [node.expression] : [];
+        case 'unary':
+        case 'postfix': return node.argument ? [node.argument] : [];
+        case 'binary': return [node.left, node.right].filter(Boolean);
+        case 'conditional': return [node.test, node.consequent, node.alternate].filter(Boolean);
+        case 'call': return Array.isArray(node.args) ? node.args : [];
+        default: return [];
+    }
+}
+
+function variableExpression(node, context) {
+    const name = node.name;
+    if (name === 'd' || name === 'z' || name === 's') return name;
+    if (name === 'j') return 'vec2(float(idx), 0.0)';
+    if (name === 'i') return I_VEC;
+    if (name === 'pi') return PI_VEC;
+    if (name === 'e') return E_VEC;
+    if (name === 'true') return TRUE_VEC;
+    if (name === 'false') return FALSE_VEC;
+    if (context.variables?.[name]) return context.variables[name];
+    if (context.parameters?.[name]) return vec2(context.parameters[name]);
+    throw new Error(`Variable "${name}" is not supported by the GPU expression compiler`);
+}
+
+function literalSignature(value) {
+    return `${glslFloat(value?.re)},${glslFloat(value?.im)}`;
+}
+
+function hashText(text) {
+    let hash = 2166136261;
+    const source = String(text);
+    for (let index = 0; index < source.length; index++) {
+        hash = Math.imul(hash ^ source.charCodeAt(index), 16777619) >>> 0;
+    }
+    return hash;
+}
+
+function hashParts(tag, ...parts) {
+    let hash = Math.imul(2166136261 ^ tag, 16777619) >>> 0;
+    for (let index = 0; index < parts.length; index++) {
+        hash = Math.imul(hash ^ (parts[index] >>> 0), 16777619) >>> 0;
+    }
+    return hash;
+}
+
+function sheetSalt(context, enabled) {
+    return enabled && context.sheet ? 0x9e3779b9 : 0;
+}
+
+function analyzeExpressionTree(root, context) {
+    assertExpressionNode(root);
+    const meta = new WeakMap();
+    const counts = new Map();
+    const representatives = new Map();
+    const stack = [[root, 0]];
+
+    while (stack.length) {
+        const frame = stack[stack.length - 1];
+        const node = frame[0];
+        assertExpressionNode(node);
+        const children = nodeChildren(node);
+        if (frame[1] < children.length) {
+            stack.push([children[frame[1]++], 0]);
+            continue;
+        }
+        stack.pop();
+
+        let hash;
+        let cost = 1;
+        switch (node.type) {
+            case 'literal':
+                hash = hashParts(1, hashText(literalSignature(node.value)));
+                break;
+            case 'variable':
+                hash = hashParts(2, hashText(node.name), hashText(variableExpression(node, context)));
+                break;
+            case 'group': {
+                const child = meta.get(node.expression);
+                hash = hashParts(3, child.hash);
+                cost = child.cost + 1;
+                break;
+            }
+            case 'unary': {
+                const child = meta.get(node.argument);
+                hash = hashParts(4, hashText(node.op), child.hash);
+                cost = child.cost + 2;
+                break;
+            }
+            case 'postfix': {
+                const child = meta.get(node.argument);
+                hash = hashParts(5, hashText(node.op || '!'), child.hash);
+                cost = child.cost + 6;
+                break;
+            }
+            case 'binary': {
+                const left = meta.get(node.left);
+                const right = meta.get(node.right);
+                hash = hashParts(6, hashText(node.op), sheetSalt(context, node.op === '^'), left.hash, right.hash);
+                cost = left.cost + right.cost + (node.op === '^' ? 14 : BOOLEAN_BINARY_OPERATORS.has(node.op) ? 5 : 3);
+                break;
+            }
+            case 'conditional': {
+                const test = meta.get(node.test);
+                const consequent = meta.get(node.consequent);
+                const alternate = meta.get(node.alternate);
+                hash = hashParts(7, test.hash, consequent.hash, alternate.hash);
+                cost = test.cost + consequent.cost + alternate.cost + 5;
+                break;
+            }
+            case 'call': {
+                const childHashes = (node.args || []).map(argument => {
+                    const child = meta.get(argument);
+                    cost += child.cost;
+                    return child.hash;
+                });
+                hash = hashParts(8, hashText(node.name), sheetSalt(context, node.name === 'ln' || node.name === 'log' || node.name === 'sqrt' || node.name === 'pow'), ...childHashes);
+                cost += node.name === 'pow' ? 14 : 8;
+                break;
+            }
+            default:
+                throw new Error(`Expression node "${node.type}" is not supported by the GPU expression compiler`);
+        }
+
+        meta.set(node, { hash, cost });
+        counts.set(hash, (counts.get(hash) || 0) + 1);
+        if (!representatives.has(hash)) representatives.set(hash, node);
+    }
+
+    return { meta, counts, representatives };
+}
+
+function shouldMaterialize(node, hash, analysis) {
+    if (node.type === 'literal' || node.type === 'variable' || node.type === 'group') return false;
+    const item = analysis.meta.get(node);
+    return item.cost >= CSE_MIN_COST && (analysis.counts.get(hash) || 0) > 1;
+}
+
+
+function realIntegerLiteral(node) {
+    if (node?.type !== 'literal') return null;
+    const re = Number(node.value?.re);
+    const im = Number(node.value?.im);
+    if (!Number.isFinite(re) || !Number.isFinite(im) || Math.abs(im) > 1.0e-12) return null;
+    const rounded = Math.round(re);
+    return Math.abs(re - rounded) < 1.0e-12 ? rounded : null;
+}
+
+function compilePowExpression(left, right, rightNode, context) {
+    const integerExponent = realIntegerLiteral(rightNode);
+    if (integerExponent === 1) return left;
+    if (integerExponent === 2 && left.length <= 48) return `complexMul(${left}, ${left})`;
+    if (integerExponent === 3 && left.length <= 36) return `complexMul(complexMul(${left}, ${left}), ${left})`;
+    return context.sheet
+        ? `dynamicComplexPowOnSheet(${left}, ${right}, branchIndex, branchCutWidth)`
+        : `dynamicComplexPow(${left}, ${right})`;
+}
+
+function foldReal(args, operation) {
+    if (!args.length) return '0.0';
+    let result = `dynamicReal(${args[0]})`;
+    for (let index = 1; index < args.length; index++) {
+        result = `${operation}(${result}, dynamicReal(${args[index]}))`;
+    }
+    return result;
+}
+
+function compileCallExpression(node, args, context) {
     assertGPUArity(node);
-    const args = node.args.map(argument => compileNode(argument, context));
-    const one = () => args[0] || 'vec2(0.0)';
-    const foldReal = operation => {
-        const values = args.map(argument => `dynamicReal(${argument})`);
-        return values.slice(1).reduce(
-            (left, right) => `${operation}(${left}, ${right})`,
-            values[0] || '0.0'
-        );
-    };
+    const first = args[0] || ZERO_VEC;
 
     switch (node.name) {
-        case 'sin': return `complexSin(${one()})`;
-        case 'cos': return `complexCos(${one()})`;
-        case 'tan': return `complexDiv(complexSin(${one()}), complexCos(${one()}))`;
-        case 'sec': return `complexDiv(vec2(1.0, 0.0), complexCos(${one()}))`;
-        case 'exp': return `complexExp(${one()})`;
+        case 'sin': return `complexSin(${first})`;
+        case 'cos': return `complexCos(${first})`;
+        case 'tan': return `complexDiv(complexSin(${first}), complexCos(${first}))`;
+        case 'sec': return `complexDiv(${ONE_VEC}, complexCos(${first}))`;
+        case 'exp': return `complexExp(${first})`;
         case 'ln':
         case 'log':
             return context.sheet
-                ? `dynamicLnOnSheet(${one()}, branchIndex, branchCutWidth)`
-                : `complexLn(${one()})`;
-        case 'sinh': return `complexSinh(${one()})`;
-        case 'cosh': return `complexCosh(${one()})`;
-        case 'tanh': return `complexTanh(${one()})`;
+                ? `dynamicLnOnSheet(${first}, branchIndex, branchCutWidth)`
+                : `complexLn(${first})`;
+        case 'sinh': return `complexSinh(${first})`;
+        case 'cosh': return `complexCosh(${first})`;
+        case 'tanh': return `complexTanh(${first})`;
         case 'sqrt':
             return context.sheet
-                ? `dynamicComplexPowOnSheet(${one()}, vec2(0.5, 0.0), branchIndex, branchCutWidth)`
-                : `dynamicComplexPow(${one()}, vec2(0.5, 0.0))`;
-        case 'reciprocal': return `complexDiv(vec2(1.0, 0.0), ${one()})`;
-        case 'abs': return `vec2(length(${one()}), 0.0)`;
-        case 'arg': return `vec2(atan((${one()}).y, (${one()}).x), 0.0)`;
-        case 're': return `vec2((${one()}).x, 0.0)`;
-        case 'im': return `vec2((${one()}).y, 0.0)`;
-        case 'conj': return `vec2((${one()}).x, -(${one()}).y)`;
-        case 'complex': return `vec2(dynamicReal(${args[0]}), dynamicReal(${args[1] || 'vec2(0.0)'}))`;
-        case 'floor': return `vec2(floor(dynamicReal(${one()})), 0.0)`;
-        case 'ceil': return `vec2(ceil(dynamicReal(${one()})), 0.0)`;
-        case 'round': return `vec2(floor(dynamicReal(${one()}) + 0.5), 0.0)`;
-        case 'trunc': return `vec2(dynamicTrunc(dynamicReal(${one()})), 0.0)`;
-        case 'sign': return `vec2(sign(dynamicReal(${one()})), 0.0)`;
-        case 'min': return `vec2(${foldReal('min')}, 0.0)`;
-        case 'max': return `vec2(${foldReal('max')}, 0.0)`;
+                ? `dynamicComplexPowOnSheet(${first}, vec2(0.5, 0.0), branchIndex, branchCutWidth)`
+                : `dynamicComplexPow(${first}, vec2(0.5, 0.0))`;
+        case 'reciprocal': return `complexDiv(${ONE_VEC}, ${first})`;
+        case 'abs': return `vec2(length(${first}), 0.0)`;
+        case 'arg': return `vec2(atan((${first}).y, (${first}).x), 0.0)`;
+        case 're': return `vec2((${first}).x, 0.0)`;
+        case 'im': return `vec2((${first}).y, 0.0)`;
+        case 'conj': return `vec2((${first}).x, -(${first}).y)`;
+        case 'complex': return `vec2(dynamicReal(${args[0]}), dynamicReal(${args[1] || ZERO_VEC}))`;
+        case 'floor': return `vec2(floor(dynamicReal(${first})), 0.0)`;
+        case 'ceil': return `vec2(ceil(dynamicReal(${first})), 0.0)`;
+        case 'round': return `vec2(floor(dynamicReal(${first}) + 0.5), 0.0)`;
+        case 'trunc': return `vec2(dynamicTrunc(dynamicReal(${first})), 0.0)`;
+        case 'sign': return `vec2(sign(dynamicReal(${first})), 0.0)`;
+        case 'min': return `vec2(${foldReal(args, 'min')}, 0.0)`;
+        case 'max': return `vec2(${foldReal(args, 'max')}, 0.0)`;
         case 'mod': {
             const left = `dynamicReal(${args[0]})`;
             const right = `dynamicReal(${args[1]})`;
             return `vec2(${left} - ${right} * dynamicTrunc(${left} / ${right}), 0.0)`;
         }
         case 'gcd': return `vec2(dynamicGcd(dynamicReal(${args[0]}), dynamicReal(${args[1]})), 0.0)`;
-        case 'factorial': return `vec2(dynamicFactorial(dynamicReal(${one()})), 0.0)`;
+        case 'factorial': return `vec2(dynamicFactorial(dynamicReal(${first})), 0.0)`;
         case 'isPrime':
             throw new Error('isPrime() is evaluated by the exact CPU backend');
         case 'pow':
-            return context.sheet
-                ? `dynamicComplexPowOnSheet(${args[0]}, ${args[1]}, branchIndex, branchCutWidth)`
-                : `dynamicComplexPow(${args[0]}, ${args[1]})`;
+            return compilePowExpression(args[0], args[1], node.args?.[1], context);
         case 'selected':
         case 'selectedFunction':
         case 'f':
             return context.sheet
-                ? `dynamicEvaluateBasicOnSheet(${glslFloat(context.selectedFunctionId)}, ${one()}, branchIndex, branchCutWidth, mA, mB, mC, mD, polyDeg, polyCoeffs, zetaCont, zetaRefl, fracPower)`
-                : `dynamicEvaluateBasic(${glslFloat(context.selectedFunctionId)}, ${one()}, mA, mB, mC, mD, polyDeg, polyCoeffs, zetaCont, zetaRefl, fracPower)`;
+                ? `dynamicEvaluateBasicOnSheet(${glslFloat(context.selectedFunctionId)}, ${first}, branchIndex, branchCutWidth, mA, mB, mC, mD, polyDeg, polyCoeffs, zetaCont, zetaRefl, fracPower)`
+                : `dynamicEvaluateBasic(${glslFloat(context.selectedFunctionId)}, ${first}, mA, mB, mC, mD, polyDeg, polyCoeffs, zetaCont, zetaRefl, fracPower)`;
         default: {
             const functionId = context.getFunctionId(node.name);
             if (!functionId || functionId === 16 || functionId === 17) {
                 throw new Error(`Function "${node.name}" is not supported by the GPU expression compiler`);
             }
             return context.sheet
-                ? `dynamicEvaluateBasicOnSheet(${glslFloat(functionId)}, ${one()}, branchIndex, branchCutWidth, mA, mB, mC, mD, polyDeg, polyCoeffs, zetaCont, zetaRefl, fracPower)`
-                : `dynamicEvaluateBasic(${glslFloat(functionId)}, ${one()}, mA, mB, mC, mD, polyDeg, polyCoeffs, zetaCont, zetaRefl, fracPower)`;
+                ? `dynamicEvaluateBasicOnSheet(${glslFloat(functionId)}, ${first}, branchIndex, branchCutWidth, mA, mB, mC, mD, polyDeg, polyCoeffs, zetaCont, zetaRefl, fracPower)`
+                : `dynamicEvaluateBasic(${glslFloat(functionId)}, ${first}, mA, mB, mC, mD, polyDeg, polyCoeffs, zetaCont, zetaRefl, fracPower)`;
         }
     }
 }
 
-function compileBoolean(node, context) {
-    if (node.type === 'unary' && node.op === '!') {
-        return `(!${compileBoolean(node.argument, context)})`;
-    }
-    if (node.type === 'binary') {
-        if (node.op === '&&' || node.op === '||') {
-            return `(${compileBoolean(node.left, context)} ${node.op} ${compileBoolean(node.right, context)})`;
-        }
 
-        const left = compileNode(node.left, context);
-        const right = compileNode(node.right, context);
+function compileBooleanDirect(node, context) {
+    if (node.type === 'unary' && node.op === '!') return `(!${compileBooleanDirect(node.argument, context)})`;
+    if (node.type === 'binary') {
+        if (node.op === '&&' || node.op === '||') return `(${compileBooleanDirect(node.left, context)} ${node.op} ${compileBooleanDirect(node.right, context)})`;
+        const left = compileNodeDirect(node.left, context);
+        const right = compileNodeDirect(node.right, context);
         if (node.op === '==') return `(distance(${left}, ${right}) < 1.0e-6)`;
         if (node.op === '!=') return `(distance(${left}, ${right}) >= 1.0e-6)`;
-        if (['<', '<=', '>', '>='].includes(node.op)) {
-            return `(dynamicReal(${left}) ${node.op} dynamicReal(${right}))`;
-        }
+        if (node.op === '<' || node.op === '<=' || node.op === '>' || node.op === '>=') return `(dynamicReal(${left}) ${node.op} dynamicReal(${right}))`;
     }
-
-    if (node.type === 'call' && node.name === 'isPrime') {
-        throw new Error('isPrime() is evaluated by the exact CPU backend');
-    }
-
-    return `dynamicTruthy(${compileNode(node, context)})`;
+    if (node.type === 'call' && node.name === 'isPrime') throw new Error('isPrime() is evaluated by the exact CPU backend');
+    return `dynamicTruthy(${compileNodeDirect(node, context)})`;
 }
 
-function compileNode(node, context) {
+function compileNodeDirect(node, context) {
+    assertExpressionNode(node);
     switch (node.type) {
-        case 'literal':
-            return vec2(node.value);
-        case 'variable':
-            if (node.name === 'd' || node.name === 'z' || node.name === 's') return node.name;
-            if (node.name === 'j') return 'vec2(float(idx), 0.0)';
-            if (node.name === 'i') return 'vec2(0.0, 1.0)';
-            if (node.name === 'pi') return 'vec2(PI, 0.0)';
-            if (node.name === 'e') return 'vec2(2.718281828459045, 0.0)';
-            if (node.name === 'true') return 'vec2(1.0, 0.0)';
-            if (node.name === 'false') return 'vec2(0.0, 0.0)';
-            if (context.variables?.[node.name]) return context.variables[node.name];
-            if (context.parameters[node.name]) return vec2(context.parameters[node.name]);
-            throw new Error(`Variable "${node.name}" is not supported by the GPU expression compiler`);
-        case 'group':
-            return `(${compileNode(node.expression, context)})`;
+        case 'literal': return vec2(node.value);
+        case 'variable': return variableExpression(node, context);
+        case 'group': return `(${compileNodeDirect(node.expression, context)})`;
         case 'unary':
-            if (node.op === '+') return compileNode(node.argument, context);
-            if (node.op === '-') return `(-${compileNode(node.argument, context)})`;
-            if (node.op === '!') return `dynamicBool(${compileBoolean(node, context)})`;
+            if (node.op === '+') return compileNodeDirect(node.argument, context);
+            if (node.op === '-') return `(-${compileNodeDirect(node.argument, context)})`;
+            if (node.op === '!') return `dynamicBool(${compileBooleanDirect(node, context)})`;
             throw new Error(`Unary operator "${node.op}" is not supported by the GPU expression compiler`);
-        case 'postfix':
-            return `vec2(dynamicFactorial(dynamicReal(${compileNode(node.argument, context)})), 0.0)`;
+        case 'postfix': return `vec2(dynamicFactorial(dynamicReal(${compileNodeDirect(node.argument, context)})), 0.0)`;
         case 'binary': {
-            if (['&&', '||', '==', '!=', '<', '<=', '>', '>='].includes(node.op)) {
-                return `dynamicBool(${compileBoolean(node, context)})`;
-            }
-            const left = compileNode(node.left, context);
-            const right = compileNode(node.right, context);
-            if (node.op === '+') return `complexAdd(${left}, ${right})`;
+            if (BOOLEAN_BINARY_OPERATORS.has(node.op)) return `dynamicBool(${compileBooleanDirect(node, context)})`;
+            const left = compileNodeDirect(node.left, context);
+            const right = compileNodeDirect(node.right, context);
+            if (node.op === '+') return `(${left} + ${right})`;
             if (node.op === '-') return `(${left} - ${right})`;
             if (node.op === '*') return `complexMul(${left}, ${right})`;
             if (node.op === '/') return `complexDiv(${left}, ${right})`;
-            if (node.op === '^') {
-                return context.sheet
-                    ? `dynamicComplexPowOnSheet(${left}, ${right}, branchIndex, branchCutWidth)`
-                    : `dynamicComplexPow(${left}, ${right})`;
-            }
+            if (node.op === '^') return compilePowExpression(left, right, node.right, context);
+            throw new Error(`Operator "${node.op}" is not supported by the GPU expression compiler`);
+        }
+        case 'conditional': return `(${compileBooleanDirect(node.test, context)} ? ${compileNodeDirect(node.consequent, context)} : ${compileNodeDirect(node.alternate, context)})`;
+        case 'call': return compileCallExpression(node, (node.args || []).map(argument => compileNodeDirect(argument, context)), context);
+        default: throw new Error(`Expression node "${node.type}" is not supported by the GPU expression compiler`);
+    }
+}
+
+
+function compileNode(node, context) {
+    return compileNodeDirect(node, context);
+}
+
+function shouldMaterializeInState(node, state, allowMaterialize) {
+    if (!allowMaterialize) return false;
+    const hash = state.analysis.meta.get(node).hash;
+    return shouldMaterialize(node, hash, state.analysis);
+}
+
+function compileBooleanCSE(node, state) {
+    if (node.type === 'unary' && node.op === '!') {
+        return `(!${compileBooleanCSE(node.argument, state)})`;
+    }
+    if (node.type === 'binary') {
+        if (node.op === '&&' || node.op === '||') {
+            return `(${compileBooleanCSE(node.left, state)} ${node.op} ${compileBooleanCSE(node.right, state)})`;
+        }
+        const left = compileCSEExpressionNode(node.left, state, true);
+        const right = compileCSEExpressionNode(node.right, state, true);
+        if (node.op === '==') return `(distance(${left}, ${right}) < 1.0e-6)`;
+        if (node.op === '!=') return `(distance(${left}, ${right}) >= 1.0e-6)`;
+        if (node.op === '<' || node.op === '<=' || node.op === '>' || node.op === '>=') {
+            return `(dynamicReal(${left}) ${node.op} dynamicReal(${right}))`;
+        }
+    }
+    if (node.type === 'call' && node.name === 'isPrime') {
+        throw new Error('isPrime() is evaluated by the exact CPU backend');
+    }
+    return `dynamicTruthy(${compileCSEExpressionNode(node, state, true)})`;
+}
+
+function compileCSEExpressionNode(node, state, allowMaterialize) {
+    assertExpressionNode(node);
+    const hash = state.analysis.meta.get(node).hash;
+    if (shouldMaterializeInState(node, state, allowMaterialize)) {
+        const existing = state.names.get(hash);
+        if (existing) return existing;
+        const expression = compileCSEExpressionNode(node, state, false);
+        const name = `${state.prefix}Tmp_${state.index++}`;
+        state.names.set(hash, name);
+        state.statements.push('    vec2 ', name, ' = ', expression, ';\n');
+        return name;
+    }
+
+    switch (node.type) {
+        case 'literal': return vec2(node.value);
+        case 'variable': return variableExpression(node, state.context);
+        case 'group': return `(${compileCSEExpressionNode(node.expression, state, true)})`;
+        case 'unary':
+            if (node.op === '+') return compileCSEExpressionNode(node.argument, state, true);
+            if (node.op === '-') return `(-${compileCSEExpressionNode(node.argument, state, true)})`;
+            if (node.op === '!') return `dynamicBool(${compileBooleanCSE(node, state)})`;
+            throw new Error(`Unary operator "${node.op}" is not supported by the GPU expression compiler`);
+        case 'postfix': return `vec2(dynamicFactorial(dynamicReal(${compileCSEExpressionNode(node.argument, state, true)})), 0.0)`;
+        case 'binary': {
+            if (BOOLEAN_BINARY_OPERATORS.has(node.op)) return `dynamicBool(${compileBooleanCSE(node, state)})`;
+            const left = compileCSEExpressionNode(node.left, state, true);
+            const right = compileCSEExpressionNode(node.right, state, true);
+            if (node.op === '+') return `(${left} + ${right})`;
+            if (node.op === '-') return `(${left} - ${right})`;
+            if (node.op === '*') return `complexMul(${left}, ${right})`;
+            if (node.op === '/') return `complexDiv(${left}, ${right})`;
+            if (node.op === '^') return compilePowExpression(left, right, node.right, state.context);
             throw new Error(`Operator "${node.op}" is not supported by the GPU expression compiler`);
         }
         case 'conditional':
-            return `(${compileBoolean(node.test, context)} ? ${compileNode(node.consequent, context)} : ${compileNode(node.alternate, context)})`;
+            return `(${compileBooleanCSE(node.test, state)} ? ${compileCSEExpressionNode(node.consequent, state, true)} : ${compileCSEExpressionNode(node.alternate, state, true)})`;
         case 'call':
-            return compileCall(node, context);
+            return compileCallExpression(
+                node,
+                (node.args || []).map(argument => compileCSEExpressionNode(argument, state, true)),
+                state.context
+            );
         default:
             throw new Error(`Expression node "${node.type}" is not supported by the GPU expression compiler`);
     }
+}
+
+function compileExpressionWithCSE(ast, context, prefix) {
+    const analysis = analyzeExpressionTree(ast, context);
+    const state = {
+        context,
+        analysis,
+        names: new Map(),
+        statements: [],
+        index: 0,
+        prefix
+    };
+    const expression = compileCSEExpressionNode(ast, state, true);
+    return {
+        statements: state.statements.join(''),
+        expression,
+        tempCount: state.index
+    };
+}
+
+
+function contextSignature(context) {
+    const variableKeys = Object.keys(context.variables || {}).sort();
+    const parameterKeys = Object.keys(context.parameters || {}).sort();
+    return JSON.stringify({
+        sheet: Boolean(context.sheet),
+        selectedFunctionId: context.selectedFunctionId || 0,
+        variables: variableKeys.map(key => [key, context.variables[key]]),
+        parameters: parameterKeys.map(key => [key, literalSignature(context.parameters[key])])
+    });
+}
+
+function compileSourceExpressionWithCSE(source, context) {
+    const key = `${contextSignature(context)}\n${source}`;
+    const cached = cseExpressionCache.get(key);
+    if (cached) return cached;
+    const compiled = compileExpressionWithCSE(parseExpression(source), context, 'dyn');
+    return cacheMapResult(cseExpressionCache, MAX_CSE_EXPRESSION_CACHE_ENTRIES, key, compiled);
 }
 
 export const GLSL_EXPRESSION_HELPERS = `
@@ -339,31 +606,55 @@ function sourceRecords(appState) {
 }
 
 function domainValueFunction(records) {
-    const branches = records.map((record, index) =>
-        `  if (idx == ${index}) return ${vec2(record.domainValue)};`
-    ).join('\n');
-
-    return `vec2 dynamicDomainValue(int idx) {
-${branches}
-  return vec2(0.0);
-}`;
+    const out = ['vec2 dynamicDomainValue(int idx) {\n'];
+    for (let index = 0; index < records.length; index++) {
+        out.push('  if (idx == ', String(index), ') return ', vec2(records[index].domainValue), ';\n');
+    }
+    out.push('  return vec2(0.0);\n}');
+    return out.join('');
 }
 
 function bindingValueFunctions(bindingResult, bindings) {
-    return bindings
-        .filter(binding => binding.kind !== 'parameter' && binding.kind !== 'parameter_real')
-        .map(binding => {
-            const values = bindingResult.series[binding.symbol] || [];
-            const branches = values.map((value, index) =>
-                `  if (idx == ${index}) return ${vec2(value)};`
-            ).join('\n');
-            return `vec2 dynamicBinding_${binding.symbol}(int idx) {
-${branches}
-  return vec2(0.0);
-}`;
-        })
-        .join('\n');
+    const out = [];
+    for (const binding of bindings) {
+        if (binding.kind === 'parameter' || binding.kind === 'parameter_real') continue;
+        const values = bindingResult.series[binding.symbol] || [];
+        out.push('vec2 dynamicBinding_', binding.symbol, '(int idx) {\n');
+        for (let index = 0; index < values.length; index++) {
+            out.push('  if (idx == ', String(index), ') return ', vec2(values[index]), ';\n');
+        }
+        out.push('  return vec2(0.0);\n}\n');
+    }
+    return out.join('');
 }
+
+function emitScopedEvaluation(out, targetType, targetName, compiled) {
+    out.push('    ', targetType, ' ', targetName, ';\n');
+    if (compiled.statements) {
+        out.push('    {\n');
+        out.push(compiled.statements.replace(/^    /gm, '      '));
+        out.push('      ', targetName, ' = ', compiled.expression, ';\n');
+        out.push('    }\n');
+    } else {
+        out.push('    ', targetName, ' = ', compiled.expression, ';\n');
+    }
+}
+
+function compileAggregateLoop(point, term, reduction, invalid) {
+    const out = [];
+    out.push('  vec2 accumulator = ', reduction.initial, ';\n');
+    out.push('  for (int idx = 0; idx < ', String(reduction.count), '; idx++) {\n');
+    out.push('    vec2 d = dynamicDomainValue(idx);\n');
+    emitScopedEvaluation(out, 'vec2', 'z', point);
+    emitScopedEvaluation(out, 'vec2', 'termValue', term);
+    out.push('    ', invalid, '\n');
+    out.push('    ', reduction.combine, '\n');
+    out.push('  }\n');
+    out.push('  mapped = accumulator;\n');
+    out.push('  return isFiniteVec2Compat(mapped);\n');
+    return out.join('');
+}
+
 
 export function buildDynamicAggregateGLSL(appState, getFunctionId) {
     if (!dynamicEnabled(appState)) return { enabled: false, source: '', termCount: 0 };
@@ -408,79 +699,64 @@ export function buildDynamicAggregateGLSL(appState, getFunctionId) {
             getFunctionId: name => getFunctionId(name, true)
         };
         const sheetContext = { ...context, sheet: true };
-        const pointAst = parseExpression(String(config.pointExpression ?? 'd'));
-        const termAst = config.term?.kind === 'selected-function'
-            ? parseExpression('selected(z)')
-            : parseExpression(String(config.term?.expression ?? ''));
-        const pointCode = compileNode(pointAst, context);
-        const termCode = compileNode(termAst, context);
-        const pointCodeOnSheet = compileNode(pointAst, sheetContext);
-        const termCodeOnSheet = compileNode(termAst, sheetContext);
-        const reduction = config.reduction?.kind;
-        const initial = reduction === 'product' ? 'vec2(1.0, 0.0)' : 'vec2(0.0)';
-        const combine = reduction === 'product'
-            ? 'accumulator = complexMul(accumulator, termValue);'
-            : 'accumulator = complexAdd(accumulator, termValue);';
+        const pointExpression = String(config.pointExpression ?? 'd');
+        const termExpression = config.term?.kind === 'selected-function'
+            ? 'selected(z)'
+            : String(config.term?.expression ?? '');
+        const pointCode = compileSourceExpressionWithCSE(pointExpression, context);
+        const termCode = compileSourceExpressionWithCSE(termExpression, context);
+        const pointCodeOnSheet = compileSourceExpressionWithCSE(pointExpression, sheetContext);
+        const termCodeOnSheet = compileSourceExpressionWithCSE(termExpression, sheetContext);
+        const reductionKind = config.reduction?.kind;
+        const reduction = {
+            count: records.length,
+            initial: reductionKind === 'product' ? ONE_VEC : ZERO_VEC,
+            combine: reductionKind === 'product'
+                ? 'accumulator = complexMul(accumulator, termValue);'
+                : 'accumulator = accumulator + termValue;'
+        };
         const invalid = config.reduction?.invalidPolicy === 'skip'
             ? 'if (!isFiniteVec2Compat(z) || !isFiniteVec2Compat(termValue)) continue;'
             : 'if (!isFiniteVec2Compat(z) || !isFiniteVec2Compat(termValue)) return false;';
 
-        const source = `
-${domainValueFunction(records)}
-${bindingValueFunctions(bindingResult, bindings)}
-bool evaluateDynamicAggregate(
-  vec2 s,
-  vec2 c,
-  vec2 mA,
-  vec2 mB,
-  vec2 mC,
-  vec2 mD,
-  int polyDeg,
-  vec2 polyCoeffs[11],
-  float zetaCont,
-  float zetaRefl,
-  float fracPower,
-  out vec2 mapped
-) {
-  vec2 accumulator = ${initial};
-  for (int idx = 0; idx < ${records.length}; idx++) {
-    vec2 d = dynamicDomainValue(idx);
-    vec2 z = ${pointCode};
-    vec2 termValue = ${termCode};
-    ${invalid}
-    ${combine}
-  }
-  mapped = accumulator;
-  return isFiniteVec2Compat(mapped);
-}
-bool evaluateDynamicAggregateOnSheet(
-  vec2 s,
-  vec2 c,
-  float branchIndex,
-  float branchCutWidth,
-  vec2 mA,
-  vec2 mB,
-  vec2 mC,
-  vec2 mD,
-  int polyDeg,
-  vec2 polyCoeffs[11],
-  float zetaCont,
-  float zetaRefl,
-  float fracPower,
-  out vec2 mapped
-) {
-  vec2 accumulator = ${initial};
-  for (int idx = 0; idx < ${records.length}; idx++) {
-    vec2 d = dynamicDomainValue(idx);
-    vec2 z = ${pointCodeOnSheet};
-    vec2 termValue = ${termCodeOnSheet};
-    ${invalid}
-    ${combine}
-  }
-  mapped = accumulator;
-  return isFiniteVec2Compat(mapped);
-}
-`;
+        const source = [
+            domainValueFunction(records), '\n',
+            bindingValueFunctions(bindingResult, bindings),
+            'bool evaluateDynamicAggregate(\n',
+            '  vec2 s,\n',
+            '  vec2 c,\n',
+            '  vec2 mA,\n',
+            '  vec2 mB,\n',
+            '  vec2 mC,\n',
+            '  vec2 mD,\n',
+            '  int polyDeg,\n',
+            '  vec2 polyCoeffs[11],\n',
+            '  float zetaCont,\n',
+            '  float zetaRefl,\n',
+            '  float fracPower,\n',
+            '  out vec2 mapped\n',
+            ') {\n',
+            compileAggregateLoop(pointCode, termCode, reduction, invalid),
+            '}\n',
+            'bool evaluateDynamicAggregateOnSheet(\n',
+            '  vec2 s,\n',
+            '  vec2 c,\n',
+            '  float branchIndex,\n',
+            '  float branchCutWidth,\n',
+            '  vec2 mA,\n',
+            '  vec2 mB,\n',
+            '  vec2 mC,\n',
+            '  vec2 mD,\n',
+            '  int polyDeg,\n',
+            '  vec2 polyCoeffs[11],\n',
+            '  float zetaCont,\n',
+            '  float zetaRefl,\n',
+            '  float fracPower,\n',
+            '  out vec2 mapped\n',
+            ') {\n',
+            compileAggregateLoop(pointCodeOnSheet, termCodeOnSheet, reduction, invalid),
+            '}\n'
+        ].join('');
 
         return cacheShaderResult(cacheKey, {
             enabled: true,
@@ -521,15 +797,22 @@ export function compileCustomExpressionToGLSL(source, getFunctionId) {
     if (!source || source === 'z') {
         return 'z';
     }
+    const cached = expressionCache.get(source);
+    if (cached) return cached;
     try {
         const ast = parseExpression(source);
         const context = {
             parameters: {},
-            variables: { z: 'z', i: 'vec2(0.0, 1.0)' },
+            variables: { z: 'z', i: I_VEC },
             sheet: false,
             getFunctionId: name => getFunctionId(name, true)
         };
-        return compileNode(ast, context);
+        return cacheMapResult(
+            expressionCache,
+            MAX_EXPRESSION_CACHE_ENTRIES,
+            source,
+            compileNode(ast, context)
+        );
     } catch (e) {
         console.warn('Failed to compile custom Z expression to GLSL:', e);
         return 'z';
