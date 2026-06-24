@@ -592,6 +592,15 @@
                         </label>
 
                         <div id="algebraic_chaining_controls_container" style="display: none;">
+                            <div style="margin-bottom: 0.5rem; display: flex; flex-direction: column; gap: 0.25rem;">
+                                <label style="font-size: 0.8rem; color: var(--text-secondary-color);">Custom z expression (optional):</label>
+                                <input type="text" id="algebraic_chaining_z_input" class="dynamic-formula-input"
+                                    style="font-size: 0.8rem; padding: 0.25rem;" placeholder="e.g. z^2 + 1"
+                                    value="z" spellcheck="false" autocomplete="off">
+                                <div id="algebraic_chaining_z_math" class="dynamic-math-display"
+                                    style="font-size: 0.8rem; margin: 0; padding: 0.25rem; background: rgba(0,0,0,0.2); border-radius: 4px; min-height: 1.5rem; display: flex; align-items: center; justify-content: center;">
+                                </div>
+                            </div>
                             <div id="algebraic_terms_list">
                                 <!-- Dynamically populated by JS -->
                             </div>

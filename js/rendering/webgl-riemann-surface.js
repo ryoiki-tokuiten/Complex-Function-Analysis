@@ -10,7 +10,9 @@ import {
 import {
   buildDynamicAggregateGLSL,
   dynamicAggregateGLSLSignature,
-  isDynamicAggregateGLSLActive
+  isDynamicAggregateGLSLActive,
+  compileCustomExpressionToGLSL,
+  GLSL_EXPRESSION_HELPERS
 } from '../math/expression/glsl.js';
 import {
   getBranchWindowLabel,
@@ -330,12 +332,27 @@ function buildAlgebraicBranchBody(appState) {
     ? appState.algebraicChainingTerms
     : [];
 
-  return [
+  const zExpr = appState?.algebraicChainingZExpr || 'z';
+  const steps = [];
+
+  if (zExpr !== 'z') {
+    const zCustomExprGLSL = compileCustomExpressionToGLSL(
+      zExpr,
+      functionName => getWebGLDomainColorFunctionIdShared(functionName, true)
+    );
+    if (zCustomExprGLSL && zCustomExprGLSL !== 'z') {
+      steps.push(`    z = ${zCustomExprGLSL};`);
+    }
+  }
+
+  steps.push(
     '    vec2 sum = vec2(0.0);',
     ...terms.map(emitAlgebraicTerm),
     '    mapped = sum;',
     '    return isFiniteVec2Compat(mapped);'
-  ].join('\n');
+  );
+
+  return steps.join('\n');
 }
 
 /**
@@ -781,6 +798,7 @@ bool evaluateDynamicAggregateOnSheet(
   return false;
 }`;
   return `${GLSL_COMPLEX_MATH_LIBRARY_BASE}
+${GLSL_EXPRESSION_HELPERS}
 ${dynamicSource}
 ${assembleGlslModules(SURFACE_MATH_GLSL, ['evaluateSurfaceStage'], { appState })}
 `;
@@ -1043,6 +1061,7 @@ function disposeMesh(gl, mesh) {
 function getProgramSignature(appState) {
   return JSON.stringify({
     algebraic: (appState && appState.algebraicChainingTerms) || [],
+    algebraicZ: (appState && appState.algebraicChainingZExpr) || 'z',
     dynamic: dynamicAggregateGLSLSignature(appState)
   });
 }

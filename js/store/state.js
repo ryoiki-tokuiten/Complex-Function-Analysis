@@ -217,6 +217,7 @@ const rawState = {
     fractalOrbitColoringEnabled: false,
 
     algebraicChainingEnabled: false,
+    algebraicChainingZExpr: 'z',
     algebraicChainingTerms: [
         {
             coeff: { re: 1.0, im: 0.0 },

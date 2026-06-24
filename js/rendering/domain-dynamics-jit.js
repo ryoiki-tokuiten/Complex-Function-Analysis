@@ -170,6 +170,14 @@ function compileStepCode(snapshot, outRe, outIm, inRe, inIm, cRe, cIm) {
 }
 
 export function createJitTileRenderer(snapshot, writeDynamicsEscapeColor, writeBlack, writeDomainColor, evaluateBuiltin) {
+    if (
+        snapshot.functionKey === 'algebraic_chaining' &&
+        snapshot.algebraicChainingZExpr &&
+        snapshot.algebraicChainingZExpr !== 'z'
+    ) {
+        return null;
+    }
+
     const isOrbit = snapshot.fractalOrbitColoringEnabled;
     const chainEnabled = snapshot.chainingEnabled;
     const count = Math.max(1, Math.floor(Number(snapshot.chainCount) || 1));

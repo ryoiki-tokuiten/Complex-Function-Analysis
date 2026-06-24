@@ -42,6 +42,8 @@ const DOM_BINDINGS = [
     { key: 'dynamicPlottingParams', id: 'dynamic_plotting_params' },
     { key: 'enableAlgebraicChainingCb', id: 'enable_algebraic_chaining_cb' },
     { key: 'algebraicChainingControlsContainer', id: 'algebraic_chaining_controls_container' },
+    { key: 'algebraicChainingZInput', id: 'algebraic_chaining_z_input' },
+    { key: 'algebraicChainingZMath', id: 'algebraic_chaining_z_math' },
     { key: 'algebraicTermsList', id: 'algebraic_terms_list' },
     { key: 'addAlgebraicTermBtn', id: 'add_algebraic_term_btn' },
     { key: 'commonParamsSliders', id: 'common_params_sliders' },

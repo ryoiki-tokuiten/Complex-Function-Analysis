@@ -453,6 +453,7 @@ function appendAlgebraicChainingKey(parts) {
     const terms = asArray(state.algebraicChainingTerms);
 
     appendKey(parts, 'algTerms', terms.length);
+    appendKey(parts, 'algZExpr', state.algebraicChainingZExpr || 'z');
     terms.forEach((term, index) => appendAlgebraicFactorFunctionKey(parts, term, index));
 }
 

@@ -1,4 +1,5 @@
 import { state } from './store/state.js';
+import { compileExpression } from './math/expression/evaluator.js';
 import { eventBus } from './store/events.js';
 
 let cachesDirty = true;
@@ -648,13 +649,40 @@ export function evaluateAlgebraicTerm(term, z_re, z_im, context = null) {
     return value;
 }
 
+let algebraicZExprCompiled = null;
+let algebraicZExprCacheKey = null;
+
 export function evaluateAlgebraicChaining(z_re, z_im, context = null) {
     const terms = state.algebraicChainingTerms;
     if (!state.algebraicChainingEnabled || !Array.isArray(terms) || terms.length === 0) {
         return { re: 0, im: 0 };
     }
 
-    const z = toComplex(z_re, z_im);
+    let z = toComplex(z_re, z_im);
+    
+    if (state.algebraicChainingZExpr && state.algebraicChainingZExpr !== 'z') {
+        if (algebraicZExprCacheKey !== state.algebraicChainingZExpr) {
+            try {
+                algebraicZExprCompiled = compileExpression(state.algebraicChainingZExpr, { allowedVariables: ['z'] });
+            } catch (e) {
+                algebraicZExprCompiled = null;
+            }
+            algebraicZExprCacheKey = state.algebraicChainingZExpr;
+        }
+        if (algebraicZExprCompiled) {
+            try {
+                const result = algebraicZExprCompiled({ z });
+                if (result !== null && result !== undefined) {
+                    if (typeof result === 'number') {
+                        z = { re: result, im: 0 };
+                    } else if (typeof result === 'object' && 're' in result) {
+                        z = { re: result.re, im: result.im || 0 };
+                    }
+                }
+            } catch (e) {}
+        }
+    }
+
     const evalContext = context || { c: z };
     let sum = { re: 0, im: 0 };
 
@@ -771,6 +799,7 @@ export function buildMappedTransformProfileKey(functionKey) {
         appendPolynomialProfileParts(parts);
     } else if (functionKey === 'algebraic_chaining') {
         parts.push(`alg:${serializeAlgebraicTerms(state.algebraicChainingTerms)}`);
+        parts.push(`algZ:${state.algebraicChainingZExpr}`);
     }
 
     return parts.join('|');
@@ -1257,6 +1286,7 @@ export function buildTaylorSeriesCoefficientCacheKey(functionKey, z0Complex, ord
     } else if (functionKey === 'algebraic_chaining') {
         const terms = state.algebraicChainingTerms ?? [];
         parts.push(`algTerms:${terms.length}`);
+        parts.push(`algZExpr:${state.algebraicChainingZExpr || 'z'}`);
 
         terms.forEach((term, termIndex) => {
             parts.push(`t${termIndex}:${(term.factors ?? []).map(factor => factor.func).join(',')}`);

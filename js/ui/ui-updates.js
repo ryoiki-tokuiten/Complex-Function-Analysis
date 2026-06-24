@@ -799,15 +799,24 @@ function baseFunctionHtml(funcKey) {
 }
 
 function argumentFunctionHtml(funcKey) {
+    const zExpr = state.algebraicChainingZExpr && state.algebraicChainingZExpr !== 'z'
+        ? state.algebraicChainingZExpr
+        : 'z';
+
     if (funcKey === 'c') {
         return 'c';
     }
 
     if (funcKey === 'power') {
-        return `z<sup>${fractionalPowerExponent()}</sup>`;
+        return `(${zExpr})<sup>${fractionalPowerExponent()}</sup>`;
     }
 
-    return FUNCTION_ARGUMENT_HTML[funcKey] ?? `${funcKey}(z)`;
+    const val = FUNCTION_ARGUMENT_HTML[funcKey];
+    if (val) {
+        return val.replaceAll('z', zExpr);
+    }
+
+    return `${funcKey}(${zExpr})`;
 }
 
 function formatFuncForFormula(funcKey, termFactor = null) {
@@ -815,10 +824,14 @@ function formatFuncForFormula(funcKey, termFactor = null) {
         return '';
     }
 
+    const zExpr = state.algebraicChainingZExpr && state.algebraicChainingZExpr !== 'z'
+        ? state.algebraicChainingZExpr
+        : 'z';
+
     const base = baseFunctionHtml(funcKey);
     const innerArg = termFactor?.chainedFunc && termFactor.chainedFunc !== 'none'
         ? argumentFunctionHtml(termFactor.chainedFunc)
-        : 'z';
+        : zExpr;
 
     let result = funcKey === 'c'
         ? 'c'

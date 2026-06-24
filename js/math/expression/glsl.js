@@ -216,7 +216,7 @@ function compileNode(node, context) {
     }
 }
 
-const HELPERS = `
+export const GLSL_EXPRESSION_HELPERS = `
 float dynamicReal(vec2 value) { return value.x; }
 bool dynamicTruthy(vec2 value) { return dot(value, value) > 1.0e-20; }
 vec2 dynamicBool(bool value) { return value ? vec2(1.0, 0.0) : vec2(0.0); }
@@ -426,7 +426,6 @@ export function buildDynamicAggregateGLSL(appState, getFunctionId) {
             : 'if (!isFiniteVec2Compat(z) || !isFiniteVec2Compat(termValue)) return false;';
 
         const source = `
-${HELPERS}
 ${domainValueFunction(records)}
 ${bindingValueFunctions(bindingResult, bindings)}
 bool evaluateDynamicAggregate(
@@ -516,4 +515,23 @@ export function dynamicAggregateGLSLSignature(appState) {
 
 export function isDynamicAggregateGLSLActive(appState) {
     return dynamicEnabled(appState);
+}
+
+export function compileCustomExpressionToGLSL(source, getFunctionId) {
+    if (!source || source === 'z') {
+        return 'z';
+    }
+    try {
+        const ast = parseExpression(source);
+        const context = {
+            parameters: {},
+            variables: { z: 'z', i: 'vec2(0.0, 1.0)' },
+            sheet: false,
+            getFunctionId: name => getFunctionId(name, true)
+        };
+        return compileNode(ast, context);
+    } catch (e) {
+        console.warn('Failed to compile custom Z expression to GLSL:', e);
+        return 'z';
+    }
 }

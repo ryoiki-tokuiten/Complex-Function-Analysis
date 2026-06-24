@@ -8,6 +8,7 @@ const DOMAIN_LIGHTNESS_MAX = 0.72;
 const DOMAIN_LIGHTNESS_DETAIL_BASE = 0.72;
 const DOMAIN_LIGHTNESS_DETAIL_SCALE = 0.28;
 import { createJitTileRenderer } from './domain-dynamics-jit.js';
+import { compileExpression } from '../math/expression/evaluator.js';
 
 const DYNAMICS_ESCAPE_RADIUS = 1e4;
 const DYNAMICS_ESCAPE_RADIUS_SQ = DYNAMICS_ESCAPE_RADIUS * DYNAMICS_ESCAPE_RADIUS;
@@ -348,13 +349,40 @@ function evaluateAlgebraicTerm(term, z, snapshot, context) {
     return value;
 }
 
+let algebraicZExprCompiled = null;
+let algebraicZExprCacheKey = null;
+
 function evaluateAlgebraicChaining(z, snapshot, context = null) {
     const terms = snapshot.algebraicChainingTerms;
     if (!snapshot.algebraicChainingEnabled || !Array.isArray(terms) || terms.length === 0) {
         return { re: 0, im: 0 };
     }
 
-    const point = toComplex(z);
+    let point = toComplex(z);
+
+    if (snapshot.algebraicChainingZExpr && snapshot.algebraicChainingZExpr !== 'z') {
+        if (algebraicZExprCacheKey !== snapshot.algebraicChainingZExpr) {
+            try {
+                algebraicZExprCompiled = compileExpression(snapshot.algebraicChainingZExpr, { allowedVariables: ['z'] });
+            } catch (e) {
+                algebraicZExprCompiled = null;
+            }
+            algebraicZExprCacheKey = snapshot.algebraicChainingZExpr;
+        }
+        if (algebraicZExprCompiled) {
+            try {
+                const result = algebraicZExprCompiled({ z: point });
+                if (result !== null && result !== undefined) {
+                    if (typeof result === 'number') {
+                        point = { re: result, im: 0 };
+                    } else if (typeof result === 'object' && 're' in result) {
+                        point = { re: result.re, im: result.im || 0 };
+                    }
+                }
+            } catch (e) {}
+        }
+    }
+
     const evalContext = context || { c: point };
     let sum = { re: 0, im: 0 };
     for (const term of terms) {
@@ -400,7 +428,8 @@ function createPolynomialParameterAccelerator(snapshot) {
     if (
         snapshot.functionKey !== 'algebraic_chaining' ||
         !snapshot.algebraicChainingEnabled ||
-        !Array.isArray(snapshot.algebraicChainingTerms)
+        !Array.isArray(snapshot.algebraicChainingTerms) ||
+        (snapshot.algebraicChainingZExpr && snapshot.algebraicChainingZExpr !== 'z')
     ) {
         return null;
     }
@@ -471,7 +500,8 @@ function createLaurentParameterAccelerator(snapshot) {
     if (
         snapshot.functionKey !== 'algebraic_chaining' ||
         !snapshot.algebraicChainingEnabled ||
-        !Array.isArray(snapshot.algebraicChainingTerms)
+        !Array.isArray(snapshot.algebraicChainingTerms) ||
+        (snapshot.algebraicChainingZExpr && snapshot.algebraicChainingZExpr !== 'z')
     ) {
         return null;
     }
@@ -1028,6 +1058,7 @@ export function domainDynamicsSignature(snapshot) {
         fractalOrbitColoringEnabled: snapshot.fractalOrbitColoringEnabled,
         algebraicChainingEnabled: snapshot.algebraicChainingEnabled,
         algebraicChainingTerms: snapshot.algebraicChainingTerms,
+        algebraicChainingZExpr: snapshot.algebraicChainingZExpr,
         polynomialN: snapshot.polynomialN,
         polynomialCoeffs: snapshot.polynomialCoeffs,
         mobiusA: snapshot.mobiusA,

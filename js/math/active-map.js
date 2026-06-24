@@ -29,6 +29,7 @@ function sourceSignature() {
         chainCount: state.chainCount,
         chainMode: state.chainingMode,
         algebraic: state.algebraicChainingTerms,
+        algebraicZExpr: state.algebraicChainingZExpr,
         mobius: [state.mobiusA, state.mobiusB, state.mobiusC, state.mobiusD],
         polynomial: [state.polynomialN, state.polynomialCoeffs],
         fractionalPower: state.fractionalPowerN,

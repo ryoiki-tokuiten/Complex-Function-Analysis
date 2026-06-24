@@ -1976,6 +1976,13 @@ function bindAlgebraicChainingControls() {
         syncParameterControlsPanelVisibility();
         requestDomainRedraw(true);
     });
+
+    bindControlListener('algebraicChainingZInput', 'input', () => {
+        const val = controls.algebraicChainingZInput?.value || 'z';
+        state.algebraicChainingZExpr = val;
+        updateCustomFormulaPreview(controls.algebraicChainingZInput, controls.algebraicChainingZMath);
+        requestDomainRedraw(true);
+    });
 }
 
 function createAlgebraicFactor(func = 'cos') {
@@ -2226,6 +2233,13 @@ function renderFactors(term, preview) {
 
 function renderAlgebraicChainingTerms() {
     if (!controls.algebraicTermsList) return;
+
+    if (controls.algebraicChainingZInput && state.algebraicChainingZExpr) {
+        if (controls.algebraicChainingZInput.value !== state.algebraicChainingZExpr) {
+            controls.algebraicChainingZInput.value = state.algebraicChainingZExpr;
+            updateCustomFormulaPreview(controls.algebraicChainingZInput, controls.algebraicChainingZMath);
+        }
+    }
 
     controls.algebraicTermsList.innerHTML = '';
     algebraicTerms().forEach((term, index) => {

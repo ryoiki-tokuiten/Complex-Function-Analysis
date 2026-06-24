@@ -818,6 +818,7 @@ function serializeProgramMathForCache() {
     try {
         return JSON.stringify({
             algebraic: state?.algebraicChainingTerms || [],
+            algebraicZ: state?.algebraicChainingZExpr || 'z',
             dynamic: dynamicAggregateGLSLSignature(state)
         }, createCacheStringifier());
     } catch (error) {
