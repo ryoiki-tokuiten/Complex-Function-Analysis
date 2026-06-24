@@ -1,37 +1,37 @@
 import { state, context } from '../store/state.js';
 import { eventBus } from '../store/events.js';
 import {
-    createWebGLProgramShared,
-    getWebGLDomainColorFunctionIdShared,
-    getWebGLBackendInfoShared,
-    setComplexFunctionUniformsShared,
-    getGLSLComplexMathLibrary
+  createWebGLProgramShared,
+  getWebGLDomainColorFunctionIdShared,
+  getWebGLBackendInfoShared,
+  setComplexFunctionUniformsShared,
+  getGLSLComplexMathLibrary
 } from './webgl-shared.js';
 import {
-    buildDynamicAggregateGLSL,
-    dynamicAggregateGLSLSignature,
-    isDynamicAggregateGLSLActive
+  buildDynamicAggregateGLSL,
+  dynamicAggregateGLSLSignature,
+  isDynamicAggregateGLSLActive
 } from '../math/expression/glsl.js';
 import {
-    WEBGL_DOMAIN_COLOR_SUPERSAMPLE,
-    WEBGL_DOMAIN_COLOR_STRESS_SCALE,
-    SPHERE_LIGHT_DIRECTION_CAMERA,
-    SPHERE_TEXTURE_AMBIENT_INTENSITY,
-    SPHERE_TEXTURE_DIFFUSE_INTENSITY,
-    SPHERE_TEXTURE_SPECULAR_INTENSITY,
-    SPHERE_TEXTURE_SHININESS_FACTOR
+  WEBGL_DOMAIN_COLOR_SUPERSAMPLE,
+  WEBGL_DOMAIN_COLOR_STRESS_SCALE,
+  SPHERE_LIGHT_DIRECTION_CAMERA,
+  SPHERE_TEXTURE_AMBIENT_INTENSITY,
+  SPHERE_TEXTURE_DIFFUSE_INTENSITY,
+  SPHERE_TEXTURE_SPECULAR_INTENSITY,
+  SPHERE_TEXTURE_SHININESS_FACTOR
 } from '../constants/rendering.js';
 
 const { webglDomainColorSupport } = context;
 
 const CFG = Object.freeze({
-    defaultSupersample: 1.75,
-    defaultStressScale: 2.5,
-    maxRenderScale: 3,
-    maxDprBoost: 1.35,
-    dprScaleFactor: 0.92,
-    polyCoeffCount: 11,
-    maxChainStepsGlsl: 512
+  defaultSupersample: 1.75,
+  defaultStressScale: 2.5,
+  maxRenderScale: 3,
+  maxDprBoost: 1.35,
+  dprScaleFactor: 0.92,
+  polyCoeffCount: 11,
+  maxChainStepsGlsl: 512
 });
 
 const EMPTY_OPTIONS = Object.freeze({});
@@ -39,144 +39,144 @@ const PLANES = Object.freeze(['z', 'w']);
 const PLANE_KEYS = new Set(PLANES);
 
 const QUAD_VERTICES = new Float32Array([
-    -1, -1,
-     1, -1,
-    -1,  1,
-     1,  1
+  -1, -1,
+  1, -1,
+  -1, 1,
+  1, 1
 ]);
 
 const WEBGL_CONTEXT_ATTRIBUTES = Object.freeze({
-    antialias: false,
-    alpha: true,
-    premultipliedAlpha: true,
-    preserveDrawingBuffer: false,
-    powerPreference: 'high-performance'
+  antialias: false,
+  alpha: true,
+  premultipliedAlpha: true,
+  preserveDrawingBuffer: false,
+  powerPreference: 'high-performance'
 });
 
 export const DOMAIN_PALETTE_IDS = Object.freeze({
-    'analytic-base': 0,
-    'arctic-frost': 4,
-    calming: 11,
-    mandelbrot: 14,
-    lava: 15,
-    fall: 16,
-    jewellery: 20
+  'analytic-base': 0,
+  'arctic-frost': 4,
+  calming: 11,
+  mandelbrot: 14,
+  lava: 15,
+  fall: 16,
+  jewellery: 20
 });
 
 export const CHAIN_MODE_IDS = Object.freeze({
-    recursion: 1,
-    power: 2,
-    sqrt: 3,
-    ln: 4,
-    exp: 5,
-    reciprocal: 6,
-    zero_seed: 7
+  recursion: 1,
+  power: 2,
+  sqrt: 3,
+  ln: 4,
+  exp: 5,
+  reciprocal: 6,
+  zero_seed: 7
 });
 
 const DOMAIN_FLOAT_UNIFORMS = Object.freeze([
-    ['uDomainBrightness', 'domainBrightness', 1],
-    ['uDomainContrast', 'domainContrast', 1],
-    ['uDomainSaturation', 'domainSaturation', 1],
-    ['uDomainLightnessCycles', 'domainLightnessCycles', 0]
+  ['uDomainBrightness', 'domainBrightness', 1],
+  ['uDomainContrast', 'domainContrast', 1],
+  ['uDomainSaturation', 'domainSaturation', 1],
+  ['uDomainLightnessCycles', 'domainLightnessCycles', 0]
 ]);
 
 const UNIFORM_ALIASES = Object.freeze({
-    uResolution: 'u_resolution',
-    uViewCenter: 'u_viewCenter',
-    uViewSpan: 'u_viewSpan',
-    uDomainBrightness: 'u_domainBrightness',
-    uDomainContrast: 'u_domainContrast',
-    uDomainSaturation: 'u_domainSaturation',
-    uDomainLightnessCycles: 'u_domainLightnessCycles',
-    uDomainPalette: 'u_domainPalette',
-    uUseSphere: 'u_useSphere',
-    uSphereCenter: 'u_sphereCenter',
-    uSphereRadius: 'u_sphereRadius',
-    uRotX: 'u_rotX',
-    uRotY: 'u_rotY',
-    uLightDir: 'u_lightDir',
-    uSphereLighting: 'u_sphereLighting',
-    uIsWPlaneColoring: 'u_isWPlaneColoring',
-    uFunctionId: 'u_functionId',
-    uMobiusA: 'u_mobiusA',
-    uMobiusB: 'u_mobiusB',
-    uMobiusC: 'u_mobiusC',
-    uMobiusD: 'u_mobiusD',
-    uPolyDegree: 'u_polyDegree',
-    uZetaCont: 'u_zetaContinuationEnabled',
-    uZetaRefl: 'u_zetaReflectionBoundary',
-    uFracPower: 'u_fracPower',
-    uChainCount: 'u_chainCount',
-    uChainMode: 'u_chainMode',
-    uDerivativeMode: 'u_derivativeMode',
-    uUseOrbitColoring: 'u_useOrbitColoring'
+  uResolution: 'u_resolution',
+  uViewCenter: 'u_viewCenter',
+  uViewSpan: 'u_viewSpan',
+  uDomainBrightness: 'u_domainBrightness',
+  uDomainContrast: 'u_domainContrast',
+  uDomainSaturation: 'u_domainSaturation',
+  uDomainLightnessCycles: 'u_domainLightnessCycles',
+  uDomainPalette: 'u_domainPalette',
+  uUseSphere: 'u_useSphere',
+  uSphereCenter: 'u_sphereCenter',
+  uSphereRadius: 'u_sphereRadius',
+  uRotX: 'u_rotX',
+  uRotY: 'u_rotY',
+  uLightDir: 'u_lightDir',
+  uSphereLighting: 'u_sphereLighting',
+  uIsWPlaneColoring: 'u_isWPlaneColoring',
+  uFunctionId: 'u_functionId',
+  uMobiusA: 'u_mobiusA',
+  uMobiusB: 'u_mobiusB',
+  uMobiusC: 'u_mobiusC',
+  uMobiusD: 'u_mobiusD',
+  uPolyDegree: 'u_polyDegree',
+  uZetaCont: 'u_zetaContinuationEnabled',
+  uZetaRefl: 'u_zetaReflectionBoundary',
+  uFracPower: 'u_fracPower',
+  uChainCount: 'u_chainCount',
+  uChainMode: 'u_chainMode',
+  uDerivativeMode: 'u_derivativeMode',
+  uUseOrbitColoring: 'u_useOrbitColoring'
 });
 
 const PALETTES = Object.freeze([
-    [0, [[0.68, 0.12, 0.12], [0.60, 0.60, 0.11], [0.11, 0.60, 0.11], [0.11, 0.60, 0.60], [0.135, 0.135, 0.765], [0.68, 0.12, 0.68], [0.68, 0.12, 0.12]]],
-    [4, [[0.059, 0.090, 0.165], [0.118, 0.161, 0.231], [0.231, 0.510, 0.965], [0.576, 0.773, 0.992], [0.231, 0.510, 0.965], [0.118, 0.161, 0.231], [0.059, 0.090, 0.165]]],
-    [11, [[0.851, 0.773, 0.757], [0.769, 0.545, 0.502], [0.792, 0.576, 0.522], [0.922, 0.863, 0.824], [0.608, 0.443, 0.412], [0.584, 0.416, 0.388], [0.851, 0.773, 0.757]]],
-    [14, [[0.000, 0.027, 0.392], [0.075, 0.337, 0.741], [0.522, 0.753, 0.929], [0.969, 0.976, 0.867], [1.000, 0.675, 0.000], [0.039, 0.027, 0.000], [0.000, 0.027, 0.392]]],
-    [15, [[0.000, 0.000, 0.000], [0.314, 0.000, 0.000], [1.000, 0.627, 0.000], [1.000, 1.000, 1.000], [1.000, 0.627, 0.000], [0.314, 0.000, 0.000], [0.000, 0.000, 0.000]]],
-    [16, [[0.098, 0.098, 0.098], [0.502, 0.000, 0.000], [1.000, 0.271, 0.000], [1.000, 0.549, 0.000], [1.000, 0.843, 0.000], [1.000, 0.937, 0.722], [0.098, 0.098, 0.098]]],
-    [20, [[0.000, 0.000, 0.200], [0.000, 0.082, 0.667], [0.051, 0.451, 0.557], [0.800, 0.800, 1.000], [1.000, 0.000, 0.259], [0.482, 0.776, 1.000], [0.000, 0.000, 0.200]]]
+  [0, [[0.68, 0.12, 0.12], [0.60, 0.60, 0.11], [0.11, 0.60, 0.11], [0.11, 0.60, 0.60], [0.135, 0.135, 0.765], [0.68, 0.12, 0.68], [0.68, 0.12, 0.12]]],
+  [4, [[0.059, 0.090, 0.165], [0.118, 0.161, 0.231], [0.231, 0.510, 0.965], [0.576, 0.773, 0.992], [0.231, 0.510, 0.965], [0.118, 0.161, 0.231], [0.059, 0.090, 0.165]]],
+  [11, [[0.851, 0.773, 0.757], [0.769, 0.545, 0.502], [0.792, 0.576, 0.522], [0.922, 0.863, 0.824], [0.608, 0.443, 0.412], [0.584, 0.416, 0.388], [0.851, 0.773, 0.757]]],
+  [14, [[0.000, 0.027, 0.392], [0.075, 0.337, 0.741], [0.522, 0.753, 0.929], [0.969, 0.976, 0.867], [1.000, 0.675, 0.000], [0.039, 0.027, 0.000], [0.000, 0.027, 0.392]]],
+  [15, [[0.000, 0.000, 0.000], [0.314, 0.000, 0.000], [1.000, 0.627, 0.000], [1.000, 1.000, 1.000], [1.000, 0.627, 0.000], [0.314, 0.000, 0.000], [0.000, 0.000, 0.000]]],
+  [16, [[0.098, 0.098, 0.098], [0.502, 0.000, 0.000], [1.000, 0.271, 0.000], [1.000, 0.549, 0.000], [1.000, 0.843, 0.000], [1.000, 0.937, 0.722], [0.098, 0.098, 0.098]]],
+  [20, [[0.000, 0.000, 0.200], [0.000, 0.082, 0.667], [0.051, 0.451, 0.557], [0.800, 0.800, 1.000], [1.000, 0.000, 0.259], [0.482, 0.776, 1.000], [0.000, 0.000, 0.200]]]
 ]);
 
 const FALLBACK_PALETTE = Object.freeze([
-    [0.110, 0.098, 0.090],
-    [0.471, 0.208, 0.059],
-    [0.882, 0.114, 0.282],
-    [0.996, 0.643, 0.686],
-    [0.882, 0.114, 0.282],
-    [0.471, 0.208, 0.059],
-    [0.110, 0.098, 0.090]
+  [0.110, 0.098, 0.090],
+  [0.471, 0.208, 0.059],
+  [0.882, 0.114, 0.282],
+  [0.996, 0.643, 0.686],
+  [0.882, 0.114, 0.282],
+  [0.471, 0.208, 0.059],
+  [0.110, 0.098, 0.090]
 ]);
 
 const VERTEX_SOURCE = lines(
-    'attribute vec2 a_position;',
-    'varying vec2 v_uv;',
-    'void main() {',
-    '  v_uv = (a_position + 1.0) * 0.5;',
-    '  gl_Position = vec4(a_position, 0.0, 1.0);',
-    '}'
+  'attribute vec2 a_position;',
+  'varying vec2 v_uv;',
+  'void main() {',
+  '  v_uv = (a_position + 1.0) * 0.5;',
+  '  gl_Position = vec4(a_position, 0.0, 1.0);',
+  '}'
 );
 
 const FRAGMENT_UNIFORMS = lines(
-    'precision highp float;',
-    'varying vec2 v_uv;',
-    '',
-    'uniform vec2 u_resolution;',
-    'uniform vec2 u_viewCenter;',
-    'uniform vec2 u_viewSpan;',
-    'uniform float u_domainBrightness;',
-    'uniform float u_domainContrast;',
-    'uniform float u_domainSaturation;',
-    'uniform float u_domainLightnessCycles;',
-    'uniform int u_domainPalette;',
-    '',
-    'uniform float u_useSphere;',
-    'uniform vec2 u_sphereCenter;',
-    'uniform float u_sphereRadius;',
-    'uniform float u_rotX;',
-    'uniform float u_rotY;',
-    'uniform vec3 u_lightDir;',
-    'uniform vec4 u_sphereLighting;',
-    '',
-    'uniform float u_isWPlaneColoring;',
-    'uniform float u_functionId;',
-    'uniform vec2 u_mobiusA;',
-    'uniform vec2 u_mobiusB;',
-    'uniform vec2 u_mobiusC;',
-    'uniform vec2 u_mobiusD;',
-    'uniform int u_polyDegree;',
-    `uniform vec2 u_polyCoeffs[${CFG.polyCoeffCount}];`,
-    'uniform float u_zetaContinuationEnabled;',
-    'uniform float u_zetaReflectionBoundary;',
-    'uniform float u_fracPower;',
-    'uniform int u_chainCount;',
-    'uniform int u_chainMode;',
-    'uniform float u_derivativeMode;',
-    'uniform float u_useOrbitColoring;'
+  'precision highp float;',
+  'varying vec2 v_uv;',
+  '',
+  'uniform vec2 u_resolution;',
+  'uniform vec2 u_viewCenter;',
+  'uniform vec2 u_viewSpan;',
+  'uniform float u_domainBrightness;',
+  'uniform float u_domainContrast;',
+  'uniform float u_domainSaturation;',
+  'uniform float u_domainLightnessCycles;',
+  'uniform int u_domainPalette;',
+  '',
+  'uniform float u_useSphere;',
+  'uniform vec2 u_sphereCenter;',
+  'uniform float u_sphereRadius;',
+  'uniform float u_rotX;',
+  'uniform float u_rotY;',
+  'uniform vec3 u_lightDir;',
+  'uniform vec4 u_sphereLighting;',
+  '',
+  'uniform float u_isWPlaneColoring;',
+  'uniform float u_functionId;',
+  'uniform vec2 u_mobiusA;',
+  'uniform vec2 u_mobiusB;',
+  'uniform vec2 u_mobiusC;',
+  'uniform vec2 u_mobiusD;',
+  'uniform int u_polyDegree;',
+  `uniform vec2 u_polyCoeffs[${CFG.polyCoeffCount}];`,
+  'uniform float u_zetaContinuationEnabled;',
+  'uniform float u_zetaReflectionBoundary;',
+  'uniform float u_fracPower;',
+  'uniform int u_chainCount;',
+  'uniform int u_chainMode;',
+  'uniform float u_derivativeMode;',
+  'uniform float u_useOrbitColoring;'
 );
 
 const DYNAMICS_COLOR_HELPERS = `
@@ -561,683 +561,1104 @@ void main() {
 `;
 
 const SUPPORT_DEFAULTS = Object.freeze({
-    available: false,
-    reason: 'disabled-or-unavailable',
-    warnedRuntimeFallback: false
+  available: false,
+  reason: 'disabled-or-unavailable',
+  warnedRuntimeFallback: false
 });
 
 const LIGHTING_UNIFORM_VALUES = Object.freeze([
-    SPHERE_TEXTURE_AMBIENT_INTENSITY,
-    SPHERE_TEXTURE_DIFFUSE_INTENSITY,
-    SPHERE_TEXTURE_SPECULAR_INTENSITY,
-    SPHERE_TEXTURE_SHININESS_FACTOR
+  SPHERE_TEXTURE_AMBIENT_INTENSITY,
+  SPHERE_TEXTURE_DIFFUSE_INTENSITY,
+  SPHERE_TEXTURE_SPECULAR_INTENSITY,
+  SPHERE_TEXTURE_SHININESS_FACTOR
 ]);
 
 const HAS_OWN = Function.call.bind(Object.prototype.hasOwnProperty);
 
 function lines(...parts) {
-    return parts.join('\n');
+  return parts.join('\n');
 }
 
 function clamp(value, min, max) {
-    return Math.max(min, Math.min(max, value));
+  return Math.max(min, Math.min(max, value));
 }
 
 function finite(value, fallback) {
-    return Number.isFinite(value) ? value : fallback;
+  return Number.isFinite(value) ? value : fallback;
 }
 
 function finiteNumber(value, fallback) {
-    const number = Number(value);
-    return Number.isFinite(number) ? number : fallback;
+  const number = Number(value);
+  return Number.isFinite(number) ? number : fallback;
 }
 
 function stateNumber(key, fallback) {
-    return finite(state?.[key], fallback);
+  return finite(state?.[key], fallback);
 }
 
 function enumId(table, key, fallback) {
-    return HAS_OWN(table, key) ? table[key] : fallback;
+  return HAS_OWN(table, key) ? table[key] : fallback;
 }
 
 function positivePixelSize(value) {
-    const number = Number(value);
-    return Number.isFinite(number) && number > 0 ? Math.max(1, Math.round(number)) : 0;
+  const number = Number(value);
+  return Number.isFinite(number) && number > 0 ? Math.max(1, Math.round(number)) : 0;
 }
 
 function uniformInt(value, fallback) {
-    const number = Number(value);
-    return Number.isFinite(number) ? Math.trunc(number) : fallback;
+  const number = Number(value);
+  return Number.isFinite(number) ? Math.trunc(number) : fallback;
 }
 
 function finiteRange(candidate) {
-    if (!Array.isArray(candidate) || candidate.length < 2) return null;
+  if (!Array.isArray(candidate) || candidate.length < 2) return null;
 
-    const start = Number(candidate[0]);
-    const end = Number(candidate[1]);
-    return Number.isFinite(start) && Number.isFinite(end) ? [start, end] : null;
+  const start = Number(candidate[0]);
+  const end = Number(candidate[1]);
+  return Number.isFinite(start) && Number.isFinite(end) ? [start, end] : null;
 }
 
 function chooseRange(primary, fallback) {
-    return finiteRange(primary) || finiteRange(fallback);
+  return finiteRange(primary) || finiteRange(fallback);
 }
 
 function recordFromPlanes(factory) {
-    return Object.fromEntries(PLANES.map((plane) => [plane, factory(plane)]));
+  return Object.fromEntries(PLANES.map((plane) => [plane, factory(plane)]));
 }
 
 function firstTruthyPlaneValue(record) {
-    return PLANES.map((plane) => record?.[plane]).find(Boolean) || null;
+  return PLANES.map((plane) => record?.[plane]).find(Boolean) || null;
 }
 
 function ensureRecord(owner, key) {
-    if (!owner[key] || typeof owner[key] !== 'object') owner[key] = {};
-    return owner[key];
+  if (!owner[key] || typeof owner[key] !== 'object') owner[key] = {};
+  return owner[key];
 }
 
 function assignPlaneRecord(target, source) {
-    for (const plane of PLANES) target[plane] = source?.[plane] || null;
-    return target;
+  for (const plane of PLANES) target[plane] = source?.[plane] || null;
+  return target;
 }
 
 function glslFloat(value) {
-    const number = Number.isFinite(value) ? value : 0;
-    return Number.isInteger(number) ? `${number}.0` : String(number);
+  const number = Number.isFinite(value) ? value : 0;
+  return Number.isInteger(number) ? `${number}.0` : String(number);
 }
 
 function glslVec3(rgb) {
-    return `vec3(${rgb.map(glslFloat).join(', ')})`;
+  return `vec3(${rgb.map(glslFloat).join(', ')})`;
 }
 
 function glslPaletteWrites(stops, indent) {
-    return stops.map((rgb, index) => `${indent}c${index} = ${glslVec3(rgb)};`).join('\n');
+  return stops.map((rgb, index) => `${indent}c${index} = ${glslVec3(rgb)};`).join('\n');
 }
 
 function glslPaletteBranch([paletteId, stops], index) {
-    return lines(
-        `  ${index ? 'else if' : 'if'} (paletteId == ${paletteId}) {`,
-        glslPaletteWrites(stops, '    '),
-        '    return;',
-        '  }'
-    );
+  return lines(
+    `  ${index ? 'else if' : 'if'} (paletteId == ${paletteId}) {`,
+    glslPaletteWrites(stops, '    '),
+    '    return;',
+    '  }'
+  );
 }
 
 function createPaletteLoaderSource() {
-    return lines(
-        'void loadPalette(int paletteId, out vec3 c0, out vec3 c1, out vec3 c2, out vec3 c3, out vec3 c4, out vec3 c5, out vec3 c6) {',
-        PALETTES.map(glslPaletteBranch).join('\n'),
-        glslPaletteWrites(FALLBACK_PALETTE, '  '),
-        '}'
-    );
+  return lines(
+    'void loadPalette(int paletteId, out vec3 c0, out vec3 c1, out vec3 c2, out vec3 c3, out vec3 c4, out vec3 c5, out vec3 c6) {',
+    PALETTES.map(glslPaletteBranch).join('\n'),
+    glslPaletteWrites(FALLBACK_PALETTE, '  '),
+    '}'
+  );
 }
 
 function createFragmentSource() {
-    return lines(
-        FRAGMENT_UNIFORMS,
-        '',
-        getGLSLComplexMathLibrary(state),
-        '',
-        createPaletteLoaderSource(),
-        '',
-        FRAGMENT_HELPERS,
-        '',
-        FRAGMENT_MAIN
-    );
+  return lines(
+    FRAGMENT_UNIFORMS,
+    '',
+    getGLSLComplexMathLibrary(state),
+    '',
+    createPaletteLoaderSource(),
+    '',
+    FRAGMENT_HELPERS,
+    '',
+    FRAGMENT_MAIN
+  );
 }
 
 function createCanvasAndWebGLContext() {
-    if (typeof document === 'undefined' || typeof document.createElement !== 'function') return null;
+  if (typeof document === 'undefined' || typeof document.createElement !== 'function') return null;
 
-    const canvas = document.createElement('canvas');
-    const gl = canvas.getContext('webgl', WEBGL_CONTEXT_ATTRIBUTES);
-    return gl ? { canvas, gl } : null;
+  const canvas = document.createElement('canvas');
+  const gl = canvas.getContext('webgl', WEBGL_CONTEXT_ATTRIBUTES);
+  return gl ? { canvas, gl } : null;
 }
 
 function createQuadBuffer(gl) {
-    const buffer = gl.createBuffer();
-    if (!buffer) return null;
+  const buffer = gl.createBuffer();
+  if (!buffer) return null;
 
-    gl.bindBuffer(gl.ARRAY_BUFFER, buffer);
-    gl.bufferData(gl.ARRAY_BUFFER, QUAD_VERTICES, gl.STATIC_DRAW);
-    return buffer;
+  gl.bindBuffer(gl.ARRAY_BUFFER, buffer);
+  gl.bufferData(gl.ARRAY_BUFFER, QUAD_VERTICES, gl.STATIC_DRAW);
+  return buffer;
 }
 
 function deleteRenderer(renderer) {
-    const gl = renderer?.gl;
-    if (!gl) return;
+  const gl = renderer?.gl;
+  if (!gl) return;
 
-    if (renderer.quadBuffer) gl.deleteBuffer(renderer.quadBuffer);
-    if (renderer.program) gl.deleteProgram(renderer.program);
+  if (renderer.quadBuffer) gl.deleteBuffer(renderer.quadBuffer);
+
+  const cache = renderer.programCache;
+  if (cache?.forEach) {
+    cache.forEach(record => {
+      if (record?.program) gl.deleteProgram(record.program);
+    });
+    cache.clear();
+  } else if (renderer.program) {
+    gl.deleteProgram(renderer.program);
+  }
 }
 
 function deletePlaneRenderers(renderers) {
-    for (const plane of PLANES) deleteRenderer(renderers?.[plane]);
+  for (const plane of PLANES) deleteRenderer(renderers?.[plane]);
 }
 
 function collectUniformLocations(gl, program) {
-    const locations = {};
+  const locations = {};
 
-    for (const [publicName, shaderName] of Object.entries(UNIFORM_ALIASES)) {
-        const location = gl.getUniformLocation(program, shaderName);
-        if (location === null) return null;
-        locations[publicName] = location;
-    }
+  for (const [publicName, shaderName] of Object.entries(UNIFORM_ALIASES)) {
+    const location = gl.getUniformLocation(program, shaderName);
+    if (location === null) return null;
+    locations[publicName] = location;
+  }
 
-    locations.uPolyCoeffs = Array.from(
-        { length: CFG.polyCoeffCount },
-        (_unused, index) => gl.getUniformLocation(program, `u_polyCoeffs[${index}]`)
-    );
+  locations.uPolyCoeffs = Array.from(
+    { length: CFG.polyCoeffCount },
+    (_unused, index) => gl.getUniformLocation(program, `u_polyCoeffs[${index}]`)
+  );
 
-    return locations;
+  return locations;
 }
 
-function buildRenderer(canvas, gl, program, quadBuffer, aPosition, uniforms) {
-    return {
-        canvas,
-        gl,
-        program,
-        quadBuffer,
-        aPosition,
-        ...uniforms
-    };
+const UNIFORM_KIND_1F = 1;
+const UNIFORM_KIND_1I = 2;
+const UNIFORM_KIND_2F = 3;
+const UNIFORM_KIND_3F = 4;
+const UNIFORM_KIND_4F = 5;
+const UNIFORM_COMPONENT_STRIDE = 4;
+
+function sameNumber(a, b) {
+  return a === b || (a !== a && b !== b);
+}
+
+function registerUniformSlot(slots, location, slot) {
+  if (location === null || location === undefined) return;
+  try {
+    slots.set(location, slot);
+  } catch (_error) {
+    // Host WebGLUniformLocation objects are normally WeakMap-compatible; this
+    // fallback keeps unusual test doubles functional without changing output.
+  }
+}
+
+function createUniformCommitter(gl, uniforms) {
+  const slots = new WeakMap();
+  let slotCount = 0;
+
+  for (const publicName of Object.keys(UNIFORM_ALIASES)) {
+    registerUniformSlot(slots, uniforms[publicName], slotCount++);
+  }
+  for (let i = 0; i < CFG.polyCoeffCount; i++) {
+    registerUniformSlot(slots, uniforms.uPolyCoeffs?.[i], slotCount++);
+  }
+
+  const valid = new Uint8Array(slotCount);
+  const kind = new Uint8Array(slotCount);
+  const values = new Float64Array(slotCount * UNIFORM_COMPONENT_STRIDE);
+
+  const slotOf = (location) => {
+    const slot = slots.get(location);
+    return slot === undefined ? -1 : slot;
+  };
+
+  const facade = {
+    uniform1f(location, x) {
+      const slot = slotOf(location);
+      if (slot < 0) {
+        gl.uniform1f(location, x);
+        return;
+      }
+
+      const offset = slot * UNIFORM_COMPONENT_STRIDE;
+      if (valid[slot] && kind[slot] === UNIFORM_KIND_1F && sameNumber(values[offset], x)) return;
+
+      valid[slot] = 1;
+      kind[slot] = UNIFORM_KIND_1F;
+      values[offset] = x;
+      gl.uniform1f(location, x);
+    },
+
+    uniform1i(location, x) {
+      const slot = slotOf(location);
+      if (slot < 0) {
+        gl.uniform1i(location, x);
+        return;
+      }
+
+      const offset = slot * UNIFORM_COMPONENT_STRIDE;
+      if (valid[slot] && kind[slot] === UNIFORM_KIND_1I && values[offset] === x) return;
+
+      valid[slot] = 1;
+      kind[slot] = UNIFORM_KIND_1I;
+      values[offset] = x;
+      gl.uniform1i(location, x);
+    },
+
+    uniform2f(location, x, y) {
+      const slot = slotOf(location);
+      if (slot < 0) {
+        gl.uniform2f(location, x, y);
+        return;
+      }
+
+      const offset = slot * UNIFORM_COMPONENT_STRIDE;
+      if (
+        valid[slot]
+        && kind[slot] === UNIFORM_KIND_2F
+        && sameNumber(values[offset], x)
+        && sameNumber(values[offset + 1], y)
+      ) return;
+
+      valid[slot] = 1;
+      kind[slot] = UNIFORM_KIND_2F;
+      values[offset] = x;
+      values[offset + 1] = y;
+      gl.uniform2f(location, x, y);
+    },
+
+    uniform3f(location, x, y, z) {
+      const slot = slotOf(location);
+      if (slot < 0) {
+        gl.uniform3f(location, x, y, z);
+        return;
+      }
+
+      const offset = slot * UNIFORM_COMPONENT_STRIDE;
+      if (
+        valid[slot]
+        && kind[slot] === UNIFORM_KIND_3F
+        && sameNumber(values[offset], x)
+        && sameNumber(values[offset + 1], y)
+        && sameNumber(values[offset + 2], z)
+      ) return;
+
+      valid[slot] = 1;
+      kind[slot] = UNIFORM_KIND_3F;
+      values[offset] = x;
+      values[offset + 1] = y;
+      values[offset + 2] = z;
+      gl.uniform3f(location, x, y, z);
+    },
+
+    uniform4f(location, x, y, z, w) {
+      const slot = slotOf(location);
+      if (slot < 0) {
+        gl.uniform4f(location, x, y, z, w);
+        return;
+      }
+
+      const offset = slot * UNIFORM_COMPONENT_STRIDE;
+      if (
+        valid[slot]
+        && kind[slot] === UNIFORM_KIND_4F
+        && sameNumber(values[offset], x)
+        && sameNumber(values[offset + 1], y)
+        && sameNumber(values[offset + 2], z)
+        && sameNumber(values[offset + 3], w)
+      ) return;
+
+      valid[slot] = 1;
+      kind[slot] = UNIFORM_KIND_4F;
+      values[offset] = x;
+      values[offset + 1] = y;
+      values[offset + 2] = z;
+      values[offset + 3] = w;
+      gl.uniform4f(location, x, y, z, w);
+    },
+
+    uniform1fv(location, data) {
+      if (data && data.length === 1) {
+        this.uniform1f(location, data[0]);
+        return;
+      }
+      gl.uniform1fv(location, data);
+    },
+
+    uniform1iv(location, data) {
+      if (data && data.length === 1) {
+        this.uniform1i(location, data[0]);
+        return;
+      }
+      gl.uniform1iv(location, data);
+    },
+
+    uniform2fv(location, data) {
+      if (data && data.length === 2) {
+        this.uniform2f(location, data[0], data[1]);
+        return;
+      }
+      gl.uniform2fv(location, data);
+    },
+
+    uniform3fv(location, data) {
+      if (data && data.length === 3) {
+        this.uniform3f(location, data[0], data[1], data[2]);
+        return;
+      }
+      gl.uniform3fv(location, data);
+    },
+
+    uniform4fv(location, data) {
+      if (data && data.length === 4) {
+        this.uniform4f(location, data[0], data[1], data[2], data[3]);
+        return;
+      }
+      gl.uniform4fv(location, data);
+    },
+
+    uniformMatrix2fv(location, transpose, data) {
+      gl.uniformMatrix2fv(location, transpose, data);
+    },
+
+    uniformMatrix3fv(location, transpose, data) {
+      gl.uniformMatrix3fv(location, transpose, data);
+    },
+
+    uniformMatrix4fv(location, transpose, data) {
+      gl.uniformMatrix4fv(location, transpose, data);
+    }
+  };
+
+  return {
+    gl: facade,
+    invalidate() {
+      valid.fill(0);
+    }
+  };
+}
+
+function createPipelineState() {
+  return {
+    viewportWidth: -1,
+    viewportHeight: -1,
+    program: null,
+    arrayBuffer: null,
+    attribPosition: -1,
+    vertexAttribPointerPosition: -1,
+    depthTestDisabled: false,
+    blendDisabled: false,
+    clearColorValid: false
+  };
+}
+
+function createRendererScratch(renderer) {
+  return {
+    targetCtx: null,
+    renderer,
+    targetWidth: 0,
+    targetHeight: 0,
+    origin: null,
+    scale: null,
+    x0: 0,
+    x1: 0,
+    y0: 0,
+    y1: 0,
+    isWPlaneColoring: false,
+    sphereParams: null,
+    map: null,
+    metrics: {
+      internalWidth: 1,
+      internalHeight: 1,
+      scaleX: 1,
+      scaleY: 1,
+      uniformScale: 1
+    },
+    view: new Float64Array(4),
+    sphere: new Float64Array(6),
+    light: new Float64Array(3)
+  };
+}
+
+function createProgramRecord(gl, fragmentSource) {
+  const program = createWebGLProgramShared(gl, VERTEX_SOURCE, fragmentSource);
+  if (!program) return null;
+
+  const aPosition = gl.getAttribLocation(program, 'a_position');
+  const uniforms = collectUniformLocations(gl, program);
+  if (aPosition < 0 || !uniforms) {
+    gl.deleteProgram(program);
+    return null;
+  }
+
+  return {
+    program,
+    aPosition,
+    uniforms,
+    uniformCommitter: createUniformCommitter(gl, uniforms)
+  };
+}
+
+function adoptProgramRecord(renderer, key, record) {
+  renderer.programKey = key;
+  renderer.program = record.program;
+  renderer.aPosition = record.aPosition;
+  renderer.uniformCommitter = record.uniformCommitter;
+  renderer.uniformGL = record.uniformCommitter.gl;
+
+  for (const publicName of Object.keys(UNIFORM_ALIASES)) {
+    renderer[publicName] = record.uniforms[publicName];
+  }
+  renderer.uPolyCoeffs = record.uniforms.uPolyCoeffs;
+
+  if (renderer.pipelineState) {
+    renderer.pipelineState.program = null;
+    renderer.pipelineState.attribPosition = -1;
+    renderer.pipelineState.vertexAttribPointerPosition = -1;
+  }
+}
+
+function buildRenderer(canvas, gl, quadBuffer, key, record) {
+  const renderer = {
+    canvas,
+    gl,
+    program: null,
+    programKey: '',
+    programCache: new Map(),
+    quadBuffer,
+    aPosition: -1,
+    pipelineState: createPipelineState(),
+    uniformCommitter: null,
+    uniformGL: null,
+    uPolyCoeffs: null
+  };
+
+  renderer.programCache.set(key, record);
+  adoptProgramRecord(renderer, key, record);
+  renderer.scratch = createRendererScratch(renderer);
+  return renderer;
+}
+
+function ensureRendererProgram(renderer, key, fragmentSource) {
+  if (!renderer || renderer.programKey === key) return !!renderer;
+
+  let record = renderer.programCache.get(key);
+  if (!record) {
+    record = createProgramRecord(renderer.gl, fragmentSource);
+    if (!record) return false;
+    renderer.programCache.set(key, record);
+  }
+
+  adoptProgramRecord(renderer, key, record);
+  return true;
+}
+
+function switchDomainRendererPrograms(key, fragmentSource) {
+  const renderers = webglDomainColorSupport?.renderers;
+  if (!renderers) return false;
+
+  let available = false;
+  for (const plane of PLANES) {
+    const renderer = renderers[plane];
+    if (!renderer || !liveContext(renderer.gl)) continue;
+    if (!ensureRendererProgram(renderer, key, fragmentSource)) return false;
+    available = true;
+  }
+  return available;
 }
 
 function liveContext(gl) {
-    return !!gl && (typeof gl.isContextLost !== 'function' || !gl.isContextLost());
+  return !!gl && (typeof gl.isContextLost !== 'function' || !gl.isContextLost());
 }
 
 function canvas2DTarget(targetCtx) {
-    return !!targetCtx
-        && typeof targetCtx.save === 'function'
-        && typeof targetCtx.restore === 'function'
-        && typeof targetCtx.setTransform === 'function'
-        && typeof targetCtx.clearRect === 'function'
-        && typeof targetCtx.drawImage === 'function';
+  return !!targetCtx
+    && typeof targetCtx.save === 'function'
+    && typeof targetCtx.restore === 'function'
+    && typeof targetCtx.setTransform === 'function'
+    && typeof targetCtx.clearRect === 'function'
+    && typeof targetCtx.drawImage === 'function';
 }
 
 function resetSupportObject(support) {
-    const renderers = ensureRecord(support, 'renderers');
+  const renderers = ensureRecord(support, 'renderers');
 
-    deletePlaneRenderers(renderers);
-    Object.assign(support, SUPPORT_DEFAULTS);
+  deletePlaneRenderers(renderers);
+  Object.assign(support, SUPPORT_DEFAULTS);
 
-    assignPlaneRecord(renderers, null);
-    assignPlaneRecord(ensureRecord(support, 'diagnostics'), null);
+  assignPlaneRecord(renderers, null);
+  assignPlaneRecord(ensureRecord(support, 'diagnostics'), null);
 
-    if (support.warnedFunctionFallbacks?.clear) support.warnedFunctionFallbacks.clear();
+  if (support.warnedFunctionFallbacks?.clear) support.warnedFunctionFallbacks.clear();
 }
 
 function installSupportRenderers(support, renderers, diagnostics) {
-    assignPlaneRecord(ensureRecord(support, 'renderers'), renderers);
-    assignPlaneRecord(ensureRecord(support, 'diagnostics'), diagnostics);
+  assignPlaneRecord(ensureRecord(support, 'renderers'), renderers);
+  assignPlaneRecord(ensureRecord(support, 'diagnostics'), diagnostics);
 
-    support.available = true;
-    support.reason = renderers.z && renderers.w ? 'ready' : 'partial-ready';
+  support.available = true;
+  support.reason = renderers.z && renderers.w ? 'ready' : 'partial-ready';
 }
 
 function backendLabel(diagnostics) {
-    const diag = firstTruthyPlaneValue(diagnostics);
-    if (!diag) return null;
+  const diag = firstTruthyPlaneValue(diagnostics);
+  if (!diag) return null;
 
-    return {
-        software: !!diag.softwareBackend,
-        vendor: diag.unmaskedVendor || diag.vendor || 'unknown vendor',
-        renderer: diag.unmaskedRenderer || diag.renderer || 'unknown renderer'
-    };
+  return {
+    software: !!diag.softwareBackend,
+    vendor: diag.unmaskedVendor || diag.vendor || 'unknown vendor',
+    renderer: diag.unmaskedRenderer || diag.renderer || 'unknown renderer'
+  };
 }
 
 function announceBackend(diagnostics) {
-    const label = backendLabel(diagnostics);
+  const label = backendLabel(diagnostics);
 
-    if (!label) {
-        console.info('GPU domain coloring enabled.');
-        return;
-    }
+  if (!label) {
+    console.info('GPU domain coloring enabled.');
+    return;
+  }
 
-    const message = `GPU domain coloring ${label.software ? 'is running on a software WebGL backend' : 'enabled on'} ${label.vendor} | ${label.renderer}.`;
-    (label.software ? console.warn : console.info)(message);
+  const message = `GPU domain coloring ${label.software ? 'is running on a software WebGL backend' : 'enabled on'} ${label.vendor} | ${label.renderer}.`;
+  (label.software ? console.warn : console.info)(message);
 }
 
 function createCacheStringifier() {
-    const seen = new WeakSet();
+  const seen = new WeakSet();
 
-    return (_key, value) => {
-        if (typeof value === 'bigint') return `${value}n`;
-        if (typeof value === 'function') return `[Function:${value.name || 'anonymous'}]`;
+  return (_key, value) => {
+    if (typeof value === 'bigint') return `${value}n`;
+    if (typeof value === 'function') return `[Function:${value.name || 'anonymous'}]`;
 
-        if (value && typeof value === 'object') {
-            if (seen.has(value)) return '[Circular]';
-            seen.add(value);
-        }
+    if (value && typeof value === 'object') {
+      if (seen.has(value)) return '[Circular]';
+      seen.add(value);
+    }
 
-        return value;
-    };
+    return value;
+  };
 }
 
 function serializeProgramMathForCache() {
-    try {
-        return JSON.stringify({
-            algebraic: state?.algebraicChainingTerms || [],
-            algebraicZ: state?.algebraicChainingZExpr || 'z',
-            dynamic: dynamicAggregateGLSLSignature(state)
-        }, createCacheStringifier());
-    } catch (error) {
-        return `unserializable:${error?.message || String(error)}`;
-    }
+  try {
+    const dynamicActive = isDynamicAggregateGLSLActive(state);
+    const algebraicActive = state?.currentFunction === 'algebraic_chaining';
+    return JSON.stringify({
+      mode: dynamicActive ? 'dynamic' : (algebraicActive ? 'algebraic' : 'base'),
+      algebraic: algebraicActive ? state?.algebraicChainingTerms || [] : null,
+      algebraicZ: algebraicActive ? state?.algebraicChainingZExpr || 'z' : null,
+      dynamic: dynamicActive ? dynamicAggregateGLSLSignature(state) : null
+    }, createCacheStringifier());
+  } catch (error) {
+    return `unserializable:${error?.message || String(error)}`;
+  }
 }
 
 let mathRendererHashCached = '';
 let mathRendererHashDirty = true;
 
 if (typeof eventBus !== 'undefined' && eventBus.on) {
-    eventBus.on('state:change', () => {
-        mathRendererHashDirty = true;
-    });
+  eventBus.on('state:change', () => {
+    mathRendererHashDirty = true;
+  });
 }
 
 function refreshMathRendererIfNeeded() {
-    if (state?.currentFunction !== 'algebraic_chaining' && !isDynamicAggregateGLSLActive(state)) return true;
-    if (!webglDomainColorSupport) return false;
+  if (!webglDomainColorSupport) return false;
 
-    if (mathRendererHashDirty) {
-        mathRendererHashCached = serializeProgramMathForCache();
-        mathRendererHashDirty = false;
-    }
-    const hash = mathRendererHashCached;
-    if (webglDomainColorSupport.lastAlgHash === hash) return true;
+  if (mathRendererHashDirty) {
+    mathRendererHashCached = serializeProgramMathForCache();
+    mathRendererHashDirty = false;
+  }
 
+  const hash = mathRendererHashCached;
+  if (webglDomainColorSupport.lastAlgHash === hash) return true;
+
+  if (!domainRenderersAvailable(webglDomainColorSupport.renderers)) {
     initializeWebGLDomainColoringSupport();
     webglDomainColorSupport.lastAlgHash = hash;
     return !!webglDomainColorSupport.available;
+  }
+
+  const fragmentSource = createFragmentSource();
+  if (!switchDomainRendererPrograms(hash, fragmentSource)) return false;
+
+  webglDomainColorSupport.lastAlgHash = hash;
+  webglDomainColorSupport.available = true;
+  webglDomainColorSupport.reason = webglDomainColorSupport.renderers?.z && webglDomainColorSupport.renderers?.w
+    ? 'ready'
+    : 'partial-ready';
+  return true;
 }
 
-function targetSize(planeParams) {
-    const width = positivePixelSize(planeParams?.width);
-    const height = positivePixelSize(planeParams?.height);
-    return width && height ? { width, height } : null;
-}
+function readRangeEndpoints(primary, fallback, job, axis) {
+  const primaryOk = Array.isArray(primary) && primary.length >= 2;
+  const candidate = primaryOk ? primary : fallback;
+  if (!Array.isArray(candidate) || candidate.length < 2) return false;
 
-function viewBounds(planeParams) {
-    const xRange = chooseRange(planeParams?.currentVisXRange, planeParams?.xRange);
-    const yRange = chooseRange(planeParams?.currentVisYRange, planeParams?.yRange);
-    return xRange && yRange ? { xRange, yRange } : null;
+  const start = Number(candidate[0]);
+  const end = Number(candidate[1]);
+  if (!Number.isFinite(start) || !Number.isFinite(end)) return false;
+
+  if (axis === 0) {
+    job.x0 = start;
+    job.x1 = end;
+  } else {
+    job.y0 = start;
+    job.y1 = end;
+  }
+  return true;
 }
 
 function renderOptions(options) {
-    return options && typeof options === 'object' ? options : EMPTY_OPTIONS;
+  return options && typeof options === 'object' ? options : EMPTY_OPTIONS;
 }
 
 function resolveRenderJob(targetCtx, planeParams, options) {
-    if (!canvas2DTarget(targetCtx)) return null;
+  if (!canvas2DTarget(targetCtx)) return null;
 
-    const opts = renderOptions(options);
-    const planeKey = inferDomainColorPlaneKey(targetCtx, opts.planeKey);
-    const renderer = getWebGLDomainColorRenderer(planeKey);
-    if (!renderer || !liveContext(renderer.gl)) return null;
+  const opts = renderOptions(options);
+  const planeKey = inferDomainColorPlaneKey(targetCtx, opts.planeKey);
+  const renderer = getWebGLDomainColorRenderer(planeKey);
+  if (!renderer || !liveContext(renderer.gl)) return null;
 
-    const size = targetSize(planeParams);
-    const bounds = viewBounds(planeParams);
-    if (!size || !bounds) return null;
+  const width = positivePixelSize(planeParams?.width);
+  const height = positivePixelSize(planeParams?.height);
+  if (!width || !height) return null;
 
-    return {
-        targetCtx,
-        renderer,
-        targetWidth: size.width,
-        targetHeight: size.height,
-        origin: planeParams.origin || null,
-        scale: planeParams.scale || null,
-        xRange: bounds.xRange,
-        yRange: bounds.yRange,
-        isWPlaneColoring: !!opts.isWPlaneColoring,
-        sphereParams: opts.sphereParams || null,
-        map: opts.map || null
-    };
+  const job = renderer.scratch;
+  if (!readRangeEndpoints(planeParams?.currentVisXRange, planeParams?.xRange, job, 0)) return null;
+  if (!readRangeEndpoints(planeParams?.currentVisYRange, planeParams?.yRange, job, 1)) return null;
+
+  job.targetCtx = targetCtx;
+  job.renderer = renderer;
+  job.targetWidth = width;
+  job.targetHeight = height;
+  job.origin = planeParams.origin || null;
+  job.scale = planeParams.scale || null;
+  job.isWPlaneColoring = !!opts.isWPlaneColoring;
+  job.sphereParams = opts.sphereParams || null;
+  job.map = opts.map || null;
+  return job;
 }
 
-function renderMetrics(targetWidth, targetHeight) {
-    const scale = getWebGLDomainColorRenderScale();
-    const internalWidth = Math.max(1, Math.round(targetWidth * scale));
-    const internalHeight = Math.max(1, Math.round(targetHeight * scale));
-    const scaleX = internalWidth / targetWidth;
-    const scaleY = internalHeight / targetHeight;
+function writeRenderMetrics(metrics, targetWidth, targetHeight) {
+  const scale = getWebGLDomainColorRenderScale();
+  const internalWidth = Math.max(1, Math.round(targetWidth * scale));
+  const internalHeight = Math.max(1, Math.round(targetHeight * scale));
+  const scaleX = internalWidth / targetWidth;
+  const scaleY = internalHeight / targetHeight;
 
-    return {
-        internalWidth,
-        internalHeight,
-        scaleX,
-        scaleY,
-        uniformScale: Math.min(scaleX, scaleY)
-    };
+  metrics.internalWidth = internalWidth;
+  metrics.internalHeight = internalHeight;
+  metrics.scaleX = scaleX;
+  metrics.scaleY = scaleY;
+  metrics.uniformScale = Math.min(scaleX, scaleY);
+  return metrics;
 }
 
 function bindPipeline(gl, renderer) {
-    gl.viewport(0, 0, renderer.canvas.width, renderer.canvas.height);
+  const pipeline = renderer.pipelineState;
+  const width = renderer.canvas.width;
+  const height = renderer.canvas.height;
+
+  if (pipeline.viewportWidth !== width || pipeline.viewportHeight !== height) {
+    gl.viewport(0, 0, width, height);
+    pipeline.viewportWidth = width;
+    pipeline.viewportHeight = height;
+  }
+
+  if (pipeline.program !== renderer.program) {
     gl.useProgram(renderer.program);
+    pipeline.program = renderer.program;
+    renderer.uniformCommitter.invalidate();
+  }
+
+  if (pipeline.arrayBuffer !== renderer.quadBuffer) {
     gl.bindBuffer(gl.ARRAY_BUFFER, renderer.quadBuffer);
+    pipeline.arrayBuffer = renderer.quadBuffer;
+    pipeline.vertexAttribPointerPosition = -1;
+  }
+
+  if (pipeline.attribPosition !== renderer.aPosition) {
     gl.enableVertexAttribArray(renderer.aPosition);
+    pipeline.attribPosition = renderer.aPosition;
+    pipeline.vertexAttribPointerPosition = -1;
+  }
+
+  if (pipeline.vertexAttribPointerPosition !== renderer.aPosition) {
     gl.vertexAttribPointer(renderer.aPosition, 2, gl.FLOAT, false, 0, 0);
+    pipeline.vertexAttribPointerPosition = renderer.aPosition;
+  }
 }
 
-function resolveSphere(sphereParams, job, metrics) {
-    if (!sphereParams) {
-        return {
-            enabled: false,
-            centerX: metrics.internalWidth * 0.5,
-            centerY: metrics.internalHeight * 0.5,
-            radius: 0,
-            rotX: 0,
-            rotY: 0
-        };
-    }
+function writeSphereUniforms(scratch, sphereParams, job, metrics) {
+  const sphere = scratch.sphere;
 
-    const centerX = finite(sphereParams.centerX, job.targetWidth * 0.5);
-    const centerY = finite(sphereParams.centerY, job.targetHeight * 0.5);
-    const radius = finite(sphereParams.radius, 0);
+  if (!sphereParams) {
+    sphere[0] = 0;
+    sphere[1] = metrics.internalWidth * 0.5;
+    sphere[2] = metrics.internalHeight * 0.5;
+    sphere[3] = 0;
+    sphere[4] = 0;
+    sphere[5] = 0;
+    return sphere;
+  }
 
-    return {
-        enabled: true,
-        centerX: centerX * metrics.scaleX,
-        centerY: centerY * metrics.scaleY,
-        radius: Math.max(0, radius) * metrics.uniformScale,
-        rotX: finite(sphereParams.rotX, 0),
-        rotY: finite(sphereParams.rotY, 0)
-    };
+  const centerX = finite(sphereParams.centerX, job.targetWidth * 0.5);
+  const centerY = finite(sphereParams.centerY, job.targetHeight * 0.5);
+  const radius = finite(sphereParams.radius, 0);
+
+  sphere[0] = 1;
+  sphere[1] = centerX * metrics.scaleX;
+  sphere[2] = centerY * metrics.scaleY;
+  sphere[3] = Math.max(0, radius) * metrics.uniformScale;
+  sphere[4] = finite(sphereParams.rotX, 0);
+  sphere[5] = finite(sphereParams.rotY, 0);
+  return sphere;
 }
 
-function resolvePlanarView(job) {
-    const scaleX = finiteNumber(job.scale?.x, 0);
-    const scaleY = finiteNumber(job.scale?.y, 0);
-    const originX = finiteNumber(job.origin?.x, NaN);
-    const originY = finiteNumber(job.origin?.y, NaN);
+function writePlanarView(scratch, job) {
+  const view = scratch.view;
+  const scaleX = finiteNumber(job.scale?.x, 0);
+  const scaleY = finiteNumber(job.scale?.y, 0);
+  const originX = finiteNumber(job.origin?.x, NaN);
+  const originY = finiteNumber(job.origin?.y, NaN);
 
-    if (scaleX > 0 && scaleY > 0 && Number.isFinite(originX) && Number.isFinite(originY)) {
-        return {
-            centerX: (job.targetWidth * 0.5 - originX) / scaleX,
-            centerY: (originY - job.targetHeight * 0.5) / scaleY,
-            spanX: job.targetWidth / scaleX,
-            spanY: job.targetHeight / scaleY
-        };
-    }
+  if (scaleX > 0 && scaleY > 0 && Number.isFinite(originX) && Number.isFinite(originY)) {
+    view[0] = (job.targetWidth * 0.5 - originX) / scaleX;
+    view[1] = (originY - job.targetHeight * 0.5) / scaleY;
+    view[2] = job.targetWidth / scaleX;
+    view[3] = job.targetHeight / scaleY;
+    return view;
+  }
 
-    return {
-        centerX: (job.xRange[0] + job.xRange[1]) * 0.5,
-        centerY: (job.yRange[0] + job.yRange[1]) * 0.5,
-        spanX: job.xRange[1] - job.xRange[0],
-        spanY: job.yRange[1] - job.yRange[0]
-    };
+  view[0] = (job.x0 + job.x1) * 0.5;
+  view[1] = (job.y0 + job.y1) * 0.5;
+  view[2] = job.x1 - job.x0;
+  view[3] = job.y1 - job.y0;
+  return view;
 }
 
-function uploadFrameUniforms(gl, renderer, job) {
-    const view = resolvePlanarView(job);
+function uploadFrameUniforms(uniformGL, renderer, job) {
+  const view = writePlanarView(renderer.scratch, job);
 
-    gl.uniform2f(renderer.uResolution, renderer.canvas.width, renderer.canvas.height);
-    gl.uniform2f(renderer.uViewCenter, view.centerX, view.centerY);
-    gl.uniform2f(renderer.uViewSpan, view.spanX, view.spanY);
+  uniformGL.uniform2f(renderer.uResolution, renderer.canvas.width, renderer.canvas.height);
+  uniformGL.uniform2f(renderer.uViewCenter, view[0], view[1]);
+  uniformGL.uniform2f(renderer.uViewSpan, view[2], view[3]);
 }
 
-function uploadDomainStyleUniforms(gl, renderer) {
-    for (const [uniformKey, stateKey, fallback] of DOMAIN_FLOAT_UNIFORMS) {
-        gl.uniform1f(renderer[uniformKey], stateNumber(stateKey, fallback));
-    }
+function uploadDomainStyleUniforms(uniformGL, renderer) {
+  for (let i = 0; i < DOMAIN_FLOAT_UNIFORMS.length; i++) {
+    const spec = DOMAIN_FLOAT_UNIFORMS[i];
+    uniformGL.uniform1f(renderer[spec[0]], stateNumber(spec[1], spec[2]));
+  }
 
-    gl.uniform1i(renderer.uDomainPalette, enumId(DOMAIN_PALETTE_IDS, state?.domainPalette, 0));
+  uniformGL.uniform1i(renderer.uDomainPalette, enumId(DOMAIN_PALETTE_IDS, state?.domainPalette, 0));
 }
 
-function uploadSphereUniforms(gl, renderer, job, metrics) {
-    const sphere = resolveSphere(job.sphereParams, job, metrics);
+function uploadSphereUniforms(uniformGL, renderer, job, metrics) {
+  const sphere = writeSphereUniforms(renderer.scratch, job.sphereParams, job, metrics);
 
-    gl.uniform1f(renderer.uUseSphere, sphere.enabled ? 1 : 0);
-    gl.uniform2f(renderer.uSphereCenter, sphere.centerX, sphere.centerY);
-    gl.uniform1f(renderer.uSphereRadius, sphere.radius);
-    gl.uniform1f(renderer.uRotX, sphere.rotX);
-    gl.uniform1f(renderer.uRotY, sphere.rotY);
+  uniformGL.uniform1f(renderer.uUseSphere, sphere[0]);
+  uniformGL.uniform2f(renderer.uSphereCenter, sphere[1], sphere[2]);
+  uniformGL.uniform1f(renderer.uSphereRadius, sphere[3]);
+  uniformGL.uniform1f(renderer.uRotX, sphere[4]);
+  uniformGL.uniform1f(renderer.uRotY, sphere[5]);
+  return sphere[0] > 0;
 }
 
-function uploadLightingUniforms(gl, renderer) {
-    const { x, y, z } = getNormalizedSphereLightDirection();
+function writeNormalizedSphereLightDirection(out) {
+  const lx = finiteNumber(SPHERE_LIGHT_DIRECTION_CAMERA?.x, 0);
+  const ly = finiteNumber(SPHERE_LIGHT_DIRECTION_CAMERA?.y, 0);
+  const lz = finiteNumber(SPHERE_LIGHT_DIRECTION_CAMERA?.z, 1);
+  const magnitude = Math.hypot(lx, ly, lz);
 
-    gl.uniform3f(renderer.uLightDir, x, y, z);
-    gl.uniform4f(
-        renderer.uSphereLighting,
-        finiteNumber(LIGHTING_UNIFORM_VALUES[0], 0),
-        finiteNumber(LIGHTING_UNIFORM_VALUES[1], 0),
-        finiteNumber(LIGHTING_UNIFORM_VALUES[2], 0),
-        finiteNumber(LIGHTING_UNIFORM_VALUES[3], 1)
-    );
+  if (Number.isFinite(magnitude) && magnitude >= 1e-9) {
+    out[0] = lx / magnitude;
+    out[1] = ly / magnitude;
+    out[2] = lz / magnitude;
+    return out;
+  }
+
+  out[0] = 0;
+  out[1] = 0;
+  out[2] = 1;
+  return out;
 }
 
-function uploadChainingUniforms(gl, renderer) {
-    const enabled = !!state?.chainingEnabled;
-    const chainCount = enabled
-        ? Math.max(1, Math.min(CFG.maxChainStepsGlsl, uniformInt(state.chainCount, 1)))
-        : 1;
-    const chainMode = enabled ? enumId(CHAIN_MODE_IDS, state.chainingMode, 1) : 0;
+function uploadLightingUniforms(uniformGL, renderer) {
+  const light = writeNormalizedSphereLightDirection(renderer.scratch.light);
 
-    gl.uniform1i(renderer.uChainCount, chainCount);
-    gl.uniform1i(renderer.uChainMode, chainMode);
-    gl.uniform1f(renderer.uUseOrbitColoring, state?.fractalOrbitColoringEnabled ? 1 : 0);
+  uniformGL.uniform3f(renderer.uLightDir, light[0], light[1], light[2]);
+  uniformGL.uniform4f(
+    renderer.uSphereLighting,
+    finiteNumber(LIGHTING_UNIFORM_VALUES[0], 0),
+    finiteNumber(LIGHTING_UNIFORM_VALUES[1], 0),
+    finiteNumber(LIGHTING_UNIFORM_VALUES[2], 0),
+    finiteNumber(LIGHTING_UNIFORM_VALUES[3], 1)
+  );
 }
 
-function uploadRenderUniforms(gl, renderer, job, metrics) {
-    uploadFrameUniforms(gl, renderer, job);
-    uploadDomainStyleUniforms(gl, renderer);
-    uploadSphereUniforms(gl, renderer, job, metrics);
-    uploadLightingUniforms(gl, renderer);
-    gl.uniform1f(renderer.uIsWPlaneColoring, job.isWPlaneColoring ? 1 : 0);
-    gl.uniform1f(renderer.uDerivativeMode, job.map?.presentation === 'derivative' ? 1 : 0);
-    setComplexFunctionUniformsShared(gl, renderer, state);
-    uploadChainingUniforms(gl, renderer);
+function uploadChainingUniforms(uniformGL, renderer) {
+  const enabled = !!state?.chainingEnabled;
+  const chainCount = enabled
+    ? Math.max(1, Math.min(CFG.maxChainStepsGlsl, uniformInt(state.chainCount, 1)))
+    : 1;
+  const chainMode = enabled ? enumId(CHAIN_MODE_IDS, state.chainingMode, 1) : 0;
+
+  uniformGL.uniform1i(renderer.uChainCount, chainCount);
+  uniformGL.uniform1i(renderer.uChainMode, chainMode);
+  uniformGL.uniform1f(renderer.uUseOrbitColoring, state?.fractalOrbitColoringEnabled ? 1 : 0);
 }
 
-function draw(gl) {
+function uploadRenderUniforms(renderer, job, metrics) {
+  const uniformGL = renderer.uniformGL;
+
+  uploadFrameUniforms(uniformGL, renderer, job);
+  uploadDomainStyleUniforms(uniformGL, renderer);
+  if (uploadSphereUniforms(uniformGL, renderer, job, metrics)) {
+    uploadLightingUniforms(uniformGL, renderer);
+  }
+  uniformGL.uniform1f(renderer.uIsWPlaneColoring, job.isWPlaneColoring ? 1 : 0);
+  uniformGL.uniform1f(renderer.uDerivativeMode, job.map?.presentation === 'derivative' ? 1 : 0);
+  setComplexFunctionUniformsShared(uniformGL, renderer, state);
+  uploadChainingUniforms(uniformGL, renderer);
+}
+
+function draw(gl, renderer) {
+  const pipeline = renderer.pipelineState;
+
+  if (!pipeline.depthTestDisabled) {
     gl.disable(gl.DEPTH_TEST);
+    pipeline.depthTestDisabled = true;
+  }
+  if (!pipeline.blendDisabled) {
     gl.disable(gl.BLEND);
+    pipeline.blendDisabled = true;
+  }
+  if (!pipeline.clearColorValid) {
     gl.clearColor(0, 0, 0, 0);
-    gl.clear(gl.COLOR_BUFFER_BIT);
-    gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
+    pipeline.clearColorValid = true;
+  }
+
+  gl.clear(gl.COLOR_BUFFER_BIT);
+  gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
 }
 
 function copyToTarget(renderer, job) {
-    const ctx = job.targetCtx;
+  const ctx = job.targetCtx;
 
-    ctx.save();
-    try {
-        ctx.setTransform(1, 0, 0, 1, 0, 0);
-        ctx.clearRect(0, 0, job.targetWidth, job.targetHeight);
-        ctx.drawImage(
-            renderer.canvas,
-            0, 0, renderer.canvas.width, renderer.canvas.height,
-            0, 0, job.targetWidth, job.targetHeight
-        );
-    } finally {
-        ctx.restore();
-    }
+  ctx.save();
+  try {
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    ctx.clearRect(0, 0, job.targetWidth, job.targetHeight);
+    ctx.drawImage(
+      renderer.canvas,
+      0, 0, renderer.canvas.width, renderer.canvas.height,
+      0, 0, job.targetWidth, job.targetHeight
+    );
+  } finally {
+    ctx.restore();
+  }
 }
 
 function executeRenderJob(job) {
-    const metrics = renderMetrics(job.targetWidth, job.targetHeight);
-    const { renderer } = job;
-    const { gl } = renderer;
+  const { renderer } = job;
+  const { gl } = renderer;
+  const metrics = writeRenderMetrics(renderer.scratch.metrics, job.targetWidth, job.targetHeight);
 
-    resizeWebGLDomainColorRenderer(renderer, metrics.internalWidth, metrics.internalHeight);
-    bindPipeline(gl, renderer);
-    uploadRenderUniforms(gl, renderer, job, metrics);
-    draw(gl);
-    copyToTarget(renderer, job);
+  resizeWebGLDomainColorRenderer(renderer, metrics.internalWidth, metrics.internalHeight);
+  bindPipeline(gl, renderer);
+  uploadRenderUniforms(renderer, job, metrics);
+  draw(gl, renderer);
+  copyToTarget(renderer, job);
 
-    return true;
+  return true;
 }
 
 function domainRenderersAvailable(renderers) {
-    return PLANES.some((plane) => !!renderers[plane]);
+  return PLANES.some((plane) => !!renderers[plane]);
 }
 
 function currentFunctionSupported(functionName, isWPlaneColoring) {
-    if (isWebGLDomainColoringFunctionSupported(functionName, isWPlaneColoring)) return true;
+  if (isWebGLDomainColoringFunctionSupported(functionName, isWPlaneColoring)) return true;
 
-    warnWebGLDomainFunctionFallback(functionName);
-    return false;
+  warnWebGLDomainFunctionFallback(functionName);
+  return false;
 }
 
 export function getWebGLDomainColorRenderScale() {
 
-    const baseScale = finite(WEBGL_DOMAIN_COLOR_SUPERSAMPLE, CFG.defaultSupersample);
-    const stressScale = finite(WEBGL_DOMAIN_COLOR_STRESS_SCALE, CFG.defaultStressScale);
-    const requestedScale = state?.webglGpuStressMode ? Math.max(baseScale, stressScale) : baseScale;
-    const dpr = finite(typeof window === 'undefined' ? 1 : window.devicePixelRatio, 1);
-    const dprBoost = clamp(dpr * CFG.dprScaleFactor, 1, CFG.maxDprBoost);
+  const baseScale = finite(WEBGL_DOMAIN_COLOR_SUPERSAMPLE, CFG.defaultSupersample);
+  const stressScale = finite(WEBGL_DOMAIN_COLOR_STRESS_SCALE, CFG.defaultStressScale);
+  const requestedScale = state?.webglGpuStressMode ? Math.max(baseScale, stressScale) : baseScale;
+  const dpr = finite(typeof window === 'undefined' ? 1 : window.devicePixelRatio, 1);
+  const dprBoost = clamp(dpr * CFG.dprScaleFactor, 1, CFG.maxDprBoost);
 
-    return clamp(requestedScale * dprBoost, 1, CFG.maxRenderScale);
+  return clamp(requestedScale * dprBoost, 1, CFG.maxRenderScale);
 }
 
 export function createWebGLDomainColorRenderer() {
-    const contextBundle = createCanvasAndWebGLContext();
-    if (!contextBundle) return null;
+  const contextBundle = createCanvasAndWebGLContext();
+  if (!contextBundle) return null;
 
-    const { canvas, gl } = contextBundle;
-    const program = createWebGLProgramShared(gl, VERTEX_SOURCE, createFragmentSource());
-    if (!program) return null;
+  const { canvas, gl } = contextBundle;
+  const fragmentSource = createFragmentSource();
+  const key = serializeProgramMathForCache();
+  const record = createProgramRecord(gl, fragmentSource);
+  if (!record) return null;
 
-    const quadBuffer = createQuadBuffer(gl);
-    if (!quadBuffer) {
-        gl.deleteProgram(program);
-        return null;
-    }
+  const quadBuffer = createQuadBuffer(gl);
+  if (!quadBuffer) {
+    gl.deleteProgram(record.program);
+    return null;
+  }
 
-    const aPosition = gl.getAttribLocation(program, 'a_position');
-    const uniforms = collectUniformLocations(gl, program);
-    if (aPosition < 0 || !uniforms) {
-        gl.deleteBuffer(quadBuffer);
-        gl.deleteProgram(program);
-        return null;
-    }
-
-    return buildRenderer(canvas, gl, program, quadBuffer, aPosition, uniforms);
+  return buildRenderer(canvas, gl, quadBuffer, key, record);
 }
 
 export function isWebGLDomainColoringFunctionSupported(functionName, isWPlaneColoring = false) {
-    if (!isWPlaneColoring && isDynamicAggregateGLSLActive(state)) {
-        const compiled = buildDynamicAggregateGLSL(
-            state,
-            name => getWebGLDomainColorFunctionIdShared(name, true)
-        );
-        return Boolean(compiled.source && !compiled.error);
-    }
-    return !!isWPlaneColoring || getWebGLDomainColorFunctionIdShared(functionName) !== 0;
+  if (!isWPlaneColoring && isDynamicAggregateGLSLActive(state)) {
+    const compiled = buildDynamicAggregateGLSL(
+      state,
+      name => getWebGLDomainColorFunctionIdShared(name, true)
+    );
+    return Boolean(compiled.source && !compiled.error);
+  }
+  return !!isWPlaneColoring || getWebGLDomainColorFunctionIdShared(functionName) !== 0;
 }
 
 export function resizeWebGLDomainColorRenderer(renderer, width, height) {
-    if (!renderer?.canvas) return;
+  if (!renderer?.canvas) return;
 
-    const nextWidth = positivePixelSize(width);
-    const nextHeight = positivePixelSize(height);
-    if (!nextWidth || !nextHeight) return;
+  const nextWidth = positivePixelSize(width);
+  const nextHeight = positivePixelSize(height);
+  if (!nextWidth || !nextHeight) return;
 
-    if (renderer.canvas.width !== nextWidth || renderer.canvas.height !== nextHeight) {
-        renderer.canvas.width = nextWidth;
-        renderer.canvas.height = nextHeight;
+  if (renderer.canvas.width !== nextWidth || renderer.canvas.height !== nextHeight) {
+    renderer.canvas.width = nextWidth;
+    renderer.canvas.height = nextHeight;
+    if (renderer.pipelineState) {
+      renderer.pipelineState.viewportWidth = -1;
+      renderer.pipelineState.viewportHeight = -1;
     }
+  }
 }
 
 export function getNormalizedSphereLightDirection() {
-    const lx = finiteNumber(SPHERE_LIGHT_DIRECTION_CAMERA?.x, 0);
-    const ly = finiteNumber(SPHERE_LIGHT_DIRECTION_CAMERA?.y, 0);
-    const lz = finiteNumber(SPHERE_LIGHT_DIRECTION_CAMERA?.z, 1);
-    const magnitude = Math.hypot(lx, ly, lz);
+  const lx = finiteNumber(SPHERE_LIGHT_DIRECTION_CAMERA?.x, 0);
+  const ly = finiteNumber(SPHERE_LIGHT_DIRECTION_CAMERA?.y, 0);
+  const lz = finiteNumber(SPHERE_LIGHT_DIRECTION_CAMERA?.z, 1);
+  const magnitude = Math.hypot(lx, ly, lz);
 
-    return Number.isFinite(magnitude) && magnitude >= 1e-9
-        ? { x: lx / magnitude, y: ly / magnitude, z: lz / magnitude }
-        : { x: 0, y: 0, z: 1 };
+  return Number.isFinite(magnitude) && magnitude >= 1e-9
+    ? { x: lx / magnitude, y: ly / magnitude, z: lz / magnitude }
+    : { x: 0, y: 0, z: 1 };
 }
 
 export function initializeWebGLDomainColoringSupport() {
-    if (!webglDomainColorSupport) return;
+  if (!webglDomainColorSupport) return;
 
-    resetSupportObject(webglDomainColorSupport);
+  resetSupportObject(webglDomainColorSupport);
 
-    if (!state?.webglDomainColoringEnabled) {
-        webglDomainColorSupport.reason = 'disabled';
-        return;
-    }
+  if (!state?.webglDomainColoringEnabled) {
+    webglDomainColorSupport.reason = 'disabled';
+    return;
+  }
 
-    const renderers = recordFromPlanes(createWebGLDomainColorRenderer);
-    if (!domainRenderersAvailable(renderers)) {
-        webglDomainColorSupport.reason = 'context-or-program-init-failed';
-        console.info('GPU domain coloring unavailable, using CPU fallback.');
-        return;
-    }
+  const renderers = recordFromPlanes(createWebGLDomainColorRenderer);
+  if (!domainRenderersAvailable(renderers)) {
+    webglDomainColorSupport.reason = 'context-or-program-init-failed';
+    console.info('GPU domain coloring unavailable, using CPU fallback.');
+    return;
+  }
 
-    const diagnostics = recordFromPlanes((plane) => (
-        renderers[plane] ? getWebGLBackendInfoShared(renderers[plane].gl) : null
-    ));
+  const diagnostics = recordFromPlanes((plane) => (
+    renderers[plane] ? getWebGLBackendInfoShared(renderers[plane].gl) : null
+  ));
 
-    installSupportRenderers(webglDomainColorSupport, renderers, diagnostics);
-    announceBackend(diagnostics);
+  installSupportRenderers(webglDomainColorSupport, renderers, diagnostics);
+  if (mathRendererHashDirty) {
+    mathRendererHashCached = serializeProgramMathForCache();
+    mathRendererHashDirty = false;
+  }
+  webglDomainColorSupport.lastAlgHash = mathRendererHashCached;
+  announceBackend(diagnostics);
 }
 
 export function getWebGLDomainColorRenderer(planeKey) {
-    return PLANE_KEYS.has(planeKey) ? webglDomainColorSupport?.renderers?.[planeKey] || null : null;
+  return PLANE_KEYS.has(planeKey) ? webglDomainColorSupport?.renderers?.[planeKey] || null : null;
 }
 
 export function inferDomainColorPlaneKey(targetCtx, planeKeyHint) {
-    if (planeKeyHint === 'z' || planeKeyHint === 'w') return planeKeyHint;
-    if (targetCtx === context.zDomainColorCtx) return 'z';
-    if (targetCtx === context.wDomainColorCtx) return 'w';
-    return 'z';
+  if (planeKeyHint === 'z' || planeKeyHint === 'w') return planeKeyHint;
+  if (targetCtx === context.zDomainColorCtx) return 'z';
+  if (targetCtx === context.wDomainColorCtx) return 'w';
+  return 'z';
 }
 
 export function warnWebGLDomainFunctionFallback(functionName) {
-    const warned = webglDomainColorSupport?.warnedFunctionFallbacks;
-    if (!warned?.has || !warned?.add || warned.has(functionName)) return;
+  const warned = webglDomainColorSupport?.warnedFunctionFallbacks;
+  if (!warned?.has || !warned?.add || warned.has(functionName)) return;
 
-    warned.add(functionName);
-    console.info(`GPU domain coloring not available for "${functionName}", using CPU fallback.`);
+  warned.add(functionName);
+  console.info(`GPU domain coloring not available for "${functionName}", using CPU fallback.`);
 }
 
 export function renderDomainColoringWithWebGL(targetCtx, planeParams, options = null) {
-    if (!targetCtx || !planeParams || !webglDomainColorSupport?.available) return false;
-    if (!state?.webglDomainColoringEnabled) return false;
-    if (!refreshMathRendererIfNeeded()) return false;
+  if (!targetCtx || !planeParams || !webglDomainColorSupport?.available) return false;
+  if (!state?.webglDomainColoringEnabled) return false;
+  if (!refreshMathRendererIfNeeded()) return false;
 
-    const job = resolveRenderJob(targetCtx, planeParams, options);
-    if (!job) return false;
-    if (!currentFunctionSupported(state.currentFunction, job.isWPlaneColoring)) return false;
+  const job = resolveRenderJob(targetCtx, planeParams, options);
+  if (!job) return false;
+  if (!currentFunctionSupported(state.currentFunction, job.isWPlaneColoring)) return false;
 
-    return executeRenderJob(job);
+  return executeRenderJob(job);
 }
 
 export function getGPUBackendStatus() {
-    const lineDiag = context.webglSupport || null;
-    const domainDiag = context.webglDomainColorSupport || null;
-    const currentFunctionName = state?.currentFunction || null;
+  const lineDiag = context.webglSupport || null;
+  const domainDiag = context.webglDomainColorSupport || null;
+  const currentFunctionName = state?.currentFunction || null;
 
-    return {
-        lineRendering: lineDiag ? {
-            available: !!lineDiag.available,
-            reason: lineDiag.reason,
-            diagnostics: lineDiag.diagnostics || null
-        } : null,
-        domainColoring: domainDiag ? {
-            available: !!domainDiag.available,
-            reason: domainDiag.reason,
-            diagnostics: domainDiag.diagnostics || null,
-            currentFunction: currentFunctionName,
-            currentFunctionSupported: currentFunctionName
-                ? isWebGLDomainColoringFunctionSupported(currentFunctionName, false)
-                : null,
-            zetaContinuationEnabled: !!state?.zetaContinuationEnabled
-        } : null
-    };
+  return {
+    lineRendering: lineDiag ? {
+      available: !!lineDiag.available,
+      reason: lineDiag.reason,
+      diagnostics: lineDiag.diagnostics || null
+    } : null,
+    domainColoring: domainDiag ? {
+      available: !!domainDiag.available,
+      reason: domainDiag.reason,
+      diagnostics: domainDiag.diagnostics || null,
+      currentFunction: currentFunctionName,
+      currentFunctionSupported: currentFunctionName
+        ? isWebGLDomainColoringFunctionSupported(currentFunctionName, false)
+        : null,
+      zetaContinuationEnabled: !!state?.zetaContinuationEnabled
+    } : null
+  };
 }
 
 if (typeof window !== 'undefined') {
-    window.getGPUBackendStatus = getGPUBackendStatus;
+  window.getGPUBackendStatus = getGPUBackendStatus;
 }
 
 export function getThreeSphereShaderConfig(planeType) {
-    const isWPlane = planeType === 'w';
+  const isWPlane = planeType === 'w';
 
-    const uniformsDecl = `
+  const uniformsDecl = `
         precision highp float;
         varying vec3 vLocalPosition;
 
@@ -1264,7 +1685,7 @@ export function getThreeSphereShaderConfig(planeType) {
         uniform float u_useOrbitColoring;
     `;
 
-    const fragmentHelpers = `
+  const fragmentHelpers = `
         vec2 domainComplexSqrt(vec2 z) {
           float r = length(z);
           if (r < 1.0e-20) return vec2(0.0);
@@ -1456,7 +1877,7 @@ export function getThreeSphereShaderConfig(planeType) {
         }
     `;
 
-    const mainSource = `
+  const mainSource = `
         void main() {
             float R = 5.0;
             float den = 2.0 * R - vLocalPosition.y;
@@ -1482,19 +1903,19 @@ export function getThreeSphereShaderConfig(planeType) {
         }
     `;
 
-    const fragmentShader = lines(
-        uniformsDecl,
-        '',
-        getGLSLComplexMathLibrary(state),
-        '',
-        createPaletteLoaderSource(),
-        '',
-        fragmentHelpers,
-        '',
-        mainSource
-    );
+  const fragmentShader = lines(
+    uniformsDecl,
+    '',
+    getGLSLComplexMathLibrary(state),
+    '',
+    createPaletteLoaderSource(),
+    '',
+    fragmentHelpers,
+    '',
+    mainSource
+  );
 
-    const vertexShader = `
+  const vertexShader = `
         varying vec3 vLocalPosition;
         void main() {
             vLocalPosition = position;
@@ -1502,31 +1923,31 @@ export function getThreeSphereShaderConfig(planeType) {
         }
     `;
 
-    const uniforms = {
-        u_domainBrightness: { value: 1.0 },
-        u_domainContrast: { value: 1.0 },
-        u_domainSaturation: { value: 1.0 },
-        u_domainLightnessCycles: { value: 0.0 },
-        u_domainPalette: { value: 0 },
-        u_isWPlaneColoring: { value: isWPlane ? 1.0 : 0.0 },
-        u_functionId: { value: 0.0 },
-        u_mobiusA: { value: [1.0, 0.0] },
-        u_mobiusB: { value: [0.0, 0.0] },
-        u_mobiusC: { value: [0.0, 0.0] },
-        u_mobiusD: { value: [1.0, 0.0] },
-        u_polyDegree: { value: 0 },
-        u_polyCoeffs: { value: Array.from({ length: 11 }, () => [0.0, 0.0]) },
-        u_zetaContinuationEnabled: { value: 0.0 },
-        u_zetaReflectionBoundary: { value: 0.5 },
-        u_fracPower: { value: 0.5 },
-        u_chainCount: { value: 1 },
-        u_chainMode: { value: 1 },
-        u_useOrbitColoring: { value: 0.0 }
-    };
+  const uniforms = {
+    u_domainBrightness: { value: 1.0 },
+    u_domainContrast: { value: 1.0 },
+    u_domainSaturation: { value: 1.0 },
+    u_domainLightnessCycles: { value: 0.0 },
+    u_domainPalette: { value: 0 },
+    u_isWPlaneColoring: { value: isWPlane ? 1.0 : 0.0 },
+    u_functionId: { value: 0.0 },
+    u_mobiusA: { value: [1.0, 0.0] },
+    u_mobiusB: { value: [0.0, 0.0] },
+    u_mobiusC: { value: [0.0, 0.0] },
+    u_mobiusD: { value: [1.0, 0.0] },
+    u_polyDegree: { value: 0 },
+    u_polyCoeffs: { value: Array.from({ length: 11 }, () => [0.0, 0.0]) },
+    u_zetaContinuationEnabled: { value: 0.0 },
+    u_zetaReflectionBoundary: { value: 0.5 },
+    u_fracPower: { value: 0.5 },
+    u_chainCount: { value: 1 },
+    u_chainMode: { value: 1 },
+    u_useOrbitColoring: { value: 0.0 }
+  };
 
-    return {
-        uniforms,
-        vertexShader,
-        fragmentShader
-    };
+  return {
+    uniforms,
+    vertexShader,
+    fragmentShader
+  };
 }
