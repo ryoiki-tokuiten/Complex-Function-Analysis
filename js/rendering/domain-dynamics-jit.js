@@ -1,4 +1,4 @@
-function compileBuiltin(funcKey, outRe, outIm, inRe, inIm, cRe, cIm, snapshot) {
+function compileBuiltin(funcKey, outRe, outIm, inRe, inIm, cRe, cIm, snapshot, uid = '0') {
     if (funcKey === 'c') {
         return `let ${outRe} = ${cRe}; let ${outIm} = ${cIm};\n`;
     } else if (funcKey === 'cos') {
@@ -13,9 +13,9 @@ function compileBuiltin(funcKey, outRe, outIm, inRe, inIm, cRe, cIm, snapshot) {
         `;
     } else if (funcKey === 'exp') {
         return `
-            let __mag_exp = Math.exp(Math.min(700, Math.max(-745, ${inRe})));
-            let ${outRe} = __mag_exp * Math.cos(${inIm});
-            let ${outIm} = __mag_exp * Math.sin(${inIm});\n
+            let __mag_exp_${uid} = Math.exp(Math.min(700, Math.max(-745, ${inRe})));
+            let ${outRe} = __mag_exp_${uid} * Math.cos(${inIm});
+            let ${outIm} = __mag_exp_${uid} * Math.sin(${inIm});\n
         `;
     } else if (funcKey === 'ln') {
         return `
@@ -24,30 +24,30 @@ function compileBuiltin(funcKey, outRe, outIm, inRe, inIm, cRe, cIm, snapshot) {
         `;
     } else if (funcKey === 'reciprocal') {
         return `
-            let __d_recip = ${inRe} * ${inRe} + ${inIm} * ${inIm};
-            let ${outRe} = __d_recip === 0 ? NaN : ${inRe} / __d_recip;
-            let ${outIm} = __d_recip === 0 ? NaN : -${inIm} / __d_recip;\n
+            let __d_recip_${uid} = ${inRe} * ${inRe} + ${inIm} * ${inIm};
+            let ${outRe} = __d_recip_${uid} === 0 ? NaN : ${inRe} / __d_recip_${uid};
+            let ${outIm} = __d_recip_${uid} === 0 ? NaN : -${inIm} / __d_recip_${uid};\n
         `;
     } else if (funcKey === 'power') {
         const pN = snapshot.fractionalPowerN ?? 0.5;
         return `
-            let __lnR_pow = Math.log(Math.hypot(${inRe}, ${inIm}));
-            let __lnI_pow = Math.atan2(${inIm}, ${inRe});
-            let __expR_pow = ${pN} * __lnR_pow;
-            let __expI_pow = ${pN} * __lnI_pow;
-            let __mag_pow = Math.exp(Math.min(700, Math.max(-745, __expR_pow)));
-            let ${outRe} = (${inRe} === 0 && ${inIm} === 0) ? 0 : __mag_pow * Math.cos(__expI_pow);
-            let ${outIm} = (${inRe} === 0 && ${inIm} === 0) ? 0 : __mag_pow * Math.sin(__expI_pow);\n
+            let __lnR_pow_${uid} = Math.log(Math.hypot(${inRe}, ${inIm}));
+            let __lnI_pow_${uid} = Math.atan2(${inIm}, ${inRe});
+            let __expR_pow_${uid} = ${pN} * __lnR_pow_${uid};
+            let __expI_pow_${uid} = ${pN} * __lnI_pow_${uid};
+            let __mag_pow_${uid} = Math.exp(Math.min(700, Math.max(-745, __expR_pow_${uid})));
+            let ${outRe} = (${inRe} === 0 && ${inIm} === 0) ? 0 : __mag_pow_${uid} * Math.cos(__expI_pow_${uid});
+            let ${outIm} = (${inRe} === 0 && ${inIm} === 0) ? 0 : __mag_pow_${uid} * Math.sin(__expI_pow_${uid});\n
         `;
     } else if (funcKey === 'polynomial') {
         const degree = Math.max(0, Math.floor(Number(snapshot.polynomialN) || 0));
         let code = `let ${outRe} = ${snapshot.polynomialCoeffs[degree]?.re || 0}; let ${outIm} = ${snapshot.polynomialCoeffs[degree]?.im || 0};\n`;
         for (let k = degree - 1; k >= 0; k--) {
             code += `
-                let __tr_poly = ${outRe} * ${inRe} - ${outIm} * ${inIm} + (${snapshot.polynomialCoeffs[k]?.re || 0});
-                let __ti_poly = ${outRe} * ${inIm} + ${outIm} * ${inRe} + (${snapshot.polynomialCoeffs[k]?.im || 0});
-                ${outRe} = __tr_poly;
-                ${outIm} = __ti_poly;\n
+                let __tr_poly_${uid}_${k} = ${outRe} * ${inRe} - ${outIm} * ${inIm} + (${snapshot.polynomialCoeffs[k]?.re || 0});
+                let __ti_poly_${uid}_${k} = ${outRe} * ${inIm} + ${outIm} * ${inRe} + (${snapshot.polynomialCoeffs[k]?.im || 0});
+                ${outRe} = __tr_poly_${uid}_${k};
+                ${outIm} = __ti_poly_${uid}_${k};\n
             `;
         }
         return code;
@@ -57,20 +57,20 @@ function compileBuiltin(funcKey, outRe, outIm, inRe, inIm, cRe, cIm, snapshot) {
         const mC = snapshot.mobiusC || {re:0,im:0};
         const mD = snapshot.mobiusD || {re:1,im:0};
         return `
-            let __numR = ${mA.re} * ${inRe} - ${mA.im} * ${inIm} + ${mB.re};
-            let __numI = ${mA.re} * ${inIm} + ${mA.im} * ${inRe} + ${mB.im};
-            let __denR = ${mC.re} * ${inRe} - ${mC.im} * ${inIm} + ${mD.re};
-            let __denI = ${mC.re} * ${inIm} + ${mC.im} * ${inRe} + ${mD.im};
-            let __denSq = __denR * __denR + __denI * __denI;
-            let ${outRe} = __denSq === 0 ? NaN : (__numR * __denR + __numI * __denI) / __denSq;
-            let ${outIm} = __denSq === 0 ? NaN : (__numI * __denR - __numR * __denI) / __denSq;\n
+            let __numR_${uid} = ${mA.re} * ${inRe} - ${mA.im} * ${inIm} + ${mB.re};
+            let __numI_${uid} = ${mA.re} * ${inIm} + ${mA.im} * ${inRe} + ${mB.im};
+            let __denR_${uid} = ${mC.re} * ${inRe} - ${mC.im} * ${inIm} + ${mD.re};
+            let __denI_${uid} = ${mC.re} * ${inIm} + ${mC.im} * ${inRe} + ${mD.im};
+            let __denSq_${uid} = __denR_${uid} * __denR_${uid} + __denI_${uid} * __denI_${uid};
+            let ${outRe} = __denSq_${uid} === 0 ? NaN : (__numR_${uid} * __denR_${uid} + __numI_${uid} * __denI_${uid}) / __denSq_${uid};
+            let ${outIm} = __denSq_${uid} === 0 ? NaN : (__numI_${uid} * __denR_${uid} - __numR_${uid} * __denI_${uid}) / __denSq_${uid};\n
         `;
     }
     // Fallback for others
     return `
-        let __res_fb = evaluateBuiltin('${funcKey}', {re: ${inRe}, im: ${inIm}}, snapshot, {c: {re: ${cRe}, im: ${cIm}}});
-        let ${outRe} = __res_fb.re;
-        let ${outIm} = __res_fb.im;\n
+        let __res_fb_${uid} = evaluateBuiltin('${funcKey}', {re: ${inRe}, im: ${inIm}}, snapshot, {c: {re: ${cRe}, im: ${cIm}}});
+        let ${outRe} = __res_fb_${uid}.re;
+        let ${outIm} = __res_fb_${uid}.im;\n
     `;
 }
 
@@ -80,12 +80,12 @@ function compileFunctionBlock(block, outRe, outIm, inRe, inIm, cRe, cIm, snapsho
     let curIm = inIm;
     
     if (block.chainedFunc && block.chainedFunc !== 'none') {
-        code += compileBuiltin(block.chainedFunc, `__chR_${uid}`, `__chI_${uid}`, curRe, curIm, cRe, cIm, snapshot);
+        code += compileBuiltin(block.chainedFunc, `__chR_${uid}`, `__chI_${uid}`, curRe, curIm, cRe, cIm, snapshot, `${uid}_ch`);
         curRe = `__chR_${uid}`;
         curIm = `__chI_${uid}`;
     }
     
-    code += compileBuiltin(block.func, `__fnR_${uid}`, `__fnI_${uid}`, curRe, curIm, cRe, cIm, snapshot);
+    code += compileBuiltin(block.func, `__fnR_${uid}`, `__fnI_${uid}`, curRe, curIm, cRe, cIm, snapshot, `${uid}_fn`);
     curRe = `__fnR_${uid}`;
     curIm = `__fnI_${uid}`;
     
@@ -165,7 +165,7 @@ function compileStepCode(snapshot, outRe, outIm, inRe, inIm, cRe, cIm) {
         code += `let ${outRe} = __sumRe; let ${outIm} = __sumIm;\n`;
         return code;
     } else {
-        return compileBuiltin(snapshot.functionKey, outRe, outIm, inRe, inIm, cRe, cIm, snapshot);
+        return compileBuiltin(snapshot.functionKey, outRe, outIm, inRe, inIm, cRe, cIm, snapshot, 'base');
     }
 }
 

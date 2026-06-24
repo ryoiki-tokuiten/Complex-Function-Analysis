@@ -165,7 +165,9 @@ const UNIFORM_NAMES = Object.freeze({
   uWirePass: 'u_wirePass',
   uUseTaylor: 'u_useTaylor',
   uTaylorCenter: 'u_taylorCenter',
-  uTaylorOrder: 'u_taylorOrder'
+  uTaylorOrder: 'u_taylorOrder',
+  uChainCount: 'u_chainCount',
+  uUseOrbitColoring: 'u_useOrbitColoring'
 });
 
 const ARRAY_UNIFORMS = Object.freeze([
@@ -704,6 +706,7 @@ ${emitPaletteBranches()}
     mix(u_viewBounds.x, u_viewBounds.y, a_grid.x),
     mix(u_viewBounds.z, u_viewBounds.w, a_grid.y)
   );
+  v_z = z;
   vec2 mapped = vec2(0.0);
   float height = 0.0;
   bool ok = mapSurfacePoint(z, mapped, height);
@@ -735,23 +738,155 @@ const FRAGMENT_GLSL = Object.freeze({
   shadeSurface: {
     deps: [],
     source: `vec3 shadeSurface(vec3 color, vec3 normal, vec3 viewPosition) {
-  vec3 lightDirection = normalize(vec3(0.45, 0.72, 0.9));
-  vec3 viewDirection = normalize(-viewPosition);
-  float diffuse = max(dot(normal, lightDirection), 0.0);
-  float specular = pow(max(dot(reflect(-lightDirection, normal), viewDirection), 0.0), 32.0);
-  return color * (0.34 + 0.76 * diffuse) + vec3(0.45, 0.38, 0.72) * specular * 0.5;
+  // Decode sRGB to Linear for physically accurate math
+  vec3 albedo = pow(max(color, vec3(0.0)), vec3(2.2));
+  
+  vec3 viewDir = normalize(-viewPosition);
+  float ndotv = max(dot(normal, viewDir), 1e-4);
+  
+  // Glossy glass/ceramic material properties
+  float roughness = 0.15;
+  float metallic = 0.02;
+  vec3 f0 = mix(vec3(0.04), albedo, metallic);
+  
+  // Schlick's Fresnel
+  vec3 fresnel = f0 + (1.0 - f0) * pow(1.0 - ndotv, 5.0);
+  
+  // Energy conservation for diffuse
+  vec3 kD = (1.0 - fresnel) * (1.0 - metallic);
+  
+  vec3 totalLight = vec3(0.0);
+  
+  // Light 1: Main Key Light (Warm, sharp specular)
+  vec3 l1Dir = normalize(vec3(0.8, 1.0, 0.6));
+  vec3 l1Col = vec3(1.3, 1.15, 1.0) * 1.8;
+  vec3 h1 = normalize(l1Dir + viewDir);
+  float diff1 = max(dot(normal, l1Dir), 0.0);
+  float spec1 = pow(max(dot(normal, h1), 0.0), 128.0) * ((128.0 + 8.0) / (8.0 * 3.14159));
+  totalLight += (kD * albedo / 3.14159 + fresnel * spec1) * l1Col * diff1;
+  
+  // Fake Subsurface glow from Key Light
+  float sss = pow(max(dot(viewDir, -l1Dir), 0.0), 8.0) * 0.4;
+  totalLight += albedo * sss * l1Col;
+  
+  // Light 2: Soft Fill Light (Cool, broad specular)
+  vec3 l2Dir = normalize(vec3(-0.6, 0.2, -0.8));
+  vec3 l2Col = vec3(0.2, 0.35, 0.6) * 1.2;
+  vec3 h2 = normalize(l2Dir + viewDir);
+  float diff2 = max(dot(normal, l2Dir), 0.0);
+  float spec2 = pow(max(dot(normal, h2), 0.0), 32.0) * ((32.0 + 8.0) / (8.0 * 3.14159));
+  totalLight += (kD * albedo / 3.14159 + fresnel * spec2) * l2Col * diff2;
+  
+  // Light 3: Rim / Backlight
+  vec3 l3Dir = normalize(vec3(0.0, 0.9, -0.6));
+  vec3 l3Col = vec3(0.7, 0.5, 0.9) * 2.0;
+  float rim = smoothstep(0.4, 1.0, 1.0 - ndotv) * max(dot(normal, l3Dir), 0.0);
+  totalLight += albedo * rim * l3Col;
+  
+  // Fake Studio Environment Map Reflection
+  vec3 reflectDir = reflect(-viewDir, normal);
+  float envMask = smoothstep(-0.3, 1.0, reflectDir.y);
+  vec3 envColor = mix(vec3(0.02, 0.03, 0.05), vec3(0.5, 0.7, 1.0), envMask);
+  // Add some fake rectangular area lights to the reflection
+  envColor += vec3(1.0) * smoothstep(0.95, 0.98, max(dot(reflectDir, normalize(vec3(1.0, 0.8, 0.5))), 0.0));
+  envColor += vec3(1.0) * smoothstep(0.96, 0.99, max(dot(reflectDir, normalize(vec3(-1.0, 0.4, -0.2))), 0.0));
+  
+  // Base ambient
+  vec3 ambient = albedo * vec3(0.03, 0.04, 0.05);
+  totalLight += ambient + fresnel * envColor * 1.5;
+  
+  // ACES Film Tonemapping
+  vec3 x = totalLight;
+  vec3 mapped = (x * (2.51 * x + 0.03)) / (x * (2.43 * x + 0.59) + 0.14);
+  
+  // Gamma Correction back to sRGB
+  return pow(max(mapped, vec3(0.0)), vec3(1.0 / 2.2));
+}`
+  },
+
+  iteratedDynamicsColor: {
+    deps: [],
+    source: `vec4 dynamicsEscapeColor(float smoothIteration, float brightnessFactor) {
+  float count = max(float(u_chainCount), 1.0);
+  float t = clamp(smoothIteration / count, 0.0, 1.0);
+  vec3 baseColor = surfacePaletteColor(u_domainPalette, min(t, 0.9999));
+  float lightnessBase = 0.22 + 0.58 * pow(t, 0.65);
+  float lightnessContrasted = 0.5 + (lightnessBase - 0.5) * u_domainContrast;
+  float lightnessFinal = clamp(lightnessContrasted * u_domainBrightness * brightnessFactor, 0.05, 0.95);
+  vec3 lit = lightnessFinal < 0.5 ? baseColor * (lightnessFinal / 0.5) : mix(baseColor, vec3(1.0), (lightnessFinal - 0.5) / 0.5);
+  float gray = dot(lit, vec3(0.299, 0.587, 0.114));
+  return vec4(mix(vec3(gray), lit, clamp(u_domainSaturation, 0.0, 1.0)), 1.0);
+}
+
+vec4 iteratedDynamicsColor(vec2 parameterValue, int chainMode, float brightnessFactor) {
+  vec2 current = chainMode == 7 ? vec2(0.0) : parameterValue;
+  float escapeRadius = 64.0;
+  float escapeRadiusSq = escapeRadius * escapeRadius;
+  float smoothIteration = float(u_chainCount);
+  bool escaped = false;
+
+  for (int i = 0; i < 512; i++) {
+    if (i >= u_chainCount) break;
+
+    vec2 nextValue = vec2(0.0);
+    bool ok = evaluateSurfaceBase(
+      current, parameterValue, u_functionId, u_branchIndex, u_branchCutWidth,
+      u_mobiusA, u_mobiusB, u_mobiusC, u_mobiusD, u_polyDegree, u_polyCoeffs,
+      u_zetaContinuationEnabled, u_zetaReflectionBoundary, u_fracPower,
+      u_useTaylor, u_taylorCenter, u_taylorOrder, u_taylorCoefficients, nextValue
+    );
+
+    float magSq = dot(nextValue, nextValue);
+
+    if (!ok || !isFiniteVec2Compat(nextValue) || magSq > escapeRadiusSq || max(abs(nextValue.x), abs(nextValue.y)) >= 1.0e18) {
+      float magnitude = sqrt(max(magSq, escapeRadius));
+      smoothIteration = float(i) + 1.0;
+
+      if (ok && isFiniteFloatCompat(magnitude) && magnitude > 1.0001) {
+        float smoothAdjust = log(max(log(magnitude) / log(escapeRadius), 1.0e-6)) / LOG_TWO;
+        smoothIteration = clamp(smoothIteration - smoothAdjust, 0.0, float(u_chainCount));
+      }
+
+      escaped = true;
+      break;
+    }
+
+    current = nextValue;
+  }
+
+  return escaped
+    ? dynamicsEscapeColor(smoothIteration, brightnessFactor)
+    : vec4(0.0, 0.0, 0.0, 1.0);
 }`
   },
 
   main: {
-    deps: ['shadeSurface'],
+    deps: ['shadeSurface', 'iteratedDynamicsColor'],
     source: `void main() {
   if (v_valid < 0.995) discard;
   if (u_wirePass > 0.5) {
     gl_FragColor = vec4(mix(v_color, vec3(0.92, 0.88, 1.0), 0.7), 0.42);
     return;
   }
-  gl_FragColor = vec4(shadeSurface(v_color, normalize(v_normal), v_viewPosition), 0.88);
+  
+  vec3 baseColor = v_color;
+  
+  if (u_useOrbitColoring > 0.5 && u_chainCount > 1 && (u_chainMode == 1 || u_chainMode == 7)) {
+    baseColor = iteratedDynamicsColor(v_z, u_chainMode, 1.0).rgb;
+  } else {
+    vec2 mapped = vec2(0.0);
+    bool ok = evaluateSurfaceStage(
+      v_z, v_z, u_stage, u_chainMode, u_functionId, u_branchIndex, u_branchCutWidth,
+      u_mobiusA, u_mobiusB, u_mobiusC, u_mobiusD, u_polyDegree, u_polyCoeffs,
+      u_zetaContinuationEnabled, u_zetaReflectionBoundary, u_fracPower,
+      u_useTaylor, u_taylorCenter, u_taylorOrder, u_taylorCoefficients, mapped
+    );
+    if (ok) {
+      baseColor = surfaceColor(mapped);
+    }
+  }
+
+  gl_FragColor = vec4(shadeSurface(baseColor, normalize(v_normal), v_viewPosition), 0.88);
 }`
   }
 });
@@ -807,6 +942,7 @@ ${assembleGlslModules(SURFACE_MATH_GLSL, ['evaluateSurfaceStage'], { appState })
 function buildVertexShader(appState) {
   return `
 precision highp float;
+precision highp int;
 attribute vec2 a_grid;
 uniform vec4 u_viewBounds;
 uniform mat4 u_modelView;
@@ -845,24 +981,57 @@ varying vec3 v_color;
 varying vec3 v_normal;
 varying vec3 v_viewPosition;
 varying float v_valid;
+varying vec2 v_z;
 ${buildRiemannSurfaceMathLibrary(appState)}
 ${assembleGlslModules(VERTEX_SURFACE_GLSL, ['main'])}
 `;
 }
 
-function buildFragmentShader() {
+function buildFragmentShader(appState) {
   return `
 precision highp float;
+precision highp int;
 uniform float u_wirePass;
+uniform float u_useOrbitColoring;
+uniform int u_chainCount;
+uniform int u_chainMode;
+
+uniform float u_functionId;
+uniform vec2 u_mobiusA;
+uniform vec2 u_mobiusB;
+uniform vec2 u_mobiusC;
+uniform vec2 u_mobiusD;
+uniform int u_polyDegree;
+uniform vec2 u_polyCoeffs[11];
+uniform float u_zetaContinuationEnabled;
+uniform float u_zetaReflectionBoundary;
+uniform float u_fracPower;
+uniform int u_stage;
+uniform float u_derivativeMode;
+uniform float u_branchIndex;
+uniform float u_branchCutWidth;
+uniform float u_sheetTint;
+uniform float u_domainBrightness;
+uniform float u_domainContrast;
+uniform float u_domainSaturation;
+uniform float u_domainLightnessCycles;
+uniform int u_domainPalette;
+uniform float u_useTaylor;
+uniform vec2 u_taylorCenter;
+uniform int u_taylorOrder;
+uniform vec2 u_taylorCoefficients[9];
+
 varying vec3 v_color;
 varying vec3 v_normal;
 varying vec3 v_viewPosition;
 varying float v_valid;
+varying vec2 v_z;
+
+${buildRiemannSurfaceMathLibrary(appState)}
+${assembleGlslModules(VERTEX_SURFACE_GLSL, ['surfaceColor'])}
 ${assembleGlslModules(FRAGMENT_GLSL, ['main'])}
 `;
 }
-
-const FRAGMENT_SHADER = buildFragmentShader();
 
 function matrix4(values) {
   return new Float32Array(values);
@@ -1096,7 +1265,7 @@ function collectUniformLocations(gl, program) {
 
 function rebuildProgram(renderer) {
   const { gl } = renderer;
-  const program = createWebGLProgramShared(gl, buildVertexShader(state), FRAGMENT_SHADER);
+  const program = createWebGLProgramShared(gl, buildVertexShader(state), buildFragmentShader(state));
 
   if (!program) {
     renderer.failureReason = 'shader compilation failed';
@@ -1292,6 +1461,8 @@ function setCommonUniforms(renderer, options) {
   gl.uniform1f(locations.uDomainSaturation, finiteNumber(state.domainSaturation, 1));
   gl.uniform1f(locations.uDomainLightnessCycles, finiteNumber(state.domainLightnessCycles, 0));
   gl.uniform1i(locations.uDomainPalette, getPaletteId(state.domainPalette));
+  gl.uniform1i(locations.uChainCount, finiteInteger(state.chainCount, 1));
+  gl.uniform1f(locations.uUseOrbitColoring, state.useOrbitColoring ? 1 : 0);
 
   setTaylorUniforms(renderer);
 }
