@@ -9,6 +9,7 @@ const chainedFuncCache = new Map();
 if (typeof eventBus !== 'undefined' && eventBus.on) {
     eventBus.on('state:change', () => {
         cachesDirty = true;
+        invalidateHotPathCaches();
     });
 }
 
@@ -40,6 +41,160 @@ const isObject = value => value !== null && typeof value === 'object';
 const finite = Number.isFinite;
 const realOf = value => value?.re ?? value?.real ?? 0;
 const imagOf = value => value?.im ?? value?.imag ?? 0;
+const argRe = value => isObject(value) ? realOf(value) : (value ?? 0);
+const argIm = (value, fallback = 0) => isObject(value) ? imagOf(value) : (fallback ?? 0);
+const resultComplex = (re, im) => ({ re, im });
+
+function divideRaw(nRe, nIm, dRe, dIm) {
+    const absRe = Math.abs(dRe);
+    const absIm = Math.abs(dIm);
+    const scale = Math.max(absRe, absIm);
+
+    if (scale < COMPLEX_ZERO_EPSILON) {
+        const numMagSq = nRe * nRe + nIm * nIm;
+        if (numMagSq < COMPLEX_ZERO_MAG_SQ) return { re: NaN, im: NaN };
+        if (Math.abs(nRe) < COMPLEX_ZERO_EPSILON && Math.abs(nIm) < COMPLEX_ZERO_EPSILON) {
+            return { re: 0, im: 0 };
+        }
+
+        const largeValue = POLE_MAGNITUDE_THRESHOLD * 2;
+        const safeScale = largeValue / Math.sqrt(numMagSq);
+        return { re: nRe * safeScale, im: nIm * safeScale };
+    }
+
+    if (absRe >= absIm) {
+        const ratio = dIm / dRe;
+        const divisor = dRe + dIm * ratio;
+        return {
+            re: (nRe + nIm * ratio) / divisor,
+            im: (nIm - nRe * ratio) / divisor
+        };
+    }
+
+    const ratio = dRe / dIm;
+    const divisor = dIm + dRe * ratio;
+    return {
+        re: (nRe * ratio + nIm) / divisor,
+        im: (nIm * ratio - nRe) / divisor
+    };
+}
+
+function divideRawInto(nRe, nIm, dRe, dIm, out, offset = 0) {
+    const absRe = Math.abs(dRe);
+    const absIm = Math.abs(dIm);
+    const scale = Math.max(absRe, absIm);
+
+    if (scale < COMPLEX_ZERO_EPSILON) {
+        const numMagSq = nRe * nRe + nIm * nIm;
+        if (numMagSq < COMPLEX_ZERO_MAG_SQ) {
+            out[offset] = NaN;
+            out[offset + 1] = NaN;
+            return out;
+        }
+        if (Math.abs(nRe) < COMPLEX_ZERO_EPSILON && Math.abs(nIm) < COMPLEX_ZERO_EPSILON) {
+            out[offset] = 0;
+            out[offset + 1] = 0;
+            return out;
+        }
+
+        const largeValue = POLE_MAGNITUDE_THRESHOLD * 2;
+        const safeScale = largeValue / Math.sqrt(numMagSq);
+        out[offset] = nRe * safeScale;
+        out[offset + 1] = nIm * safeScale;
+        return out;
+    }
+
+    if (absRe >= absIm) {
+        const ratio = dIm / dRe;
+        const divisor = dRe + dIm * ratio;
+        out[offset] = (nRe + nIm * ratio) / divisor;
+        out[offset + 1] = (nIm - nRe * ratio) / divisor;
+        return out;
+    }
+
+    const ratio = dRe / dIm;
+    const divisor = dIm + dRe * ratio;
+    out[offset] = (nRe * ratio + nIm) / divisor;
+    out[offset + 1] = (nIm * ratio - nRe) / divisor;
+    return out;
+}
+
+function reciprocalRaw(re, im) {
+    if (re === 0 && im === 0) return { re: NaN, im: NaN };
+    return divideRaw(1, 0, re, im);
+}
+
+function multiplyRaw(aRe, aIm, bRe, bIm) {
+    return { re: aRe * bRe - aIm * bIm, im: aRe * bIm + aIm * bRe };
+}
+
+function expRaw(re, im) {
+    const magnitude = expSafe(re);
+    return { re: magnitude * Math.cos(im), im: magnitude * Math.sin(im) };
+}
+
+function expRawInto(re, im, out, offset = 0) {
+    const magnitude = expSafe(re);
+    out[offset] = magnitude * Math.cos(im);
+    out[offset + 1] = magnitude * Math.sin(im);
+    return out;
+}
+
+function logHypot(re, im) {
+    const absRe = Math.abs(re);
+    const absIm = Math.abs(im);
+    const scale = absRe > absIm ? absRe : absIm;
+    if (scale === 0) return -Infinity;
+    // The square path is dramatically cheaper than Math.hypot and is exact enough
+    // for the bounded rendering domain; the scaled path preserves overflow safety.
+    if (scale < 1e154 && scale > 1e-154) return 0.5 * Math.log(re * re + im * im);
+    return Math.log(Math.hypot(re, im));
+}
+
+function powRaw(baseRe, baseIm, expRe, expIm) {
+    if (baseRe === 0 && baseIm === 0) {
+        if (expRe > 0 || (expRe === 0 && expIm !== 0)) return { re: 0, im: 0 };
+        if (expRe === 0 && expIm === 0) return { re: 1, im: 0 };
+    }
+
+    const lnRe = logHypot(baseRe, baseIm);
+    const lnIm = Math.atan2(baseIm, baseRe);
+    const outRe = expRe * lnRe - expIm * lnIm;
+    const outIm = expRe * lnIm + expIm * lnRe;
+    return expRaw(outRe, outIm);
+}
+
+function powRawInto(baseRe, baseIm, expRe, expIm, out, offset = 0) {
+    if (baseRe === 0 && baseIm === 0) {
+        if (expRe > 0 || (expRe === 0 && expIm !== 0)) {
+            out[offset] = 0;
+            out[offset + 1] = 0;
+            return out;
+        }
+        if (expRe === 0 && expIm === 0) {
+            out[offset] = 1;
+            out[offset + 1] = 0;
+            return out;
+        }
+    }
+
+    const lnRe = logHypot(baseRe, baseIm);
+    const lnIm = Math.atan2(baseIm, baseRe);
+    return expRawInto(expRe * lnRe - expIm * lnIm, expRe * lnIm + expIm * lnRe, out, offset);
+}
+
+function positiveRealPowComponents(logBase, expRe, expIm) {
+    const magnitude = expSafe(expRe * logBase);
+    const angle = expIm * logBase;
+    return { re: magnitude * Math.cos(angle), im: magnitude * Math.sin(angle) };
+}
+
+function zetaEtaDenominator(a, b) {
+    const magnitude = expSafe((1 - a) * LN_2);
+    const angle = -b * LN_2;
+    return { re: 1 - magnitude * Math.cos(angle), im: -magnitude * Math.sin(angle) };
+}
+
 const hypotComplex = value => Math.hypot(value.re, value.im);
 const cloneComplex = value => ({ re: value.re, im: value.im });
 const complex = (re = 0, im = 0) => ({ re, im });
@@ -82,6 +237,27 @@ function zeroLike() {
     return { re: 0, im: 0 };
 }
 
+
+let polynomialKernelRef = null;
+let polynomialKernelDegree = -1;
+let polynomialKernelRe = new Float64Array(0);
+let polynomialKernelIm = new Float64Array(0);
+let polynomialEvalKernel = null;
+let algebraicKernelTerms = null;
+let algebraicKernelZExpr = null;
+let algebraicKernel = null;
+
+function invalidateHotPathCaches() {
+    polynomialKernelRef = null;
+    polynomialKernelDegree = -1;
+    polynomialKernelRe = new Float64Array(0);
+    polynomialKernelIm = new Float64Array(0);
+    polynomialEvalKernel = null;
+    algebraicKernelTerms = null;
+    algebraicKernelZExpr = null;
+    algebraicKernel = null;
+}
+
 export function withMaxMag(res, ...inputs) {
     return res;
 }
@@ -91,110 +267,94 @@ export function isNumericallyStable(w) {
 }
 
 export function complexAdd(z1, z2) {
-    const a = toComplex(z1);
-    const b = toComplex(z2);
-    return withMaxMag({ re: a.re + b.re, im: a.im + b.im }, z1, z2);
+    const z1Obj = z1 !== null && typeof z1 === 'object';
+    const z2Obj = z2 !== null && typeof z2 === 'object';
+    const aRe = z1Obj ? (z1.re !== undefined ? z1.re : (z1.real ?? 0)) : (z1 ?? 0);
+    const aIm = z1Obj ? (z1.im !== undefined ? z1.im : (z1.imag ?? 0)) : 0;
+    const bRe = z2Obj ? (z2.re !== undefined ? z2.re : (z2.real ?? 0)) : (z2 ?? 0);
+    const bIm = z2Obj ? (z2.im !== undefined ? z2.im : (z2.imag ?? 0)) : 0;
+    return { re: aRe + bRe, im: aIm + bIm };
 }
 
 export function complexSub(z1, z2) {
-    const a = toComplex(z1);
-    const b = toComplex(z2);
-    return withMaxMag({ re: a.re - b.re, im: a.im - b.im }, z1, z2);
+    const z1Obj = z1 !== null && typeof z1 === 'object';
+    const z2Obj = z2 !== null && typeof z2 === 'object';
+    const aRe = z1Obj ? (z1.re !== undefined ? z1.re : (z1.real ?? 0)) : (z1 ?? 0);
+    const aIm = z1Obj ? (z1.im !== undefined ? z1.im : (z1.imag ?? 0)) : 0;
+    const bRe = z2Obj ? (z2.re !== undefined ? z2.re : (z2.real ?? 0)) : (z2 ?? 0);
+    const bIm = z2Obj ? (z2.im !== undefined ? z2.im : (z2.imag ?? 0)) : 0;
+    return { re: aRe - bRe, im: aIm - bIm };
 }
 
 export function complexMul(z1, z2) {
-    const a = toComplex(z1);
-    const b = toComplex(z2);
-    return withMaxMag({
-        re: a.re * b.re - a.im * b.im,
-        im: a.re * b.im + a.im * b.re
-    }, z1, z2);
+    const z1Obj = z1 !== null && typeof z1 === 'object';
+    const z2Obj = z2 !== null && typeof z2 === 'object';
+    const aRe = z1Obj ? (z1.re !== undefined ? z1.re : (z1.real ?? 0)) : (z1 ?? 0);
+    const aIm = z1Obj ? (z1.im !== undefined ? z1.im : (z1.imag ?? 0)) : 0;
+    const bRe = z2Obj ? (z2.re !== undefined ? z2.re : (z2.real ?? 0)) : (z2 ?? 0);
+    const bIm = z2Obj ? (z2.im !== undefined ? z2.im : (z2.imag ?? 0)) : 0;
+    return { re: aRe * bRe - aIm * bIm, im: aRe * bIm + aIm * bRe };
 }
 
 export function complexScalarMul(s, z) {
-    const value = toComplex(z);
-    return withMaxMag({ re: s * value.re, im: s * value.im }, s, z);
+    return { re: s * argRe(z), im: s * argIm(z) };
 }
 
 export function complexDivide(num, den) {
-    const n = toComplex(num);
-    const d = toComplex(den);
-    const absRe = Math.abs(d.re);
-    const absIm = Math.abs(d.im);
-    const scale = Math.max(absRe, absIm);
-
-    if (scale < COMPLEX_ZERO_EPSILON) {
-        const numMagSq = n.re * n.re + n.im * n.im;
-        if (numMagSq < COMPLEX_ZERO_MAG_SQ) return { re: NaN, im: NaN };
-        if (Math.abs(n.re) < COMPLEX_ZERO_EPSILON && Math.abs(n.im) < COMPLEX_ZERO_EPSILON) {
-            return { re: 0, im: 0 };
-        }
-
-        const largeValue = POLE_MAGNITUDE_THRESHOLD * 2;
-        const safeScale = largeValue / Math.sqrt(numMagSq);
-        return withMaxMag({ re: n.re * safeScale, im: n.im * safeScale }, num, den);
-    }
-
-    if (absRe >= absIm) {
-        const ratio = d.im / d.re;
-        const divisor = d.re + d.im * ratio;
-        return withMaxMag({
-            re: (n.re + n.im * ratio) / divisor,
-            im: (n.im - n.re * ratio) / divisor
-        }, num, den);
-    }
-
-    const ratio = d.re / d.im;
-    const divisor = d.im + d.re * ratio;
-    return withMaxMag({
-        re: (n.re * ratio + n.im) / divisor,
-        im: (n.im * ratio - n.re) / divisor
-    }, num, den);
+    const nObj = num !== null && typeof num === 'object';
+    const dObj = den !== null && typeof den === 'object';
+    return divideRaw(
+        nObj ? (num.re !== undefined ? num.re : (num.real ?? 0)) : (num ?? 0),
+        nObj ? (num.im !== undefined ? num.im : (num.imag ?? 0)) : 0,
+        dObj ? (den.re !== undefined ? den.re : (den.real ?? 0)) : (den ?? 0),
+        dObj ? (den.im !== undefined ? den.im : (den.imag ?? 0)) : 0
+    );
 }
 
 export function complexAbs(z) {
-    return hypotComplex(toComplex(z));
+    return Math.hypot(argRe(z), argIm(z));
 }
 
 export function complexArg(z) {
-    const value = toComplex(z);
-    return Math.atan2(value.im, value.re);
+    return Math.atan2(argIm(z), argRe(z));
 }
 
 export function _cosh(x) { return Math.cosh(x); }
 export function _sinh(x) { return Math.sinh(x); }
 
 export function complexCos(a, b) {
-    const z = normalizeUnaryComplexArgs(a, b);
-    const cosh = _cosh(z.im);
-    const sinh = _sinh(z.im);
-    return withMaxMag({
-        re: Math.cos(z.re) * cosh,
-        im: -Math.sin(z.re) * sinh
-    }, a, cosh, sinh);
+    const obj = isObject(a);
+    const re = obj ? (a.re ?? a.real ?? 0) : (a ?? 0);
+    const im = obj ? (a.im ?? a.imag ?? 0) : (b ?? 0);
+    const cosh = Math.cosh(im);
+    const sinh = Math.sinh(im);
+    return { re: Math.cos(re) * cosh, im: -Math.sin(re) * sinh };
 }
 
 export function complexSin(a, b) {
-    const z = normalizeUnaryComplexArgs(a, b);
-    const cosh = _cosh(z.im);
-    const sinh = _sinh(z.im);
-    return withMaxMag({
-        re: Math.sin(z.re) * cosh,
-        im: Math.cos(z.re) * sinh
-    }, a, cosh, sinh);
+    const obj = isObject(a);
+    const re = obj ? (a.re ?? a.real ?? 0) : (a ?? 0);
+    const im = obj ? (a.im ?? a.imag ?? 0) : (b ?? 0);
+    const cosh = Math.cosh(im);
+    const sinh = Math.sinh(im);
+    return { re: Math.sin(re) * cosh, im: Math.cos(re) * sinh };
 }
 
 export function complexTan(a, b) {
-    const z = normalizeUnaryComplexArgs(a, b);
-    const sinZ = complexSin(z);
-    const cosZ = complexCos(z);
-    return withMaxMag(complexDivide(sinZ, cosZ), a, sinZ, cosZ);
+    const obj = isObject(a);
+    const re = obj ? (a.re ?? a.real ?? 0) : (a ?? 0);
+    const im = obj ? (a.im ?? a.imag ?? 0) : (b ?? 0);
+    const denominator = Math.cos(2 * re) + Math.cosh(2 * im);
+    return { re: Math.sin(2 * re) / denominator, im: Math.sinh(2 * im) / denominator };
 }
 
 export function complexSec(a, b) {
-    const z = normalizeUnaryComplexArgs(a, b);
-    const cosZ = complexCos(z);
-    return withMaxMag(complexDivide(ONE, cosZ), a, cosZ);
+    const obj = isObject(a);
+    const re = obj ? (a.re ?? a.real ?? 0) : (a ?? 0);
+    const im = obj ? (a.im ?? a.imag ?? 0) : (b ?? 0);
+    const cRe = Math.cos(re) * Math.cosh(im);
+    const cIm = -Math.sin(re) * Math.sinh(im);
+    return divideRaw(1, 0, cRe, cIm);
 }
 
 export function expSafe(x) {
@@ -204,62 +364,55 @@ export function expSafe(x) {
 }
 
 export function complexExp(a, b) {
-    const z = normalizeUnaryComplexArgs(a, b);
-    const magnitude = expSafe(z.re);
-    return withMaxMag({
-        re: magnitude * Math.cos(z.im),
-        im: magnitude * Math.sin(z.im)
-    }, a, magnitude);
+    const obj = isObject(a);
+    return expRaw(obj ? (a.re ?? a.real ?? 0) : (a ?? 0), obj ? (a.im ?? a.imag ?? 0) : (b ?? 0));
 }
 
 export function complexLn(a, b) {
-    const z = normalizeUnaryComplexArgs(a, b);
-    if (z.re === 0 && z.im === 0) return { re: -Infinity, im: 0 };
-    return withMaxMag({
-        re: Math.log(Math.hypot(z.re, z.im)),
-        im: Math.atan2(z.im, z.re)
-    }, a);
+    const obj = isObject(a);
+    const re = obj ? (a.re ?? a.real ?? 0) : (a ?? 0);
+    const im = obj ? (a.im ?? a.imag ?? 0) : (b ?? 0);
+    if (re === 0 && im === 0) return { re: -Infinity, im: 0 };
+    return { re: logHypot(re, im), im: Math.atan2(im, re) };
 }
 
 export function complexReciprocal(a, b) {
-    const z = normalizeUnaryComplexArgs(a, b);
-    if (z.re === 0 && z.im === 0) return { re: NaN, im: NaN };
-    return complexDivide(ONE, z);
+    const obj = isObject(a);
+    return reciprocalRaw(obj ? (a.re ?? a.real ?? 0) : (a ?? 0), obj ? (a.im ?? a.imag ?? 0) : (b ?? 0));
 }
 
 export function complexSinh(a, b) {
-    const z = normalizeUnaryComplexArgs(a, b);
-    const cosh = _cosh(z.re);
-    const sinh = _sinh(z.re);
-    return withMaxMag({
-        re: sinh * Math.cos(z.im),
-        im: cosh * Math.sin(z.im)
-    }, a, cosh, sinh);
+    const obj = isObject(a);
+    const re = obj ? (a.re ?? a.real ?? 0) : (a ?? 0);
+    const im = obj ? (a.im ?? a.imag ?? 0) : (b ?? 0);
+    const cosh = Math.cosh(re);
+    const sinh = Math.sinh(re);
+    return { re: sinh * Math.cos(im), im: cosh * Math.sin(im) };
 }
 
 export function complexCosh(a, b) {
-    const z = normalizeUnaryComplexArgs(a, b);
-    const cosh = _cosh(z.re);
-    const sinh = _sinh(z.re);
-    return withMaxMag({
-        re: cosh * Math.cos(z.im),
-        im: sinh * Math.sin(z.im)
-    }, a, cosh, sinh);
+    const obj = isObject(a);
+    const re = obj ? (a.re ?? a.real ?? 0) : (a ?? 0);
+    const im = obj ? (a.im ?? a.imag ?? 0) : (b ?? 0);
+    const cosh = Math.cosh(re);
+    const sinh = Math.sinh(re);
+    return { re: cosh * Math.cos(im), im: sinh * Math.sin(im) };
 }
 
 export function complexTanh(a, b) {
-    const z = normalizeUnaryComplexArgs(a, b);
-    const sinhZ = complexSinh(z);
-    const coshZ = complexCosh(z);
-    return withMaxMag(complexDivide(sinhZ, coshZ), a, sinhZ, coshZ);
+    const obj = isObject(a);
+    const re = obj ? (a.re ?? a.real ?? 0) : (a ?? 0);
+    const im = obj ? (a.im ?? a.imag ?? 0) : (b ?? 0);
+    const denominator = Math.cosh(2 * re) + Math.cos(2 * im);
+    return { re: Math.sinh(2 * re) / denominator, im: Math.sin(2 * im) / denominator };
 }
 
 export function complexPowerFractional(a, b) {
-    const z = normalizeUnaryComplexArgs(a, b);
+    const re = argRe(a);
+    const im = argIm(a, b);
     const n = state.fractionalPowerN !== undefined ? state.fractionalPowerN : DEFAULT_FRACTIONAL_POWER;
-    if (z.re === 0 && z.im === 0) return { re: 0, im: 0 };
-    const lnZ = complexLn(z);
-    return withMaxMag(complexExp(n * lnZ.re, n * lnZ.im), a, lnZ);
+    if (re === 0 && im === 0) return { re: 0, im: 0 };
+    return powRaw(re, im, n, 0);
 }
 
 function normalizePowerArgs(baseRe, baseIm, expRe, expIm) {
@@ -280,16 +433,34 @@ function normalizePowerArgs(baseRe, baseIm, expRe, expIm) {
 }
 
 export function complexPow(base_re, base_im, exp_re, exp_im) {
-    const { base, exp, baseInput } = normalizePowerArgs(base_re, base_im, exp_re, exp_im);
+    let baseRe;
+    let baseIm;
+    let expRe;
+    let expIm;
 
-    if (base.re === 0 && base.im === 0) {
-        if (exp.re > 0 || (exp.re === 0 && exp.im !== 0)) return { re: 0, im: 0 };
-        if (exp.re === 0 && exp.im === 0) return { re: 1, im: 0 };
+    if (isObject(base_re)) {
+        baseRe = realOf(base_re);
+        baseIm = imagOf(base_re);
+        if (isObject(base_im) && exp_re === undefined) {
+            expRe = realOf(base_im);
+            expIm = imagOf(base_im);
+        } else {
+            expRe = base_im ?? 0;
+            expIm = exp_re ?? 0;
+        }
+    } else {
+        baseRe = base_re ?? 0;
+        baseIm = base_im ?? 0;
+        if (isObject(exp_re) && exp_im === undefined) {
+            expRe = realOf(exp_re);
+            expIm = imagOf(exp_re);
+        } else {
+            expRe = exp_re ?? 0;
+            expIm = exp_im ?? 0;
+        }
     }
 
-    const lnZ = complexLn(base);
-    const exponent = complexMul(exp, lnZ);
-    return withMaxMag(complexExp(exponent), baseInput, lnZ, exponent);
+    return powRaw(baseRe, baseIm, expRe, expIm);
 }
 
 export function C(re, im) {
@@ -353,7 +524,7 @@ export function C(re, im) {
     return obj;
 }
 
-C.power = function(base, exp) {
+C.power = function (base, exp) {
     const result = complexPow(base, exp);
     return C(result.re, result.im);
 };
@@ -386,9 +557,7 @@ export function ensureZetaLogIntegerCache(maxN) {
 }
 
 export function complexPositiveRealPowFromLog(logBase, expRe, expIm) {
-    const magnitude = expSafe(expRe * logBase);
-    const angle = expIm * logBase;
-    return { re: magnitude * Math.cos(angle), im: magnitude * Math.sin(angle) };
+    return positiveRealPowComponents(logBase, expRe, expIm);
 }
 
 export function getZetaEvalCacheKey(a, b, continuationEnabled) {
@@ -427,71 +596,88 @@ export function getDynamicZetaHasseLevels() {
 }
 
 export function complexGamma(re, im) {
-    const z = toComplex(re, im);
+    const zRe = argRe(re);
+    const zIm = argIm(re, im);
 
-    if (z.re < 0.5) {
-        const reflected = complexGamma(1 - z.re, -z.im);
-        const sinPiZ = complexSin(PI * z.re, PI * z.im);
-        return complexDivide({ re: PI, im: 0 }, complexMul(sinPiZ, reflected));
+    if (zRe < 0.5) {
+        const reflected = complexGamma(1 - zRe, -zIm);
+        const sinRe = Math.sin(PI * zRe) * _cosh(PI * zIm);
+        const sinIm = Math.cos(PI * zRe) * _sinh(PI * zIm);
+        const denomRe = sinRe * reflected.re - sinIm * reflected.im;
+        const denomIm = sinRe * reflected.im + sinIm * reflected.re;
+        return divideRaw(PI, 0, denomRe, denomIm);
     }
 
-    const zMinusOne = { re: z.re - 1, im: z.im };
-    let lanczos = { re: LANCZOS_P[0], im: 0 };
+    const zmRe = zRe - 1;
+    const zmIm = zIm;
+    let lRe = LANCZOS_P[0];
+    let lIm = 0;
 
     for (let k = 1; k < LANCZOS_P.length; k++) {
-        lanczos = complexAdd(
-            lanczos,
-            complexDivide({ re: LANCZOS_P[k], im: 0 }, { re: zMinusOne.re + k, im: zMinusOne.im })
-        );
+        const q = divideRaw(LANCZOS_P[k], 0, zmRe + k, zmIm);
+        lRe += q.re;
+        lIm += q.im;
     }
 
-    const t = { re: z.re + LANCZOS_G - 0.5, im: z.im };
-    const exponent = { re: z.re - 0.5, im: z.im };
-    const powered = complexPow(t, exponent);
-    const decayed = complexExp(-t.re, -t.im);
+    const tRe = zRe + LANCZOS_G - 0.5;
+    const tIm = zIm;
+    const powered = powRaw(tRe, tIm, zRe - 0.5, zIm);
+    const decayed = expRaw(-tRe, -tIm);
+    const pdRe = powered.re * decayed.re - powered.im * decayed.im;
+    const pdIm = powered.re * decayed.im + powered.im * decayed.re;
 
-    return complexScalarMul(
-        SQRT_TWO_PI,
-        complexMul(complexMul(powered, decayed), lanczos)
-    );
+    return {
+        re: SQRT_TWO_PI * (pdRe * lRe - pdIm * lIm),
+        im: SQRT_TWO_PI * (pdRe * lIm + pdIm * lRe)
+    };
 }
 
 export function complexRiemannZeta_DirectSum(a, b, numTerms) {
     if (a <= 1.0) return { re: NaN, im: NaN };
 
     ensureZetaLogIntegerCache(numTerms);
-    let sum = { re: 0, im: 0 };
+    let sumRe = 0;
+    let sumIm = 0;
 
     for (let n = 1; n <= numTerms; n++) {
-        addInto(sum, complexPositiveRealPowFromLog(zetaLogIntegerCache[n], -a, -b));
+        const logN = zetaLogIntegerCache[n];
+        const magnitude = expSafe(-a * logN);
+        const angle = -b * logN;
+        sumRe += magnitude * Math.cos(angle);
+        sumIm += magnitude * Math.sin(angle);
     }
 
-    return sum;
+    return { re: sumRe, im: sumIm };
 }
 
 export function complexRiemannZeta_EtaSeries(a, b, numTerms) {
     if (a === 1 && b === 0) return { re: Infinity, im: NaN };
 
     ensureZetaLogIntegerCache(numTerms);
-    let eta = { re: 0, im: 0 };
+    let etaRe = 0;
+    let etaIm = 0;
 
     for (let n = 1; n <= numTerms; n++) {
+        const logN = zetaLogIntegerCache[n];
+        const magnitude = expSafe(-a * logN);
+        const angle = -b * logN;
         const sign = n % 2 === 0 ? -1 : 1;
-        addInto(eta, complexPositiveRealPowFromLog(zetaLogIntegerCache[n], -a, -b), sign);
+        etaRe += sign * magnitude * Math.cos(angle);
+        etaIm += sign * magnitude * Math.sin(angle);
     }
 
-    const denominator = complexSub(ONE, complexPositiveRealPowFromLog(LN_2, 1 - a, -b));
+    const denominator = zetaEtaDenominator(a, b);
 
     if (Math.abs(denominator.re) < 1e-14 && Math.abs(denominator.im) < 1e-14) {
-        const etaMagSq = eta.re * eta.re + eta.im * eta.im;
-        if (Math.abs(eta.re) < 1e-10 && Math.abs(eta.im) < 1e-10) return { re: NaN, im: NaN };
+        const etaMagSq = etaRe * etaRe + etaIm * etaIm;
+        if (Math.abs(etaRe) < 1e-10 && Math.abs(etaIm) < 1e-10) return { re: NaN, im: NaN };
         if (etaMagSq < 1e-20) return { re: 0, im: 0 };
 
         const scale = (POLE_MAGNITUDE_THRESHOLD * 1.5) / Math.sqrt(etaMagSq);
-        return { re: eta.re * scale, im: eta.im * scale };
+        return { re: etaRe * scale, im: etaIm * scale };
     }
 
-    return complexDivide(eta, denominator);
+    return divideRaw(etaRe, etaIm, denominator.re, denominator.im);
 }
 
 const zetaHasseBinomialRowsCache = {};
@@ -510,39 +696,56 @@ export function getZetaHasseBinomialRows(maxLevel) {
     return rows;
 }
 
+const zetaHasseCombinedCoefficientsCache = new Map();
+
+function getZetaHasseCombinedCoefficients(maxLevel) {
+    const level = Math.max(0, Math.floor(maxLevel));
+    const cached = zetaHasseCombinedCoefficientsCache.get(level);
+    if (cached) return cached;
+
+    const coeffs = new Float64Array(level + 1);
+    for (let n = 0; n < level; n++) {
+        let binomial = 1;
+        const rowScale = Math.pow(2, -n - 1);
+        for (let k = 0; k <= n; k++) {
+            coeffs[k + 1] += (k % 2 === 0 ? 1 : -1) * binomial * rowScale;
+            binomial = binomial * (n - k) / (k + 1);
+        }
+    }
+
+    zetaHasseCombinedCoefficientsCache.set(level, coeffs);
+    return coeffs;
+}
+
+
 export function complexRiemannZeta_HasseSeries(a, b, numLevels) {
     if (a === 1 && b === 0) return { re: Infinity, im: NaN };
 
-    const denominator = complexSub(ONE, complexPositiveRealPowFromLog(LN_2, 1 - a, -b));
+    const denominator = zetaEtaDenominator(a, b);
     if (Math.abs(denominator.re) < 1e-14 && Math.abs(denominator.im) < 1e-14) {
         return complexRiemannZeta_EtaSeries(a, b, NUM_ZETA_TERMS_ETA_SERIES);
     }
 
-    const rows = getZetaHasseBinomialRows(numLevels);
-    ensureZetaLogIntegerCache(numLevels + 1);
+    const coeffs = getZetaHasseCombinedCoefficients(numLevels);
+    ensureZetaLogIntegerCache(numLevels);
 
-    const negPowers = Array.from({ length: numLevels + 1 }, (_, n) =>
-        n === 0 ? null : complexPositiveRealPowFromLog(zetaLogIntegerCache[n], -a, -b)
-    );
-
-    let outerSum = { re: 0, im: 0 };
+    let sumRe = 0;
+    let sumIm = 0;
     let maxTermMag = 0;
 
-    for (let n = 0; n < numLevels; n++) {
-        const row = rows[n];
-        const inner = { re: 0, im: 0 };
-
-        for (let k = 0; k <= n; k++) {
-            const coeff = (k % 2 === 0 ? 1 : -1) * row[k];
-            const term = negPowers[k + 1];
-            addInto(inner, term, coeff);
-            maxTermMag = Math.max(maxTermMag, Math.abs(coeff) * Math.hypot(term.re, term.im));
-        }
-
-        addInto(outerSum, inner, Math.pow(2, -n - 1));
+    for (let n = 1; n <= numLevels; n++) {
+        const coeff = coeffs[n];
+        const logN = zetaLogIntegerCache[n];
+        const magnitude = expSafe(-a * logN);
+        const angle = -b * logN;
+        const termRe = magnitude * Math.cos(angle);
+        const termIm = magnitude * Math.sin(angle);
+        sumRe += coeff * termRe;
+        sumIm += coeff * termIm;
+        maxTermMag = Math.max(maxTermMag, Math.abs(coeff) * Math.hypot(termRe, termIm));
     }
 
-    return withMaxMag(complexDivide(outerSum, denominator), maxTermMag, denominator);
+    return withMaxMag(divideRaw(sumRe, sumIm, denominator.re, denominator.im), maxTermMag, denominator);
 }
 
 export function complexRiemannZeta(a, b) {
@@ -572,29 +775,570 @@ export function complexRiemannZeta(a, b) {
 }
 
 export function complexMobius(z_re, z_im) {
-    const z = toComplex(z_re, z_im);
-    const numerator = complexAdd(complexMul(state.mobiusA, z), state.mobiusB);
-    const denominator = complexAdd(complexMul(state.mobiusC, z), state.mobiusD);
-    return complexDivide(numerator, denominator);
+    const zRe = argRe(z_re);
+    const zIm = argIm(z_re, z_im);
+    const a = state.mobiusA || ZERO;
+    const b = state.mobiusB || ZERO;
+    const c = state.mobiusC || ZERO;
+    const d = state.mobiusD || ONE;
+
+    const ar = realOf(a);
+    const ai = imagOf(a);
+    const br = realOf(b);
+    const bi = imagOf(b);
+    const cr = realOf(c);
+    const ci = imagOf(c);
+    const dr = realOf(d);
+    const di = imagOf(d);
+
+    const numRe = ar * zRe - ai * zIm + br;
+    const numIm = ar * zIm + ai * zRe + bi;
+    const denRe = cr * zRe - ci * zIm + dr;
+    const denIm = cr * zIm + ci * zRe + di;
+    return divideRaw(numRe, numIm, denRe, denIm);
+}
+
+
+function createPolynomialEvalKernel(degree) {
+    if (degree > 64) return null;
+    let code = `'use strict';let accRe=0,accIm=0;`;
+    for (let k = degree; k >= 0; k--) {
+        code += `const nr_${k}=accRe*zRe-accIm*zIm;`;
+        code += `accIm=accRe*zIm+accIm*zRe+${jsNumber(polynomialKernelIm[k] || 0)};`;
+        code += `accRe=nr_${k}+${jsNumber(polynomialKernelRe[k] || 0)};`;
+    }
+    code += `out[offset]=accRe;out[offset+1]=accIm;return out;`;
+    try {
+        return Function(`return function polynomialEvalKernel(zRe,zIm,out,offset){${code}};`)();
+    } catch (error) {
+        return null;
+    }
+}
+
+function refreshPolynomialKernel(coeffs, degree) {
+    const size = degree + 1;
+    if (polynomialKernelRe.length < size) {
+        polynomialKernelRe = new Float64Array(size);
+        polynomialKernelIm = new Float64Array(size);
+    }
+
+    for (let i = 0; i <= degree; i++) {
+        const coeff = coeffs?.[i];
+        polynomialKernelRe[i] = coeff ? realOf(coeff) : 0;
+        polynomialKernelIm[i] = coeff ? imagOf(coeff) : 0;
+    }
+
+    polynomialKernelRef = coeffs;
+    polynomialKernelDegree = degree;
+    polynomialEvalKernel = createPolynomialEvalKernel(degree);
+}
+
+function complexPolynomialRawInto(zRe, zIm, out, offset = 0) {
+    const degree = Math.max(0, Math.floor(finite(state.polynomialN) ? state.polynomialN : 0));
+    const coeffs = state.polynomialCoeffs;
+    if (coeffs !== polynomialKernelRef || degree !== polynomialKernelDegree) {
+        refreshPolynomialKernel(coeffs, degree);
+    }
+
+    if (polynomialEvalKernel) return polynomialEvalKernel(zRe, zIm, out, offset);
+
+    let accRe = 0;
+    let accIm = 0;
+    const coeffRe = polynomialKernelRe;
+    const coeffIm = polynomialKernelIm;
+
+    for (let k = degree; k >= 0; k--) {
+        const nextRe = accRe * zRe - accIm * zIm;
+        accIm = accRe * zIm + accIm * zRe + coeffIm[k];
+        accRe = nextRe + coeffRe[k];
+    }
+
+    out[offset] = accRe;
+    out[offset + 1] = accIm;
+    return out;
 }
 
 export function complexPolynomial(z_re, z_im) {
-    const z = toComplex(z_re, z_im);
-    const degree = Math.max(0, Math.floor(finite(state.polynomialN) ? state.polynomialN : 0));
-    let acc = zeroLike();
-
-    for (let k = degree; k >= 0; k--) {
-        acc = complexAdd(complexMul(acc, z), state.polynomialCoeffs?.[k] ?? ZERO);
-    }
-
-    return acc;
+    const out = complexPolynomialRawInto(argRe(z_re), argIm(z_re, z_im), POLYNOMIAL_EXPORT_SCRATCH);
+    return { re: out[0], im: out[1] };
 }
+
+const POLYNOMIAL_EXPORT_SCRATCH = new Float64Array(2);
 
 export function complexPoincareCustomMetric(a, b) {
     const z = normalizeUnaryComplexArgs(a, b);
     if (z.im <= 1e-9) return { re: NaN, im: NaN };
     const sqrtIm = Math.sqrt(z.im);
     return { re: z.re / sqrtIm, im: sqrtIm };
+}
+
+
+const ALGEBRAIC_RAW_SUPPORTED = new Set([
+    'c',
+    'cos',
+    'sin',
+    'tan',
+    'sec',
+    'exp',
+    'ln',
+    'reciprocal',
+    'sinh',
+    'cosh',
+    'tanh',
+    'power',
+    'mobius',
+    'zeta',
+    'polynomial',
+    'poincare'
+]);
+
+const ALG_TMP = new Float64Array(8);
+
+function writeContextParameter(ctxRe, ctxIm, out, offset) {
+    out[offset] = ctxRe;
+    out[offset + 1] = ctxIm;
+    return out;
+}
+
+function complexMobiusRawInto(zRe, zIm, out, offset = 0) {
+    const a = state.mobiusA || ZERO;
+    const b = state.mobiusB || ZERO;
+    const c = state.mobiusC || ZERO;
+    const d = state.mobiusD || ONE;
+    const ar = realOf(a);
+    const ai = imagOf(a);
+    const br = realOf(b);
+    const bi = imagOf(b);
+    const cr = realOf(c);
+    const ci = imagOf(c);
+    const dr = realOf(d);
+    const di = imagOf(d);
+    return divideRawInto(
+        ar * zRe - ai * zIm + br,
+        ar * zIm + ai * zRe + bi,
+        cr * zRe - ci * zIm + dr,
+        cr * zIm + ci * zRe + di,
+        out,
+        offset
+    );
+}
+
+function evaluateRawTransformInto(func, re, im, ctxRe, ctxIm, out, offset = 0) {
+    switch (func) {
+        case 'c':
+            return writeContextParameter(ctxRe, ctxIm, out, offset);
+        case 'sin': {
+            const cosh = Math.cosh(im);
+            const sinh = Math.sinh(im);
+            out[offset] = Math.sin(re) * cosh;
+            out[offset + 1] = Math.cos(re) * sinh;
+            return out;
+        }
+        case 'cos': {
+            const cosh = Math.cosh(im);
+            const sinh = Math.sinh(im);
+            out[offset] = Math.cos(re) * cosh;
+            out[offset + 1] = -Math.sin(re) * sinh;
+            return out;
+        }
+        case 'tan': {
+            const denominator = Math.cos(2 * re) + Math.cosh(2 * im);
+            out[offset] = Math.sin(2 * re) / denominator;
+            out[offset + 1] = Math.sinh(2 * im) / denominator;
+            return out;
+        }
+        case 'sec': {
+            const cRe = Math.cos(re) * Math.cosh(im);
+            const cIm = -Math.sin(re) * Math.sinh(im);
+            return divideRawInto(1, 0, cRe, cIm, out, offset);
+        }
+        case 'exp':
+            return expRawInto(re, im, out, offset);
+        case 'ln':
+            out[offset] = re === 0 && im === 0 ? -Infinity : logHypot(re, im);
+            out[offset + 1] = re === 0 && im === 0 ? 0 : Math.atan2(im, re);
+            return out;
+        case 'reciprocal':
+            return divideRawInto(1, 0, re, im, out, offset);
+        case 'sinh': {
+            const cosh = Math.cosh(re);
+            const sinh = Math.sinh(re);
+            out[offset] = sinh * Math.cos(im);
+            out[offset + 1] = cosh * Math.sin(im);
+            return out;
+        }
+        case 'cosh': {
+            const cosh = Math.cosh(re);
+            const sinh = Math.sinh(re);
+            out[offset] = cosh * Math.cos(im);
+            out[offset + 1] = sinh * Math.sin(im);
+            return out;
+        }
+        case 'tanh': {
+            const denominator = Math.cosh(2 * re) + Math.cos(2 * im);
+            out[offset] = Math.sinh(2 * re) / denominator;
+            out[offset + 1] = Math.sin(2 * im) / denominator;
+            return out;
+        }
+        case 'power':
+            return powRawInto(re, im, state.fractionalPowerN !== undefined ? state.fractionalPowerN : DEFAULT_FRACTIONAL_POWER, 0, out, offset);
+        case 'mobius':
+            return complexMobiusRawInto(re, im, out, offset);
+        case 'polynomial':
+            return complexPolynomialRawInto(re, im, out, offset);
+        case 'poincare':
+            if (im <= 1e-9) {
+                out[offset] = NaN;
+                out[offset + 1] = NaN;
+                return out;
+            }
+            out[offset + 1] = Math.sqrt(im);
+            out[offset] = re / out[offset + 1];
+            return out;
+        case 'zeta': {
+            const z = complexRiemannZeta(re, im);
+            out[offset] = z.re;
+            out[offset + 1] = z.im;
+            return out;
+        }
+        default:
+            return null;
+    }
+}
+
+function powSmallIntegerInto(re, im, exponent, out, offset = 0) {
+    // Exact low-degree complex powers avoid generic log/exp exponentiation in algebraic hot paths.
+    if (exponent === 0) {
+        out[offset] = 1;
+        out[offset + 1] = 0;
+        return out;
+    }
+    if (exponent === 1) {
+        out[offset] = re;
+        out[offset + 1] = im;
+        return out;
+    }
+    if (exponent === 2) {
+        out[offset] = re * re - im * im;
+        out[offset + 1] = 2 * re * im;
+        return out;
+    }
+    if (exponent === 3) {
+        const re2 = re * re - im * im;
+        const im2 = 2 * re * im;
+        out[offset] = re2 * re - im2 * im;
+        out[offset + 1] = re2 * im + im2 * re;
+        return out;
+    }
+    let accRe = 1;
+    let accIm = 0;
+    let baseRe = re;
+    let baseIm = im;
+    let n = exponent | 0;
+    while (n > 0) {
+        if (n & 1) {
+            const nextRe = accRe * baseRe - accIm * baseIm;
+            accIm = accRe * baseIm + accIm * baseRe;
+            accRe = nextRe;
+        }
+        n >>>= 1;
+        if (n) {
+            const nextBaseRe = baseRe * baseRe - baseIm * baseIm;
+            baseIm = 2 * baseRe * baseIm;
+            baseRe = nextBaseRe;
+        }
+    }
+    out[offset] = accRe;
+    out[offset + 1] = accIm;
+    return out;
+}
+
+function isFastPositiveIntegerPower(value) {
+    return Number.isInteger(value) && value >= 0 && value <= 16;
+}
+
+function applyAlgebraicModifiersInto(factor, out, offset = 0) {
+    if (factor.power !== undefined && factor.power !== 1) {
+        if (isFastPositiveIntegerPower(factor.power)) {
+            powSmallIntegerInto(out[offset], out[offset + 1], factor.power, out, offset);
+        } else {
+            powRawInto(out[offset], out[offset + 1], factor.power, 0, out, offset);
+        }
+    }
+    if (factor.reciprocal) {
+        divideRawInto(1, 0, out[offset], out[offset + 1], out, offset);
+    }
+    if (factor.log) {
+        const re = out[offset];
+        const im = out[offset + 1];
+        out[offset] = re === 0 && im === 0 ? -Infinity : logHypot(re, im);
+        out[offset + 1] = re === 0 && im === 0 ? 0 : Math.atan2(im, re);
+    }
+    if (factor.exp) {
+        expRawInto(out[offset], out[offset + 1], out, offset);
+    }
+    return out;
+}
+
+function factorIsRawCompilable(factor) {
+    if (!factor || factor.func === 'none') return true;
+    if (!ALGEBRAIC_RAW_SUPPORTED.has(factor.func)) return false;
+    if (factor.chainedFunc && factor.chainedFunc !== 'none' && !ALGEBRAIC_RAW_SUPPORTED.has(factor.chainedFunc)) return false;
+    return !(factor.power !== undefined && factor.power !== 1 && typeof factor.power !== 'number');
+}
+
+
+function jsNumber(value) {
+    return Number.isFinite(value) ? String(value) : (Number.isNaN(value) ? 'NaN' : (value < 0 ? '-Infinity' : 'Infinity'));
+}
+
+function emitRawTransform(func, inRe, inIm, outRe, outIm, tag) {
+    switch (func) {
+        case 'c':
+            return `let ${outRe}=ctxRe,${outIm}=ctxIm;`;
+        case 'sin':
+            return `const cosh_${tag}=Math.cosh(${inIm}),sinh_${tag}=Math.sinh(${inIm});let ${outRe}=Math.sin(${inRe})*cosh_${tag},${outIm}=Math.cos(${inRe})*sinh_${tag};`;
+        case 'cos':
+            return `const cosh_${tag}=Math.cosh(${inIm}),sinh_${tag}=Math.sinh(${inIm});let ${outRe}=Math.cos(${inRe})*cosh_${tag},${outIm}=-Math.sin(${inRe})*sinh_${tag};`;
+        case 'tan':
+            return `const den_${tag}=Math.cos(2*(${inRe}))+Math.cosh(2*(${inIm}));let ${outRe}=Math.sin(2*(${inRe}))/den_${tag},${outIm}=Math.sinh(2*(${inIm}))/den_${tag};`;
+        case 'sec':
+            return `const cre_${tag}=Math.cos(${inRe})*Math.cosh(${inIm}),cim_${tag}=-Math.sin(${inRe})*Math.sinh(${inIm});divideRawInto(1,0,cre_${tag},cim_${tag},tmp,0);let ${outRe}=tmp[0],${outIm}=tmp[1];`;
+        case 'exp':
+            return `expRawInto(${inRe},${inIm},tmp,0);let ${outRe}=tmp[0],${outIm}=tmp[1];`;
+        case 'ln':
+            return `let ${outRe}=(${inRe})===0&&(${inIm})===0?-Infinity:logHypot(${inRe},${inIm}),${outIm}=(${inRe})===0&&(${inIm})===0?0:Math.atan2(${inIm},${inRe});`;
+        case 'reciprocal':
+            return `divideRawInto(1,0,${inRe},${inIm},tmp,0);let ${outRe}=tmp[0],${outIm}=tmp[1];`;
+        case 'sinh':
+            return `const cosh_${tag}=Math.cosh(${inRe}),sinh_${tag}=Math.sinh(${inRe});let ${outRe}=sinh_${tag}*Math.cos(${inIm}),${outIm}=cosh_${tag}*Math.sin(${inIm});`;
+        case 'cosh':
+            return `const cosh_${tag}=Math.cosh(${inRe}),sinh_${tag}=Math.sinh(${inRe});let ${outRe}=cosh_${tag}*Math.cos(${inIm}),${outIm}=sinh_${tag}*Math.sin(${inIm});`;
+        case 'tanh':
+            return `const den_${tag}=Math.cosh(2*(${inRe}))+Math.cos(2*(${inIm}));let ${outRe}=Math.sinh(2*(${inRe}))/den_${tag},${outIm}=Math.sin(2*(${inIm}))/den_${tag};`;
+        case 'power':
+            return `powRawInto(${inRe},${inIm},state.fractionalPowerN!==undefined?state.fractionalPowerN:0.5,0,tmp,0);let ${outRe}=tmp[0],${outIm}=tmp[1];`;
+        case 'mobius':
+            return `complexMobiusRawInto(${inRe},${inIm},tmp,0);let ${outRe}=tmp[0],${outIm}=tmp[1];`;
+        case 'polynomial':
+            return `complexPolynomialRawInto(${inRe},${inIm},tmp,0);let ${outRe}=tmp[0],${outIm}=tmp[1];`;
+        case 'poincare':
+            return `let ${outRe},${outIm};if((${inIm})<=1e-9){${outRe}=NaN;${outIm}=NaN;}else{${outIm}=Math.sqrt(${inIm});${outRe}=(${inRe})/${outIm};}`;
+        case 'zeta':
+            return `const zeta_${tag}=complexRiemannZeta(${inRe},${inIm});let ${outRe}=zeta_${tag}.re,${outIm}=zeta_${tag}.im;`;
+        default:
+            return null;
+    }
+}
+
+function emitModifiers(factor, reVar, imVar, tag) {
+    let code = '';
+    if (factor.power !== undefined && factor.power !== 1) {
+        if (isFastPositiveIntegerPower(factor.power)) {
+            const n = factor.power | 0;
+            if (n === 0) {
+                code += `${reVar}=1;${imVar}=0;`;
+            } else if (n === 2) {
+                code += `const pr_${tag}=${reVar},pi_${tag}=${imVar};${reVar}=pr_${tag}*pr_${tag}-pi_${tag}*pi_${tag};${imVar}=2*pr_${tag}*pi_${tag};`;
+            } else if (n === 3) {
+                code += `const ar_${tag}=${reVar},ai_${tag}=${imVar},br_${tag}=ar_${tag}*ar_${tag}-ai_${tag}*ai_${tag},bi_${tag}=2*ar_${tag}*ai_${tag};${reVar}=br_${tag}*ar_${tag}-bi_${tag}*ai_${tag};${imVar}=br_${tag}*ai_${tag}+bi_${tag}*ar_${tag};`;
+            } else {
+                code += `powSmallIntegerInto(${reVar},${imVar},${n},tmp,0);${reVar}=tmp[0];${imVar}=tmp[1];`;
+            }
+        } else {
+            code += `powRawInto(${reVar},${imVar},${jsNumber(factor.power)},0,tmp,0);${reVar}=tmp[0];${imVar}=tmp[1];`;
+        }
+    }
+    if (factor.reciprocal) {
+        code += `divideRawInto(1,0,${reVar},${imVar},tmp,0);${reVar}=tmp[0];${imVar}=tmp[1];`;
+    }
+    if (factor.log) {
+        code += `const lr_${tag}=${reVar},li_${tag}=${imVar};${reVar}=lr_${tag}===0&&li_${tag}===0?-Infinity:logHypot(lr_${tag},li_${tag});${imVar}=lr_${tag}===0&&li_${tag}===0?0:Math.atan2(li_${tag},lr_${tag});`;
+    }
+    if (factor.exp) {
+        code += `expRawInto(${reVar},${imVar},tmp,0);${reVar}=tmp[0];${imVar}=tmp[1];`;
+    }
+    return code;
+}
+
+
+function hasOnlyBaseFlags(factor) {
+    return factor && !factor.reciprocal && !factor.log && !factor.exp && (factor.chainedFunc === undefined || factor.chainedFunc === 'none');
+}
+
+
+
+function createGeneratedAlgebraicKernel(compiledTerms) {
+    let code = `'use strict';const tmp=scratch;let sumRe=0,sumIm=0;`;
+    for (let i = 0; i < compiledTerms.length; i++) {
+        const term = compiledTerms[i];
+        code += `let vr_${i}=${jsNumber(term.coeffRe)},vi_${i}=${jsNumber(term.coeffIm)};`;
+        const factors = term.factors;
+        for (let j = 0; j < factors.length; j++) {
+            const factor = factors[j];
+            if (!factor || factor.func === 'none') break;
+            const tag = `${i}_${j}`;
+            let argRe = 'zRe';
+            let argIm = 'zIm';
+            if (factor.chainedFunc && factor.chainedFunc !== 'none') {
+                const chRe = `chr_${tag}`;
+                const chIm = `chi_${tag}`;
+                const emitted = emitRawTransform(factor.chainedFunc, argRe, argIm, chRe, chIm, `c_${tag}`);
+                if (!emitted) return null;
+                code += emitted;
+                argRe = chRe;
+                argIm = chIm;
+            }
+            const fr = `fr_${tag}`;
+            const fi = `fi_${tag}`;
+            const emitted = emitRawTransform(factor.func, argRe, argIm, fr, fi, `f_${tag}`);
+            if (!emitted) return null;
+            code += emitted;
+            code += emitModifiers(factor, fr, fi, `m_${tag}`);
+            code += `const nr_${tag}=vr_${i}*${fr}-vi_${i}*${fi};vi_${i}=vr_${i}*${fi}+vi_${i}*${fr};vr_${i}=nr_${tag};`;
+        }
+        code += `if(!finite(vr_${i})||!finite(vi_${i})){out[offset]=NaN;out[offset+1]=NaN;return out;}sumRe+=vr_${i};sumIm+=vi_${i};`;
+    }
+    code += `out[offset]=sumRe;out[offset+1]=sumIm;return out;`;
+
+    try {
+        const raw = Function(
+            'scratch',
+            'Math',
+            'state',
+            'finite',
+            'logHypot',
+            'divideRawInto',
+            'expRawInto',
+            'powRawInto',
+            'powSmallIntegerInto',
+            'complexPolynomialRawInto',
+            'complexMobiusRawInto',
+            'complexRiemannZeta',
+            `return function generatedAlgebraicKernel(zRe,zIm,ctxRe,ctxIm,out,offset){${code}};`
+        )(
+            ALG_TMP,
+            Math,
+            state,
+            finite,
+            logHypot,
+            divideRawInto,
+            expRawInto,
+            powRawInto,
+            powSmallIntegerInto,
+            complexPolynomialRawInto,
+            complexMobiusRawInto,
+            complexRiemannZeta
+        );
+
+        const wrapper = (zRe, zIm, context = null, directCtxIm = undefined, out = null, offset = 0) => {
+            const directContext = typeof context === 'number';
+            const contextC = !directContext && context && context.c !== undefined && context.c !== null ? context.c : null;
+            const ctxRe = directContext ? context : (contextC ? argRe(contextC) : zRe);
+            const ctxIm = directContext ? (directCtxIm ?? 0) : (contextC ? argIm(contextC) : zIm);
+            if (out) return raw(zRe, zIm, ctxRe, ctxIm, out, offset);
+            raw(zRe, zIm, ctxRe, ctxIm, ALG_TMP, 0);
+            return { re: ALG_TMP[0], im: ALG_TMP[1] };
+        };
+        wrapper.raw = raw;
+        return wrapper;
+    } catch (error) {
+        return null;
+    }
+}
+
+function createCompiledAlgebraicKernel(terms) {
+    if (!Array.isArray(terms) || state.algebraicChainingZExpr && state.algebraicChainingZExpr !== 'z') {
+        return null;
+    }
+
+    const compiledTerms = new Array(terms.length);
+    for (let i = 0; i < terms.length; i++) {
+        const term = terms[i];
+        if (!term) return null;
+        const factors = term.factors ?? [];
+        for (const factor of factors) {
+            if (!factorIsRawCompilable(factor)) return null;
+            if (!factor || factor.func === 'none') break;
+        }
+        compiledTerms[i] = {
+            coeffRe: realOf(term.coeff ?? ONE),
+            coeffIm: imagOf(term.coeff ?? ONE),
+            factors
+        };
+    }
+
+    const generatedKernel = createGeneratedAlgebraicKernel(compiledTerms);
+    if (generatedKernel) return generatedKernel;
+
+    return (zRe, zIm, context = null, directCtxIm = undefined, out = null, offset = 0) => {
+        let sumRe = 0;
+        let sumIm = 0;
+        const tmp = ALG_TMP;
+        const directContext = typeof context === 'number';
+        const contextC = !directContext && context && context.c !== undefined && context.c !== null ? context.c : null;
+        const ctxRe = directContext ? context : (contextC ? argRe(contextC) : zRe);
+        const ctxIm = directContext ? (directCtxIm ?? 0) : (contextC ? argIm(contextC) : zIm);
+
+        for (let i = 0; i < compiledTerms.length; i++) {
+            const term = compiledTerms[i];
+            const factors = term.factors;
+            let valueRe = term.coeffRe;
+            let valueIm = term.coeffIm;
+
+            for (let j = 0; j < factors.length; j++) {
+                const factor = factors[j];
+                if (!factor || factor.func === 'none') break;
+
+                let argRe = zRe;
+                let argIm = zIm;
+                const chainedFunc = factor.chainedFunc;
+                if (chainedFunc && chainedFunc !== 'none') {
+                    const chained = evaluateRawTransformInto(chainedFunc, argRe, argIm, ctxRe, ctxIm, tmp, 0);
+                    if (!chained) return null;
+                    argRe = tmp[0];
+                    argIm = tmp[1];
+                }
+
+                const out = evaluateRawTransformInto(factor.func, argRe, argIm, ctxRe, ctxIm, tmp, 2);
+                if (!out) return null;
+                applyAlgebraicModifiersInto(factor, tmp, 2);
+
+                const factorRe = tmp[2];
+                const factorIm = tmp[3];
+                const nextRe = valueRe * factorRe - valueIm * factorIm;
+                valueIm = valueRe * factorIm + valueIm * factorRe;
+                valueRe = nextRe;
+            }
+
+            if (!finite(valueRe) || !finite(valueIm)) {
+                if (out) {
+                    out[offset] = NaN;
+                    out[offset + 1] = NaN;
+                    return out;
+                }
+                return { re: NaN, im: NaN };
+            }
+            sumRe += valueRe;
+            sumIm += valueIm;
+        }
+
+        if (out) {
+            out[offset] = sumRe;
+            out[offset + 1] = sumIm;
+            return out;
+        }
+        return { re: sumRe, im: sumIm };
+    };
+}
+
+function getCompiledAlgebraicKernel(terms) {
+    if (terms !== algebraicKernelTerms || state.algebraicChainingZExpr !== algebraicKernelZExpr) {
+        algebraicKernelTerms = terms;
+        algebraicKernelZExpr = state.algebraicChainingZExpr;
+        algebraicKernel = createCompiledAlgebraicKernel(terms);
+    }
+    return algebraicKernel;
 }
 
 function algebraicParameter(context, fallback) {
@@ -658,8 +1402,23 @@ export function evaluateAlgebraicChaining(z_re, z_im, context = null) {
         return { re: 0, im: 0 };
     }
 
-    let z = toComplex(z_re, z_im);
-    
+    const zInputRe = argRe(z_re);
+    const zInputIm = argIm(z_re, z_im);
+    const compiledKernel = getCompiledAlgebraicKernel(terms);
+    if (compiledKernel) {
+        if (compiledKernel.raw) {
+            const contextC = context && context.c !== undefined && context.c !== null ? context.c : null;
+            const ctxRe = contextC ? argRe(contextC) : zInputRe;
+            const ctxIm = contextC ? argIm(contextC) : zInputIm;
+            compiledKernel.raw(zInputRe, zInputIm, ctxRe, ctxIm, ALG_TMP, 0);
+            return { re: ALG_TMP[0], im: ALG_TMP[1] };
+        }
+        const compiledResult = compiledKernel(zInputRe, zInputIm, context);
+        if (compiledResult) return compiledResult;
+    }
+
+    let z = { re: zInputRe, im: zInputIm };
+
     if (state.algebraicChainingZExpr && state.algebraicChainingZExpr !== 'z') {
         if (algebraicZExprCacheKey !== state.algebraicChainingZExpr) {
             try {
@@ -679,7 +1438,7 @@ export function evaluateAlgebraicChaining(z_re, z_im, context = null) {
                         z = { re: result.re, im: result.im || 0 };
                     }
                 }
-            } catch (e) {}
+            } catch (e) { }
         }
     }
 
@@ -924,21 +1683,43 @@ export function getMappedTransformProfile(functionKey = state.currentFunction, t
     return profile;
 }
 
+
+function evaluateRawMappedTransformXY(transformFunc, re, im, functionKey = state.currentFunction, evalContext = null) {
+    if (!transformFunc) return null;
+    if (functionKey === 'zeta' && !state.zetaContinuationEnabled && re <= ZETA_REFLECTION_POINT_RE) return null;
+    const mapped = transformFunc(re, im, evalContext);
+    return isValidMappedTransformValue(mapped) ? mapped : null;
+}
+
 export function evaluateMappedTransform(profileOrTransform, re, im, functionKey = state.currentFunction, evalContext = null) {
     if (!profileOrTransform) return null;
 
     if (typeof profileOrTransform === 'function') {
-        return evaluateRawMappedTransform(profileOrTransform, { re, im }, functionKey, evalContext);
+        return evaluateRawMappedTransformXY(profileOrTransform, re, im, functionKey, evalContext);
     }
 
     if (!evalContext && profileOrTransform.isConstant && profileOrTransform.constantValue) {
         return cloneMappedComplex(profileOrTransform.constantValue);
     }
 
-    return evaluateRawMappedTransform(
+    const resolvedKey = profileOrTransform.functionKey || functionKey;
+    if (resolvedKey === 'algebraic_chaining' && profileOrTransform.transformFunc === transformFunctions.algebraic_chaining) {
+        const terms = state.algebraicChainingTerms;
+        const kernel = state.algebraicChainingEnabled && Array.isArray(terms) && terms.length !== 0 ? getCompiledAlgebraicKernel(terms) : null;
+        if (kernel?.raw) {
+            const contextC = evalContext && evalContext.c !== undefined && evalContext.c !== null ? evalContext.c : null;
+            const ctxRe = contextC ? argRe(contextC) : re;
+            const ctxIm = contextC ? argIm(contextC) : im;
+            kernel.raw(re, im, ctxRe, ctxIm, ALG_TMP, 0);
+            return finite(ALG_TMP[0]) && finite(ALG_TMP[1]) ? { re: ALG_TMP[0], im: ALG_TMP[1] } : null;
+        }
+    }
+
+    return evaluateRawMappedTransformXY(
         profileOrTransform.transformFunc,
-        { re, im },
-        profileOrTransform.functionKey || functionKey,
+        re,
+        im,
+        resolvedKey,
         evalContext
     );
 }
@@ -1064,9 +1845,99 @@ export function evaluateDomainColoringMappedTransform(profileOrTransform, re, im
     );
 }
 
+
+function writeChainStepRaw(mode, currentRe, currentIm, baseRe, baseIm, kernel, functionKey, cRe, cIm, out, offset = 0) {
+    switch (mode) {
+        case 'power': {
+            out[offset] = currentRe * baseRe - currentIm * baseIm;
+            out[offset + 1] = currentRe * baseIm + currentIm * baseRe;
+            return out;
+        }
+        case 'sqrt':
+            return powRawInto(currentRe, currentIm, 0.5, 0, out, offset);
+        case 'ln':
+            out[offset] = currentRe === 0 && currentIm === 0 ? -Infinity : logHypot(currentRe, currentIm);
+            out[offset + 1] = currentRe === 0 && currentIm === 0 ? 0 : Math.atan2(currentIm, currentRe);
+            return out;
+        case 'exp':
+            return expRawInto(currentRe, currentIm, out, offset);
+        case 'reciprocal':
+            return divideRawInto(1, 0, currentRe, currentIm, out, offset);
+        case 'recursion':
+        case 'repeat':
+        case 'compose':
+        default:
+            if (functionKey === 'algebraic_chaining') return kernel(currentRe, currentIm, cRe, cIm, out, offset);
+            return null;
+    }
+}
+
+function createFastAlgebraicChainedTransform(stage) {
+    const kernel = getCompiledAlgebraicKernel(state.algebraicChainingTerms);
+    if (!kernel) return null;
+    const rawKernel = kernel.raw || null;
+
+    const mode = state.chainingMode || 'recursion';
+    return (re, im) => {
+        const tmp = ALG_TMP;
+        const cRe = re;
+        const cIm = im;
+        let currentRe;
+        let currentIm;
+        let lastRe = NaN;
+        let lastIm = NaN;
+
+        if (mode === 'zero_seed') {
+            currentRe = 0;
+            currentIm = 0;
+            for (let i = 0; i <= stage; i++) {
+                if (rawKernel) rawKernel(currentRe, currentIm, cRe, cIm, tmp, 0);
+                else kernel(currentRe, currentIm, cRe, cIm, tmp, 0);
+                currentRe = tmp[0];
+                currentIm = tmp[1];
+                if (!finite(currentRe) || !finite(currentIm)) return { re: NaN, im: NaN };
+                lastRe = currentRe;
+                lastIm = currentIm;
+                if (Math.max(Math.abs(currentRe), Math.abs(currentIm)) >= DOMAIN_COLOR_CHAIN_BAILOUT_MAGNITUDE) break;
+            }
+            return { re: lastRe, im: lastIm };
+        }
+
+        if (rawKernel) rawKernel(re, im, cRe, cIm, tmp, 0);
+        else kernel(re, im, cRe, cIm, tmp, 0);
+        currentRe = tmp[0];
+        currentIm = tmp[1];
+        if (!finite(currentRe) || !finite(currentIm)) return { re: NaN, im: NaN };
+        if (Math.max(Math.abs(currentRe), Math.abs(currentIm)) >= DOMAIN_COLOR_CHAIN_BAILOUT_MAGNITUDE) return { re: NaN, im: NaN };
+        const baseRe = currentRe;
+        const baseIm = currentIm;
+
+        for (let i = 1; i <= stage; i++) {
+            if (mode === 'recursion' || mode === 'repeat' || mode === 'compose') {
+                if (rawKernel) rawKernel(currentRe, currentIm, cRe, cIm, tmp, 0);
+                else kernel(currentRe, currentIm, cRe, cIm, tmp, 0);
+            } else {
+                const step = writeChainStepRaw(mode, currentRe, currentIm, baseRe, baseIm, kernel, 'algebraic_chaining', cRe, cIm, tmp, 0);
+                if (!step) return null;
+            }
+            currentRe = tmp[0];
+            currentIm = tmp[1];
+            if (!finite(currentRe) || !finite(currentIm)) return { re: NaN, im: NaN };
+            if (Math.max(Math.abs(currentRe), Math.abs(currentIm)) >= DOMAIN_COLOR_CHAIN_BAILOUT_MAGNITUDE) return { re: NaN, im: NaN };
+        }
+
+        return { re: currentRe, im: currentIm };
+    };
+}
+
 function createChainedTransformForStage(funcKey, stageIndex, baseFunc) {
-    const baseProfile = getMappedTransformProfile(funcKey, baseFunc);
     const stage = chainStageIndex(stageIndex);
+    if (funcKey === 'algebraic_chaining' && baseFunc === transformFunctions.algebraic_chaining) {
+        const fast = createFastAlgebraicChainedTransform(stage);
+        if (fast) return fast;
+    }
+
+    const baseProfile = getMappedTransformProfile(funcKey, baseFunc);
 
     return (re, im) => {
         const mapped = evaluateMappedChainStage(baseProfile, re, im, funcKey, stage);
@@ -1139,28 +2010,32 @@ export function getContourPoints(shapeType, params, numSteps) {
 
     if (!shape || !params || !shape.valid(params) || !finite(steps) || steps < 1) return [];
 
-    return Array.from({ length: steps + 1 }, (_, i) => {
-        const t = (i / steps) * TWO_PI;
-        return shape.point(params, t);
-    });
+    const points = new Array(steps + 1);
+    for (let i = 0; i <= steps; i++) {
+        points[i] = shape.point(params, (i / steps) * TWO_PI);
+    }
+    return points;
 }
 
 export function numericalLineIntegral(transformFunc, contourPoints) {
-    const total = { re: 0, im: 0 };
-    if (!contourPoints || contourPoints.length < 2) return total;
+    if (!contourPoints || contourPoints.length < 2) return { re: 0, im: 0 };
+
+    let totalRe = 0;
+    let totalIm = 0;
 
     for (let i = 0; i < contourPoints.length - 1; i++) {
         const z0 = contourPoints[i];
         const z1 = contourPoints[i + 1];
-        const dz = complexSub(z1, z0);
-        const mid = { re: (z0.re + z1.re) / 2, im: (z0.im + z1.im) / 2 };
-        const value = transformFunc(mid.re, mid.im);
+        const dzRe = z1.re - z0.re;
+        const dzIm = z1.im - z0.im;
+        const value = transformFunc((z0.re + z1.re) * 0.5, (z0.im + z1.im) * 0.5);
 
         if (invalidComplex(value)) return { re: NaN, im: NaN };
-        addInto(total, complexMul(value, dz));
+        totalRe += value.re * dzRe - value.im * dzIm;
+        totalIm += value.re * dzIm + value.im * dzRe;
     }
 
-    return total;
+    return { re: totalRe, im: totalIm };
 }
 
 export function isPointInsideContour(point, contourType, params) {
@@ -1169,16 +2044,17 @@ export function isPointInsideContour(point, contourType, params) {
 }
 
 export function estimateResidue(transformFunc, pole, epsilonRadius, numSteps) {
-    const center = toComplex(pole);
+    const centerRe = argRe(pole);
+    const centerIm = argIm(pole);
     const radius = Math.max(epsilonRadius, 1e-6);
-    const points = getContourPoints('circle', { cx: center.re, cy: center.im, r: radius }, numSteps);
+    const points = getContourPoints('circle', { cx: centerRe, cy: centerIm, r: radius }, numSteps);
 
     if (!points.length) return { re: NaN, im: NaN };
 
     const integral = numericalLineIntegral(transformFunc, points);
     if (invalidComplex(integral)) return { re: NaN, im: NaN };
 
-    return complexDivide(integral, { re: 0, im: TWO_PI });
+    return divideRaw(integral.re, integral.im, 0, TWO_PI);
 }
 
 export function factorial(n) {
@@ -1363,6 +2239,58 @@ function computeCauchyCoefficients(originalTransformFunc, z0Complex, contourPoin
     return coefficients.every(isFiniteComplex) ? coefficients : null;
 }
 
+
+function computeCauchyCoefficientsOnCircle(originalTransformFunc, z0Complex, radius, stepCount, order) {
+    const accRe = new Float64Array(order + 1);
+    const accIm = new Float64Array(order + 1);
+    let prevRe = z0Complex.re + radius;
+    let prevIm = z0Complex.im;
+
+    for (let i = 1; i <= stepCount; i++) {
+        const t = (i / stepCount) * TWO_PI;
+        const currRe = z0Complex.re + radius * Math.cos(t);
+        const currIm = z0Complex.im + radius * Math.sin(t);
+        const dzRe = currRe - prevRe;
+        const dzIm = currIm - prevIm;
+        const midRe = (prevRe + currRe) * 0.5;
+        const midIm = (prevIm + currIm) * 0.5;
+        const functionValue = originalTransformFunc(midRe, midIm);
+
+        if (!isFiniteComplex(functionValue)) return null;
+
+        const deltaRe = midRe - z0Complex.re;
+        const deltaIm = midIm - z0Complex.im;
+        const denom = deltaRe * deltaRe + deltaIm * deltaIm;
+        if (!(denom > 0) || !finite(denom)) return null;
+
+        const invRe = deltaRe / denom;
+        const invIm = -deltaIm / denom;
+        let powRe = invRe;
+        let powIm = invIm;
+
+        for (let n = 0; n <= order; n++) {
+            const fpRe = functionValue.re * powRe - functionValue.im * powIm;
+            const fpIm = functionValue.re * powIm + functionValue.im * powRe;
+            accRe[n] += fpRe * dzRe - fpIm * dzIm;
+            accIm[n] += fpRe * dzIm + fpIm * dzRe;
+
+            const nextRe = powRe * invRe - powIm * invIm;
+            powIm = powRe * invIm + powIm * invRe;
+            powRe = nextRe;
+        }
+
+        prevRe = currRe;
+        prevIm = currIm;
+    }
+
+    const coefficients = new Array(order + 1);
+    for (let n = 0; n <= order; n++) {
+        coefficients[n] = { re: accIm[n] / TWO_PI, im: -accRe[n] / TWO_PI };
+        if (!isFiniteComplex(coefficients[n])) return null;
+    }
+    return coefficients;
+}
+
 export function computeTaylorSeriesCoefficients(originalTransformFuncKey, z0Complex, order) {
     const originalTransformFunc = transformFunctions[originalTransformFuncKey];
     if (!originalTransformFunc) {
@@ -1370,7 +2298,7 @@ export function computeTaylorSeriesCoefficients(originalTransformFuncKey, z0Comp
         return null;
     }
 
-    const z0 = toComplex(z0Complex);
+    const z0 = { re: argRe(z0Complex), im: argIm(z0Complex) };
     const cacheKey = buildTaylorSeriesCoefficientCacheKey(originalTransformFuncKey, z0, order);
 
     if (taylorSeriesCoefficientCache.key === cacheKey) {
@@ -1381,30 +2309,34 @@ export function computeTaylorSeriesCoefficients(originalTransformFuncKey, z0Comp
     if (!(radius > 0)) return cacheTaylorCoefficients(cacheKey, null);
 
     const contourStepCount = Math.max(192, 48 * (order + 1));
-    const contourPoints = getContourPoints('circle', { cx: z0.re, cy: z0.im, r: radius }, contourStepCount);
-
-    if (!Array.isArray(contourPoints) || contourPoints.length < 2) {
-        return cacheTaylorCoefficients(cacheKey, null);
-    }
-
     return cacheTaylorCoefficients(
         cacheKey,
-        computeCauchyCoefficients(originalTransformFunc, z0, contourPoints, order)
+        computeCauchyCoefficientsOnCircle(originalTransformFunc, z0, radius, contourStepCount, order)
     );
 }
 
 export function evaluateTaylorSeries(coefficients, zInputComplex, z0Complex) {
     if (!Array.isArray(coefficients) || coefficients.length === 0) return { re: NaN, im: NaN };
 
-    const delta = complexSub(toComplex(zInputComplex), toComplex(z0Complex));
-    let sum = { re: 0, im: 0 };
+    const deltaRe = argRe(zInputComplex) - argRe(z0Complex);
+    const deltaIm = argIm(zInputComplex) - argIm(z0Complex);
+    let sumRe = 0;
+    let sumIm = 0;
 
     for (let n = coefficients.length - 1; n >= 0; n--) {
+        const mulRe = sumRe * deltaRe - sumIm * deltaIm;
+        const mulIm = sumRe * deltaIm + sumIm * deltaRe;
         const coefficient = coefficients[n];
-        sum = complexAdd(complexMul(sum, delta), isFiniteComplex(coefficient) ? coefficient : ZERO);
+        if (isFiniteComplex(coefficient)) {
+            sumRe = mulRe + coefficient.re;
+            sumIm = mulIm + coefficient.im;
+        } else {
+            sumRe = mulRe;
+            sumIm = mulIm;
+        }
     }
 
-    return sum;
+    return { re: sumRe, im: sumIm };
 }
 
 const ENTIRE_FUNCTIONS = new Set(['exp', 'sin', 'cos', 'polynomial']);
