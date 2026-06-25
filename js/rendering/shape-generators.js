@@ -10,13 +10,13 @@ import {
 } from '../constants/colors.js';
 import { LINE_WIDTH_THIN, LINE_WIDTH_NORMAL, LINE_WIDTH_MEDIUM, LINE_WIDTH_THICK } from '../constants/rendering.js';
 
-
 const EPSILON = 1e-9;
 const DEG_TO_RAD = Math.PI / 180;
 const HYPERBOLA_U_MAX = 2.5;
 const MIN_VISIBLE_RADIUS = 0.1;
 const MIN_LOGPOLAR_RADIUS = 0.05;
 const RADIAL_DISCRETE_STEP_COLOR = 'rgba(255, 255, 0, 0.7)';
+const UNIT_CIRCLE_CACHE_LIMIT = 256;
 
 const RADIAL_STEP_DOMAIN_DEFAULT = Object.freeze({ min: -5, max: 5 });
 const RADIAL_STEP_DOMAINS = Object.freeze({
@@ -38,8 +38,16 @@ const RADIAL_STEP_SINGULARITIES = Object.freeze({
     ln: value => value <= EPSILON
 });
 
-const emptyPointSets = () => [];
+/*
+ * The public contract still returns arrays of { re, im } points. Internally we
+ * remove callback-heavy sampling, transient range arrays, spread/slice/filter
+ * churn, and repeated full-circle trig. The single cache below stores immutable
+ * unit-circle coordinate tables; callers receive fresh point objects, so no
+ * downstream mutation can corrupt cached numeric data.
+ */
+const UNIT_CIRCLE_CACHE = new Map();
 
+const emptyPointSets = () => [];
 const point = (re, im) => ({ re, im });
 const degreesToRadians = degrees => degrees * DEG_TO_RAD;
 const lerp = (start, end, t) => start + (end - start) * t;
@@ -52,8 +60,10 @@ function isRangeLike(value) {
     return Array.isArray(value) && value.length >= 2;
 }
 
-function firstRange(...ranges) {
-    return ranges.find(isRangeLike) ?? defaultRange();
+function firstRange(rangeA, rangeB) {
+    if (isRangeLike(rangeA)) return rangeA;
+    if (isRangeLike(rangeB)) return rangeB;
+    return defaultRange();
 }
 
 function integerAtLeast(value, minimum) {
@@ -63,146 +73,128 @@ function integerAtLeast(value, minimum) {
         : minimum;
 }
 
-/*
- * Inclusive sampling is the geometry contract for this module: public curve
- * generators include both endpoints, and every higher-level shape delegates to
- * this one boundary policy instead of hand-rolling loop arithmetic.
- */
-function inclusiveSamples(segments, sampler) {
+function unitCircleTable(segments) {
+    let table = UNIT_CIRCLE_CACHE.get(segments);
+    if (table !== undefined) return table;
+
+    table = new Float64Array((segments + 1) << 1);
+    for (let index = 0, offset = 0; index <= segments; index += 1, offset += 2) {
+        const angle = (index / segments) * TWO_PI;
+        table[offset] = Math.cos(angle);
+        table[offset + 1] = Math.sin(angle);
+    }
+
+    if (UNIT_CIRCLE_CACHE.size >= UNIT_CIRCLE_CACHE_LIMIT) {
+        UNIT_CIRCLE_CACHE.delete(UNIT_CIRCLE_CACHE.keys().next().value);
+    }
+    UNIT_CIRCLE_CACHE.set(segments, table);
+    return table;
+}
+
+function cartesianSegment(startRe, startIm, endRe, endIm, segments) {
     const count = integerAtLeast(segments, 1);
     const points = new Array(count + 1);
+    const stepRe = (endRe - startRe) / count;
+    const stepIm = (endIm - startIm) / count;
+    let re = startRe;
+    let im = startIm;
+
+    for (let index = 0; index < count; index += 1) {
+        points[index] = { re, im };
+        re += stepRe;
+        im += stepIm;
+    }
+    points[count] = { re: endRe, im: endIm };
+
+    return points;
+}
+
+function radialSegment(angle, startRadius, endRadius, segments) {
+    const count = integerAtLeast(segments, 1);
+    const points = new Array(count + 1);
+    const radiusStep = (endRadius - startRadius) / count;
+    const cos = Math.cos(angle);
+    const sin = Math.sin(angle);
+    let radius = startRadius;
+
+    for (let index = 0; index < count; index += 1) {
+        points[index] = { re: radius * cos, im: radius * sin };
+        radius += radiusStep;
+    }
+    points[count] = { re: endRadius * cos, im: endRadius * sin };
+
+    return points;
+}
+
+function logarithmicRadialSegment(angle, minLogRadius, maxLogRadius, segments) {
+    const count = integerAtLeast(segments, 1);
+    const points = new Array(count + 1);
+    const cos = Math.cos(angle);
+    const sin = Math.sin(angle);
+    const ratio = Math.exp((maxLogRadius - minLogRadius) / count);
+    let radius = Math.exp(minLogRadius);
 
     for (let index = 0; index <= count; index += 1) {
-        points[index] = sampler(index / count, index, count);
+        points[index] = { re: radius * cos, im: radius * sin };
+        radius *= ratio;
     }
 
     return points;
 }
 
-/*
- * Conditional collection avoids map-null-filter churn for geometry paths where
- * invalid samples are expected around singularities or visibility boundaries.
- */
-function collect(count, reducer) {
-    const results = [];
+function arcPoints(radius, startAngle, endAngle, segments) {
+    const count = integerAtLeast(segments, 1);
+    const points = new Array(count + 1);
+    const inv = 1 / count;
+    const angleDelta = endAngle - startAngle;
 
-    for (let index = 0; index < count; index += 1) {
-        reducer(results, index);
+    for (let index = 0; index <= count; index += 1) {
+        const angle = startAngle + angleDelta * index * inv;
+        points[index] = { re: radius * Math.cos(angle), im: radius * Math.sin(angle) };
     }
 
-    return results;
-}
-
-function linearlySampledRange(range, divisions) {
-    const [start, end] = range;
-    return inclusiveSamples(divisions, t => lerp(start, end, t));
-}
-
-function cartesianSegment(startRe, startIm, endRe, endIm, segments) {
-    return inclusiveSamples(segments, t => point(
-        lerp(startRe, endRe, t),
-        lerp(startIm, endIm, t)
-    ));
-}
-
-function radialSegment(angle, startRadius, endRadius, segments) {
-    const cos = Math.cos(angle);
-    const sin = Math.sin(angle);
-
-    return inclusiveSamples(segments, t => {
-        const radius = lerp(startRadius, endRadius, t);
-        return point(radius * cos, radius * sin);
-    });
-}
-
-function logarithmicRadialSegment(angle, minLogRadius, maxLogRadius, segments) {
-    const cos = Math.cos(angle);
-    const sin = Math.sin(angle);
-
-    return inclusiveSamples(segments, t => {
-        const radius = Math.exp(lerp(minLogRadius, maxLogRadius, t));
-        return point(radius * cos, radius * sin);
-    });
-}
-
-function arcPoints(radius, startAngle, endAngle, segments) {
-    return inclusiveSamples(segments, t => {
-        const angle = lerp(startAngle, endAngle, t);
-        return point(radius * Math.cos(angle), radius * Math.sin(angle));
-    });
+    return points;
 }
 
 function finitePoint(value) {
-    return value && Number.isFinite(value.re) && Number.isFinite(value.im);
+    return value !== null && value !== undefined && Number.isFinite(value.re) && Number.isFinite(value.im);
 }
 
 function maxVisibleRadius(config) {
-    return Math.max(
-        Math.abs(config.xRange[0]),
-        Math.abs(config.xRange[1]),
-        Math.abs(config.yRange[0]),
-        Math.abs(config.yRange[1]),
-        MIN_VISIBLE_RADIUS
-    );
+    const xRange = config.xRange;
+    const yRange = config.yRange;
+    const x0 = Math.abs(xRange[0]);
+    const x1 = Math.abs(xRange[1]);
+    const y0 = Math.abs(yRange[0]);
+    const y1 = Math.abs(yRange[1]);
+    return Math.max(x0, x1, y0, y1, MIN_VISIBLE_RADIUS);
 }
 
 function currentGridPalette() {
+    const gridColor1 = state.gridColor1;
+    const gridColor2 = state.gridColor2;
     return {
-        horizontal: state.gridColor1 || COLOR_Z_GRID_HORZ,
-        vertical: state.gridColor2 || COLOR_Z_GRID_VERT,
-        horizontalFunctionalEquation: state.gridColor1 || COLOR_Z_GRID_HORZ_FUNCTIONAL_EQ,
-        verticalFunctionalEquation: state.gridColor2 || COLOR_Z_GRID_VERT_FUNCTIONAL_EQ,
+        horizontal: gridColor1 || COLOR_Z_GRID_HORZ,
+        vertical: gridColor2 || COLOR_Z_GRID_VERT,
+        horizontalFunctionalEquation: gridColor1 || COLOR_Z_GRID_HORZ_FUNCTIONAL_EQ,
+        verticalFunctionalEquation: gridColor2 || COLOR_Z_GRID_VERT_FUNCTIONAL_EQ,
         zetaUndefinedSumRegion: COLOR_Z_GRID_ZETA_UNDEFINED_SUM_REGION
     };
 }
 
-function isBoundaryCrossing(previousPoint, currentPoint, splitRe) {
-    const previousDelta = previousPoint.re - splitRe;
-    const currentDelta = currentPoint.re - splitRe;
-    return previousDelta === 0 || currentDelta === 0 || previousDelta * currentDelta < 0;
-}
-
-function findFirstBoundaryCrossingIndex(points, splitRe) {
-    return points.findIndex((currentPoint, index) => (
-        index > 0 && isBoundaryCrossing(points[index - 1], currentPoint, splitRe)
-    ));
-}
-
-function interpolateBoundaryPoint(previousPoint, currentPoint, splitRe) {
-    if (currentPoint.re === previousPoint.re) {
-        return point(splitRe, previousPoint.im);
-    }
-
-    const ratio = (splitRe - previousPoint.re) / (currentPoint.re - previousPoint.re);
-    return point(splitRe, lerp(previousPoint.im, currentPoint.im, ratio));
-}
-
-function appendPointIfMissing(points, nextPoint) {
-    const currentPoint = points.at(-1);
-
-    if (!currentPoint || currentPoint.re !== nextPoint.re || currentPoint.im !== nextPoint.im) {
-        points.push(nextPoint);
-    }
-
-    return points;
-}
-
-function prependPointIfMissing(points, nextPoint) {
-    const currentPoint = points[0];
-
-    if (!currentPoint || currentPoint.re !== nextPoint.re || currentPoint.im !== nextPoint.im) {
-        points.unshift(nextPoint);
-    }
-
-    return points;
-}
-
 function zetaVerticalGridColor(pointSet, palette) {
-    const referencePoint = pointSet.points.find(Boolean);
-
-    return referencePoint && referencePoint.re < ZETA_REFLECTION_POINT_RE
-        ? palette.verticalFunctionalEquation
-        : palette.vertical;
+    const points = pointSet.points;
+    if (points) {
+        for (let index = 0; index < points.length; index += 1) {
+            const referencePoint = points[index];
+            if (referencePoint) {
+                return referencePoint.re < ZETA_REFLECTION_POINT_RE
+                    ? palette.verticalFunctionalEquation
+                    : palette.vertical;
+            }
+        }
+    }
+    return palette.vertical;
 }
 
 function prepareZetaPointSet(pointSet, palette) {
@@ -223,7 +215,32 @@ function prepareZetaPointSet(pointSet, palette) {
 }
 
 function radialStepIsSingular(functionKey, value) {
-    return Boolean(RADIAL_STEP_SINGULARITIES[functionKey]?.(value));
+    const predicate = RADIAL_STEP_SINGULARITIES[functionKey];
+    return predicate !== undefined && predicate(value);
+}
+
+function makeCirclePoints(cx, cy, radius, segments) {
+    const count = integerAtLeast(segments, 1);
+    const table = unitCircleTable(count);
+    const points = new Array(count + 1);
+
+    for (let index = 0, offset = 0; index <= count; index += 1, offset += 2) {
+        points[index] = { re: cx + radius * table[offset], im: cy + radius * table[offset + 1] };
+    }
+
+    return points;
+}
+
+function makeEllipsePoints(cx, cy, a, b, segments) {
+    const count = integerAtLeast(segments, 1);
+    const table = unitCircleTable(count);
+    const points = new Array(count + 1);
+
+    for (let index = 0, offset = 0; index <= count; index += 1, offset += 2) {
+        points[index] = { re: cx + a * table[offset], im: cy + b * table[offset + 1] };
+    }
+
+    return points;
 }
 
 export function createLineSet(points, color, role, lineWidth) {
@@ -240,14 +257,14 @@ export function getVisiblePlaneRanges(planeParams) {
 }
 
 export function buildInputShapeGeometryConfig(planeParams, options = {}) {
-    const { xRange, yRange } = getVisiblePlaneRanges(planeParams);
+    const ranges = getVisiblePlaneRanges(planeParams);
 
     return {
         currentInputShape: options.currentInputShape ?? state.currentInputShape,
         currentFunction: options.currentFunction ?? state.currentFunction,
         zetaContinuationEnabled: options.zetaContinuationEnabled ?? state.zetaContinuationEnabled,
-        xRange: options.xRange ?? xRange,
-        yRange: options.yRange ?? yRange,
+        xRange: options.xRange ?? ranges.xRange,
+        yRange: options.yRange ?? ranges.yRange,
         gridDensity: integerAtLeast(options.gridDensity ?? state.gridDensity, 1),
         curvePoints: integerAtLeast(options.curvePoints ?? NUM_POINTS_CURVE, 8),
         a0: options.a0 ?? state.a0,
@@ -267,28 +284,32 @@ export function buildInputShapeGeometryConfig(planeParams, options = {}) {
 }
 
 export function generateCirclePoints(cx, cy, radius, numPoints) {
-    return inclusiveSamples(numPoints, t => {
-        const angle = t * TWO_PI;
-        return point(cx + radius * Math.cos(angle), cy + radius * Math.sin(angle));
-    });
+    return makeCirclePoints(cx, cy, radius, numPoints);
 }
 
 export function generateEllipsePoints(cx, cy, a, b, numPoints) {
-    return inclusiveSamples(numPoints, t => {
-        const angle = t * TWO_PI;
-        return point(cx + a * Math.cos(angle), cy + b * Math.sin(angle));
-    });
+    return makeEllipsePoints(cx, cy, a, b, numPoints);
 }
 
 export function generateHyperbolaPoints(cx, cy, a, b, numPoints) {
     const halfSteps = integerAtLeast(numPoints / 2, 2);
+    const branchLength = halfSteps + 1;
+    const points = new Array(branchLength * 2 + 1);
+    const secondBranchOffset = branchLength + 1;
+    const inv = 1 / halfSteps;
+    const halfMax = HYPERBOLA_U_MAX / 2;
 
-    const branch = sign => inclusiveSamples(halfSteps, t => {
-        const u = t * HYPERBOLA_U_MAX - HYPERBOLA_U_MAX / 2;
-        return point(cx + sign * a * Math.cosh(u), cy + b * Math.sinh(u));
-    });
+    for (let index = 0; index <= halfSteps; index += 1) {
+        const u = HYPERBOLA_U_MAX * index * inv - halfMax;
+        const cosh = Math.cosh(u);
+        const sinh = Math.sinh(u);
+        const im = cy + b * sinh;
+        points[index] = { re: cx + a * cosh, im };
+        points[secondBranchOffset + index] = { re: cx - a * cosh, im };
+    }
 
-    return [...branch(1), null, ...branch(-1)];
+    points[branchLength] = null;
+    return points;
 }
 
 export function generateLinePoints(xMin, xMax, y, numPoints) {
@@ -303,53 +324,67 @@ export function generateCartesianGridPointSets(config) {
     const palette = currentGridPalette();
     const sampleCount = integerAtLeast(config.curvePoints / 2, 2);
     const gridDensity = integerAtLeast(config.gridDensity, 1);
+    const lineCount = gridDensity + 1;
+    const pointSets = new Array(lineCount << 1);
+    const xRange = config.xRange;
+    const yRange = config.yRange;
+    const x0 = xRange[0];
+    const x1 = xRange[1];
+    const y0 = yRange[0];
+    const yStep = (yRange[1] - y0) / gridDensity;
+    const xStep = (x1 - x0) / gridDensity;
+    const zetaBlocked = config.currentFunction === 'zeta' && !config.zetaContinuationEnabled;
 
-    const horizontalSets = linearlySampledRange(config.yRange, gridDensity).map(y => createLineSet(
-        generateLinePoints(config.xRange[0], config.xRange[1], y, sampleCount),
-        palette.horizontal,
-        'grid-horizontal',
-        LINE_WIDTH_NORMAL
-    ));
+    for (let index = 0; index < lineCount; index += 1) {
+        const y = y0 + yStep * index;
+        pointSets[index] = createLineSet(
+            cartesianSegment(x0, y, x1, y, sampleCount),
+            palette.horizontal,
+            'grid-horizontal',
+            LINE_WIDTH_NORMAL
+        );
+    }
 
-    const verticalSets = linearlySampledRange(config.xRange, gridDensity).map(x => createLineSet(
-        generateVerticalLinePoints(x, config.yRange[0], config.yRange[1], sampleCount),
-        config.currentFunction === 'zeta' && !config.zetaContinuationEnabled && x <= ZETA_REFLECTION_POINT_RE
-            ? palette.zetaUndefinedSumRegion
-            : palette.vertical,
-        'grid-vertical',
-        LINE_WIDTH_NORMAL
-    ));
+    for (let index = 0; index < lineCount; index += 1) {
+        const x = x0 + xStep * index;
+        pointSets[lineCount + index] = createLineSet(
+            cartesianSegment(x, yRange[0], x, yRange[1], sampleCount),
+            zetaBlocked && x <= ZETA_REFLECTION_POINT_RE ? palette.zetaUndefinedSumRegion : palette.vertical,
+            'grid-vertical',
+            LINE_WIDTH_NORMAL
+        );
+    }
 
-    return [...horizontalSets, ...verticalSets];
+    return pointSets;
 }
 
 export function generatePolarGridPointSets(config) {
     const maxRadius = maxVisibleRadius(config);
     const angularLineCount = integerAtLeast(Math.max(4, config.gridDensity), 4);
+    const gridDensity = integerAtLeast(config.gridDensity, 1);
+    const pointSets = new Array(angularLineCount + gridDensity);
 
-    const angularSets = Array.from({ length: angularLineCount }, (_, index) => {
+    for (let index = 0; index < angularLineCount; index += 1) {
         const angle = (index / angularLineCount) * TWO_PI;
-
-        return createLineSet(
+        pointSets[index] = createLineSet(
             radialSegment(angle, 0, maxRadius, config.curvePoints),
             COLOR_POLAR_ANGULAR,
             'polar-angular',
             LINE_WIDTH_NORMAL
         );
-    });
+    }
 
-    const radialSets = collect(integerAtLeast(config.gridDensity, 1), (sets, index) => {
+    for (let index = 0; index < gridDensity; index += 1) {
         const radius = ((index + 1) / config.gridDensity) * maxRadius;
-
-        sets.push(createLineSet(
-            generateCirclePoints(0, 0, radius, config.curvePoints),
+        pointSets[angularLineCount + index] = createLineSet(
+            makeCirclePoints(0, 0, radius, config.curvePoints),
             COLOR_POLAR_RADIAL,
             'polar-radial',
             LINE_WIDTH_NORMAL
-        ));
-    });
+        );
+    }
 
-    return [...angularSets, ...radialSets];
+    return pointSets;
 }
 
 export function generateLogPolarGridPointSets(config) {
@@ -358,43 +393,51 @@ export function generateLogPolarGridPointSets(config) {
     const maxLogRadius = Math.log(maxRadius);
     const angularLineCount = integerAtLeast(Math.max(4, config.gridDensity), 4);
     const gridDensity = integerAtLeast(config.gridDensity, 1);
+    const pointSets = new Array(angularLineCount + gridDensity + 1);
+    const radialRatio = Math.exp((maxLogRadius - minLogRadius) / gridDensity);
+    let radius = Math.exp(minLogRadius);
 
-    const angularSets = Array.from({ length: angularLineCount }, (_, index) => {
+    for (let index = 0; index < angularLineCount; index += 1) {
         const angle = (index / angularLineCount) * TWO_PI;
-
-        return createLineSet(
+        pointSets[index] = createLineSet(
             logarithmicRadialSegment(angle, minLogRadius, maxLogRadius, config.curvePoints),
             COLOR_LOGPOLAR_ANGULAR,
             'logpolar-angular',
             LINE_WIDTH_NORMAL
         );
-    });
+    }
 
-    const radialSets = collect(gridDensity + 1, (sets, index) => {
-        const radius = Math.exp(lerp(minLogRadius, maxLogRadius, index / gridDensity));
+    for (let index = 0; index <= gridDensity; index += 1) {
+        pointSets[angularLineCount + index] = createLineSet(
+            makeCirclePoints(0, 0, radius, config.curvePoints),
+            COLOR_LOGPOLAR_EXP_R,
+            'logpolar-radial',
+            LINE_WIDTH_NORMAL
+        );
+        radius *= radialRatio;
+    }
 
-        if (radius <= maxRadius * 1.1) {
-            sets.push(createLineSet(
-                generateCirclePoints(0, 0, radius, config.curvePoints),
-                COLOR_LOGPOLAR_EXP_R,
-                'logpolar-radial',
-                LINE_WIDTH_NORMAL
-            ));
-        }
-    });
-
-    return [...angularSets, ...radialSets];
+    return pointSets;
 }
 
 export function generateStripPointSets(config) {
     const sampleCount = integerAtLeast(config.curvePoints, 2);
+    const xRange = config.xRange;
 
-    return [config.stripY1, config.stripY2].map(y => createLineSet(
-        generateLinePoints(config.xRange[0], config.xRange[1], y, sampleCount),
-        COLOR_STRIP_LINES,
-        'strip-boundary',
-        LINE_WIDTH_MEDIUM
-    ));
+    return [
+        createLineSet(
+            cartesianSegment(xRange[0], config.stripY1, xRange[1], config.stripY1, sampleCount),
+            COLOR_STRIP_LINES,
+            'strip-boundary',
+            LINE_WIDTH_MEDIUM
+        ),
+        createLineSet(
+            cartesianSegment(xRange[0], config.stripY2, xRange[1], config.stripY2, sampleCount),
+            COLOR_STRIP_LINES,
+            'strip-boundary',
+            LINE_WIDTH_MEDIUM
+        )
+    ];
 }
 
 export function generateSectorPointSets(config) {
@@ -433,16 +476,18 @@ export function generateSectorPointSets(config) {
 
 export function generateLineShapePointSets(config) {
     const sampleCount = integerAtLeast(config.curvePoints, 2);
+    const xRange = config.xRange;
+    const yRange = config.yRange;
 
     return [
         createLineSet(
-            generateLinePoints(config.xRange[0], config.xRange[1], config.b0, sampleCount),
+            cartesianSegment(xRange[0], config.b0, xRange[1], config.b0, sampleCount),
             COLOR_INPUT_SHAPE_Z,
             'line-horizontal',
             LINE_WIDTH_THICK
         ),
         createLineSet(
-            generateVerticalLinePoints(config.a0, config.yRange[0], config.yRange[1], sampleCount),
+            cartesianSegment(config.a0, yRange[0], config.a0, yRange[1], sampleCount),
             COLOR_INPUT_LINE_IM_Z,
             'line-vertical',
             LINE_WIDTH_THICK
@@ -451,17 +496,17 @@ export function generateLineShapePointSets(config) {
 }
 
 const GEOMETRIC_POINT_FACTORIES = Object.freeze({
-    circle: config => generateCirclePoints(config.a0, config.b0, config.circleR, config.curvePoints),
-    ellipse: config => generateEllipsePoints(config.a0, config.b0, config.ellipseA, config.ellipseB, config.curvePoints),
+    circle: config => makeCirclePoints(config.a0, config.b0, config.circleR, config.curvePoints),
+    ellipse: config => makeEllipsePoints(config.a0, config.b0, config.ellipseA, config.ellipseB, config.curvePoints),
     hyperbola: config => generateHyperbolaPoints(config.a0, config.b0, config.hyperbolaA, config.hyperbolaB, config.curvePoints)
 });
 
 export function generateGeometricShapePointSets(config) {
     const buildPoints = GEOMETRIC_POINT_FACTORIES[config.currentInputShape];
 
-    return buildPoints
-        ? [createLineSet(buildPoints(config), COLOR_INPUT_SHAPE_Z, 'shape-curve', LINE_WIDTH_THICK)]
-        : [];
+    return buildPoints === undefined
+        ? []
+        : [createLineSet(buildPoints(config), COLOR_INPUT_SHAPE_Z, 'shape-curve', LINE_WIDTH_THICK)];
 }
 
 const INPUT_SHAPE_GENERATORS = Object.freeze({
@@ -480,7 +525,8 @@ const INPUT_SHAPE_GENERATORS = Object.freeze({
 });
 
 export function generateInputShapePointSets(config) {
-    return (INPUT_SHAPE_GENERATORS[config?.currentInputShape] ?? emptyPointSets)(config);
+    const generator = INPUT_SHAPE_GENERATORS[config?.currentInputShape];
+    return generator === undefined ? [] : generator(config);
 }
 
 export function generateCurrentInputShapePointSets(planeParams, options = {}) {
@@ -505,30 +551,91 @@ export function cloneLineSet(pointSet, overrides = {}) {
 }
 
 export function splitPointSetAtRealBoundary(pointSet, splitRe, leftColor, rightColor) {
-    const sourcePoints = (pointSet.points ?? []).filter(Boolean);
+    const rawPoints = pointSet.points ?? [];
+    const rawLength = rawPoints.length;
+    if (rawLength < 2) return [];
 
-    if (sourcePoints.length < 2) {
-        return [];
+    let nullCount = 0;
+    for (let index = 0; index < rawLength; index += 1) {
+        if (!rawPoints[index]) nullCount += 1;
     }
 
-    const crossingIndex = findFirstBoundaryCrossingIndex(sourcePoints, splitRe);
+    const sourceLength = rawLength - nullCount;
+    if (sourceLength < 2) return [];
+
+    let sourcePoints = rawPoints;
+    if (nullCount !== 0) {
+        sourcePoints = new Array(sourceLength);
+        let write = 0;
+        for (let index = 0; index < rawLength; index += 1) {
+            const candidate = rawPoints[index];
+            if (candidate) {
+                sourcePoints[write] = candidate;
+                write += 1;
+            }
+        }
+    }
+
+    let crossingIndex = -1;
+    let previousPoint = sourcePoints[0];
+    let previousDelta = previousPoint.re - splitRe;
+
+    for (let index = 1; index < sourceLength; index += 1) {
+        const currentPoint = sourcePoints[index];
+        const currentDelta = currentPoint.re - splitRe;
+        if (previousDelta === 0 || currentDelta === 0 || previousDelta * currentDelta < 0) {
+            crossingIndex = index;
+            break;
+        }
+        previousPoint = currentPoint;
+        previousDelta = currentDelta;
+    }
 
     if (crossingIndex === -1) {
-        const isLeft = sourcePoints.every(sourcePoint => sourcePoint.re <= splitRe);
+        let isLeft = true;
+        for (let index = 0; index < sourceLength; index += 1) {
+            if (sourcePoints[index].re > splitRe) {
+                isLeft = false;
+                break;
+            }
+        }
         return [cloneLineSet(pointSet, { color: isLeft ? leftColor : rightColor })];
     }
 
-    const previousPoint = sourcePoints[crossingIndex - 1];
     const currentPoint = sourcePoints[crossingIndex];
-    const boundaryPoint = interpolateBoundaryPoint(previousPoint, currentPoint, splitRe);
+    const boundaryIm = currentPoint.re === previousPoint.re
+        ? previousPoint.im
+        : previousPoint.im + (currentPoint.im - previousPoint.im) * ((splitRe - previousPoint.re) / (currentPoint.re - previousPoint.re));
+    const boundaryPoint = { re: splitRe, im: boundaryIm };
 
-    const leftPoints = appendPointIfMissing(sourcePoints.slice(0, crossingIndex), boundaryPoint);
-    const rightPoints = prependPointIfMissing(sourcePoints.slice(crossingIndex), boundaryPoint);
+    const leftNeedsBoundary = previousPoint.re !== boundaryPoint.re || previousPoint.im !== boundaryPoint.im;
+    const leftLength = crossingIndex + (leftNeedsBoundary ? 1 : 0);
+    const leftPoints = new Array(leftLength);
+    for (let index = 0; index < crossingIndex; index += 1) leftPoints[index] = sourcePoints[index];
+    if (leftNeedsBoundary) leftPoints[leftLength - 1] = boundaryPoint;
 
-    return [
-        cloneLineSet(pointSet, { points: leftPoints, color: leftColor }),
-        cloneLineSet(pointSet, { points: rightPoints, color: rightColor })
-    ].filter(set => set.points.length > 1);
+    const rightNeedsBoundary = currentPoint.re !== boundaryPoint.re || currentPoint.im !== boundaryPoint.im;
+    const rightLength = sourceLength - crossingIndex + (rightNeedsBoundary ? 1 : 0);
+    const rightPoints = new Array(rightLength);
+    let write = 0;
+    if (rightNeedsBoundary) {
+        rightPoints[write] = boundaryPoint;
+        write += 1;
+    }
+    for (let index = crossingIndex; index < sourceLength; index += 1) {
+        rightPoints[write] = sourcePoints[index];
+        write += 1;
+    }
+
+    if (leftPoints.length > 1 && rightPoints.length > 1) {
+        return [
+            cloneLineSet(pointSet, { points: leftPoints, color: leftColor }),
+            cloneLineSet(pointSet, { points: rightPoints, color: rightColor })
+        ];
+    }
+    if (leftPoints.length > 1) return [cloneLineSet(pointSet, { points: leftPoints, color: leftColor })];
+    if (rightPoints.length > 1) return [cloneLineSet(pointSet, { points: rightPoints, color: rightColor })];
+    return [];
 }
 
 export function prepareInputShapePointSetsForMapping(pointSets, options = {}) {
@@ -542,15 +649,31 @@ export function prepareInputShapePointSetsForMapping(pointSets, options = {}) {
     const palette = currentGridPalette();
     const preparedSets = [];
 
-    for (const pointSet of pointSets) {
-        preparedSets.push(...prepareZetaPointSet(pointSet, palette));
+    for (let index = 0; index < pointSets.length; index += 1) {
+        const pointSet = pointSets[index];
+        if (pointSet.role === 'grid-horizontal') {
+            const splitSets = splitPointSetAtRealBoundary(
+                pointSet,
+                ZETA_REFLECTION_POINT_RE,
+                palette.horizontalFunctionalEquation,
+                palette.horizontal
+            );
+            for (let splitIndex = 0; splitIndex < splitSets.length; splitIndex += 1) {
+                preparedSets.push(splitSets[splitIndex]);
+            }
+        } else if (pointSet.role === 'grid-vertical') {
+            preparedSets.push(cloneLineSet(pointSet, { color: zetaVerticalGridColor(pointSet, palette) }));
+        } else {
+            preparedSets.push(pointSet);
+        }
     }
 
     return preparedSets;
 }
 
 export function getRadialDiscreteStepDomain(functionKey) {
-    return { ...(RADIAL_STEP_DOMAINS[functionKey] ?? RADIAL_STEP_DOMAIN_DEFAULT) };
+    const domain = RADIAL_STEP_DOMAINS[functionKey] ?? RADIAL_STEP_DOMAIN_DEFAULT;
+    return { min: domain.min, max: domain.max };
 }
 
 export function generateRadialDiscreteStepPointSets(functionKey, transformFunc, stepsCount, options = {}) {
@@ -560,31 +683,36 @@ export function generateRadialDiscreteStepPointSets(functionKey, transformFunc, 
         return [];
     }
 
-    const domain = getRadialDiscreteStepDomain(functionKey);
+    const domain = RADIAL_STEP_DOMAINS[functionKey] ?? RADIAL_STEP_DOMAIN_DEFAULT;
     const circlePointCount = integerAtLeast(options.curvePoints ?? NUM_POINTS_CURVE / 2, 24);
+    const denominator = steps - 1;
+    const delta = domain.max - domain.min;
+    const sets = [];
 
-    return collect(steps, (sets, index) => {
-        const x = lerp(domain.min, domain.max, index / (steps - 1));
+    for (let index = 0; index < steps; index += 1) {
+        const x = domain.min + delta * (index / denominator);
 
         if (radialStepIsSingular(functionKey, x)) {
-            return;
+            continue;
         }
 
         const transformedPoint = transformFunc(x, 0);
 
         if (!finitePoint(transformedPoint)) {
-            return;
+            continue;
         }
 
         const radius = Math.hypot(transformedPoint.re, transformedPoint.im);
 
         if (radius > 0) {
             sets.push(createLineSet(
-                generateCirclePoints(0, 0, radius, circlePointCount),
+                makeCirclePoints(0, 0, radius, circlePointCount),
                 RADIAL_DISCRETE_STEP_COLOR,
                 'radial-discrete-step',
                 LINE_WIDTH_THIN
             ));
         }
-    });
+    }
+
+    return sets;
 }
