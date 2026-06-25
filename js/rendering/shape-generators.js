@@ -1,12 +1,9 @@
 import { state } from '../store/state.js';
 import { TWO_PI, NUM_POINTS_CURVE, ZETA_REFLECTION_POINT_RE } from '../constants/numerical.js';
 import {
-    COLOR_Z_GRID_HORZ, COLOR_Z_GRID_VERT, COLOR_Z_GRID_HORZ_FUNCTIONAL_EQ, COLOR_Z_GRID_VERT_FUNCTIONAL_EQ,
+    COLOR_Z_GRID_HORZ, COLOR_Z_GRID_VERT,
     COLOR_Z_GRID_ZETA_UNDEFINED_SUM_REGION,
-    COLOR_INPUT_SHAPE_Z, COLOR_INPUT_LINE_IM_Z,
-    COLOR_POLAR_RADIAL, COLOR_POLAR_ANGULAR,
-    COLOR_LOGPOLAR_EXP_R, COLOR_LOGPOLAR_ANGULAR,
-    COLOR_STRIP_LINES, COLOR_SECTOR_LINES
+    COLOR_INPUT_SHAPE_Z, COLOR_INPUT_LINE_IM_Z
 } from '../constants/colors.js';
 import { LINE_WIDTH_THIN, LINE_WIDTH_NORMAL, LINE_WIDTH_MEDIUM, LINE_WIDTH_THICK } from '../constants/rendering.js';
 
@@ -48,9 +45,7 @@ const RADIAL_STEP_SINGULARITIES = Object.freeze({
 const UNIT_CIRCLE_CACHE = new Map();
 
 const emptyPointSets = () => [];
-const point = (re, im) => ({ re, im });
 const degreesToRadians = degrees => degrees * DEG_TO_RAD;
-const lerp = (start, end, t) => start + (end - start) * t;
 
 function defaultRange() {
     return [-1, 1];
@@ -176,42 +171,8 @@ function currentGridPalette() {
     return {
         horizontal: gridColor1 || COLOR_Z_GRID_HORZ,
         vertical: gridColor2 || COLOR_Z_GRID_VERT,
-        horizontalFunctionalEquation: gridColor1 || COLOR_Z_GRID_HORZ_FUNCTIONAL_EQ,
-        verticalFunctionalEquation: gridColor2 || COLOR_Z_GRID_VERT_FUNCTIONAL_EQ,
         zetaUndefinedSumRegion: COLOR_Z_GRID_ZETA_UNDEFINED_SUM_REGION
     };
-}
-
-function zetaVerticalGridColor(pointSet, palette) {
-    const points = pointSet.points;
-    if (points) {
-        for (let index = 0; index < points.length; index += 1) {
-            const referencePoint = points[index];
-            if (referencePoint) {
-                return referencePoint.re < ZETA_REFLECTION_POINT_RE
-                    ? palette.verticalFunctionalEquation
-                    : palette.vertical;
-            }
-        }
-    }
-    return palette.vertical;
-}
-
-function prepareZetaPointSet(pointSet, palette) {
-    if (pointSet.role === 'grid-horizontal') {
-        return splitPointSetAtRealBoundary(
-            pointSet,
-            ZETA_REFLECTION_POINT_RE,
-            palette.horizontalFunctionalEquation,
-            palette.horizontal
-        );
-    }
-
-    if (pointSet.role === 'grid-vertical') {
-        return [cloneLineSet(pointSet, { color: zetaVerticalGridColor(pointSet, palette) })];
-    }
-
-    return [pointSet];
 }
 
 function radialStepIsSingular(functionKey, value) {
@@ -359,6 +320,7 @@ export function generateCartesianGridPointSets(config) {
 }
 
 export function generatePolarGridPointSets(config) {
+    const palette = currentGridPalette();
     const maxRadius = maxVisibleRadius(config);
     const angularLineCount = integerAtLeast(Math.max(4, config.gridDensity), 4);
     const gridDensity = integerAtLeast(config.gridDensity, 1);
@@ -368,7 +330,7 @@ export function generatePolarGridPointSets(config) {
         const angle = (index / angularLineCount) * TWO_PI;
         pointSets[index] = createLineSet(
             radialSegment(angle, 0, maxRadius, config.curvePoints),
-            COLOR_POLAR_ANGULAR,
+            palette.horizontal,
             'polar-angular',
             LINE_WIDTH_NORMAL
         );
@@ -378,7 +340,7 @@ export function generatePolarGridPointSets(config) {
         const radius = ((index + 1) / config.gridDensity) * maxRadius;
         pointSets[angularLineCount + index] = createLineSet(
             makeCirclePoints(0, 0, radius, config.curvePoints),
-            COLOR_POLAR_RADIAL,
+            palette.vertical,
             'polar-radial',
             LINE_WIDTH_NORMAL
         );
@@ -388,6 +350,7 @@ export function generatePolarGridPointSets(config) {
 }
 
 export function generateLogPolarGridPointSets(config) {
+    const palette = currentGridPalette();
     const maxRadius = maxVisibleRadius(config);
     const minLogRadius = Math.log(MIN_LOGPOLAR_RADIUS);
     const maxLogRadius = Math.log(maxRadius);
@@ -401,7 +364,7 @@ export function generateLogPolarGridPointSets(config) {
         const angle = (index / angularLineCount) * TWO_PI;
         pointSets[index] = createLineSet(
             logarithmicRadialSegment(angle, minLogRadius, maxLogRadius, config.curvePoints),
-            COLOR_LOGPOLAR_ANGULAR,
+            palette.horizontal,
             'logpolar-angular',
             LINE_WIDTH_NORMAL
         );
@@ -410,7 +373,7 @@ export function generateLogPolarGridPointSets(config) {
     for (let index = 0; index <= gridDensity; index += 1) {
         pointSets[angularLineCount + index] = createLineSet(
             makeCirclePoints(0, 0, radius, config.curvePoints),
-            COLOR_LOGPOLAR_EXP_R,
+            palette.vertical,
             'logpolar-radial',
             LINE_WIDTH_NORMAL
         );
@@ -421,19 +384,20 @@ export function generateLogPolarGridPointSets(config) {
 }
 
 export function generateStripPointSets(config) {
+    const palette = currentGridPalette();
     const sampleCount = integerAtLeast(config.curvePoints, 2);
     const xRange = config.xRange;
 
     return [
         createLineSet(
             cartesianSegment(xRange[0], config.stripY1, xRange[1], config.stripY1, sampleCount),
-            COLOR_STRIP_LINES,
+            palette.horizontal,
             'strip-boundary',
             LINE_WIDTH_MEDIUM
         ),
         createLineSet(
             cartesianSegment(xRange[0], config.stripY2, xRange[1], config.stripY2, sampleCount),
-            COLOR_STRIP_LINES,
+            palette.vertical,
             'strip-boundary',
             LINE_WIDTH_MEDIUM
         )
@@ -441,6 +405,7 @@ export function generateStripPointSets(config) {
 }
 
 export function generateSectorPointSets(config) {
+    const palette = currentGridPalette();
     const angle1 = degreesToRadians(config.sectorAngle1);
     const angle2 = degreesToRadians(config.sectorAngle2);
     const linePointCount = integerAtLeast(config.curvePoints / 2, 8);
@@ -449,25 +414,25 @@ export function generateSectorPointSets(config) {
     return [
         createLineSet(
             radialSegment(angle1, config.sectorRMin, config.sectorRMax, linePointCount),
-            COLOR_SECTOR_LINES,
+            palette.horizontal,
             'sector-radial',
             LINE_WIDTH_MEDIUM
         ),
         createLineSet(
             radialSegment(angle2, config.sectorRMin, config.sectorRMax, linePointCount),
-            COLOR_SECTOR_LINES,
+            palette.horizontal,
             'sector-radial',
             LINE_WIDTH_MEDIUM
         ),
         createLineSet(
             arcPoints(config.sectorRMin, angle1, angle2, arcPointCount),
-            COLOR_SECTOR_LINES,
+            palette.vertical,
             'sector-arc',
             LINE_WIDTH_MEDIUM
         ),
         createLineSet(
             arcPoints(config.sectorRMax, angle1, angle2, arcPointCount),
-            COLOR_SECTOR_LINES,
+            palette.vertical,
             'sector-arc',
             LINE_WIDTH_MEDIUM
         )
@@ -534,141 +499,7 @@ export function generateCurrentInputShapePointSets(planeParams, options = {}) {
 }
 
 export function generateCurrentMappedInputShapePointSets(planeParams, options = {}) {
-    return prepareInputShapePointSetsForMapping(
-        generateCurrentInputShapePointSets(planeParams, options),
-        options
-    );
-}
-
-export function cloneLineSet(pointSet, overrides = {}) {
-    return {
-        points: pointSet.points,
-        color: pointSet.color,
-        role: pointSet.role,
-        lineWidth: pointSet.lineWidth,
-        ...overrides
-    };
-}
-
-export function splitPointSetAtRealBoundary(pointSet, splitRe, leftColor, rightColor) {
-    const rawPoints = pointSet.points ?? [];
-    const rawLength = rawPoints.length;
-    if (rawLength < 2) return [];
-
-    let nullCount = 0;
-    for (let index = 0; index < rawLength; index += 1) {
-        if (!rawPoints[index]) nullCount += 1;
-    }
-
-    const sourceLength = rawLength - nullCount;
-    if (sourceLength < 2) return [];
-
-    let sourcePoints = rawPoints;
-    if (nullCount !== 0) {
-        sourcePoints = new Array(sourceLength);
-        let write = 0;
-        for (let index = 0; index < rawLength; index += 1) {
-            const candidate = rawPoints[index];
-            if (candidate) {
-                sourcePoints[write] = candidate;
-                write += 1;
-            }
-        }
-    }
-
-    let crossingIndex = -1;
-    let previousPoint = sourcePoints[0];
-    let previousDelta = previousPoint.re - splitRe;
-
-    for (let index = 1; index < sourceLength; index += 1) {
-        const currentPoint = sourcePoints[index];
-        const currentDelta = currentPoint.re - splitRe;
-        if (previousDelta === 0 || currentDelta === 0 || previousDelta * currentDelta < 0) {
-            crossingIndex = index;
-            break;
-        }
-        previousPoint = currentPoint;
-        previousDelta = currentDelta;
-    }
-
-    if (crossingIndex === -1) {
-        let isLeft = true;
-        for (let index = 0; index < sourceLength; index += 1) {
-            if (sourcePoints[index].re > splitRe) {
-                isLeft = false;
-                break;
-            }
-        }
-        return [cloneLineSet(pointSet, { color: isLeft ? leftColor : rightColor })];
-    }
-
-    const currentPoint = sourcePoints[crossingIndex];
-    const boundaryIm = currentPoint.re === previousPoint.re
-        ? previousPoint.im
-        : previousPoint.im + (currentPoint.im - previousPoint.im) * ((splitRe - previousPoint.re) / (currentPoint.re - previousPoint.re));
-    const boundaryPoint = { re: splitRe, im: boundaryIm };
-
-    const leftNeedsBoundary = previousPoint.re !== boundaryPoint.re || previousPoint.im !== boundaryPoint.im;
-    const leftLength = crossingIndex + (leftNeedsBoundary ? 1 : 0);
-    const leftPoints = new Array(leftLength);
-    for (let index = 0; index < crossingIndex; index += 1) leftPoints[index] = sourcePoints[index];
-    if (leftNeedsBoundary) leftPoints[leftLength - 1] = boundaryPoint;
-
-    const rightNeedsBoundary = currentPoint.re !== boundaryPoint.re || currentPoint.im !== boundaryPoint.im;
-    const rightLength = sourceLength - crossingIndex + (rightNeedsBoundary ? 1 : 0);
-    const rightPoints = new Array(rightLength);
-    let write = 0;
-    if (rightNeedsBoundary) {
-        rightPoints[write] = boundaryPoint;
-        write += 1;
-    }
-    for (let index = crossingIndex; index < sourceLength; index += 1) {
-        rightPoints[write] = sourcePoints[index];
-        write += 1;
-    }
-
-    if (leftPoints.length > 1 && rightPoints.length > 1) {
-        return [
-            cloneLineSet(pointSet, { points: leftPoints, color: leftColor }),
-            cloneLineSet(pointSet, { points: rightPoints, color: rightColor })
-        ];
-    }
-    if (leftPoints.length > 1) return [cloneLineSet(pointSet, { points: leftPoints, color: leftColor })];
-    if (rightPoints.length > 1) return [cloneLineSet(pointSet, { points: rightPoints, color: rightColor })];
-    return [];
-}
-
-export function prepareInputShapePointSetsForMapping(pointSets, options = {}) {
-    const currentFunction = options.currentFunction ?? state.currentFunction;
-    const zetaContinuationEnabled = options.zetaContinuationEnabled ?? state.zetaContinuationEnabled;
-
-    if (currentFunction !== 'zeta' || !zetaContinuationEnabled) {
-        return pointSets;
-    }
-
-    const palette = currentGridPalette();
-    const preparedSets = [];
-
-    for (let index = 0; index < pointSets.length; index += 1) {
-        const pointSet = pointSets[index];
-        if (pointSet.role === 'grid-horizontal') {
-            const splitSets = splitPointSetAtRealBoundary(
-                pointSet,
-                ZETA_REFLECTION_POINT_RE,
-                palette.horizontalFunctionalEquation,
-                palette.horizontal
-            );
-            for (let splitIndex = 0; splitIndex < splitSets.length; splitIndex += 1) {
-                preparedSets.push(splitSets[splitIndex]);
-            }
-        } else if (pointSet.role === 'grid-vertical') {
-            preparedSets.push(cloneLineSet(pointSet, { color: zetaVerticalGridColor(pointSet, palette) }));
-        } else {
-            preparedSets.push(pointSet);
-        }
-    }
-
-    return preparedSets;
+    return generateCurrentInputShapePointSets(planeParams, options);
 }
 
 export function getRadialDiscreteStepDomain(functionKey) {

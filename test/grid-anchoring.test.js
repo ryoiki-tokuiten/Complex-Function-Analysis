@@ -3,8 +3,13 @@ import assert from 'node:assert/strict';
 
 import {
     generateCartesianGridPointSets,
-    generatePolarGridPointSets
+    generatePolarGridPointSets,
+    generateLogPolarGridPointSets,
+    generateStripPointSets,
+    generateSectorPointSets,
+    generateCurrentMappedInputShapePointSets
 } from '../js/rendering/shape-generators.js';
+import { state } from '../js/store/state.js';
 
 test('Cartesian grid lines are evenly distributed across the visible range', () => {
     const config = {
@@ -109,5 +114,74 @@ test('Polar grid radial circles are evenly distributed up to max radius', () => 
         const expected = ((i + 1) / config.gridDensity) * maxRadius;
         assert.ok(Math.abs(radii[i] - expected) < 1e-9,
             `radius[${i}] = ${radii[i]}, expected ${expected}`);
+    }
+});
+
+test('Grid-style input shapes use active grid theme colors', () => {
+    const previousGridColor1 = state.gridColor1;
+    const previousGridColor2 = state.gridColor2;
+    state.gridColor1 = '#112233';
+    state.gridColor2 = '#445566';
+
+    try {
+        const baseConfig = {
+            xRange: [-2.0, 2.0],
+            yRange: [-2.0, 2.0],
+            gridDensity: 4,
+            curvePoints: 32,
+            stripY1: -0.5,
+            stripY2: 0.5,
+            sectorAngle1: 10,
+            sectorAngle2: 80,
+            sectorRMin: 0.5,
+            sectorRMax: 2
+        };
+
+        const polarSets = generatePolarGridPointSets(baseConfig);
+        assert.equal(polarSets.find(set => set.role === 'polar-angular').color, state.gridColor1);
+        assert.equal(polarSets.find(set => set.role === 'polar-radial').color, state.gridColor2);
+
+        const logPolarSets = generateLogPolarGridPointSets(baseConfig);
+        assert.equal(logPolarSets.find(set => set.role === 'logpolar-angular').color, state.gridColor1);
+        assert.equal(logPolarSets.find(set => set.role === 'logpolar-radial').color, state.gridColor2);
+
+        const stripSets = generateStripPointSets(baseConfig);
+        assert.equal(stripSets[0].color, state.gridColor1);
+        assert.equal(stripSets[1].color, state.gridColor2);
+
+        const sectorSets = generateSectorPointSets(baseConfig);
+        assert.equal(sectorSets.find(set => set.role === 'sector-radial').color, state.gridColor1);
+        assert.equal(sectorSets.find(set => set.role === 'sector-arc').color, state.gridColor2);
+    } finally {
+        state.gridColor1 = previousGridColor1;
+        state.gridColor2 = previousGridColor2;
+    }
+});
+
+test('Zeta continuation Cartesian grid is not split at the continuation boundary', () => {
+    const gridDensity = 4;
+    const planeParams = {
+        currentVisXRange: [-2, 2],
+        currentVisYRange: [-1, 1]
+    };
+
+    const pointSets = generateCurrentMappedInputShapePointSets(planeParams, {
+        currentInputShape: 'grid_cartesian',
+        currentFunction: 'zeta',
+        zetaContinuationEnabled: true,
+        gridDensity,
+        curvePoints: 40
+    });
+
+    const horizontalSets = pointSets.filter(set => set.role === 'grid-horizontal');
+    const verticalSets = pointSets.filter(set => set.role === 'grid-vertical');
+
+    assert.equal(horizontalSets.length, gridDensity + 1);
+    assert.equal(verticalSets.length, gridDensity + 1);
+    assert.equal(pointSets.length, (gridDensity + 1) * 2);
+
+    for (const set of horizontalSets) {
+        assert.equal(set.points[0].re, planeParams.currentVisXRange[0]);
+        assert.equal(set.points[set.points.length - 1].re, planeParams.currentVisXRange[1]);
     }
 });
