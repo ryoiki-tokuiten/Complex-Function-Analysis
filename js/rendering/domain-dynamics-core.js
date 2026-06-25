@@ -347,7 +347,7 @@ function evaluateBuiltin(functionKey, z, snapshot, evalContext) {
         case 'zeta': return complexRiemannZeta(z, !!snapshot.zetaContinuationEnabled);
         case 'algebraic_chaining': return evaluateAlgebraicChaining(z, snapshot, evalContext);
         case 'c': return toComplex(evalContext?.c ?? z);
-        default: return toComplex(z);
+        default: return null;
     }
 }
 
@@ -363,11 +363,13 @@ function evaluateFunctionBlock(block, z, snapshot, context) {
         arg = block.chainedFunc === 'c'
             ? algebraicParameter(context, arg)
             : evaluateBuiltin(block.chainedFunc, arg, snapshot, context);
+        if (!validComplex(arg)) return { re: NaN, im: NaN };
     }
 
     let value = block.func === 'c'
         ? algebraicParameter(context, arg)
         : evaluateBuiltin(block.func, arg, snapshot, context);
+    if (!validComplex(value)) return { re: NaN, im: NaN };
 
     if (block.power !== undefined && block.power !== 1) value = complexPow(value, { re: Number(block.power), im: 0 });
     if (block.reciprocal) value = complexReciprocal(value);
@@ -769,10 +771,6 @@ const EXPR_DIV = 8;
 const EXPR_POW = 9;
 const EXPR_FUNC = 10;
 
-function supportedCompiledFunction(functionKey) {
-    return vmFunctionCode(functionKey) !== -1;
-}
-
 function vmFunctionCode(functionKey) {
     switch (functionKey) {
         case undefined:
@@ -795,8 +793,7 @@ function vmFunctionCode(functionKey) {
         case 'polynomial': return VMF_POLYNOMIAL;
         case 'poincare': return VMF_POINCARE;
         case 'zeta': return VMF_ZETA;
-        // Preserve the legacy default semantics: unknown builtins are identity.
-        default: return VMF_IDENTITY;
+        default: return -1;
     }
 }
 
@@ -1387,8 +1384,8 @@ function evaluatePrimitiveVmFunctionInto(accelerator, code, re, im, cr, ci, out)
         case VMF_APPLY_POWER:
             return powRealComponents(re, im, DEFAULT_FRACTIONAL_POWER, out);
         default:
-            out[0] = re;
-            out[1] = im;
+            out[0] = NaN;
+            out[1] = NaN;
             return out;
     }
 }
@@ -2501,6 +2498,7 @@ function renderPolynomialParameterOrbitTile(snapshot, tile, accelerator) {
                 zi = ni;
             }
 
+            const idx = (y * tile.width + x) * 4;
             if (escaped) {
                 writeDynamicsEscapeColorWithContext(data, idx, smoothIteration, count, colors);
             } else {
@@ -3833,13 +3831,6 @@ function renderBuiltinValueTile(snapshot, tile, accelerator) {
 }
 
 export function renderDomainDynamicsTile(snapshot, tile, accelerator = createDynamicsAccelerator(snapshot)) {
-    if (accelerator.type === 'jit') {
-        return accelerator.renderTile(
-            tile, DYNAMICS_ESCAPE_RADIUS_SQ, DOMAIN_COLOR_CHAIN_BAILOUT_MAGNITUDE,
-            DYNAMICS_ESCAPE_RADIUS, writeDynamicsEscapeColor, writeBlack, writeDomainColor
-        );
-    }
-
     const accelerated = renderPolynomialParameterTile(snapshot, tile, accelerator) ||
         renderLaurentParameterTile(snapshot, tile, accelerator) ||
         renderCompiledAlgebraicTile(snapshot, tile, accelerator) ||

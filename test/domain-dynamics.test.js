@@ -185,6 +185,56 @@ function makeTargetCtx() {
     };
 }
 
+function algebraicFactor(func, overrides = {}) {
+    return {
+        func,
+        chainedFunc: 'none',
+        power: 1,
+        reciprocal: false,
+        log: false,
+        exp: false,
+        ...overrides
+    };
+}
+
+function makeAlgebraicDynamicsSnapshot(overrides = {}) {
+    return {
+        functionKey: 'algebraic_chaining',
+        chainingEnabled: false,
+        chainMode: 'recursion',
+        chainCount: 1,
+        fractalOrbitColoringEnabled: false,
+        algebraicChainingEnabled: true,
+        algebraicChainingZExpr: 'z',
+        algebraicChainingTerms: [],
+        polynomialN: 1,
+        polynomialCoeffs: [
+            { re: 0, im: 0 },
+            { re: 1, im: 0 }
+        ],
+        mobiusA: { re: 1, im: 0 },
+        mobiusB: { re: 0, im: 0 },
+        mobiusC: { re: 0, im: 0 },
+        mobiusD: { re: 1, im: 0 },
+        fractionalPowerN: 0.5,
+        zetaContinuationEnabled: false,
+        style: {
+            brightness: 1,
+            contrast: 1,
+            saturation: 1,
+            lightnessCycles: 0
+        },
+        paletteStops: [[0, 0, 0], [1, 1, 1]],
+        viewport: {
+            width: 4,
+            height: 4,
+            xRange: [-2, 2],
+            yRange: [-2, 2]
+        },
+        ...overrides
+    };
+}
+
 async function waitFor(predicate, timeoutMs = 1000) {
     const started = Date.now();
     while (Date.now() - started < timeoutMs) {
@@ -253,6 +303,40 @@ test('domain dynamics tile rendering produces opaque full tile data', () => {
     } finally {
         restoreState(before);
     }
+});
+
+test('unknown algebraic functions are invalid instead of implicit identity', () => {
+    const snapshot = makeAlgebraicDynamicsSnapshot({
+        algebraicChainingTerms: [{
+            coeff: { re: 1, im: 0 },
+            factors: [algebraicFactor('not_registered')]
+        }]
+    });
+
+    assert.equal(evaluateDomainDynamicsValue(snapshot, 0.25, -0.5), null);
+});
+
+test('generic polynomial-parameter orbit rendering defines pixel indices', () => {
+    const snapshot = makeAlgebraicDynamicsSnapshot({
+        chainingEnabled: true,
+        chainMode: 'zero_seed',
+        chainCount: 2,
+        fractalOrbitColoringEnabled: true,
+        polynomialN: 3,
+        polynomialCoeffs: [
+            { re: 0, im: 0 },
+            { re: 0, im: 0 },
+            { re: 0, im: 0 },
+            { re: 1, im: 0 }
+        ],
+        algebraicChainingTerms: [
+            { coeff: { re: 1, im: 0 }, factors: [algebraicFactor('polynomial')] },
+            { coeff: { re: 1, im: 0 }, factors: [algebraicFactor('c')] }
+        ]
+    });
+
+    const pixels = renderDomainDynamicsTile(snapshot, { x: 0, y: 0, width: 1, height: 1, scale: 1 });
+    assert.equal(pixels.length, 4);
 });
 
 test('backend selection uses the worker dynamics backend', () => {

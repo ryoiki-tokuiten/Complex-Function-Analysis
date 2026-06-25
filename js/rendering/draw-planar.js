@@ -69,6 +69,7 @@ const CANVAS_PATH_CACHE = new WeakMap();
 const TRANSFORMED_PATH_CACHE = new WeakMap();
 const PREPARED_POINT_SET_CACHE = new WeakMap();
 
+const PREPARED_POINT_SET_CACHE_ASSOCIATIVITY = 12;
 const PATH_CACHE_MIN_POINTS = 64;
 const PATH_CACHE_ASSOCIATIVITY = 4;
 const TRANSFORM_SAMPLE_PROBES = 9;
@@ -206,14 +207,32 @@ function pushPathCacheEntry(cacheMap, points, entry) {
     cacheMap.set(points, entry);
 }
 
-function getCachedLinearSegment(_startPoint, _endPoint, _steps) {
-    return null;
+function getTransformScopedPathCache(points, mappedTransform, createIfMissing) {
+    if (!mappedTransform || (typeof mappedTransform !== 'object' && typeof mappedTransform !== 'function')) {
+        return null;
+    }
+
+    let byTransform = TRANSFORMED_PATH_CACHE.get(points);
+    if (!byTransform) {
+        if (!createIfMissing) return null;
+        byTransform = new WeakMap();
+        TRANSFORMED_PATH_CACHE.set(points, byTransform);
+    }
+
+    return byTransform;
 }
 
-function putCachedLinearSegment(_startPoint, _endPoint, _steps, _points) {
-    // Segment arrays are cached at the point-set preparation layer, where reuse is
-    // predictable. Caching arbitrary public calls here creates WeakMap churn and
-    // retains one-off caller data with no measurable benefit.
+function pushTransformScopedPathCacheEntry(byTransform, mappedTransform, entry) {
+    const head = byTransform.get(mappedTransform) || null;
+    entry.next = head;
+
+    let cursor = entry;
+    for (let depth = 1; cursor && cursor.next && depth < PATH_CACHE_ASSOCIATIVITY; depth++) {
+        cursor = cursor.next;
+    }
+    if (cursor) cursor.next = null;
+
+    byTransform.set(mappedTransform, entry);
 }
 
 const DEFAULT_COLOR_RESOLVER = pointSet => pointSet.color;
@@ -606,14 +625,15 @@ function getCachedTransformedPath2D(ctx, planeParams, mappedTransform, points, r
 
     const tuning = getAdaptiveTransformRenderTuning();
     const sampleHash = getTransformSampleHash(mappedTransform, points);
-    const cacheRoot = TRANSFORMED_PATH_CACHE.get(points);
+    const byTransform = getTransformScopedPathCache(points, mappedTransform, true);
+    const cacheRoot = byTransform && byTransform.get(mappedTransform);
     const cachedEntry = cacheRoot && findReusableCacheEntry(cacheRoot, entry =>
         transformedCacheEntryMatches(entry, planeParams, points, renderLimit, jumpThresholdSq, sampleHash, tuning)
     );
 
     if (cachedEntry) {
         if (cachedEntry !== cacheRoot) {
-            TRANSFORMED_PATH_CACHE.set(points, cachedEntry);
+            byTransform.set(mappedTransform, cachedEntry);
         }
         return cachedEntry.path;
     }
@@ -632,7 +652,9 @@ function getCachedTransformedPath2D(ctx, planeParams, mappedTransform, points, r
     };
     writePlaneCacheFields(entry, planeParams);
     writePointSentinels(entry, points);
-    pushPathCacheEntry(TRANSFORMED_PATH_CACHE, points, entry);
+    if (byTransform) {
+        pushTransformScopedPathCacheEntry(byTransform, mappedTransform, entry);
+    }
     return path;
 }
 
@@ -1864,11 +1886,6 @@ export function calculateDynamicPointsForSegment(p1_world, p2_world, tf) {
 
 export function generateLinearSegmentPoints(startPoint, endPoint, sampleCount) {
     const steps = Math.max(1, Math.floor(finiteOr(sampleCount, 1)));
-    const cachedPoints = getCachedLinearSegment(startPoint, endPoint, steps);
-    if (cachedPoints) {
-        return cachedPoints;
-    }
-
     const points = new Array(steps + 1);
     const startRe = startPoint.re;
     const startIm = startPoint.im;
@@ -1882,7 +1899,6 @@ export function generateLinearSegmentPoints(startPoint, endPoint, sampleCount) {
         };
     }
 
-    putCachedLinearSegment(startPoint, endPoint, steps, points);
     return points;
 }
 
@@ -1927,16 +1943,22 @@ export function preparePointSetForMappedPlane(pointSet, transformFunc, options =
         ? options.sampleCountResolver(pointSet, endpoints, transformFunc)
         : DEFAULT_POINTS_PER_LINE;
     const normalizedSampleCount = Math.max(2, sampleCount);
-    const cached = PREPARED_POINT_SET_CACHE.get(pointSet);
+    let preparedCache = PREPARED_POINT_SET_CACHE.get(pointSet);
+    if (!preparedCache) {
+        preparedCache = new Map();
+        PREPARED_POINT_SET_CACHE.set(pointSet, preparedCache);
+    }
 
+    const cached = preparedCache.get(normalizedSampleCount);
     if (cached &&
-        cached.sampleCount === normalizedSampleCount &&
         cached.start === endpoints.start &&
         cached.end === endpoints.end &&
         cached.startRe === endpoints.start.re &&
         cached.startIm === endpoints.start.im &&
         cached.endRe === endpoints.end.re &&
         cached.endIm === endpoints.end.im) {
+        preparedCache.delete(normalizedSampleCount);
+        preparedCache.set(normalizedSampleCount, cached);
         return cached.preparedPointSet;
     }
 
@@ -1948,8 +1970,13 @@ export function preparePointSetForMappedPlane(pointSet, transformFunc, options =
         )
     });
 
-    PREPARED_POINT_SET_CACHE.set(pointSet, {
-        sampleCount: normalizedSampleCount,
+    if (!preparedCache.has(normalizedSampleCount) && preparedCache.size >= PREPARED_POINT_SET_CACHE_ASSOCIATIVITY) {
+        preparedCache.delete(preparedCache.keys().next().value);
+    } else {
+        preparedCache.delete(normalizedSampleCount);
+    }
+
+    preparedCache.set(normalizedSampleCount, {
         start: endpoints.start,
         end: endpoints.end,
         startRe: endpoints.start.re,

@@ -177,27 +177,6 @@ function getCompiledPreset(preset) {
     return compiledPresetCache.get(preset);
 }
 
-function evaluateInputPreset(preset, x, y) {
-    switch (presetType(preset)) {
-        case INPUT_PRESET.Y: return { re: y, im: 0 };
-        case INPUT_PRESET.ZERO: return { re: 0, im: 0 };
-        case INPUT_PRESET.X_PLUS_Y: return { re: x + y, im: 0 };
-        case INPUT_PRESET.X_MINUS_Y: return { re: x - y, im: 0 };
-        case INPUT_PRESET.X_TIMES_Y: return { re: x * y, im: 0 };
-        case INPUT_PRESET.TWO_X_PLUS_Y: return { re: 2 * x + y, im: 0 };
-        case INPUT_PRESET.SIN_X_PLUS_COS_Y: return { re: Math.sin(x) + Math.cos(y), im: 0 };
-        case INPUT_PRESET.X2_MINUS_Y2: return { re: x * x - y * y, im: 0 };
-        case INPUT_PRESET.X: return { re: x, im: 0 };
-        default: {
-            const evaluator = InputEvaluator.for(preset);
-            evaluator.write(x, y, SCRATCH_COMPLEX);
-            return { re: SCRATCH_COMPLEX[0], im: SCRATCH_COMPLEX[1] };
-        }
-    }
-}
-
-const SCRATCH_COMPLEX = new Float64Array(2);
-
 class InputEvaluator {
     static #cache = new Map();
 
@@ -837,27 +816,4 @@ export function disposeRealPlotsRenderer() {
         active3DRenderer.dispose();
         active3DRenderer = null;
     }
-}
-
-function getPaletteColor(palette, ratio) {
-    const lut = paletteLutFor(palette || 'sunset');
-    const color = new THREE.Color();
-    const index = ((clamp01(ratio) * PALETTE_LUT_MASK + 0.5) | 0) * 3;
-    color.r = lut[index];
-    color.g = lut[index + 1];
-    color.b = lut[index + 2];
-    return color;
-}
-
-function interpolateGradient(ratio, hexColors) {
-    const color = new THREE.Color();
-    if (!hexColors || hexColors.length === 0) return color;
-    if (hexColors.length === 1) return color.setHex(hexColors[0]);
-    const clamped = clamp01(ratio);
-    const segmentSize = 1 / (hexColors.length - 1);
-    const index = Math.min(Math.floor(clamped / segmentSize), hexColors.length - 2);
-    const localRatio = (clamped - index * segmentSize) / segmentSize;
-    const c1 = new THREE.Color(hexColors[index]);
-    const c2 = new THREE.Color(hexColors[index + 1]);
-    return color.lerpColors(c1, c2, localRatio);
 }

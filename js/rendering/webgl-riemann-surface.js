@@ -1072,97 +1072,6 @@ ${assembleGlslModules(FRAGMENT_GLSL, ['main'])}
 `;
 }
 
-function matrix4(values) {
-  return new Float32Array(values);
-}
-
-function identityMatrix() {
-  return matrix4([
-    1, 0, 0, 0,
-    0, 1, 0, 0,
-    0, 0, 1, 0,
-    0, 0, 0, 1
-  ]);
-}
-
-function multiplyMatrices(a, b) {
-  const a00 = a[0], a01 = a[1], a02 = a[2], a03 = a[3];
-  const a10 = a[4], a11 = a[5], a12 = a[6], a13 = a[7];
-  const a20 = a[8], a21 = a[9], a22 = a[10], a23 = a[11];
-  const a30 = a[12], a31 = a[13], a32 = a[14], a33 = a[15];
-
-  const b00 = b[0], b01 = b[1], b02 = b[2], b03 = b[3];
-  const b10 = b[4], b11 = b[5], b12 = b[6], b13 = b[7];
-  const b20 = b[8], b21 = b[9], b22 = b[10], b23 = b[11];
-  const b30 = b[12], b31 = b[13], b32 = b[14], b33 = b[15];
-
-  return matrix4([
-    a00 * b00 + a10 * b01 + a20 * b02 + a30 * b03,
-    a01 * b00 + a11 * b01 + a21 * b02 + a31 * b03,
-    a02 * b00 + a12 * b01 + a22 * b02 + a32 * b03,
-    a03 * b00 + a13 * b01 + a23 * b02 + a33 * b03,
-
-    a00 * b10 + a10 * b11 + a20 * b12 + a30 * b13,
-    a01 * b10 + a11 * b11 + a21 * b12 + a31 * b13,
-    a02 * b10 + a12 * b11 + a22 * b12 + a32 * b13,
-    a03 * b10 + a13 * b11 + a23 * b12 + a33 * b13,
-
-    a00 * b20 + a10 * b21 + a20 * b22 + a30 * b23,
-    a01 * b20 + a11 * b21 + a21 * b22 + a31 * b23,
-    a02 * b20 + a12 * b21 + a22 * b22 + a32 * b23,
-    a03 * b20 + a13 * b21 + a23 * b22 + a33 * b23,
-
-    a00 * b30 + a10 * b31 + a20 * b32 + a30 * b33,
-    a01 * b30 + a11 * b31 + a21 * b32 + a31 * b33,
-    a02 * b30 + a12 * b31 + a22 * b32 + a32 * b33,
-    a03 * b30 + a13 * b31 + a23 * b32 + a33 * b33
-  ]);
-}
-
-function translationMatrix(x, y, z) {
-  const matrix = identityMatrix();
-  matrix[12] = x;
-  matrix[13] = y;
-  matrix[14] = z;
-  return matrix;
-}
-
-function rotationXMatrix(angle) {
-  const c = Math.cos(angle);
-  const s = Math.sin(angle);
-
-  return matrix4([
-    1, 0, 0, 0,
-    0, c, s, 0,
-    0, -s, c, 0,
-    0, 0, 0, 1
-  ]);
-}
-
-function rotationYMatrix(angle) {
-  const c = Math.cos(angle);
-  const s = Math.sin(angle);
-
-  return matrix4([
-    c, 0, -s, 0,
-    0, 1, 0, 0,
-    s, 0, c, 0,
-    0, 0, 0, 1
-  ]);
-}
-
-function perspectiveMatrix(fovRadians, aspect, near, far) {
-  const f = 1 / Math.tan(fovRadians / 2);
-  const rangeInv = 1 / (near - far);
-
-  return matrix4([
-    f / Math.max(aspect, 1.0e-6), 0, 0, 0,
-    0, f, 0, 0,
-    0, 0, (near + far) * rangeInv, -1,
-    0, 0, near * far * 2 * rangeInv, 0
-  ]);
-}
-
 /**
  * Writes T * Rx * Ry directly into a caller-owned column-major matrix.
  * The old path allocated five Float32Arrays per frame; this is allocation-free.
@@ -1384,36 +1293,21 @@ function getProgramSignature(appState) {
   const dynamicTerms = dynamicActive ? (appState.dynamicAggregateTerms || EMPTY_ARRAY) : EMPTY_ARRAY;
   const cached = PROGRAM_SIGNATURE_BY_STATE.get(appState);
 
-  if (cached
-    && cached.algebraic === algebraic
-    && cached.algebraicLength === algebraic.length
-    && cached.algebraicZ === algebraicZ
-    && cached.dynamicActive === dynamicActive
-    && cached.dynamicTerms === dynamicTerms
-    && cached.dynamicLength === dynamicTerms.length) {
-    return cached.signature;
-  }
-
-  const algebraicSignature = cached && cached.algebraic === algebraic && cached.algebraicLength === algebraic.length
-    ? cached.algebraicSignature
-    : JSON.stringify(algebraic);
+  const algebraicSignature = JSON.stringify(algebraic);
   const dynamicSignature = dynamicActive
-    ? (cached && cached.dynamicActive && cached.dynamicTerms === dynamicTerms && cached.dynamicLength === dynamicTerms.length
-      ? cached.dynamicSignature
-      : dynamicAggregateGLSLSignature(appState))
+    ? dynamicAggregateGLSLSignature(appState)
     : '';
   const signature = `az:${algebraicZ}|a:${algebraicSignature}|d:${dynamicSignature}`;
+
+  if (cached && cached.signature === signature) {
+    return signature;
+  }
+
   const usesPolynomial = formulaRefsFunction(algebraic, dynamicTerms, algebraicZ, 'polynomial');
   const usesMobius = formulaRefsFunction(algebraic, dynamicTerms, algebraicZ, 'mobius');
 
   PROGRAM_SIGNATURE_BY_STATE.set(appState, {
-    algebraic,
-    algebraicLength: algebraic.length,
-    algebraicZ,
     algebraicSignature,
-    dynamicActive,
-    dynamicTerms,
-    dynamicLength: dynamicTerms.length,
     dynamicSignature,
     usesPolynomial,
     usesMobius,
@@ -1421,6 +1315,10 @@ function getProgramSignature(appState) {
   });
 
   return signature;
+}
+
+export function getRiemannSurfaceProgramSignature(appState) {
+  return getProgramSignature(appState);
 }
 
 function validateDynamicAggregate(appState, signature) {
@@ -1661,27 +1559,11 @@ function setTaylorUniforms(renderer) {
   return true;
 }
 
-function buildModelViewMatrix(camera) {
-  return multiplyMatrices(
-    translationMatrix(0, -0.08, -camera.distance),
-    multiplyMatrices(rotationXMatrix(camera.rotX), rotationYMatrix(camera.rotY))
-  );
-}
-
-function buildProjectionMatrix(canvas) {
-  return perspectiveMatrix(
-    Math.PI / 4,
-    canvas.width / Math.max(1, canvas.height),
-    0.1,
-    30
-  );
-}
-
 function uploadComplexFunctionUniforms(gl, locations, appState, renderer) {
   const functionId = getWebGLDomainColorFunctionIdShared(appState.currentFunction);
   gl.uniform4f(
     locations.uFunctionParams,
-    functionId || 1,
+    functionId,
     appState.zetaContinuationEnabled ? 1 : 0,
     typeof ZETA_REFLECTION_POINT_RE !== 'undefined' ? ZETA_REFLECTION_POINT_RE : 0.5,
     +appState.fractionalPowerN || 0.5

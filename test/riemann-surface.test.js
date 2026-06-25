@@ -8,6 +8,7 @@ import {
     getVisibleBranchIndices,
     surfaceStageHasBranches
 } from '../js/analysis/riemann-surface.js';
+import { getRiemannSurfaceProgramSignature } from '../js/rendering/webgl-riemann-surface.js';
 
 function makeState(overrides = {}) {
     return {
@@ -94,4 +95,28 @@ test('dynamic aggregate expressions contribute branch metadata', () => {
     });
     assert.equal(dynamicExpressionHasBranches(runtimeState), true);
     assert.equal(surfaceStageHasBranches(runtimeState, 1), true);
+});
+
+test('Riemann program signatures notice in-place algebraic edits', () => {
+    const runtimeState = makeState({
+        currentFunction: 'algebraic_chaining',
+        algebraicChainingZExpr: 'z',
+        algebraicChainingTerms: [{
+            coeff: { re: 1, im: 0 },
+            factors: [{
+                func: 'sin',
+                chainedFunc: 'none',
+                power: 1,
+                reciprocal: false,
+                log: false,
+                exp: false
+            }]
+        }]
+    });
+
+    const before = getRiemannSurfaceProgramSignature(runtimeState);
+    runtimeState.algebraicChainingTerms[0].factors[0].func = 'cos';
+    const after = getRiemannSurfaceProgramSignature(runtimeState);
+
+    assert.notEqual(after, before);
 });
