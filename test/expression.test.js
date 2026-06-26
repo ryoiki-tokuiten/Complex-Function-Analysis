@@ -22,6 +22,32 @@ test('expression parser respects precedence, right-associative powers, and impli
     closeComplex(negativePower({}), { re: -4, im: 0 });
 });
 
+test('real-axis powers do not leak numerical branch residue', () => {
+    const expression = compileExpression('x^2 - y^2 + (x*y)^(14)', {
+        allowedVariables: ['x', 'y']
+    });
+    closeComplex(
+        expression({ x: { re: -10, im: 0 }, y: { re: 8, im: 0 } }),
+        { re: Math.pow(-80, 14) + 36, im: 0 }
+    );
+
+    const imaginaryPart = compileExpression('im(cos(x^2 - y^2 + (x*y)^(14)))', {
+        allowedVariables: ['x', 'y']
+    });
+    closeComplex(
+        imaginaryPart({ x: { re: -10, im: 0 }, y: { re: 8, im: 0 } }),
+        { re: 0, im: 0 }
+    );
+
+    const fractionalPowerImaginaryPart = compileExpression('im(cos((x^2 - y^2)^(1.5)))', {
+        allowedVariables: ['x', 'y']
+    });
+    closeComplex(
+        fractionalPowerImaginaryPart({ x: { re: 0, im: 0 }, y: { re: 8, im: 0 } }),
+        { re: 0, im: 0 }
+    );
+});
+
 test('complex literals, composition, and helpers evaluate without eval', () => {
     const expression = compileExpression('conj(2 + 3i) + complex(1, -2)');
     closeComplex(expression({}), { re: 3, im: -5 });

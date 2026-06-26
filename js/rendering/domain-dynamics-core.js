@@ -137,12 +137,64 @@ function complexLn(z) {
     };
 }
 
+function complexRealBasePow(baseRe, expRe) {
+    if (baseRe >= 0) {
+        return { re: expSafe(expRe * Math.log(baseRe)), im: 0 };
+    }
+
+    const magnitude = expSafe(expRe * Math.log(-baseRe));
+    const doubledExponent = expRe * 2;
+    if (Number.isSafeInteger(doubledExponent)) {
+        switch (((doubledExponent % 4) + 4) % 4) {
+            case 0: return { re: magnitude, im: 0 };
+            case 1: return { re: 0, im: magnitude };
+            case 2: return { re: -magnitude, im: 0 };
+            case 3: return { re: 0, im: -magnitude };
+        }
+    }
+
+    const angle = expRe * Math.PI;
+    return {
+        re: magnitude * Math.cos(angle),
+        im: magnitude * Math.sin(angle)
+    };
+}
+
+function complexIntegerPow(base, exponent) {
+    if (exponent === 0) return { re: 1, im: 0 };
+    if (exponent === 1) return { re: base.re, im: base.im };
+    if (exponent === -1) return complexDivide(ONE, base);
+
+    const negative = exponent < 0;
+    let n = Math.abs(exponent);
+    let acc = ONE;
+    let current = base;
+
+    while (n > 0) {
+        if (n % 2 === 1) {
+            acc = complexMul(acc, current);
+        }
+        n = Math.floor(n / 2);
+        if (n > 0) {
+            current = complexMul(current, current);
+        }
+    }
+
+    return negative ? complexDivide(ONE, acc) : acc;
+}
+
 function complexPow(base, exponent) {
     const b = toComplex(base);
     const e = toComplex(exponent);
     if (b.re === 0 && b.im === 0) {
         if (e.re > 0 || (e.re === 0 && e.im !== 0)) return { re: 0, im: 0 };
         if (e.re === 0 && e.im === 0) return { re: 1, im: 0 };
+    }
+    if (e.im === 0 && Number.isSafeInteger(e.re)) {
+        return complexIntegerPow(b, e.re);
+    }
+    if (b.im === 0 && e.im === 0) {
+        return complexRealBasePow(b.re, e.re);
     }
     return complexExp(complexMul(e, complexLn(b)));
 }

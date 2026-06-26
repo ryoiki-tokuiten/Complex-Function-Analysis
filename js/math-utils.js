@@ -151,10 +151,118 @@ function logHypot(re, im) {
     return Math.log(Math.hypot(re, im));
 }
 
+function powRealBaseRaw(baseRe, expRe) {
+    if (baseRe >= 0) {
+        return { re: expSafe(expRe * Math.log(baseRe)), im: 0 };
+    }
+
+    const magnitude = expSafe(expRe * Math.log(-baseRe));
+    const doubledExponent = expRe * 2;
+    if (Number.isSafeInteger(doubledExponent)) {
+        switch (((doubledExponent % 4) + 4) % 4) {
+            case 0: return { re: magnitude, im: 0 };
+            case 1: return { re: 0, im: magnitude };
+            case 2: return { re: -magnitude, im: 0 };
+            case 3: return { re: 0, im: -magnitude };
+        }
+    }
+
+    const angle = expRe * Math.PI;
+    return {
+        re: magnitude * Math.cos(angle),
+        im: magnitude * Math.sin(angle)
+    };
+}
+
+function powRealBaseInto(baseRe, expRe, out, offset = 0) {
+    const value = powRealBaseRaw(baseRe, expRe);
+    out[offset] = value.re;
+    out[offset + 1] = value.im;
+    return out;
+}
+
+function powIntegerRaw(re, im, exponent) {
+    if (exponent === 0) return { re: 1, im: 0 };
+    if (exponent === 1) return { re, im };
+    if (exponent === -1) return reciprocalRaw(re, im);
+
+    const negative = exponent < 0;
+    let n = Math.abs(exponent);
+    let accRe = 1;
+    let accIm = 0;
+    let baseRe = re;
+    let baseIm = im;
+
+    while (n > 0) {
+        if (n % 2 === 1) {
+            const nextRe = accRe * baseRe - accIm * baseIm;
+            accIm = accRe * baseIm + accIm * baseRe;
+            accRe = nextRe;
+        }
+        n = Math.floor(n / 2);
+        if (n > 0) {
+            const nextBaseRe = baseRe * baseRe - baseIm * baseIm;
+            baseIm = 2 * baseRe * baseIm;
+            baseRe = nextBaseRe;
+        }
+    }
+
+    return negative ? reciprocalRaw(accRe, accIm) : { re: accRe, im: accIm };
+}
+
+function powIntegerInto(re, im, exponent, out, offset = 0) {
+    if (exponent === 0) {
+        out[offset] = 1;
+        out[offset + 1] = 0;
+        return out;
+    }
+    if (exponent === 1) {
+        out[offset] = re;
+        out[offset + 1] = im;
+        return out;
+    }
+
+    const negative = exponent < 0;
+    let n = Math.abs(exponent);
+    let accRe = 1;
+    let accIm = 0;
+    let baseRe = re;
+    let baseIm = im;
+
+    while (n > 0) {
+        if (n % 2 === 1) {
+            const nextRe = accRe * baseRe - accIm * baseIm;
+            accIm = accRe * baseIm + accIm * baseRe;
+            accRe = nextRe;
+        }
+        n = Math.floor(n / 2);
+        if (n > 0) {
+            const nextBaseRe = baseRe * baseRe - baseIm * baseIm;
+            baseIm = 2 * baseRe * baseIm;
+            baseRe = nextBaseRe;
+        }
+    }
+
+    if (negative) {
+        return divideRawInto(1, 0, accRe, accIm, out, offset);
+    }
+    out[offset] = accRe;
+    out[offset + 1] = accIm;
+    return out;
+}
+
 function powRaw(baseRe, baseIm, expRe, expIm) {
     if (baseRe === 0 && baseIm === 0) {
         if (expRe > 0 || (expRe === 0 && expIm !== 0)) return { re: 0, im: 0 };
         if (expRe === 0 && expIm === 0) return { re: 1, im: 0 };
+    }
+
+    if (expIm === 0 && Number.isSafeInteger(expRe)) {
+        return powIntegerRaw(baseRe, baseIm, expRe);
+    }
+
+    if (baseIm === 0 && expIm === 0) {
+        return powRealBaseRaw(baseRe, expRe);
     }
 
     const lnRe = logHypot(baseRe, baseIm);
@@ -176,6 +284,14 @@ function powRawInto(baseRe, baseIm, expRe, expIm, out, offset = 0) {
             out[offset + 1] = 0;
             return out;
         }
+    }
+
+    if (expIm === 0 && Number.isSafeInteger(expRe)) {
+        return powIntegerInto(baseRe, baseIm, expRe, out, offset);
+    }
+
+    if (baseIm === 0 && expIm === 0) {
+        return powRealBaseInto(baseRe, expRe, out, offset);
     }
 
     const lnRe = logHypot(baseRe, baseIm);
