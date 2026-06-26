@@ -6,6 +6,7 @@ import { initializeWebGLLineSupport } from '../rendering/webgl-planar.js';
 import { initializeWebGLDomainColoringSupport } from '../rendering/webgl-domain-coloring.js';
 import { disposeRiemannSurface } from '../rendering/webgl-riemann-surface.js';
 import { captureBeforeResize } from '../rendering/domain-dynamics.js';
+import { eventBus } from '../store/events.js';
 
 const { controls, polynomialCoeffUIElements } = context;
 
@@ -560,6 +561,8 @@ export function setupVisualParameters(updateZFromSlider = true, updateWFromSlide
             updatePlaneViewportRanges(p);
         }
     }
+
+    eventBus.emit('layout:canvas');
 }
 
 export function getChainingTitleHTML(i, mode) {

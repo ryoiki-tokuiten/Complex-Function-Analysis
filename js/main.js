@@ -9,7 +9,7 @@ import { drawLaplace3DSurface } from './rendering/laplace-3d-surface.js';
 import { drawRealPlot } from './rendering/real-plots-renderer.js';
 import { setupDOMReferences, setupVisualParameters } from './utils/dom-utils.js';
 import { initializePolynomialCoeffs, generatePolynomialCoeffSliders } from './ui/polynomial-ui.js';
-import { setupEventListeners, setActiveFunctionButton, initializeStateFromControls } from './ui/event-listeners.js';
+import { setupEventListeners, setActiveFunctionButton, initializeStateFromControls, getCachedCanvasEventPosition } from './ui/event-listeners.js';
 import { initializeSectionAnimations } from './ui/section-animations.js';
 import { initializeTooltips, showDynamicTooltip, hideDynamicTooltip } from './ui/tooltip.js';
 import { mapCanvasToWorldCoords } from './utils/canvas-utils.js';
@@ -173,14 +173,17 @@ function setup() {
 function setupCanvasTooltipEvents() {
     const bindPlaneTooltip = (canvas, plane, planeParams) => {
         if (!canvas || !planeParams) return;
+        const tooltipPos = { x: 0, y: 0 };
+        const probeWorld = { re: 0, im: 0 };
+
         canvas.addEventListener('mousemove', (event) => {
             try {
-                const rect = canvas.getBoundingClientRect();
-                const mouseX = event.clientX - rect.left;
-                const mouseY = event.clientY - rect.top;
+                const pos = getCachedCanvasEventPosition(canvas, event, tooltipPos);
+                if (!pos) return;
 
-                const worldCoords = mapCanvasToWorldCoords(mouseX, mouseY, planeParams);
-                const probeWorld = { re: worldCoords.x, im: worldCoords.y };
+                const worldCoords = mapCanvasToWorldCoords(pos.x, pos.y, planeParams);
+                probeWorld.re = worldCoords.x;
+                probeWorld.im = worldCoords.y;
 
                 let foundItem = null;
                 const xRange = planeParams.currentVisXRange || planeParams.xRange;
@@ -240,7 +243,7 @@ function setupCanvasTooltipEvents() {
             } catch (error) {
                 console.error(`Error in ${plane}-plane mousemove listener for tooltips:`, error);
             }
-        });
+        }, { passive: true });
 
         canvas.addEventListener('mouseout', () => {
             try {

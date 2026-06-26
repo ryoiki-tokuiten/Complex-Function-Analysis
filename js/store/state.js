@@ -314,6 +314,10 @@ function createDeepProxy(obj, path = []) {
             return value;
         },
         set(target, prop, value, receiver) {
+            if (path.length === 0 && prop === 'probeActive' && value === true && target.chainingEnabled) {
+                value = false;
+            }
+
             const oldValue = target[prop];
             if (oldValue === value) return true;
             
@@ -322,6 +326,13 @@ function createDeepProxy(obj, path = []) {
                 const fullPath = [...path, prop].join('.');
                 eventBus.emit(`state:${fullPath}`, { value, oldValue });
                 eventBus.emit('state:change', { path: fullPath, value, oldValue });
+
+                if (path.length === 0 && prop === 'chainingEnabled' && value === true && target.probeActive) {
+                    const oldProbeActive = target.probeActive;
+                    target.probeActive = false;
+                    eventBus.emit('state:probeActive', { value: false, oldValue: oldProbeActive });
+                    eventBus.emit('state:change', { path: 'probeActive', value: false, oldValue: oldProbeActive });
+                }
             }
             return success;
         }

@@ -36,6 +36,8 @@ export class ThreeRiemannRenderer {
         this.animationHandle = null;
         this.transformFunction = null;
         this.chainCount = 1;
+        this.pointerRect = { left: 0, top: 0, width: 1, height: 1 };
+        this.pointerRectValid = false;
 
         this.initScene();
         this.initInteraction();
@@ -169,9 +171,8 @@ export class ThreeRiemannRenderer {
             this.renderer.domElement.addEventListener('pointerdown', (e) => {
                 if (!state.probeActive) return;
 
-                const rect = this.renderer.domElement.getBoundingClientRect();
-                this.mouse.x = ((e.clientX - rect.left) / rect.width) * 2 - 1;
-                this.mouse.y = -((e.clientY - rect.top) / rect.height) * 2 + 1;
+                this.refreshPointerRect();
+                this.updatePointerNdc(e);
 
                 this.raycaster.setFromCamera(this.mouse, this.camera);
                 const intersects = this.raycaster.intersectObject(this.dragPlane);
@@ -188,9 +189,7 @@ export class ThreeRiemannRenderer {
             this.renderer.domElement.addEventListener('pointermove', (e) => {
                 if (!this.isDragging || !state.probeActive) return;
 
-                const rect = this.renderer.domElement.getBoundingClientRect();
-                this.mouse.x = ((e.clientX - rect.left) / rect.width) * 2 - 1;
-                this.mouse.y = -((e.clientY - rect.top) / rect.height) * 2 + 1;
+                this.updatePointerNdc(e);
 
                 this.raycaster.setFromCamera(this.mouse, this.camera);
                 const intersects = this.raycaster.intersectObject(this.dragPlane);
@@ -211,6 +210,30 @@ export class ThreeRiemannRenderer {
             window.addEventListener('pointerup', onPointerUp);
             this.onPointerUpClean = onPointerUp;
         }
+    }
+
+    refreshPointerRect() {
+        const element = this.renderer?.domElement;
+        const rect = element && typeof element.getBoundingClientRect === 'function'
+            ? element.getBoundingClientRect()
+            : null;
+
+        this.pointerRect.left = rect?.left || 0;
+        this.pointerRect.top = rect?.top || 0;
+        this.pointerRect.width = Math.max(1, rect?.width || element?.clientWidth || element?.width || 1);
+        this.pointerRect.height = Math.max(1, rect?.height || element?.clientHeight || element?.height || 1);
+        this.pointerRectValid = true;
+        return this.pointerRect;
+    }
+
+    getPointerRect() {
+        return this.pointerRectValid ? this.pointerRect : this.refreshPointerRect();
+    }
+
+    updatePointerNdc(event) {
+        const rect = this.getPointerRect();
+        this.mouse.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
+        this.mouse.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
     }
 
     setTransform(transformFunction, chainCount = 1) {
@@ -621,6 +644,7 @@ export class ThreeRiemannRenderer {
         this.camera.aspect = w / h;
         this.camera.updateProjectionMatrix();
         this.renderer.setSize(w, h);
+        this.pointerRectValid = false;
     }
 
     render() {

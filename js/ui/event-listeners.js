@@ -39,6 +39,42 @@ let wCanvas;
 let uiEventListenersBound = false;
 let transformViewportSnapshot = null;
 
+const PASSIVE_LISTENER_OPTIONS = Object.freeze({ passive: true });
+const PASSIVE_CAPTURE_LISTENER_OPTIONS = Object.freeze({ passive: true, capture: true });
+const ACTIVE_LISTENER_OPTIONS = Object.freeze({ passive: false });
+const DEFAULT_FRAME_DELAY = 0;
+
+let palettePanelFrameId = 0;
+let pendingPalettePanelRefresh = false;
+
+const canvasInteractionContexts = { z: null, w: null };
+const canvasContextByElement = new WeakMap();
+const EMPTY_RECT = Object.freeze({ left: 0, top: 0, right: 0, bottom: 0, width: 0, height: 0 });
+
+function createPointerSnapshot() {
+    return {
+        clientX: 0,
+        clientY: 0,
+        button: 0,
+        buttons: 0,
+        deltaY: 0,
+        hasData: false
+    };
+}
+
+function createCanvasInteractionContext(planeType) {
+    const ctx = canvasContext(planeType);
+    ctx.rect = { left: 0, top: 0, right: 0, bottom: 0, width: 0, height: 0 };
+    ctx.pos = { x: 0, y: 0 };
+    ctx.pendingMove = createPointerSnapshot();
+    ctx.pendingWheel = createPointerSnapshot();
+    ctx.pendingSphereMove = createPointerSnapshot();
+    ctx.hasFreshRect = false;
+
+    if (ctx.canvas) canvasContextByElement.set(ctx.canvas, ctx);
+    return ctx;
+}
+
 const COMPLEX_PARTS = ['re', 'im'];
 const MOBIUS_PARAMS = ['A', 'B', 'C', 'D'];
 
@@ -207,6 +243,7 @@ const BINDERS = [
     bindChainingControls,
     bindSimpleControlRemainder,
     bindCanvasInteractions,
+    bindCanvasRectInvalidation,
     bindTopControlsToggle,
     bindFullscreenControls,
     bindThemeControls,
@@ -240,10 +277,10 @@ function clamp(value, min, max) {
 function frame(callback) {
     return typeof requestAnimationFrame === 'function'
         ? requestAnimationFrame(callback)
-        : setTimeout(callback, 0);
+        : setTimeout(callback, DEFAULT_FRAME_DELAY);
 }
 
-function laterFrame(callback, delay = 0) {
+function laterFrame(callback, delay = DEFAULT_FRAME_DELAY) {
     frame(() => setTimeout(callback, delay));
 }
 
@@ -380,7 +417,7 @@ function bindCheckbox(controlKey, stateKey, customCallback = null) {
             return;
         }
 
-        requestRedrawAll();
+        requestUiRedraw();
     });
 }
 
@@ -411,17 +448,37 @@ function bindSimpleControlRemainder() {
         .forEach(({ controlKey, stateKey }) => bindSelector(controlKey, stateKey));
 }
 
-export function requestDomainRedraw(markDomainDirty = false) {
+function isDomainPalettePanelOpen() {
+    const panel = $('domain_palette_circle_panel');
+    return Boolean(panel && !panel.classList.contains('hidden'));
+}
+
+function flushPalettePanelRefresh() {
+    palettePanelFrameId = 0;
+    if (!pendingPalettePanelRefresh) return;
+
+    pendingPalettePanelRefresh = false;
+    if (typeof updateDomainPaletteCirclePanel === 'function') {
+        updateDomainPaletteCirclePanel();
+    }
+}
+
+function scheduleRedraw(markDomainDirty = false, refreshPalettePanel = false) {
     if (markDomainDirty) context.domainColoringDirty = true;
     requestRedrawAll();
 
-    // Also update domain coloring guide panel if open
-    const panel = $('domain_palette_circle_panel');
-    if (panel && !panel.classList.contains('hidden')) {
-        if (typeof updateDomainPaletteCirclePanel === 'function') {
-            updateDomainPaletteCirclePanel();
-        }
+    if (refreshPalettePanel) {
+        pendingPalettePanelRefresh = true;
+        if (!palettePanelFrameId) palettePanelFrameId = frame(flushPalettePanelRefresh);
     }
+}
+
+function requestUiRedraw() {
+    scheduleRedraw(false, false);
+}
+
+export function requestDomainRedraw(markDomainDirty = false) {
+    scheduleRedraw(markDomainDirty, isDomainPalettePanelOpen());
 }
 
 export function syncLaplacePlayPauseButton() {
@@ -481,7 +538,7 @@ function disableRealPlots() {
     if (controls.wCanvasCard) controls.wCanvasCard.classList.remove('hidden');
     const refreshPlanes = () => {
         setupVisualParameters(false, false);
-        requestRedrawAll();
+        requestUiRedraw();
     };
     requestAnimationFrame(() => {
         refreshPlanes();
@@ -731,7 +788,7 @@ function setTaylorCustomCenter(re, im, shouldRedraw = true) {
     Object.assign(state.taylorSeriesCustomCenter, { re, im });
     syncTaylorCustomCenterInputs();
     call(syncTaylorSeriesCenterStatus);
-    if (shouldRedraw) requestRedrawAll();
+    if (shouldRedraw) requestUiRedraw();
 }
 
 function initializeScalarBindings() {
@@ -809,7 +866,7 @@ function bindImageControls() {
 
     bindSlider('imageResolutionSlider', 'imageResolution', parseInteger, () => {
         reprocessUploadedImage();
-        requestRedrawAll();
+        requestUiRedraw();
     });
     bindSlider('imageSizeSlider', 'imageSize', parseFloat, () => requestDomainRedraw(true));
     bindSlider('imageOpacitySlider', 'imageOpacity', parseFloat, () => requestDomainRedraw(true));
@@ -825,12 +882,12 @@ function bindVideoControls() {
 
     bindSlider('videoResolutionSlider', 'videoResolution', parseInteger, () => {
         reprocessUploadedVideo();
-        requestRedrawAll();
+        requestUiRedraw();
     });
     bindSlider('videoFpsSlider', 'videoProcessingFps', parseInteger, () => {
         syncVideoPlaybackUI();
         if (state.videoIsPlaying && state.currentInputShape === 'video') startVideoProcessingLoop();
-        requestRedrawAll();
+        requestUiRedraw();
     });
     bindSlider('videoSizeSlider', 'videoSize', parseFloat, () => requestDomainRedraw(true));
     bindSlider('videoOpacitySlider', 'videoOpacity', parseFloat, () => requestDomainRedraw(true));
@@ -843,14 +900,6 @@ function syncPalette(selectors, container) {
     renderDomainPalettesUI(container);
     call(updateDomainColoringKey);
     requestDomainRedraw(true);
-
-    // Also update domain coloring guide panel if open
-    const panel = $('domain_palette_circle_panel');
-    if (panel && !panel.classList.contains('hidden')) {
-        if (typeof updateDomainPaletteCirclePanel === 'function') {
-            updateDomainPaletteCirclePanel();
-        }
-    }
 }
 
 function bindDomainColoringControls() {
@@ -907,7 +956,7 @@ function bindDomainColoringControls() {
         bindElementListener($(inputId), 'input', event => {
             state[stateKey] = event.target.value;
             setStyles($(wrapperId), { backgroundColor: state[stateKey] });
-            requestRedrawAll();
+            requestUiRedraw();
         });
     });
 
@@ -925,7 +974,7 @@ function bindDerivativeControls() {
         context.domainColoringDirty = true;
         call(syncRiemannTransformationUI);
         call(updateChainingTitles);
-        requestRedrawAll();
+        requestUiRedraw();
     });
 }
 
@@ -967,7 +1016,7 @@ function bindConformalGridControls() {
             fitConformalGridOutputViewport();
             call(updateTitlesAndGlobalUI);
         }
-        requestRedrawAll();
+        requestUiRedraw();
     });
 }
 
@@ -1002,7 +1051,7 @@ function bindViewControls() {
     bindCheckbox('enableRiemannSphereCb', 'riemannSphereViewEnabled', () => {
         if (state.riemannSphereViewEnabled) {
             if (state.riemannSurfaceEnabled) disableRiemannSurface();
-            
+
             if (!state.threeSphereEnabled) {
                 state.threeSphereEnabled = true;
                 checked('enableThreeSphereCb', true);
@@ -1033,7 +1082,7 @@ function bindViewControls() {
         }
         hidden(controls.threeSphereOptionsDiv, !state.threeSphereEnabled);
         call(updateChainingTitles);
-        requestRedrawAll();
+        requestUiRedraw();
     });
 
     bindCheckbox('enableRiemannTransformationCb', 'riemannTransformationEnabled', () => {
@@ -1160,7 +1209,7 @@ function bindVectorFieldControls() {
         requestDomainRedraw(true);
     });
 
-    bindSelector('vectorFieldFunctionSelector', 'vectorFieldFunction', () => requestRedrawAll());
+    bindSelector('vectorFieldFunctionSelector', 'vectorFieldFunction', () => requestUiRedraw());
 
     [
         ['vectorFieldScaleSlider', 'vectorFieldScale'],
@@ -1177,7 +1226,7 @@ function bindVectorFieldControls() {
 function bindTaylorControls() {
     bindCheckbox('enableTaylorSeriesCb', 'taylorSeriesEnabled', () => {
         hidden(controls.taylorSeriesOptionsDetailDiv, !state.taylorSeriesEnabled);
-        requestRedrawAll();
+        requestUiRedraw();
     });
 
     bindSlider('taylorSeriesOrderSlider', 'taylorSeriesOrder', parseInteger);
@@ -1185,7 +1234,7 @@ function bindTaylorControls() {
     bindCheckbox('enableTaylorSeriesCustomCenterCb', 'taylorSeriesCustomCenterEnabled', () => {
         hidden(controls.taylorSeriesCustomCenterInputsDiv, !state.taylorSeriesCustomCenterEnabled);
         call(syncTaylorSeriesCenterStatus);
-        requestRedrawAll();
+        requestUiRedraw();
     });
 
     if (controls.taylorComplexPointsUiContainer) {
@@ -1222,12 +1271,12 @@ function bindParticleControls() {
     bindCheckbox('enableParticleAnimationCb', 'particleAnimationEnabled', () => {
         hidden(controls.particleAnimationDetailsDiv, !state.particleAnimationEnabled);
         if (!state.particleAnimationEnabled) state.particles = [];
-        requestRedrawAll();
+        requestUiRedraw();
     });
 
     bindSlider('particleDensitySlider', 'particleDensity', parseInteger, () => {
         state.particles = [];
-        requestRedrawAll();
+        requestUiRedraw();
     });
     bindSlider('particleSpeedSlider', 'particleSpeed');
     bindSlider('particleMaxLifetimeSlider', 'particleMaxLifetime', parseInteger);
@@ -1236,7 +1285,7 @@ function bindParticleControls() {
 function bindFourierControls() {
     bindSelector('fourierFunctionSelector', 'fourierFunction', () => {
         updateFourierTransform();
-        requestRedrawAll();
+        requestUiRedraw();
     });
 
     [
@@ -1246,7 +1295,7 @@ function bindFourierControls() {
         ['fourierSamples', parseInteger]
     ].forEach(([key, parser]) => bindSlider(`${key}Slider`, key, parser, () => {
         updateFourierTransform();
-        requestRedrawAll();
+        requestUiRedraw();
     }));
 
     bindSlider('fourierWindingFrequencySlider', 'fourierWindingFrequency');
@@ -1256,26 +1305,26 @@ function bindFourierControls() {
 function bindLaplaceControls() {
     bindSelector('laplaceFunctionSelector', 'laplaceFunction', () => {
         updateLaplaceTransform();
-        requestRedrawAll();
+        requestUiRedraw();
     });
 
     ['laplaceFrequency', 'laplaceDamping'].forEach(key => bindSlider(`${key}Slider`, key, parseFloat, () => {
         updateLaplaceTransform();
-        requestRedrawAll();
+        requestUiRedraw();
     }));
 
     ['laplaceSigma', 'laplaceOmega'].forEach(key => bindSlider(`${key}Slider`, key, parseFloat, () => {
         updateLaplaceEvaluationPoint();
-        requestRedrawAll();
+        requestUiRedraw();
     }));
 
     bindSelector('laplaceVizModeSelector', 'laplaceVizMode', () => {
         updateLaplace3DSurface();
-        requestRedrawAll();
+        requestUiRedraw();
     });
     bindSlider('laplaceClipHeightSlider', 'laplaceClipHeight', parseFloat, () => {
         updateLaplace3DSurface();
-        requestRedrawAll();
+        requestUiRedraw();
     });
 
     [
@@ -1312,13 +1361,13 @@ function bindLaplaceControls() {
 
         state.laplacePoles = result.poles;
         state.laplaceZeros = result.zeros;
-        requestRedrawAll();
+        requestUiRedraw();
     });
 
     bindControlListener('laplaceStabilityAnalysisBtn', 'click', () => {
         if (!state.laplaceModeEnabled || !state.laplacePoles) return;
         state.laplaceStability = analyzeStability(state.laplacePoles);
-        requestRedrawAll();
+        requestUiRedraw();
     });
 
 }
@@ -1335,9 +1384,68 @@ function isSphereInteractionActive(isZCanvas) {
         : state.riemannSphereViewEnabled || state.splitViewEnabled;
 }
 
-function mouse(canvas, event) {
-    const rect = canvas.getBoundingClientRect();
-    return { x: event.clientX - rect.left, y: event.clientY - rect.top, rect };
+function refreshCanvasRect(ctx) {
+    const rect = ctx.canvas && typeof ctx.canvas.getBoundingClientRect === 'function'
+        ? ctx.canvas.getBoundingClientRect()
+        : EMPTY_RECT;
+
+    ctx.rect.left = rect.left || 0;
+    ctx.rect.top = rect.top || 0;
+    ctx.rect.right = rect.right || (ctx.rect.left + (rect.width || ctx.canvas?.width || 0));
+    ctx.rect.bottom = rect.bottom || (ctx.rect.top + (rect.height || ctx.canvas?.height || 0));
+    ctx.rect.width = rect.width || Math.max(0, ctx.rect.right - ctx.rect.left) || ctx.canvas?.width || 0;
+    ctx.rect.height = rect.height || Math.max(0, ctx.rect.bottom - ctx.rect.top) || ctx.canvas?.height || 0;
+    ctx.hasFreshRect = true;
+    return ctx.rect;
+}
+
+function invalidateCanvasRect(ctx) {
+    if (ctx) ctx.hasFreshRect = false;
+}
+
+function invalidateAllCanvasRects() {
+    Object.values(canvasInteractionContexts).forEach(invalidateCanvasRect);
+}
+
+function canvasRect(ctx) {
+    return ctx.hasFreshRect ? ctx.rect : refreshCanvasRect(ctx);
+}
+
+function updatePointerSnapshot(snapshot, event) {
+    snapshot.clientX = event.clientX || 0;
+    snapshot.clientY = event.clientY || 0;
+    snapshot.button = event.button || 0;
+    snapshot.buttons = event.buttons || 0;
+    snapshot.deltaY = event.deltaY || 0;
+    snapshot.hasData = true;
+}
+
+function canvasPosition(ctx, pointer) {
+    const rect = canvasRect(ctx);
+    ctx.pos.x = pointer.clientX - rect.left;
+    ctx.pos.y = pointer.clientY - rect.top;
+    return ctx.pos;
+}
+
+export function getCachedCanvasEventPosition(canvas, event, out = { x: 0, y: 0 }) {
+    if (!canvas || !event) return null;
+
+    const ctx = canvasContextByElement.get(canvas);
+    const rect = ctx
+        ? canvasRect(ctx)
+        : typeof canvas.getBoundingClientRect === 'function'
+            ? canvas.getBoundingClientRect()
+            : EMPTY_RECT;
+
+    out.x = event.clientX - (rect.left || 0);
+    out.y = event.clientY - (rect.top || 0);
+    return out;
+}
+
+function canvasPositionInsideCanvas(ctx, pos) {
+    const width = ctx.canvas?.width ?? ctx.rect.width;
+    const height = ctx.canvas?.height ?? ctx.rect.height;
+    return pos.x >= 0 && pos.x <= width && pos.y >= 0 && pos.y <= height;
 }
 
 function panPlane(ctx, pos) {
@@ -1349,13 +1457,19 @@ function panPlane(ctx, pos) {
 
 function updateProbe(ctx, pos, active = true) {
     if (!ctx.isZ) return;
+    if (state.chainingEnabled) {
+        state.probeActive = false;
+        return;
+    }
     if (!active) {
         state.probeActive = false;
         return;
     }
 
     const world = mapCanvasToWorldCoords(pos.x, pos.y, ctx.params);
-    state.probeZ = { re: world.x, im: world.y };
+    const probe = state.probeZ || (state.probeZ = { re: 0, im: 0 });
+    probe.re = world.x;
+    probe.im = world.y;
     state.probeActive = true;
 }
 
@@ -1367,13 +1481,13 @@ function startPan(ctx, pos) {
     ctx.pan.panStartOrigin.y = ctx.params.origin.y;
     ctx.canvas.style.cursor = 'grabbing';
     updateProbe(ctx, pos, false);
-    requestRedrawAll();
+    requestUiRedraw();
 }
 
-function handleCanvasMove(ctx, event) {
+function handleCanvasMoveNow(ctx, pointer) {
     if (isSphereInteractionActive(ctx.isZ)) return;
 
-    const pos = mouse(ctx.canvas, event);
+    const pos = canvasPosition(ctx, pointer);
 
     if (ctx.pan.isPanning) {
         panPlane(ctx, pos);
@@ -1385,43 +1499,60 @@ function handleCanvasMove(ctx, event) {
         return;
     }
 
-    if (ctx.isZ && !state.panStateZ.isPanning && !state.panStateW.isPanning) {
+    if (ctx.isZ && !state.chainingEnabled && !state.panStateZ.isPanning && !state.panStateW.isPanning) {
         updateProbe(ctx, pos, true);
-        requestRedrawAll();
+        requestUiRedraw();
     }
+}
+
+function flushCanvasMove(ctx) {
+    if (!ctx.pendingMove.hasData) return;
+    ctx.pendingMove.hasData = false;
+    handleCanvasMoveNow(ctx, ctx.pendingMove);
+}
+
+function scheduleCanvasMove(ctx, event) {
+    updatePointerSnapshot(ctx.pendingMove, event);
+    flushCanvasMove(ctx);
 }
 
 function handleCanvasDown(ctx, event) {
     if (isSphereInteractionActive(ctx.isZ)) return;
-
-    const pos = mouse(ctx.canvas, event);
     if (event.button !== 0) return;
-    startPan(ctx, pos);
+
+    refreshCanvasRect(ctx);
+    updatePointerSnapshot(ctx.pendingMove, event);
+    startPan(ctx, canvasPosition(ctx, ctx.pendingMove));
 }
 
 function handleCanvasUp(ctx, event) {
     if (isSphereInteractionActive(ctx.isZ)) return;
-
     if (event.button !== 0 || !ctx.pan.isPanning) return;
 
     ctx.pan.isPanning = false;
     ctx.canvas.style.cursor = 'crosshair';
+    ctx.pendingMove.hasData = false;
 
     if (!ctx.isZ) return;
 
     if (state.navigationModeEnabled) {
         updateProbe(ctx, null, false);
-        requestRedrawAll();
+        requestUiRedraw();
         return;
     }
 
-    const pos = mouse(ctx.canvas, event);
-    updateProbe(ctx, pos, pos.x >= 0 && pos.x <= ctx.canvas.width && pos.y >= 0 && pos.y <= ctx.canvas.height);
-    requestRedrawAll();
+    refreshCanvasRect(ctx);
+    updatePointerSnapshot(ctx.pendingMove, event);
+    const pos = canvasPosition(ctx, ctx.pendingMove);
+    updateProbe(ctx, pos, canvasPositionInsideCanvas(ctx, pos));
+    requestUiRedraw();
 }
 
 function handleCanvasLeave(ctx) {
     if (isSphereInteractionActive(ctx.isZ)) return;
+
+    ctx.pendingMove.hasData = false;
+    invalidateCanvasRect(ctx);
 
     if (ctx.pan.isPanning) {
         ctx.pan.isPanning = false;
@@ -1430,7 +1561,7 @@ function handleCanvasLeave(ctx) {
     }
 
     updateProbe(ctx, null, false);
-    requestRedrawAll();
+    requestUiRedraw();
 }
 
 function zoomPlaneAt(ctx, pos, factor) {
@@ -1450,33 +1581,82 @@ function zoomPlaneAt(ctx, pos, factor) {
     requestDomainRedraw(true);
 }
 
+function flushCanvasWheel(ctx) {
+    if (!ctx.pendingWheel.hasData) return;
+    ctx.pendingWheel.hasData = false;
+    if (isSphereInteractionActive(ctx.isZ)) return;
+
+    const pos = canvasPosition(ctx, ctx.pendingWheel);
+    const factor = ctx.pendingWheel.deltaY < 0 ? ZOOM_IN_FACTOR : ZOOM_OUT_FACTOR;
+    zoomPlaneAt(ctx, pos, factor);
+}
+
 function handleCanvasWheel(ctx, event) {
     if (isSphereInteractionActive(ctx.isZ)) return;
 
     event.preventDefault();
-    const pos = mouse(ctx.canvas, event);
-    const factor = event.deltaY < 0 ? ZOOM_IN_FACTOR : ZOOM_OUT_FACTOR;
-
-    zoomPlaneAt(ctx, pos, factor);
+    canvasRect(ctx);
+    updatePointerSnapshot(ctx.pendingWheel, event);
+    flushCanvasWheel(ctx);
 }
 
 function bindCanvasInteractions() {
-    ['z', 'w'].map(canvasContext).forEach(ctx => {
-        [
-            ['mousemove', event => handleCanvasMove(ctx, event)],
-            ['mousedown', event => handleCanvasDown(ctx, event)],
-            ['mouseup', event => handleCanvasUp(ctx, event)],
-            ['mouseleave', () => handleCanvasLeave(ctx)],
-            ['wheel', event => handleCanvasWheel(ctx, event)]
-        ].forEach(([eventName, handler]) => bindElementListener(ctx.canvas, eventName, handler));
+    ['z', 'w'].forEach(planeType => {
+        const ctx = createCanvasInteractionContext(planeType);
+        canvasInteractionContexts[planeType] = ctx;
+        if (!ctx.canvas) return;
 
-        [
-            ['mousedown', event => handleSphereMouseDown(event, ctx.planeType)],
-            ['mousemove', event => handleSphereMouseMove(event, ctx.planeType)],
-            ['mouseup', () => handleSphereMouseUp(ctx.planeType)],
-            ['mouseleave', () => handleSphereMouseUp(ctx.planeType)]
-        ].forEach(([eventName, handler]) => bindElementListener(ctx.canvas, eventName, handler));
+        ctx.canvas.addEventListener('mousemove', onCanvasMouseMove, PASSIVE_LISTENER_OPTIONS);
+        ctx.canvas.addEventListener('mousedown', onCanvasMouseDown, PASSIVE_LISTENER_OPTIONS);
+        ctx.canvas.addEventListener('mouseup', onCanvasMouseUp, PASSIVE_LISTENER_OPTIONS);
+        ctx.canvas.addEventListener('mouseleave', onCanvasMouseLeave, PASSIVE_LISTENER_OPTIONS);
+        ctx.canvas.addEventListener('wheel', onCanvasWheel, ACTIVE_LISTENER_OPTIONS);
     });
+}
+
+function bindCanvasRectInvalidation() {
+    bindElementListener(window, 'resize', invalidateAllCanvasRects, PASSIVE_LISTENER_OPTIONS);
+    bindElementListener(window, 'scroll', invalidateAllCanvasRects, PASSIVE_CAPTURE_LISTENER_OPTIONS);
+    bindElementListener(document, 'scroll', invalidateAllCanvasRects, PASSIVE_CAPTURE_LISTENER_OPTIONS);
+    eventBus.on('layout:canvas', invalidateAllCanvasRects);
+}
+
+function contextForCanvasEvent(event) {
+    return canvasContextByElement.get(event.currentTarget || event.target);
+}
+
+function onCanvasMouseMove(event) {
+    const ctx = contextForCanvasEvent(event);
+    if (!ctx) return;
+    if (isSphereInteractionActive(ctx.isZ)) scheduleSphereMouseMove(ctx, event);
+    else scheduleCanvasMove(ctx, event);
+}
+
+function onCanvasMouseDown(event) {
+    const ctx = contextForCanvasEvent(event);
+    if (!ctx) return;
+    if (isSphereInteractionActive(ctx.isZ)) handleSphereMouseDown(event, ctx.planeType);
+    else handleCanvasDown(ctx, event);
+}
+
+function onCanvasMouseUp(event) {
+    const ctx = contextForCanvasEvent(event);
+    if (!ctx) return;
+    if (isSphereInteractionActive(ctx.isZ)) handleSphereMouseUp(ctx.planeType);
+    else handleCanvasUp(ctx, event);
+}
+
+function onCanvasMouseLeave(event) {
+    const ctx = contextForCanvasEvent(event);
+    if (!ctx) return;
+    if (isSphereInteractionActive(ctx.isZ)) handleSphereMouseUp(ctx.planeType);
+    else handleCanvasLeave(ctx);
+    invalidateCanvasRect(ctx);
+}
+
+function onCanvasWheel(event) {
+    const ctx = contextForCanvasEvent(event);
+    if (ctx) handleCanvasWheel(ctx, event);
 }
 
 function fullscreenStyles(backgroundColor) {
@@ -1669,7 +1849,7 @@ function bindChainingControls() {
     bindSlider('chainCountSlider', 'chainCount', parseInteger, value => {
         if (controls.chainCountValueDisplay) controls.chainCountValueDisplay.textContent = value;
         call(updateChainingColumns, state.chainingEnabled ? value : 1);
-        requestRedrawAll();
+        requestUiRedraw();
     });
 
     bindElementListener(controls.enableChainingCb, 'change', event => {
@@ -1680,7 +1860,7 @@ function bindChainingControls() {
         call(updateChainingColumns, state.chainingEnabled ? state.chainCount : 1);
         updateTitlesAndGlobalUI();
         syncParameterControlsPanelVisibility();
-        requestRedrawAll();
+        requestUiRedraw();
     });
 
     bindElementListener(controls.chainModeSelector, 'change', event => {
@@ -1688,7 +1868,7 @@ function bindChainingControls() {
         state.fractalOrbitColoringEnabled = false;
         state.currentFunctionPreset = null;
         call(updateChainingTitles);
-        requestRedrawAll();
+        requestUiRedraw();
     });
 
     bindElementListener(controls.gridViewBtn, 'click', () => {
@@ -1738,12 +1918,12 @@ function bindThemeControls() {
             setTimeout(triggerResize, 50);
             setTimeout(triggerResize, 150);
         }
-        
+
         bindElementListener(verticalLayoutCb, 'change', event => {
             state.verticalLayoutEnabled = event.target.checked;
             localStorage.setItem('complex_verticalLayoutEnabled', state.verticalLayoutEnabled);
             document.body.classList.toggle('vertical-layout', state.verticalLayoutEnabled);
-            
+
             triggerResize();
             setTimeout(triggerResize, 50);
             setTimeout(triggerResize, 150);
@@ -1767,23 +1947,23 @@ function mapSphereCanvasToWorldCoords(cX, cY, cSP) {
     const sCY = cSP.centerY;
     const sR = cSP.radius;
     if (sR === 0) return { re: NaN, im: NaN };
-    
+
     const x1 = (cX - sCX) / sR;
     const y1 = (sCY - cY) / sR;
-    
+
     const cY_cos = Math.cos(rotY), sY_sin = Math.sin(rotY);
     const cX_cos = Math.cos(rotX), sX_sin = Math.sin(rotX);
-    
+
     const denom = cX_cos * cY_cos;
     if (Math.abs(denom) < 1e-5) {
         return { re: NaN, im: NaN };
     }
-    
+
     const t = (x1 * sY_sin - y1 * sX_sin * cY_cos) / denom;
-    
+
     const p3D_rot = { x: x1, y: y1, z: t };
     const p3D_world = inverseRotate3D(p3D_rot, rotX, rotY);
-    
+
     return { re: p3D_world.x, im: p3D_world.y };
 }
 
@@ -1793,9 +1973,6 @@ function handleSphereMouseDown(event, planeType) {
 
     const canvas = canvasFor(planeType);
     if (!canvas) return;
-    const rect = canvas.getBoundingClientRect();
-    const cX = event.clientX - rect.left;
-    const cY = event.clientY - rect.top;
 
     params.dragging = true;
     params.lastMouseX = event.clientX;
@@ -1803,33 +1980,50 @@ function handleSphereMouseDown(event, planeType) {
     canvas.style.cursor = 'grabbing';
 }
 
-function handleSphereMouseMove(event, planeType) {
+function applySphereMouseMove(planeType, pointer) {
     const params = sphereParams(planeType);
     if (!isSphereInteractionActive(planeType === 'z')) return;
 
     const canvas = canvasFor(planeType);
-    if (!canvas) return;
+    if (!canvas || !params.dragging) return;
 
-    if (params.dragging) {
-        params.rotY += (event.clientX - params.lastMouseX) * SPHERE_SENSITIVITY;
-        params.rotX += (event.clientY - params.lastMouseY) * SPHERE_SENSITIVITY;
-        params.lastMouseX = event.clientX;
-        params.lastMouseY = event.clientY;
-        requestDomainRedraw(true);
-        return;
-    }
+    params.rotY += (pointer.clientX - params.lastMouseX) * SPHERE_SENSITIVITY;
+    params.rotX += (pointer.clientY - params.lastMouseY) * SPHERE_SENSITIVITY;
+    params.lastMouseX = pointer.clientX;
+    params.lastMouseY = pointer.clientY;
+    requestDomainRedraw(true);
+}
+
+function flushSphereMouseMove(ctx) {
+    if (!ctx.pendingSphereMove.hasData) return;
+    ctx.pendingSphereMove.hasData = false;
+    applySphereMouseMove(ctx.planeType, ctx.pendingSphereMove);
+}
+
+function scheduleSphereMouseMove(ctx, event) {
+    updatePointerSnapshot(ctx.pendingSphereMove, event);
+    flushSphereMouseMove(ctx);
+}
+
+function handleSphereMouseMove(event, planeType) {
+    const ctx = canvasInteractionContexts[planeType];
+    if (ctx) scheduleSphereMouseMove(ctx, event);
 }
 
 function handleSphereMouseUp(planeType) {
     const params = sphereParams(planeType);
-    
+
     if (planeType === 'z') {
         context.draggingProbeOnSphere = false;
     }
-    
+
     if (!isSphereInteractionActive(planeType === 'z') && !params.dragging) return;
 
     params.dragging = false;
+    const ctx = canvasInteractionContexts[planeType];
+    if (ctx) {
+        ctx.pendingSphereMove.hasData = false;
+    }
     const canvas = canvasFor(planeType);
     if (canvas) {
         canvas.style.cursor = 'crosshair';
@@ -2299,7 +2493,7 @@ export function drawDomainPaletteCircle(canvas, paletteId) {
             }
 
             const phase = Math.atan2(dy, dx);
-            
+
             // Just map phase to color with a fixed standard modulus of 1.0 (no magnitude cycles/shading)
             const rgb = domainColorForValue(Math.cos(phase), Math.sin(phase), {
                 ...tempState,
@@ -2317,7 +2511,7 @@ export function drawDomainPaletteCircle(canvas, paletteId) {
 
     // Draw grid/lines and labels
     ctx.save();
-    
+
     // Dashed crosshairs
     const rootStyle = getComputedStyle(document.documentElement);
     const borderColor = rootStyle.getPropertyValue('--border-color') || 'rgba(255, 255, 255, 0.15)';
@@ -2390,7 +2584,7 @@ export function drawAmplitudeStrip(canvas, paletteId) {
     for (let x = 0; x < w; x++) {
         const logMod = (x / w) * maxLogMod;
         const modVal = Math.expm1(logMod);
-        
+
         // Re = modVal, Im = 0
         const rgb = domainColorForValue(modVal, 0.0, tempState);
 
@@ -2462,7 +2656,7 @@ export function drawRealPlotsPaletteCircle(canvas, paletteId) {
 
     const palette = realPlotsPalettes.find(p => p.id === paletteId) || realPlotsPalettes.find(p => p.id === 'viridis');
     if (!palette) return;
-    
+
     // CSS gradient colors string parsing
     const colors = palette.colors.split(',').map(c => c.trim());
 
@@ -2471,7 +2665,7 @@ export function drawRealPlotsPaletteCircle(canvas, paletteId) {
     // In our 3D math, phase -PI is at 9 o'clock.
     // To match 9 o'clock, we use angle = -Math.PI/2
     const grad = ctx.createConicGradient(-Math.PI / 2, cx, cy);
-    
+
     colors.forEach((color, i) => {
         const ratio = i / (colors.length - 1);
         grad.addColorStop(ratio, color);
@@ -2487,7 +2681,7 @@ export function drawRealPlotsPaletteCircle(canvas, paletteId) {
 
     // Draw grid/lines and labels exactly like domain coloring
     ctx.save();
-    
+
     const rootStyle = getComputedStyle(document.documentElement);
     const borderColor = rootStyle.getPropertyValue('--border-color') || 'rgba(255, 255, 255, 0.15)';
     const textColor = rootStyle.getPropertyValue('--text-color') || '#FAFAFA';
@@ -2585,7 +2779,7 @@ function bindRealPlotsControls() {
     bindCheckbox('enableRealPlotsCb', 'realPlotsEnabled', (event, val) => {
         state.realPlotsEnabled = val;
         hidden(controls.realPlotsControlsContainer, !val);
-        
+
         if (val) {
             const rpContainer = controls.realPlotsControlsContainer;
             const algParams = document.getElementById('algebraic_chaining_params');
@@ -2610,10 +2804,10 @@ function bindRealPlotsControls() {
             if (controls.wCanvasCard) controls.wCanvasCard.classList.remove('hidden');
             disposeRealPlotsRenderer();
         }
-        
+
         const refreshPlanes = () => {
             setupVisualParameters(false, false);
-            requestRedrawAll();
+            requestUiRedraw();
         };
         requestAnimationFrame(() => {
             refreshPlanes();
@@ -2633,7 +2827,7 @@ function bindRealPlotsControls() {
             controls.realPlotsCustomInputContainer?.classList.add('hidden');
             state.realPlotsInputExpr = val;
         }
-        requestRedrawAll();
+        requestUiRedraw();
     });
 
     bindControlListener('realPlotsCustomInput', 'input', () => {
@@ -2641,7 +2835,7 @@ function bindRealPlotsControls() {
         state.realPlotsInputExpr = val;
         state.realPlotsInputIsCustom = true;
         updateCustomFormulaPreview(controls.realPlotsCustomInput, controls.realPlotsCustomInputMath);
-        requestRedrawAll();
+        requestUiRedraw();
     });
 
     bindSelector('realPlotsImagPreset', 'realPlotsImagPreset', (event, val) => {
@@ -2656,7 +2850,7 @@ function bindRealPlotsControls() {
             controls.realPlotsCustomImagContainer?.classList.add('hidden');
             state.realPlotsImagExpr = val;
         }
-        requestRedrawAll();
+        requestUiRedraw();
     });
 
     bindControlListener('realPlotsCustomImag', 'input', () => {
@@ -2664,12 +2858,12 @@ function bindRealPlotsControls() {
         state.realPlotsImagExpr = val;
         state.realPlotsImagIsCustom = true;
         updateCustomFormulaPreview(controls.realPlotsCustomImag, controls.realPlotsCustomImagMath);
-        requestRedrawAll();
+        requestUiRedraw();
     });
 
     bindSelector('realPlotsOutputComponent', 'realPlotsOutputComponent', (event, val) => {
         state.realPlotsOutputComponent = val;
-        requestRedrawAll();
+        requestUiRedraw();
     });
 
     const rpPaletteContainer = document.getElementById('real_plots_palette_circles');
@@ -2680,26 +2874,26 @@ function bindRealPlotsControls() {
             if (!button) return;
             state.realPlotsPalette = button.dataset.paletteId;
             renderRealPlotsPalettesUI(rpPaletteContainer);
-            
+
             const panel = document.getElementById('real_plots_palette_circle_panel');
             if (panel && !panel.classList.contains('hidden')) {
                 updateRealPlotsPaletteCirclePanel();
             }
-            
-            requestRedrawAll();
+
+            requestUiRedraw();
         });
     }
 
     bindSelector('realPlotsColorMode', 'realPlotsColorMode', (event, val) => {
         state.realPlotsColorMode = val;
-        requestRedrawAll();
+        requestUiRedraw();
     });
 
     bindSlider('realPlotsHeightScaleSlider', 'realPlotsHeightScale', parseFloat, (val) => {
         if (controls.realPlotsHeightScaleValueDisplay) {
             controls.realPlotsHeightScaleValueDisplay.textContent = val.toFixed(2);
         }
-        requestRedrawAll();
+        requestUiRedraw();
     });
 
 
@@ -2734,7 +2928,6 @@ function toggleRealPlotsFullscreen() {
 
     laterFrame(() => {
         setupVisualParameters(false, false);
-        requestRedrawAll();
+        requestUiRedraw();
     }, state.isRealPlotsFullScreen ? 150 : 100);
 }
-
