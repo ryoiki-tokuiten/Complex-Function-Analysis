@@ -51,3 +51,24 @@ test('product zero factors and invalid policies are explicit', () => {
     assert.equal(skipped.stopped, false);
     assert.deepEqual(skipped.finalValue, { re: 3, im: 0 });
 });
+
+test('compensated complex sums recover repeated low-order cancellation terms deterministically', () => {
+    const sum = new CompensatedComplexSum();
+    let naiveRe = 0;
+    let naiveIm = 0;
+
+    for (let index = 0; index < 1000; index += 1) {
+        for (const term of [
+            { re: 1e16, im: -1e16 },
+            { re: 1, im: -1 },
+            { re: -1e16, im: 1e16 }
+        ]) {
+            sum.add(term);
+            naiveRe += term.re;
+            naiveIm += term.im;
+        }
+    }
+
+    assert.deepEqual(sum.value(), { re: 1000, im: -1000 });
+    assert.notDeepEqual({ re: naiveRe, im: naiveIm }, sum.value());
+});

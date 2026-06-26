@@ -38,3 +38,18 @@ test('symbol bindings support geometric and harmonic progressions', () => {
     assert.deepEqual(generated.series.g.map(value => value.re), [3, 6, 12, 24]);
     assert.deepEqual(generated.series.h.map(value => value.re), [1 / 2, 1 / 4, 1 / 6, 1 / 8]);
 });
+
+test('geometric sequence bindings match the exact finite partial-sum formula', () => {
+    const generated = generateSequenceBindingSeries([
+        { symbol: 'z', kind: 'geometric', start: 3, ratio: -0.5 }
+    ], 12);
+
+    const series = generated.series.z;
+    const values = series.map(value => value.re);
+    const partialSum = values.reduce((sum, value) => sum + value, 0);
+    const expectedSum = 3 * (1 - Math.pow(-0.5, 12)) / (1 - -0.5);
+
+    assert.deepEqual(values.slice(0, 5), [3, -1.5, 0.75, -0.375, 0.1875]);
+    assert.ok(Math.abs(partialSum - expectedSum) < 1e-14, `${partialSum} ~= ${expectedSum}`);
+    assert.deepEqual(generated.environments[11].z, series[11]);
+});

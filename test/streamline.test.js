@@ -43,3 +43,31 @@ test('vector evaluator sanitizes invalid map values', () => {
     assert.ok(Number.isFinite(upper.vx));
     assert.ok(Number.isFinite(upper.vy));
 });
+
+test('normalized RK2 streamline tracing preserves circular flow geometry', () => {
+    const stepSize = 0.001;
+    const path = calculateStreamline(
+        1, 0,
+        (re, im) => ({ vx: -im, vy: re }),
+        { currentVisXRange: [-2, 2], currentVisYRange: [-2, 2] },
+        { streamlineStepSize: stepSize, streamlineMaxLength: 1000, chainingEnabled: false, chainCount: 1 }
+    );
+
+    assert.equal(path.length, 1000, 'Should reach max steps in bounded region');
+
+    let maxDrift = 0;
+    for (const pt of path) {
+        const rSq = pt.x * pt.x + pt.y * pt.y;
+        const drift = Math.abs(rSq - 1.0);
+        if (drift > maxDrift) maxDrift = drift;
+    }
+
+    const viewSpan = 4;
+    const effectiveStep = stepSize * viewSpan * 0.1;
+    const last = path[path.length - 1];
+    const tracedAngle = Math.atan2(last.y, last.x);
+    const expectedAngle = (path.length - 1) * effectiveStep;
+
+    assert.ok(maxDrift < 1e-9, `radius drift exceeded RK2 tolerance: ${maxDrift}`);
+    assert.ok(Math.abs(tracedAngle - expectedAngle) < 1e-6, `${tracedAngle} ~= ${expectedAngle}`);
+});

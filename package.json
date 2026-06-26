@@ -8,7 +8,9 @@
     "dev": "vite",
     "build": "vite build",
     "preview": "vite preview",
-    "test": "node --test test/*.test.js"
+    "test": "node --test test/*.test.js",
+    "benchmark": "node --expose-gc test/benchmarks/index.js",
+    "benchmark:smoke": "BENCH_PROFILE=smoke node --expose-gc test/benchmarks/index.js"
   },
   "repository": {
     "type": "git",

@@ -44,3 +44,20 @@ test('point-set endpoints reflect interior point mutations', () => {
     assert.equal(updated.start, replacementStart);
     assert.equal(updated.end, replacementEnd);
 });
+
+test('linear segment generation uses affine samples and exact endpoints', () => {
+    const start = { re: 10, im: -5 };
+    const end = { re: -10, im: 15 };
+    const steps = 8;
+    const points = generateLinearSegmentPoints(start, end, steps + 0.9);
+
+    assert.equal(points.length, steps + 1);
+    assert.deepEqual(points[0], start);
+    assert.deepEqual(points[steps], end);
+
+    for (let i = 0; i < steps; i++) {
+        const t = i / steps;
+        assert.ok(Math.abs(points[i].re - (start.re + (end.re - start.re) * t)) < 1e-12);
+        assert.ok(Math.abs(points[i].im - (start.im + (end.im - start.im) * t)) < 1e-12);
+    }
+});

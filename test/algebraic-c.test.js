@@ -19,6 +19,62 @@ function restoreState(snapshot) {
     Object.assign(state, snapshot);
 }
 
+function approxComplex(actual, expected, epsilon = 1e-12) {
+    assert.ok(actual, 'expected a complex value');
+    const scale = Math.max(1, Math.hypot(expected.re, expected.im));
+    assert.ok(Math.abs(actual.re - expected.re) <= epsilon * scale, `${actual.re} ~= ${expected.re}`);
+    assert.ok(Math.abs(actual.im - expected.im) <= epsilon * scale, `${actual.im} ~= ${expected.im}`);
+}
+
+function factor(func, overrides = {}) {
+    return {
+        func,
+        chainedFunc: 'none',
+        power: 1,
+        reciprocal: false,
+        log: false,
+        exp: false,
+        ...overrides
+    };
+}
+
+function configureQuadraticParameterChain(chainCount, chainingMode = 'recursion') {
+    Object.assign(state, {
+        currentFunction: 'algebraic_chaining',
+        algebraicChainingEnabled: true,
+        algebraicChainingZExpr: 'z',
+        polynomialN: 2,
+        polynomialCoeffs: [
+            { re: 0, im: 0 },
+            { re: 0, im: 0 },
+            { re: 1, im: 0 }
+        ],
+        algebraicChainingTerms: [
+            { coeff: { re: 1, im: 0 }, factors: [factor('polynomial')] },
+            { coeff: { re: 1, im: 0 }, factors: [factor('c')] }
+        ],
+        chainingEnabled: true,
+        chainingMode,
+        chainCount
+    });
+}
+
+function iterateQuadraticParameter(c, count, bailout = Infinity) {
+    let current = { re: c.re, im: c.im };
+
+    for (let index = 0; index < count; index += 1) {
+        current = {
+            re: current.re * current.re - current.im * current.im + c.re,
+            im: 2 * current.re * current.im + c.im
+        };
+
+        if (!Number.isFinite(current.re) || !Number.isFinite(current.im)) break;
+        if (Math.max(Math.abs(current.re), Math.abs(current.im)) >= bailout) break;
+    }
+
+    return current;
+}
+
 test('algebraic chaining can hold original input as c during recursion', () => {
     const keys = [
         'currentFunction',
@@ -304,6 +360,123 @@ test('large output-chain depths evaluate iteratively without nested call stacks'
 
         const chained = getChainedTransformFunction('algebraic_chaining');
         assert.deepEqual(chained(2, 0), { re: 2, im: 0 });
+    } finally {
+        restoreState(before);
+    }
+});
+
+test('deep bounded quadratic recursion matches an independent z^2 + c orbit', () => {
+    const keys = [
+        'currentFunction',
+        'algebraicChainingEnabled',
+        'algebraicChainingZExpr',
+        'algebraicChainingTerms',
+        'polynomialN',
+        'polynomialCoeffs',
+        'chainingEnabled',
+        'chainingMode',
+        'chainCount'
+    ];
+    const before = snapshotState(keys);
+
+    try {
+        const c = { re: -0.123, im: 0.745 };
+        configureQuadraticParameterChain(80);
+        const baseProfile = getMappedTransformProfile(
+            'algebraic_chaining',
+            getEffectiveBaseTransformFunction('algebraic_chaining')
+        );
+        const actual = evaluateDomainColoringMappedTransform(baseProfile, c.re, c.im, 'algebraic_chaining');
+        const expected = iterateQuadraticParameter(c, state.chainCount);
+
+        approxComplex(actual, expected);
+    } finally {
+        restoreState(before);
+    }
+});
+
+test('algebraic modifier chains agree between domain coloring and staged output transforms', () => {
+    const keys = [
+        'currentFunction',
+        'algebraicChainingEnabled',
+        'algebraicChainingZExpr',
+        'algebraicChainingTerms',
+        'polynomialN',
+        'polynomialCoeffs',
+        'chainingEnabled',
+        'chainingMode',
+        'chainCount'
+    ];
+    const before = snapshotState(keys);
+
+    try {
+        Object.assign(state, {
+            currentFunction: 'algebraic_chaining',
+            algebraicChainingEnabled: true,
+            algebraicChainingZExpr: 'z',
+            polynomialN: 2,
+            polynomialCoeffs: [
+                { re: 0.1, im: -0.05 },
+                { re: 0.4, im: 0.15 },
+                { re: -0.2, im: 0.05 }
+            ],
+            algebraicChainingTerms: [
+                { coeff: { re: 0.7, im: -0.2 }, factors: [factor('polynomial')] },
+                { coeff: { re: 0.25, im: 0.1 }, factors: [factor('sin', { power: 2 })] },
+                { coeff: { re: 0.08, im: -0.04 }, factors: [factor('c')] },
+                { coeff: { re: 0.05, im: 0 }, factors: [factor('cosh', { reciprocal: true })] }
+            ],
+            chainingEnabled: true
+        });
+
+        const baseProfile = getMappedTransformProfile(
+            'algebraic_chaining',
+            getEffectiveBaseTransformFunction('algebraic_chaining')
+        );
+        const point = { re: 0.35, im: -0.45 };
+
+        for (const mode of ['power', 'sqrt', 'ln', 'exp', 'reciprocal', 'recursion']) {
+            state.chainingMode = mode;
+            state.chainCount = mode === 'exp' ? 2 : 4;
+
+            const domainColoring = evaluateDomainColoringMappedTransform(baseProfile, point.re, point.im, 'algebraic_chaining');
+            const staged = getChainedStageTransformFunction('algebraic_chaining', state.chainCount - 1);
+
+            approxComplex(domainColoring, staged(point.re, point.im));
+        }
+    } finally {
+        restoreState(before);
+    }
+});
+
+test('escaped quadratic recursion returns the deterministic domain-coloring bailout value', () => {
+    const keys = [
+        'currentFunction',
+        'algebraicChainingEnabled',
+        'algebraicChainingZExpr',
+        'algebraicChainingTerms',
+        'polynomialN',
+        'polynomialCoeffs',
+        'chainingEnabled',
+        'chainingMode',
+        'chainCount'
+    ];
+    const before = snapshotState(keys);
+
+    try {
+        const c = { re: 2, im: 2 };
+        configureQuadraticParameterChain(512);
+        const baseProfile = getMappedTransformProfile(
+            'algebraic_chaining',
+            getEffectiveBaseTransformFunction('algebraic_chaining')
+        );
+        const actual = evaluateDomainColoringMappedTransform(baseProfile, c.re, c.im, 'algebraic_chaining');
+        const expected = iterateQuadraticParameter(c, state.chainCount, 1e18);
+
+        assert.ok(Number.isFinite(actual.re));
+        assert.ok(Number.isFinite(actual.im));
+        assert.ok(Math.max(Math.abs(actual.re), Math.abs(actual.im)) >= 1e18);
+        approxComplex(actual, expected);
     } finally {
         restoreState(before);
     }

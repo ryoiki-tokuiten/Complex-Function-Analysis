@@ -34,6 +34,7 @@ const STATE_KEYS = [
     'fractalOrbitColoringEnabled',
     'algebraicChainingEnabled',
     'algebraicChainingTerms',
+    'algebraicChainingZExpr',
     'polynomialN',
     'polynomialCoeffs',
     'mobiusA',
@@ -89,6 +90,7 @@ function configureDynamics(overrides = {}) {
         fractalOrbitColoringEnabled: false,
         algebraicChainingEnabled: false,
         algebraicChainingTerms: [],
+        algebraicChainingZExpr: 'z',
         polynomialN: 2,
         polynomialCoeffs: [
             { re: 0, im: 0 },
@@ -195,6 +197,22 @@ function algebraicFactor(func, overrides = {}) {
         exp: false,
         ...overrides
     };
+}
+
+function iterateQuadraticZeroSeed(c, count, bailout = 1e8) {
+    let z = { re: 0, im: 0 };
+
+    for (let index = 0; index < count; index += 1) {
+        z = {
+            re: z.re * z.re - z.im * z.im + c.re,
+            im: 2 * z.re * z.im + c.im
+        };
+
+        if (!Number.isFinite(z.re) || !Number.isFinite(z.im)) break;
+        if (Math.max(Math.abs(z.re), Math.abs(z.im)) >= bailout) break;
+    }
+
+    return z;
 }
 
 function makeAlgebraicDynamicsSnapshot(overrides = {}) {
@@ -393,6 +411,132 @@ test('async renderer ignores canceled old final tiles after viewport changes', a
     } finally {
         disposePlanarDomainDynamics();
         restoreGlobals();
+        restoreState(before);
+    }
+});
+
+test('deep Mandelbrot zero-seed dynamics match an independent orbit recurrence', () => {
+    const deepPlane = {
+        width: 64,
+        height: 64,
+        currentVisXRange: [-0.745, -0.742],
+        currentVisYRange: [0.130, 0.133]
+    };
+    const before = snapshotState();
+
+    try {
+        applyFractalPreset(state, 'mandelbrot');
+        state.chainCount = 1000;
+
+        const snapshot = buildPlanarDomainDynamicsSnapshot(state, deepPlane, { isWPlaneColoring: false });
+
+        for (const c of [
+            { re: 0, im: 0 },
+            { re: 2, im: 2 },
+            { re: -0.743643887037151, im: 0.13182590420533 },
+            { re: -0.75, im: 0.1 }
+        ]) {
+            approxComplex(
+                evaluateDomainDynamicsValue(snapshot, c.re, c.im),
+                iterateQuadraticZeroSeed(c, snapshot.chainCount)
+            );
+        }
+    } finally {
+        restoreState(before);
+    }
+});
+
+test('worker algebraic output chains match the main domain-coloring pipeline across modes', () => {
+    const before = snapshotState();
+    const plane = {
+        width: 9,
+        height: 7,
+        currentVisXRange: [-1, 1],
+        currentVisYRange: [-1, 1]
+    };
+    const algebraicTerms = [
+        { coeff: { re: 0.7, im: -0.2 }, factors: [algebraicFactor('polynomial')] },
+        { coeff: { re: 0.25, im: 0.1 }, factors: [algebraicFactor('sin')] },
+        { coeff: { re: 0.08, im: -0.04 }, factors: [algebraicFactor('c')] },
+        { coeff: { re: 0.05, im: 0 }, factors: [algebraicFactor('cosh', { reciprocal: true })] }
+    ];
+    const points = [
+        { re: -0.4, im: 0.2 },
+        { re: 0.35, im: -0.45 },
+        { re: 0.05, im: 0.6 }
+    ];
+
+    try {
+        for (const mode of ['recursion', 'power', 'sqrt', 'ln', 'exp', 'reciprocal']) {
+            configureDynamics({
+                currentFunction: 'algebraic_chaining',
+                algebraicChainingEnabled: true,
+                algebraicChainingZExpr: 'z',
+                algebraicChainingTerms: algebraicTerms,
+                polynomialN: 2,
+                polynomialCoeffs: [
+                    { re: 0.1, im: -0.05 },
+                    { re: 0.4, im: 0.15 },
+                    { re: -0.2, im: 0.05 }
+                ],
+                chainingEnabled: true,
+                chainingMode: mode,
+                chainCount: mode === 'exp' ? 2 : 4
+            });
+
+            const snapshot = buildPlanarDomainDynamicsSnapshot(state, plane, { isWPlaneColoring: false });
+            const profile = getMappedTransformProfile(
+                'algebraic_chaining',
+                getEffectiveBaseTransformFunction('algebraic_chaining')
+            );
+
+            for (const point of points) {
+                approxComplex(
+                    evaluateDomainDynamicsValue(snapshot, point.re, point.im),
+                    evaluateDomainColoringMappedTransform(profile, point.re, point.im, 'algebraic_chaining'),
+                    1e-10
+                );
+            }
+        }
+    } finally {
+        restoreState(before);
+    }
+});
+
+test('worker zeta continuation chains match the main mapped transform in the critical strip', () => {
+    const before = snapshotState();
+    const plane = {
+        width: 8,
+        height: 8,
+        currentVisXRange: [-3, 3],
+        currentVisYRange: [-15, 15]
+    };
+
+    try {
+        configureDynamics({
+            currentFunction: 'zeta',
+            zetaContinuationEnabled: true,
+            chainingEnabled: true,
+            chainingMode: 'recursion',
+            chainCount: 2
+        });
+
+        const snapshot = buildPlanarDomainDynamicsSnapshot(state, plane, { isWPlaneColoring: false });
+        const profile = getMappedTransformProfile('zeta', getEffectiveBaseTransformFunction('zeta'));
+
+        for (const point of [
+            { re: 2, im: 0 },
+            { re: 0.5, im: 2 },
+            { re: 0.5, im: 14.134725141734693 },
+            { re: -2, im: 0 }
+        ]) {
+            approxComplex(
+                evaluateDomainDynamicsValue(snapshot, point.re, point.im),
+                evaluateDomainColoringMappedTransform(profile, point.re, point.im, 'zeta'),
+                1e-10
+            );
+        }
+    } finally {
         restoreState(before);
     }
 });
