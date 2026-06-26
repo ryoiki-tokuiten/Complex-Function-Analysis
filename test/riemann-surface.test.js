@@ -8,7 +8,10 @@ import {
     getVisibleBranchIndices,
     surfaceStageHasBranches
 } from '../js/analysis/riemann-surface.js';
-import { getRiemannSurfaceProgramSignature } from '../js/rendering/webgl-riemann-surface.js';
+import {
+    getRiemannSurfaceGridData,
+    getRiemannSurfaceProgramSignature
+} from '../js/rendering/webgl-riemann-surface.js';
 
 function makeState(overrides = {}) {
     return {
@@ -119,4 +122,23 @@ test('Riemann program signatures notice in-place algebraic edits', () => {
     const after = getRiemannSurfaceProgramSignature(runtimeState);
 
     assert.notEqual(after, before);
+});
+
+test('Riemann surface grid topology is cached and index-safe', () => {
+    const resolution = 64;
+    const grid = getRiemannSurfaceGridData(resolution);
+    const cached = getRiemannSurfaceGridData(resolution);
+    const vertexCount = (resolution + 1) * (resolution + 1);
+
+    assert.equal(cached, grid);
+    assert.equal(grid.vertices.length, vertexCount * 2);
+    assert.equal(grid.triangles.length, resolution * resolution * 6);
+    assert.ok(grid.lines.length > 0);
+
+    for (const index of grid.triangles) {
+        assert.ok(index >= 0 && index < vertexCount);
+    }
+    for (const index of grid.lines) {
+        assert.ok(index >= 0 && index < vertexCount);
+    }
 });

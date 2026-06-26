@@ -166,6 +166,27 @@ test('independent symbol sequences evaluate one synchronized general term per in
     assert.ok(Math.abs(result.samples[2].termValue.re - 125 / 6) < 1e-12);
 });
 
+test('aggregate reductions skip isolated singular terms without losing later valid terms', () => {
+    configure({
+        source: { kind: 'integers', count: 3, start: 1, step: 1, ordering: 'ascending' },
+        term: { kind: 'expression', expression: '1 / (d - s)' },
+        reduction: { kind: 'sum', invalidPolicy: 'skip' },
+        aggregateParameter: { re: 2, im: 0 },
+        playback: { visibleCount: 3, playing: false, speed: 10, loop: false }
+    });
+
+    const result = getDynamicPlotResult({
+        aggregateParameter: { re: 2, im: 0 }
+    });
+
+    assert.deepEqual(result.samples.map(sample => sample.reductionStatus), ['included', 'skipped', 'included']);
+    assert.deepEqual(result.reduction.finalValue, { re: 0, im: 0 });
+    assert.deepEqual(
+        evaluateDynamicAggregateAt({ re: 2, im: 0 }, (re, im) => ({ re, im })),
+        { re: 0, im: 0 }
+    );
+});
+
 test('exponential-series preset exposes x as a free parameter and converges to exp(x)', () => {
     applyDynamicPlottingPreset('exponential_series');
     state.dynamicPlotting.enabled = true;

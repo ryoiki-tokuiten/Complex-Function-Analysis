@@ -36,7 +36,7 @@ function checksum(value) {
         return value.length + checksum(value[0]) + checksum(value[value.length - 1]);
     }
     if (typeof value === 'object') {
-        return checksum(value.checksum ?? value.value ?? value.finalValue ?? value.product ?? value.result);
+        return checksum(value.checksum ?? value.value ?? value.finalValue ?? value.reduction ?? value.product ?? value.result);
     }
     return 0;
 }

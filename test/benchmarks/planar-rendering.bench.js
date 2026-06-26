@@ -1,8 +1,17 @@
 import assert from 'node:assert/strict';
 
 import { runBenchmark } from './utils.js';
+import { state } from '../../js/store/state.js';
+import {
+    evaluateMappedTransform,
+    getChainedTransformFunction,
+    getMappedTransformProfile
+} from '../../js/math-utils.js';
 import { generateCurrentMappedInputShapePointSets } from '../../js/rendering/shape-generators.js';
-import { preparePointSetForMappedPlane } from '../../js/rendering/draw-planar.js';
+import {
+    calculateDynamicPointsForSegment,
+    preparePointSetForMappedPlane
+} from '../../js/rendering/draw-planar.js';
 
 const GRID_DENSITIES = Object.freeze({
     smoke: 12,
@@ -10,21 +19,23 @@ const GRID_DENSITIES = Object.freeze({
     deep: 96
 });
 
-function expTransform(re, im) {
-    const magnitude = Math.exp(re);
-    return {
-        re: magnitude * Math.cos(im),
-        im: magnitude * Math.sin(im)
-    };
-}
-
 export async function runPlanarRenderingBenchmarks() {
     console.log('\n[Benchmark] Planar transformed-grid preparation and mapping\n');
 
     await runBenchmark(
         'prepare and map Cartesian grid through w = exp(z)',
         ({ profile }) => {
+            Object.assign(state, {
+                currentFunction: 'exp',
+                chainingEnabled: false,
+                chainCount: 1,
+                zetaContinuationEnabled: false,
+                taylorSeriesEnabled: false
+            });
+            if (state.dynamicPlotting) state.dynamicPlotting.enabled = false;
+
             const gridDensity = GRID_DENSITIES[profile];
+            const transform = getChainedTransformFunction('exp');
             const planeParams = {
                 currentVisXRange: [-Math.PI, Math.PI],
                 currentVisYRange: [-Math.PI, Math.PI]
@@ -34,23 +45,28 @@ export async function runPlanarRenderingBenchmarks() {
                 currentFunction: 'exp',
                 zetaContinuationEnabled: false,
                 gridDensity,
-                curvePoints: 96
-            });
+                    curvePoints: 96
+                });
 
-            return { pointSets, transform: expTransform };
+            return {
+                pointSets,
+                transform,
+                profile: getMappedTransformProfile('exp', transform)
+            };
         },
-        ({ pointSets, transform }) => {
+        ({ pointSets, transform, profile }) => {
             let pointCount = 0;
             let checksum = 0;
 
             for (const pointSet of pointSets) {
                 const prepared = preparePointSetForMappedPlane(pointSet, transform, {
-                    sampleCountResolver: () => 192
+                    sampleCountResolver: calculateDynamicPointsForSegment
                 });
 
                 for (const point of prepared.points) {
                     if (!point || !Number.isFinite(point.re) || !Number.isFinite(point.im)) continue;
-                    const mapped = transform(point.re, point.im);
+                    const mapped = evaluateMappedTransform(profile, point.re, point.im, 'exp');
+                    if (!mapped) continue;
                     pointCount += 1;
                     checksum += mapped.re * 0.125 + mapped.im * 0.25;
                 }

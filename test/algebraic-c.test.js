@@ -481,3 +481,62 @@ test('escaped quadratic recursion returns the deterministic domain-coloring bail
         restoreState(before);
     }
 });
+
+test('compiled and fallback algebraic chains agree for composite expressions across output modes', () => {
+    const keys = [
+        'currentFunction',
+        'algebraicChainingEnabled',
+        'algebraicChainingZExpr',
+        'algebraicChainingTerms',
+        'polynomialN',
+        'polynomialCoeffs',
+        'chainingEnabled',
+        'chainingMode',
+        'chainCount'
+    ];
+    const before = snapshotState(keys);
+    const point = { re: 0.2, im: -0.15 };
+
+    try {
+        Object.assign(state, {
+            currentFunction: 'algebraic_chaining',
+            algebraicChainingEnabled: true,
+            polynomialN: 2,
+            polynomialCoeffs: [
+                { re: 0.2, im: 0.1 },
+                { re: -0.3, im: 0.05 },
+                { re: 0.08, im: -0.02 }
+            ],
+            algebraicChainingTerms: [
+                { coeff: { re: 0.42, im: -0.17 }, factors: [factor('sin', { chainedFunc: 'exp', power: 2 })] },
+                { coeff: { re: -0.3, im: 0.11 }, factors: [factor('cosh', { reciprocal: true })] },
+                { coeff: { re: 0.07, im: 0.05 }, factors: [factor('ln', { chainedFunc: 'polynomial', exp: true })] },
+                { coeff: { re: 0.2, im: -0.08 }, factors: [factor('c')] }
+            ],
+            chainingEnabled: true
+        });
+
+        for (const mode of ['recursion', 'zero_seed', 'power', 'sqrt', 'ln', 'exp', 'reciprocal']) {
+            state.chainingMode = mode;
+            state.chainCount = mode === 'exp' ? 2 : 3;
+
+            state.algebraicChainingZExpr = 'z';
+            let profile = getMappedTransformProfile(
+                'algebraic_chaining',
+                getEffectiveBaseTransformFunction('algebraic_chaining')
+            );
+            const compiled = evaluateDomainColoringMappedTransform(profile, point.re, point.im, 'algebraic_chaining');
+
+            state.algebraicChainingZExpr = 'z + 0';
+            profile = getMappedTransformProfile(
+                'algebraic_chaining',
+                getEffectiveBaseTransformFunction('algebraic_chaining')
+            );
+            const fallback = evaluateDomainColoringMappedTransform(profile, point.re, point.im, 'algebraic_chaining');
+
+            approxComplex(compiled, fallback, 1e-12);
+        }
+    } finally {
+        restoreState(before);
+    }
+});

@@ -1209,6 +1209,14 @@ function getGridData(resolution) {
   return data;
 }
 
+export function getRiemannSurfaceGridData(resolution = LIMITS.resolutionBase) {
+  const normalized = Math.max(
+    LIMITS.minResolution,
+    Math.min(LIMITS.maxResolution, Math.floor(Number(resolution) || LIMITS.resolutionBase))
+  );
+  return getGridData(normalized);
+}
+
 function uploadBuffer(gl, target, data) {
   const buffer = gl.createBuffer();
 

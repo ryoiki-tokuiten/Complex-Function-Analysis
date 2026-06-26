@@ -5,7 +5,6 @@ import { getChainedTransformFunction } from '../math-utils.js';
 import { compileExpression } from '../math/expression/evaluator.js';
 import { updatePlaneViewportRanges } from '../utils/canvas-utils.js';
 import { setupVisualParameters } from '../utils/dom-utils.js';
-import { requestRedrawAll } from '../main.js';
 
 const BACKGROUND = 0x0b0914;
 const CAMERA_HOME = Object.freeze({ x: 6.0, y: 5.0, z: 8.0 });
@@ -15,7 +14,6 @@ const GRID_SEGMENTS = 40;
 const GRID_STRIDE = GRID_SEGMENTS + 1;
 const GRID_VERTEX_COUNT = GRID_STRIDE * GRID_STRIDE;
 const GRID_INDEX_COUNT = GRID_SEGMENTS * GRID_SEGMENTS * 6;
-const GRID_STEP = SURFACE_SIZE / GRID_SEGMENTS;
 const HALF_SURFACE = SURFACE_SIZE * 0.5;
 const HALF_HEIGHT = SURFACE_HEIGHT * 0.5;
 const CLAMP_LIMIT = 8.0;
@@ -431,6 +429,147 @@ function softClampHeight(value) {
     return Math.sign(value) * (CLAMP_LIMIT + Math.tanh(abs - CLAMP_LIMIT));
 }
 
+function writeHeightfieldNormals(positions, normals, segments, gridStep) {
+    const stride = segments + 1;
+    const inverseCell = 1 / (2 * gridStep);
+    for (let j = 0; j <= segments; j += 1) {
+        const jPrev = j === 0 ? 0 : j - 1;
+        const jNext = j === segments ? segments : j + 1;
+        for (let i = 0; i <= segments; i += 1) {
+            const iPrev = i === 0 ? 0 : i - 1;
+            const iNext = i === segments ? segments : i + 1;
+            const index = j * stride + i;
+            const left = (j * stride + iPrev) * 3 + 1;
+            const right = (j * stride + iNext) * 3 + 1;
+            const down = (jPrev * stride + i) * 3 + 1;
+            const up = (jNext * stride + i) * 3 + 1;
+            let nx = -(positions[right] - positions[left]) * inverseCell;
+            let ny = 1;
+            let nz = -(positions[up] - positions[down]) * inverseCell;
+            const invLen = 1 / Math.hypot(nx, ny, nz);
+            const offset = index * 3;
+            normals[offset] = nx * invLen;
+            normals[offset + 1] = ny * invLen;
+            normals[offset + 2] = nz * invLen;
+        }
+    }
+}
+
+export function sampleRealPlotSurface(transformFunc, options = {}) {
+    const segments = Math.max(1, Math.floor(Number(options.segments) || GRID_SEGMENTS));
+    const topology = options.topology || (segments === GRID_SEGMENTS ? SURFACE_TOPOLOGY : new StaticSurfaceTopology(segments));
+    const vertexCount = topology.vertexCount;
+    const positions = options.positions || new Float32Array(vertexCount * 3);
+    const normals = options.normals || new Float32Array(vertexCount * 3);
+    const colors = options.colors || new Float32Array(vertexCount * 3);
+    const values = options.values || new Float64Array(vertexCount);
+    const phases = options.phases || new Float32Array(vertexCount);
+    const u = options.u || new Float64Array(2);
+    const v = options.v || new Float64Array(2);
+    const xRange = options.xRange || zPlaneParams.currentVisXRange;
+    const yRange = options.yRange || zPlaneParams.currentVisYRange;
+    const xMin = xRange[0];
+    const xMax = xRange[1];
+    const yMin = yRange[0];
+    const yMax = yRange[1];
+    const xScale = (xMax - xMin) / segments;
+    const yScale = (yMax - yMin) / segments;
+    const inputU = InputEvaluator.for(options.inputExpr ?? state.realPlotsInputExpr);
+    const inputV = InputEvaluator.for(options.imagExpr ?? state.realPlotsImagExpr);
+    const inputUType = inputU.type;
+    const inputVType = inputV.type;
+    const scalarInputs = isScalarInputType(inputUType) && isScalarInputType(inputVType);
+    const outputMode = outputComponentMode(options.outputComponent ?? state.realPlotsOutputComponent);
+    const heightScale = options.heightScale !== undefined
+        ? options.heightScale
+        : state.realPlotsHeightScale !== undefined ? state.realPlotsHeightScale : 1.0;
+    const usePhaseColor = (options.colorMode ?? state.realPlotsColorMode) === 'phase';
+    const paletteLut = paletteLutFor(options.palette || state.realPlotsPalette || 'sunset');
+    const heightFactor = (HALF_HEIGHT * heightScale) / CLAMP_LIMIT;
+    const gridStep = SURFACE_SIZE / segments;
+    let minZ = Infinity;
+    let maxZ = -Infinity;
+    let finiteResultCount = 0;
+    let vertex = 0;
+
+    for (let j = 0; j <= segments; j += 1) {
+        const yVal = yMin + j * yScale;
+        for (let i = 0; i <= segments; i += 1) {
+            const xVal = xMin + i * xScale;
+            let zInRe;
+            let zInIm;
+            if (scalarInputs) {
+                zInRe = evalScalarInput(inputUType, xVal, yVal);
+                zInIm = evalScalarInput(inputVType, xVal, yVal);
+            } else {
+                inputU.write(xVal, yVal, u);
+                inputV.write(xVal, yVal, v);
+                zInRe = u[0] - v[1];
+                zInIm = u[1] + v[0];
+            }
+
+            let rawValue = 0;
+            let phase = 0.5;
+
+            try {
+                const result = transformFunc(zInRe, zInIm);
+                if (result && isFiniteNumber(result.re) && isFiniteNumber(result.im)) {
+                    finiteResultCount += 1;
+                    if (outputMode === OUTPUT_COMPONENT.IMAG) {
+                        rawValue = result.im;
+                    } else if (outputMode === OUTPUT_COMPONENT.MAGNITUDE) {
+                        rawValue = Math.hypot(result.re, result.im);
+                    } else {
+                        rawValue = result.re;
+                    }
+                    if (usePhaseColor) {
+                        phase = (Math.atan2(result.im, result.re) + Math.PI) * INV_TWO_PI;
+                    }
+                }
+            } catch (e) {
+                rawValue = 0;
+                phase = 0.5;
+            }
+
+            values[vertex] = rawValue;
+            phases[vertex] = phase;
+            if (rawValue < minZ) minZ = rawValue;
+            if (rawValue > maxZ) maxZ = rawValue;
+            vertex += 1;
+        }
+    }
+
+    const spanZ = maxZ - minZ || 1.0;
+    const inverseSpanZ = 1 / spanZ;
+    for (let index = 0, offset = 0; index < vertexCount; index += 1, offset += 3) {
+        const rawValue = values[index];
+        positions[offset] = topology.gridX[index];
+        positions[offset + 1] = softClampHeight(rawValue) * heightFactor;
+        positions[offset + 2] = topology.gridZ[index];
+        writePaletteColor(
+            paletteLut,
+            usePhaseColor ? phases[index] : (rawValue - minZ) * inverseSpanZ,
+            colors,
+            offset
+        );
+    }
+
+    writeHeightfieldNormals(positions, normals, segments, gridStep);
+
+    return {
+        segments,
+        vertexCount,
+        positions,
+        normals,
+        colors,
+        values,
+        phases,
+        minValue: minZ,
+        maxValue: maxZ,
+        finiteResultCount
+    };
+}
+
 class RealPlots3DRenderer {
     constructor(container) {
         this.container = container;
@@ -672,122 +811,16 @@ class RealPlots3DRenderer {
 
     #sampleSurface(transformFunc) {
         const store = this.surfaceStore;
-        const positions = store.positions;
-        const normals = store.normals;
-        const colors = store.colors;
-        const values = store.values;
-        const phases = store.phases;
-        const gridX = SURFACE_TOPOLOGY.gridX;
-        const gridZ = SURFACE_TOPOLOGY.gridZ;
-        const u = store.u;
-        const v = store.v;
-        const xMin = zPlaneParams.currentVisXRange[0];
-        const xMax = zPlaneParams.currentVisXRange[1];
-        const yMin = zPlaneParams.currentVisYRange[0];
-        const yMax = zPlaneParams.currentVisYRange[1];
-        const xScale = (xMax - xMin) / GRID_SEGMENTS;
-        const yScale = (yMax - yMin) / GRID_SEGMENTS;
-        const inputU = InputEvaluator.for(state.realPlotsInputExpr);
-        const inputV = InputEvaluator.for(state.realPlotsImagExpr);
-        const inputUType = inputU.type;
-        const inputVType = inputV.type;
-        const scalarInputs = isScalarInputType(inputUType) && isScalarInputType(inputVType);
-        const outputMode = outputComponentMode(state.realPlotsOutputComponent);
-        const heightScale = state.realPlotsHeightScale !== undefined ? state.realPlotsHeightScale : 1.0;
-        const usePhaseColor = state.realPlotsColorMode === 'phase';
-        const paletteLut = paletteLutFor(state.realPlotsPalette || 'sunset');
-        const heightFactor = (HALF_HEIGHT * heightScale) / CLAMP_LIMIT;
-        let minZ = Infinity;
-        let maxZ = -Infinity;
-        let vertex = 0;
-
-        for (let j = 0; j <= GRID_SEGMENTS; j += 1) {
-            const yVal = yMin + j * yScale;
-            for (let i = 0; i <= GRID_SEGMENTS; i += 1) {
-                const xVal = xMin + i * xScale;
-                let zInRe;
-                let zInIm;
-                if (scalarInputs) {
-                    zInRe = evalScalarInput(inputUType, xVal, yVal);
-                    zInIm = evalScalarInput(inputVType, xVal, yVal);
-                } else {
-                    inputU.write(xVal, yVal, u);
-                    inputV.write(xVal, yVal, v);
-                    zInRe = u[0] - v[1];
-                    zInIm = u[1] + v[0];
-                }
-                let rawValue = 0;
-                let phase = 0.5;
-
-                try {
-                    const result = transformFunc(zInRe, zInIm);
-                    if (result && isFiniteNumber(result.re) && isFiniteNumber(result.im)) {
-                        if (outputMode === OUTPUT_COMPONENT.IMAG) {
-                            rawValue = result.im;
-                        } else if (outputMode === OUTPUT_COMPONENT.MAGNITUDE) {
-                            rawValue = Math.hypot(result.re, result.im);
-                        } else {
-                            rawValue = result.re;
-                        }
-                        if (usePhaseColor) {
-                            phase = (Math.atan2(result.im, result.re) + Math.PI) * INV_TWO_PI;
-                        }
-                    }
-                } catch (e) {
-                    rawValue = 0;
-                    phase = 0.5;
-                }
-
-                values[vertex] = rawValue;
-                phases[vertex] = phase;
-                if (rawValue < minZ) minZ = rawValue;
-                if (rawValue > maxZ) maxZ = rawValue;
-                vertex += 1;
-            }
-        }
-
-        const spanZ = maxZ - minZ || 1.0;
-        const inverseSpanZ = 1 / spanZ;
-        for (let index = 0, offset = 0; index < GRID_VERTEX_COUNT; index += 1, offset += 3) {
-            const rawValue = values[index];
-            positions[offset] = gridX[index];
-            positions[offset + 1] = softClampHeight(rawValue) * heightFactor;
-            positions[offset + 2] = gridZ[index];
-            writePaletteColor(
-                paletteLut,
-                usePhaseColor ? phases[index] : (rawValue - minZ) * inverseSpanZ,
-                colors,
-                offset
-            );
-        }
-
-        this.#writeHeightfieldNormals(positions, normals);
-    }
-
-    #writeHeightfieldNormals(positions, normals) {
-        const stride = GRID_STRIDE;
-        const inverseCell = 1 / (2 * GRID_STEP);
-        for (let j = 0; j <= GRID_SEGMENTS; j += 1) {
-            const jPrev = j === 0 ? 0 : j - 1;
-            const jNext = j === GRID_SEGMENTS ? GRID_SEGMENTS : j + 1;
-            for (let i = 0; i <= GRID_SEGMENTS; i += 1) {
-                const iPrev = i === 0 ? 0 : i - 1;
-                const iNext = i === GRID_SEGMENTS ? GRID_SEGMENTS : i + 1;
-                const index = j * stride + i;
-                const left = (j * stride + iPrev) * 3 + 1;
-                const right = (j * stride + iNext) * 3 + 1;
-                const down = (jPrev * stride + i) * 3 + 1;
-                const up = (jNext * stride + i) * 3 + 1;
-                let nx = -(positions[right] - positions[left]) * inverseCell;
-                let ny = 1;
-                let nz = -(positions[up] - positions[down]) * inverseCell;
-                const invLen = 1 / Math.hypot(nx, ny, nz);
-                const offset = index * 3;
-                normals[offset] = nx * invLen;
-                normals[offset + 1] = ny * invLen;
-                normals[offset + 2] = nz * invLen;
-            }
-        }
+        sampleRealPlotSurface(transformFunc, {
+            topology: SURFACE_TOPOLOGY,
+            positions: store.positions,
+            normals: store.normals,
+            colors: store.colors,
+            values: store.values,
+            phases: store.phases,
+            u: store.u,
+            v: store.v
+        });
     }
 
     dispose() {

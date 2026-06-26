@@ -540,3 +540,37 @@ test('worker zeta continuation chains match the main mapped transform in the cri
         restoreState(before);
     }
 });
+
+test('collapsed sub-ulp viewport ranges render deterministically uniform tiles', () => {
+    const before = snapshotState();
+    const center = { re: 0.3, im: -0.2 };
+    const delta = 1e-50;
+    const plane = {
+        width: 8,
+        height: 8,
+        currentVisXRange: [center.re, center.re + delta],
+        currentVisYRange: [center.im, center.im + delta]
+    };
+
+    try {
+        configureDynamics({
+            currentFunction: 'exp',
+            chainingEnabled: true,
+            chainingMode: 'recursion',
+            chainCount: 2
+        });
+
+        assert.equal(plane.currentVisXRange[0], plane.currentVisXRange[1]);
+        assert.equal(plane.currentVisYRange[0], plane.currentVisYRange[1]);
+
+        const snapshot = buildPlanarDomainDynamicsSnapshot(state, plane, { isWPlaneColoring: false });
+        const pixels = renderDomainDynamicsTile(snapshot, { x: 0, y: 0, width: plane.width, height: plane.height, scale: 1 });
+        const firstPixel = Array.from(pixels.slice(0, 4));
+
+        for (let offset = 0; offset < pixels.length; offset += 4) {
+            assert.deepEqual(Array.from(pixels.slice(offset, offset + 4)), firstPixel);
+        }
+    } finally {
+        restoreState(before);
+    }
+});

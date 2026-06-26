@@ -42,10 +42,10 @@ function algebraicFactor(func, overrides = {}) {
 }
 
 export async function runAlgebraicCompilerBenchmarks() {
-    console.log('\n[Benchmark] Algebraic compiler and domain-coloring hot paths\n');
+    console.log('\n[Benchmark] Algebraic compiler and transform hot paths\n');
 
     await runBenchmark(
-        'compiled rational expression over a domain-coloring tile',
+        'compiled rational expression over a dense viewport grid',
         ({ profile }) => {
             const size = TILE_SIZES[profile];
             return {

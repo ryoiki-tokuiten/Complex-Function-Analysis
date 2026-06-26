@@ -1,7 +1,10 @@
 import assert from 'node:assert/strict';
 
 import { runBenchmark } from './utils.js';
-import { calculateStreamline } from '../../js/analysis/streamline.js';
+import {
+    calculateStreamline,
+    getVectorEvaluator
+} from '../../js/analysis/streamline.js';
 import { state } from '../../js/store/state.js';
 import { getChainedTransformFunction } from '../../js/math-utils.js';
 
@@ -37,48 +40,37 @@ export async function runStreamlineTracingBenchmarks() {
     console.log('\n[Benchmark] Streamline tracing\n');
 
     await runBenchmark(
-        'Magnus-effect cylinder flow streamline',
+        'zeta-continuation inverse vector streamline',
         () => {
+            Object.assign(state, {
+                currentFunction: 'zeta',
+                chainingEnabled: false,
+                chainCount: 1,
+                zetaContinuationEnabled: true,
+                taylorSeriesEnabled: false
+            });
+            if (state.dynamicPlotting) state.dynamicPlotting.enabled = false;
+
             const planeParams = {
-                currentVisXRange: [-3, 3],
-                currentVisYRange: [-3, 3]
+                currentVisXRange: [-2, 3],
+                currentVisYRange: [10, 18]
             };
             const streamlineState = {
-                streamlineStepSize: 0.01,
-                streamlineMaxLength: 650
+                streamlineStepSize: 0.006,
+                streamlineMaxLength: 400
             };
-            const R = 1;
-            const U = 1;
-            const gamma = 2;
-
-            const evaluator = (re, im) => {
-                const r2 = re * re + im * im;
-                if (r2 < R * R) return { vx: 0, vy: 0 };
-
-                const z2Re = re * re - im * im;
-                const z2Im = 2 * re * im;
-                const z2Mag2 = z2Re * z2Re + z2Im * z2Im;
-                const term1Re = U * (1 - (R * R * z2Re) / z2Mag2);
-                const term1Im = U * ((R * R * z2Im) / z2Mag2);
-                const scale = gamma / (2 * Math.PI * r2);
-                const term2Re = im * scale;
-                const term2Im = re * scale;
-
-                return {
-                    vx: term1Re + term2Re,
-                    vy: -(term1Im + term2Im)
-                };
-            };
+            const map = { evaluate: getChainedTransformFunction('zeta') };
+            const evaluator = getVectorEvaluator(map, '1/f(z)');
 
             return { planeParams, streamlineState, evaluator };
         },
         ({ planeParams, streamlineState, evaluator }) =>
-            calculateStreamline(-2.5, 0.5, evaluator, planeParams, streamlineState),
+            calculateStreamline(0.5, 14.1, evaluator, planeParams, streamlineState),
         {
             profiles: {
-                smoke: { iterations: 3, warmup: 1 },
-                standard: { iterations: 600, warmup: 60 },
-                deep: { iterations: 2500, warmup: 200 }
+                smoke: { iterations: 2, warmup: 1 },
+                standard: { iterations: 80, warmup: 8 },
+                deep: { iterations: 240, warmup: 24 }
             },
             verify: path => {
                 assert.ok(path.length > 100);
@@ -113,6 +105,7 @@ export async function runStreamlineTracingBenchmarks() {
             });
 
             const map = getChainedTransformFunction('algebraic_chaining');
+            const vectorEvaluator = getVectorEvaluator({ evaluate: map }, 'f(z)');
             return {
                 seeds: makeCircularSeeds(BATCH_SEED_COUNTS[profile]),
                 planeParams: {
@@ -123,10 +116,7 @@ export async function runStreamlineTracingBenchmarks() {
                     streamlineStepSize: 0.006,
                     streamlineMaxLength: 240
                 },
-                evaluator: (re, im) => {
-                    const value = map(re, im);
-                    return { vx: value.re, vy: value.im };
-                }
+                evaluator: vectorEvaluator
             };
         },
         ({ seeds, planeParams, streamlineState, evaluator }) => {
