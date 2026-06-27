@@ -46,6 +46,30 @@ export const domainPalettes = [
         ]
     },
     {
+        id: "three-b1b-newton-deep",
+        name: "3b1b Newton Deep",
+        colors: "#440154, #3b528b, #21908c, #5dc963, #29abca, #440154",
+        key: [
+            { label: "Purple", color: "#440154", angle: "0° (Positive Real)" },
+            { label: "Blue", color: "#3b528b", angle: "72°" },
+            { label: "Teal", color: "#21908c", angle: "144°" },
+            { label: "Green", color: "#5dc963", angle: "216°" },
+            { label: "Cyan", color: "#29abca", angle: "288°" }
+        ]
+    },
+    {
+        id: "three-b1b-newton-bright",
+        name: "3b1b Newton Bright",
+        colors: "#FC6255, #83C167, #58C4DD, #FFFF00, #EC92AB, #FC6255",
+        key: [
+            { label: "Red", color: "#FC6255", angle: "0° (Positive Real)" },
+            { label: "Green", color: "#83C167", angle: "72°" },
+            { label: "Blue", color: "#58C4DD", angle: "144°" },
+            { label: "Yellow", color: "#FFFF00", angle: "216°" },
+            { label: "Maroon", color: "#EC92AB", angle: "288°" }
+        ]
+    },
+    {
         id: "mandelbrot",
         name: "Mandelbrot",
         colors: "rgb(0, 7, 100), rgb(19, 86, 189), rgb(133, 192, 237), rgb(247, 249, 221), rgb(255, 172, 0), rgb(10, 7, 0), rgb(0, 7, 100)",

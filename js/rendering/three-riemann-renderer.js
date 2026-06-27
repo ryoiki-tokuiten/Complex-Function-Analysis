@@ -10,6 +10,7 @@ import {
     isWebGLDomainColoringFunctionSupported
 } from './webgl-domain-coloring.js';
 import { getWebGLDomainColorFunctionIdShared } from './webgl-shared.js';
+import { orbitColoringModeId } from '../constants/rendering.js';
 
 const COLOR_BACKGROUND = 0x0b0914;
 const SPHERE_RADIUS = 5.0;
@@ -542,7 +543,7 @@ export class ThreeRiemannRenderer {
                     u_chainCount: { value: 1 },
                     u_chainMode: { value: 1 },
                     u_derivativeMode: { value: 0.0 },
-                    u_useOrbitColoring: { value: 0.0 }
+                    u_orbitColoringMode: { value: 0 }
                 };
                 this.ghostSphere.material = new THREE.ShaderMaterial({
                     uniforms: uniforms,
@@ -617,7 +618,10 @@ export class ThreeRiemannRenderer {
         const chainModeVal = CHAIN_MODE_IDS[state.chainingMode];
         uniforms.u_chainMode.value = chainModeVal !== undefined ? chainModeVal : 1;
         uniforms.u_derivativeMode.value = state.mapPresentation === 'derivative' ? 1.0 : 0.0;
-        uniforms.u_useOrbitColoring.value = state.fractalOrbitColoringEnabled ? 1.0 : 0.0;
+        uniforms.u_orbitColoringMode.value = orbitColoringModeId(
+            state.orbitColoringMode,
+            state.fractalOrbitColoringEnabled
+        );
     }
 
     startAnimationLoop() {

@@ -49,6 +49,7 @@ function configureAlgebraicDynamics() {
         chainingEnabled: true,
         chainingMode: 'recursion',
         chainCount: 24,
+        orbitColoringMode: 'value',
         fractalOrbitColoringEnabled: false,
         taylorSeriesEnabled: false,
         zetaContinuationEnabled: false

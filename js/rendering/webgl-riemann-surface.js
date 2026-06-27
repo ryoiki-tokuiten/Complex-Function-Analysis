@@ -20,6 +20,7 @@ import {
   getVisibleBranchIndices,
   surfaceStageHasBranches
 } from '../analysis/riemann-surface.js';
+import { orbitColoringModeId } from '../constants/rendering.js';
 
 const DEFAULT_CAMERA = Object.freeze({ rotX: -0.82, rotY: 0.62, distance: 3.8 });
 
@@ -65,7 +66,9 @@ const PALETTE_IDS = Object.freeze({
   mandelbrot: 14,
   lava: 15,
   fall: 16,
-  jewellery: 20
+  jewellery: 20,
+  'three-b1b-newton-deep': 21,
+  'three-b1b-newton-bright': 22
 });
 
 const PALETTE_STOPS = Object.freeze({
@@ -187,7 +190,7 @@ uniform vec2 u_taylorCoefficients[9];
 #define u_domainPalette int(u_domainIntParams.x)
 #define u_chainCount int(u_domainIntParams.y)
 #define u_taylorOrder int(u_domainIntParams.z)
-#define u_useOrbitColoring u_domainIntParams.w
+#define u_orbitColoringMode int(u_domainIntParams.w)
 #define u_branchIndex u_branchParams.x
 #define u_branchCutWidth u_branchParams.y
 #define u_sheetTint u_branchParams.z
@@ -734,13 +737,44 @@ const VERTEX_SURFACE_GLSL = Object.freeze({
 }`
   },
 
+  interpolate6: {
+    deps: [],
+    source: `vec3 interpolate6(vec3 c0, vec3 c1, vec3 c2, vec3 c3, vec3 c4, vec3 c5, float h) {
+  float val = h * 5.0;
+  if (val < 1.0) return mix(c0, c1, val);
+  else if (val < 2.0) return mix(c1, c2, val - 1.0);
+  else if (val < 3.0) return mix(c2, c3, val - 2.0);
+  else if (val < 4.0) return mix(c3, c4, val - 3.0);
+  else return mix(c4, c5, val - 4.0);
+}`
+  },
+
   surfacePaletteColor: {
-    deps: ['hslToRgbSurface', 'interpolate7'],
+    deps: ['hslToRgbSurface', 'interpolate7', 'interpolate6'],
     source: () => `vec3 surfacePaletteColor(int paletteId, float h) {
+  float hue = fract(h);
   if (paletteId == 10) return hslToRgbSurface(h, 1.0, 0.5);
+  if (paletteId == 21) return interpolate6(
+    vec3(0.266667, 0.003922, 0.329412),
+    vec3(0.231373, 0.321569, 0.545098),
+    vec3(0.129412, 0.564706, 0.549020),
+    vec3(0.364706, 0.788235, 0.388235),
+    vec3(0.160784, 0.670588, 0.792157),
+    vec3(0.266667, 0.003922, 0.329412),
+    hue
+  );
+  if (paletteId == 22) return interpolate6(
+    vec3(0.988235, 0.384314, 0.333333),
+    vec3(0.513725, 0.756863, 0.403922),
+    vec3(0.345098, 0.768627, 0.866667),
+    vec3(1.000000, 1.000000, 0.000000),
+    vec3(0.925490, 0.572549, 0.670588),
+    vec3(0.988235, 0.384314, 0.333333),
+    hue
+  );
   vec3 c0, c1, c2, c3, c4, c5, c6;
 ${SURFACE_PALETTE_BRANCH_GLSL}
-  return interpolate7(c0, c1, c2, c3, c4, c5, c6, fract(h));
+  return interpolate7(c0, c1, c2, c3, c4, c5, c6, hue);
 }`
   },
 
@@ -933,12 +967,41 @@ const FRAGMENT_GLSL = Object.freeze({
   return vec4(mix(vec3(gray), lit, clamp(u_domainSaturation, 0.0, 1.0)), 1.0);
 }
 
+vec4 dynamicsPhaseEventColor(vec2 value, float intensity, float brightnessFactor) {
+  float hue = fract(atan(value.y, value.x) / TWO_PI);
+  vec3 baseColor = surfacePaletteColor(u_domainPalette, hue);
+  float t = clamp(intensity, 0.0, 1.0);
+  float lightnessBase = 0.24 + 0.58 * pow(t, 0.55);
+  float lightnessContrasted = 0.5 + (lightnessBase - 0.5) * u_domainContrast;
+  float lightnessFinal = clamp(lightnessContrasted * u_domainBrightness * brightnessFactor, 0.05, 0.95);
+  vec3 lit = lightnessFinal < 0.5 ? baseColor * (lightnessFinal / 0.5) : mix(baseColor, vec3(1.0), (lightnessFinal - 0.5) / 0.5);
+  float gray = dot(lit, vec3(0.299, 0.587, 0.114));
+  return vec4(mix(vec3(gray), lit, clamp(u_domainSaturation, 0.0, 1.0)), 1.0);
+}
+
+int resolveOrbitColoringMode(int mode, int chainMode) {
+  if (mode != 4) return mode;
+  if (chainMode == 7) return 1;
+  if (chainMode == 1) return 2;
+  return 0;
+}
+
+float convergenceIntensity(float iteration) {
+  return 1.0 - clamp((iteration - 1.0) / max(float(u_chainCount), 1.0), 0.0, 1.0);
+}
+
 vec4 iteratedDynamicsColor(vec2 parameterValue, int chainMode, float brightnessFactor) {
+  int orbitMode = resolveOrbitColoringMode(u_orbitColoringMode, chainMode);
   vec2 current = chainMode == 7 ? vec2(0.0) : parameterValue;
+  vec2 lastFinite = current;
+  vec2 eventValue = current;
   float escapeRadius = 64.0;
   float escapeRadiusSq = escapeRadius * escapeRadius;
+  float convergenceEpsilonSq = 1.0e-14;
   float smoothIteration = float(u_chainCount);
+  float eventIteration = float(u_chainCount);
   bool escaped = false;
+  bool converged = false;
 
   for (int i = 0; i < 512; i++) {
     if (i >= u_chainCount) break;
@@ -963,15 +1026,41 @@ vec4 iteratedDynamicsColor(vec2 parameterValue, int chainMode, float brightnessF
       }
 
       escaped = true;
+      eventValue = ok && isFiniteVec2Compat(nextValue) ? nextValue : lastFinite;
+      eventIteration = float(i) + 1.0;
+      break;
+    }
+
+    if ((orbitMode == 2 || orbitMode == 3) && dot(nextValue - current, nextValue - current) <= convergenceEpsilonSq * max(1.0, magSq)) {
+      converged = true;
+      eventValue = nextValue;
+      eventIteration = float(i) + 1.0;
       break;
     }
 
     current = nextValue;
+    lastFinite = current;
   }
 
-  return escaped
+  if (orbitMode == 1) return escaped
     ? dynamicsEscapeColor(smoothIteration, brightnessFactor)
     : vec4(0.0, 0.0, 0.0, 1.0);
+
+  if (orbitMode == 2) return converged
+    ? dynamicsPhaseEventColor(eventValue, convergenceIntensity(eventIteration), brightnessFactor)
+    : vec4(0.0, 0.0, 0.0, 1.0);
+
+  if (orbitMode == 3) {
+    if (escaped) {
+      return dynamicsPhaseEventColor(eventValue, 1.0 - clamp(smoothIteration / max(float(u_chainCount), 1.0), 0.0, 1.0), brightnessFactor);
+    }
+    if (converged) {
+      return dynamicsPhaseEventColor(eventValue, convergenceIntensity(eventIteration), brightnessFactor);
+    }
+    return dynamicsPhaseEventColor(current, 0.5, brightnessFactor);
+  }
+
+  return vec4(0.0, 0.0, 0.0, 1.0);
 }`
   },
 
@@ -986,7 +1075,7 @@ vec4 iteratedDynamicsColor(vec2 parameterValue, int chainMode, float brightnessF
   
   vec3 baseColor = v_color;
   
-  if (u_useOrbitColoring > 0.5 && u_chainCount > 1 && (u_chainMode == 1 || u_chainMode == 7)) {
+  if (u_orbitColoringMode != 0 && u_chainCount > 1 && (u_chainMode == 1 || u_chainMode == 7)) {
     baseColor = iteratedDynamicsColor(v_z, u_chainMode, 1.0).rgb;
   } else {
     vec2 mapped = vec2(0.0);
@@ -1695,7 +1784,7 @@ function setCommonUniforms(renderer, options) {
     PALETTE_IDS[state.domainPalette] ?? 4,
     state.chainCount | 0 || 1,
     renderer.currentTaylorOrder,
-    state.fractalOrbitColoringEnabled ? 1 : 0
+    orbitColoringModeId(state.orbitColoringMode, state.fractalOrbitColoringEnabled)
   );
 }
 
