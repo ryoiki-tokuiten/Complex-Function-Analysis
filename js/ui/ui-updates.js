@@ -2,6 +2,10 @@ import { state, context, sliderParamKeys } from '../store/state.js';
 import { getChainedTransformFunction } from '../math-utils.js';
 import { resolveActiveMap } from '../math/active-map.js';
 import { DEFAULT_TAYLOR_SERIES_CENTER, CRITICAL_POINT_EPSILON } from '../constants/numerical.js';
+import {
+    ORBIT_COLORING_MODE_LABELS,
+    normalizeOrbitColoringMode
+} from '../constants/rendering.js';
 import { updatePolynomialCoeffDisplays } from './polynomial-ui.js';
 import { syncLaplacePlayPauseButton } from './event-listeners.js';
 import { syncVideoPlaybackUI } from '../utils/raster-media.js';
@@ -1264,6 +1268,7 @@ function syncRiemannSurfaceControls() {
 function syncDomainColoringControls() {
     setHidden('domainColoringOptionsDiv', !state.domainColoringEnabled);
     setHidden('riemannSphereDomainColoringOptions', !state.domainColoringEnabled);
+    setHidden('orbitColoringModeGroup', !(state.domainColoringEnabled && state.chainingEnabled));
 
     const paletteCirclesContainer = typeof document !== 'undefined'
         ? document.getElementById('domain_palette_circles')
@@ -1281,6 +1286,13 @@ function syncDomainColoringControls() {
         if (selector) {
             selector.value = state.domainPalette || 'analytic-base';
         }
+    }
+
+    const orbitSelector = control('orbitColoringModeSelect');
+    if (orbitSelector) {
+        const normalized = normalizeOrbitColoringMode(state.orbitColoringMode);
+        state.orbitColoringMode = normalized;
+        orbitSelector.value = normalized;
     }
 
     setHidden('domainColoringKeyDiv', !state.domainColoringEnabled);
@@ -1374,6 +1386,7 @@ export function updateDomainColoringKey() {
 
     const paletteId = state.domainPalette || 'analytic-base';
     const paletteObj = domainPalettes.find(palette => palette.id === paletteId) || domainPalettes[0];
+    const orbitMode = normalizeOrbitColoringMode(state.orbitColoringMode);
     const lines = ['<strong>Domain Coloring Key:</strong><br>'];
 
     if (paletteObj?.key) {
@@ -1386,6 +1399,11 @@ export function updateDomainColoringKey() {
         }
     }
 
+    if (state.chainingEnabled) {
+        lines.push(
+            `<span style="display:inline-block; margin-top: 4px;">- Orbit observable: ${ORBIT_COLORING_MODE_LABELS[orbitMode] || orbitMode}</span><br>`
+        );
+    }
     lines.push('<span style="display:inline-block; margin-top: 4px;">- Optional lightness shading can emphasize magnitude.</span>');
     keyDiv.innerHTML = lines.join('');
 }

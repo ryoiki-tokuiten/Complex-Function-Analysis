@@ -1,5 +1,5 @@
 import { eventBus } from '../store/events.js';
-import { domainPalettes } from '../ui/theme-manager.js';
+import { getDomainPaletteStops } from '../constants/domain-palettes.js';
 import { state, context } from '../store/state.js';
 import {
     createDomainDynamicsTileRenderer,
@@ -7,6 +7,9 @@ import {
     isDomainDynamicsSnapshot,
     renderDomainDynamicsTile
 } from './domain-dynamics-core.js';
+import {
+    normalizeOrbitColoringMode
+} from '../constants/rendering.js';
 
 const PASS_SCALES = Object.freeze([16, 4, 1]);
 const TILE_SIZE = 64;
@@ -57,53 +60,9 @@ function cloneAlgebraicTerms(terms) {
         : [];
 }
 
-function parsePaletteColor(color) {
-    const value = String(color || '').trim();
-    if (value.startsWith('#')) {
-        const hex = value.slice(1);
-        return [
-            parseInt(hex.slice(0, 2), 16) / 255,
-            parseInt(hex.slice(2, 4), 16) / 255,
-            parseInt(hex.slice(4, 6), 16) / 255
-        ];
-    }
-
-    const rgb = value.match(/rgb\((\d+),\s*(\d+),\s*(\d+)\)/);
-    if (rgb) {
-        return [
-            parseInt(rgb[1], 10) / 255,
-            parseInt(rgb[2], 10) / 255,
-            parseInt(rgb[3], 10) / 255
-        ];
-    }
-
-    const hsl = value.match(/hsl\((\d+(?:\.\d+)?),\s*(\d+(?:\.\d+)?)%,\s*(\d+(?:\.\d+)?)%\)/);
-    if (!hsl) return [0, 0, 0];
-
-    const h = Number(hsl[1]) / 360;
-    const s = Number(hsl[2]) / 100;
-    const l = Number(hsl[3]) / 100;
-    if (s === 0) return [l, l, l];
-
-    const q = l < 0.5 ? l * (1 + s) : l + s - l * s;
-    const p = 2 * l - q;
-    const hue2rgb = tValue => {
-        let t = tValue;
-        if (t < 0) t += 1;
-        if (t > 1) t -= 1;
-        if (t < 1 / 6) return p + (q - p) * 6 * t;
-        if (t < 1 / 2) return q;
-        if (t < 2 / 3) return p + (q - p) * (2 / 3 - t) * 6;
-        return p;
-    };
-
-    return [hue2rgb(h + 1 / 3), hue2rgb(h), hue2rgb(h - 1 / 3)];
-}
-
 function paletteStops(paletteId) {
-    const palette = domainPalettes.find(candidate => candidate.id === paletteId) || domainPalettes[0];
-    const colors = String(palette?.colors || '').split(/,\s*(?![^(]*\))/).map(parsePaletteColor);
-    return colors.length >= 2 ? colors : [[1, 0, 0], [0, 1, 0], [0, 0, 1], [1, 0, 0]];
+    const stops = getDomainPaletteStops(paletteId);
+    return stops.length >= 2 ? stops : [[1, 0, 0], [0, 1, 0], [0, 0, 1], [1, 0, 0]];
 }
 
 function planeRanges(planeParams) {
@@ -120,6 +79,7 @@ export function buildPlanarDomainDynamicsSnapshot(runtimeState, planeParams, opt
 
     const functionKey = runtimeState.currentFunction;
     if (!SUPPORTED_FUNCTIONS.has(functionKey)) return null;
+    const orbitColoringMode = normalizeOrbitColoringMode(runtimeState.orbitColoringMode);
 
     const snapshot = {
         isWPlaneColoring: !!options?.isWPlaneColoring,
@@ -127,7 +87,7 @@ export function buildPlanarDomainDynamicsSnapshot(runtimeState, planeParams, opt
         chainingEnabled: !!runtimeState.chainingEnabled,
         chainMode: runtimeState.chainingMode || 'recursion',
         chainCount: Math.max(1, Math.floor(Number(runtimeState.chainCount) || 1)),
-        fractalOrbitColoringEnabled: !!runtimeState.fractalOrbitColoringEnabled,
+        orbitColoringMode,
         algebraicChainingEnabled: !!runtimeState.algebraicChainingEnabled,
         algebraicChainingTerms: cloneAlgebraicTerms(runtimeState.algebraicChainingTerms),
         algebraicChainingZExpr: runtimeState.algebraicChainingZExpr || 'z',
@@ -493,7 +453,7 @@ export function domainDynamicsFuncSignature(snapshot) {
         chainingEnabled: snapshot.chainingEnabled,
         chainMode: snapshot.chainMode,
         chainCount: snapshot.chainCount,
-        fractalOrbitColoringEnabled: snapshot.fractalOrbitColoringEnabled,
+        orbitColoringMode: snapshot.orbitColoringMode,
         algebraicChainingEnabled: snapshot.algebraicChainingEnabled,
         algebraicChainingTerms: snapshot.algebraicChainingTerms,
         algebraicChainingZExpr: snapshot.algebraicChainingZExpr,
@@ -518,7 +478,7 @@ export function getCurrentFuncSignature(isWPlane = false) {
         chainingEnabled: !!state.chainingEnabled,
         chainMode: state.chainingMode || 'recursion',
         chainCount: Math.max(1, Math.floor(Number(state.chainCount) || 1)),
-        fractalOrbitColoringEnabled: !!state.fractalOrbitColoringEnabled,
+        orbitColoringMode: normalizeOrbitColoringMode(state.orbitColoringMode),
         algebraicChainingEnabled: !!state.algebraicChainingEnabled,
         algebraicChainingTerms: state.algebraicChainingTerms,
         algebraicChainingZExpr: state.algebraicChainingZExpr || 'z',

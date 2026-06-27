@@ -25,7 +25,7 @@ test('Mandelbrot preset is zero-seed algebraic output chaining', () => {
     assert.equal(preset.label, 'Mandelbrot');
     assert.equal(runtime.currentFunction, 'algebraic_chaining');
     assert.equal(runtime.chainingMode, 'zero_seed');
-    assert.equal(runtime.fractalOrbitColoringEnabled, true);
+    assert.equal(runtime.orbitColoringMode, 'escape');
     assert.equal(runtime.currentInputShape, 'empty_grid');
     assert.equal(runtime.domainPalette, 'arctic-frost');
     assert.equal(runtime.polynomialN, 2);
@@ -51,7 +51,7 @@ test('Newton preset represents Newton iteration for z^3 - 1 through algebraic ch
         'chainingEnabled',
         'chainingMode',
         'chainCount',
-        'fractalOrbitColoringEnabled',
+        'orbitColoringMode',
         'domainColoringEnabled',
         'currentInputShape',
         'domainPalette'
@@ -63,9 +63,9 @@ test('Newton preset represents Newton iteration for z^3 - 1 through algebraic ch
 
         assert.equal(state.currentFunction, 'algebraic_chaining');
         assert.equal(state.chainingMode, 'recursion');
-        assert.equal(state.fractalOrbitColoringEnabled, false);
+        assert.equal(state.orbitColoringMode, 'attractor');
         assert.equal(state.currentInputShape, 'empty_grid');
-        assert.equal(state.domainPalette, 'arctic-frost');
+        assert.equal(state.domainPalette, 'three-b1b-newton-deep');
         assert.equal(state.polynomialN, 1);
         assert.deepEqual(state.polynomialCoeffs, [
             { re: 0, im: 0 },

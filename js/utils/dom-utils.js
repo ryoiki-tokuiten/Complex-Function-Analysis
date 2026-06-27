@@ -121,6 +121,8 @@ const DOM_BINDINGS = [
     { key: 'domainLightnessCyclesValueDisplay', id: 'domain_lightness_cycles_value_display' },
     { key: 'domainColoringKeyDiv', id: 'domain_coloring_key' },
     { key: 'domainPaletteSelect', id: 'domain_palette_select' },
+    { key: 'orbitColoringModeGroup', id: 'orbit_coloring_mode_group' },
+    { key: 'orbitColoringModeSelect', id: 'orbit_coloring_mode_select' },
     { key: 'riemannSurfacePaletteSelect', id: 'riemann_surface_palette_select' },
     { key: 'riemannSpherePaletteSelect', id: 'riemann_sphere_palette_select' },
     { key: 'riemannSphereDomainColoringOptions', id: 'riemann_sphere_domain_coloring_options' },

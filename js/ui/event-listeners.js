@@ -8,7 +8,13 @@ import { updateFourierTransform } from '../analysis/fourier-transform.js';
 import { updateLaplaceTransform, updateLaplaceEvaluationPoint, analyzeStability, findPolesZeros } from '../analysis/laplace-transform.js';
 import { ComplexPointsUI } from './complex-points-ui.js';
 import { TAYLOR_CENTER_PRESET_GROUPS, ZOOM_IN_FACTOR, ZOOM_OUT_FACTOR, MIN_STATE_ZOOM_LEVEL, MAX_STATE_ZOOM_LEVEL } from '../constants/numerical.js';
-import { SPHERE_SENSITIVITY, SPHERE_INITIAL_ROT_X, SPHERE_INITIAL_ROT_Y } from '../constants/rendering.js';
+import {
+    SPHERE_SENSITIVITY,
+    SPHERE_INITIAL_ROT_X,
+    SPHERE_INITIAL_ROT_Y,
+    ORBIT_COLORING_MODES,
+    normalizeOrbitColoringMode
+} from '../constants/rendering.js';
 import { updateTitlesAndGlobalUI, syncTaylorSeriesCenterStatus, updateDomainColoringKey, syncParameterControlsPanelVisibility, syncRiemannTransformationUI, updateCustomFormulaPreview } from './ui-updates.js';
 import { stopLaplaceAnimation, toggleLaplaceAnimation, resetLaplaceAnimation, showFullLaplaceSpiral } from '../rendering/laplace-animation.js';
 import { toggleRiemannTransformationAnimationZ, toggleRiemannTransformationAnimationW, syncRiemannTransformationPlayPauseButton } from '../rendering/riemann-transformation-animation.js';
@@ -311,6 +317,23 @@ function checked(controlKey, value) {
     if (controls[controlKey]) controls[controlKey].checked = Boolean(value);
 }
 
+function setOrbitColoringMode(mode) {
+    const normalized = normalizeOrbitColoringMode(mode);
+    state.orbitColoringMode = normalized;
+    if (controls.orbitColoringModeSelect) controls.orbitColoringModeSelect.value = normalized;
+}
+
+function resetOrbitColoringMode() {
+    setOrbitColoringMode(ORBIT_COLORING_MODES.value);
+}
+
+function syncOrbitColoringModeControl() {
+    const normalized = normalizeOrbitColoringMode(state.orbitColoringMode);
+    state.orbitColoringMode = normalized;
+    if (controls.orbitColoringModeSelect) controls.orbitColoringModeSelect.value = normalized;
+    hidden(controls.orbitColoringModeGroup, !(state.domainColoringEnabled && state.chainingEnabled));
+}
+
 function closest(target, selector) {
     return target && typeof target.closest === 'function' ? target.closest(selector) : null;
 }
@@ -568,6 +591,7 @@ function syncDomainControlsFromState() {
     hidden(controls.domainColoringKeyDiv, !state.domainColoringEnabled);
     hidden(controls.riemannSphereDomainColoringOptions, !state.domainColoringEnabled);
     if (controls.domainPaletteSelect) controls.domainPaletteSelect.value = state.domainPalette;
+    syncOrbitColoringModeControl();
     call(renderDomainPalettesUI, $('domain_palette_circles'));
     call(updateDomainColoringKey);
 }
@@ -719,7 +743,7 @@ function activateFunctionMode(key) {
 
     state.currentFunction = key;
     state.currentFunctionPreset = null;
-    state.fractalOrbitColoringEnabled = false;
+    resetOrbitColoringMode();
     state.fourierModeEnabled = enteringFourier;
     state.laplaceModeEnabled = enteringLaplace;
 
@@ -921,6 +945,7 @@ function bindDomainColoringControls() {
         hidden(controls.domainColoringOptionsDiv, !state.domainColoringEnabled);
         hidden(controls.domainColoringKeyDiv, !state.domainColoringEnabled);
         hidden(controls.riemannSphereDomainColoringOptions, !state.domainColoringEnabled);
+        syncOrbitColoringModeControl();
         requestDomainRedraw(true);
     });
 
@@ -947,6 +972,14 @@ function bindDomainColoringControls() {
         if (!button) return;
         state.domainPalette = button.dataset.paletteId;
         syncPalette(selectors, paletteContainer);
+    });
+
+    syncOrbitColoringModeControl();
+    bindElementListener(controls.orbitColoringModeSelect, 'change', event => {
+        setOrbitColoringMode(event.target.value);
+        state.currentFunctionPreset = null;
+        call(updateDomainColoringKey);
+        requestDomainRedraw(true);
     });
 
     [
@@ -1854,9 +1887,9 @@ function bindChainingControls() {
 
     bindElementListener(controls.enableChainingCb, 'change', event => {
         state.chainingEnabled = event.target.checked;
-        state.fractalOrbitColoringEnabled = false;
         state.currentFunctionPreset = null;
         display(controls.chainingControlsContainer, state.chainingEnabled);
+        syncOrbitColoringModeControl();
         call(updateChainingColumns, state.chainingEnabled ? state.chainCount : 1);
         updateTitlesAndGlobalUI();
         syncParameterControlsPanelVisibility();
@@ -1865,8 +1898,8 @@ function bindChainingControls() {
 
     bindElementListener(controls.chainModeSelector, 'change', event => {
         state.chainingMode = event.target.value;
-        state.fractalOrbitColoringEnabled = false;
         state.currentFunctionPreset = null;
+        syncOrbitColoringModeControl();
         call(updateChainingTitles);
         requestUiRedraw();
     });
@@ -2149,7 +2182,6 @@ function handleFullScreenToggle(planeType, index = 0) {
 function bindAlgebraicChainingControls() {
     bindElementListener(controls.enableAlgebraicChainingCb, 'change', event => {
         state.algebraicChainingEnabled = event.target.checked;
-        state.fractalOrbitColoringEnabled = false;
         state.currentFunctionPreset = null;
         display(controls.algebraicChainingControlsContainer, state.algebraicChainingEnabled);
 
@@ -2569,7 +2601,6 @@ export function drawAmplitudeStrip(canvas, paletteId) {
     const imgData = ctx.createImageData(w, h);
     const data = imgData.data;
 
-    // Use current state settings for preview
     const tempState = {
         domainPalette: paletteId,
         domainBrightness: state.domainBrightness,
@@ -2578,15 +2609,20 @@ export function drawAmplitudeStrip(canvas, paletteId) {
         domainLightnessCycles: state.domainLightnessCycles
     };
 
-    // Draw a horizontal gradient representing modulus logarithmically from 0 to 10^12
-    // We use a fixed phase angle of 0 (positive real numbers)
+    // Horizontal axis is magnitude at a representative phase, so the strip stays
+    // palette-aware without adding a second phase dimension.
     const maxLogMod = Math.log(1e12 + 1);
+    const phase = Math.PI;
+    const phaseRe = Math.cos(phase);
+    const phaseIm = Math.sin(phase);
     for (let x = 0; x < w; x++) {
-        const logMod = (x / w) * maxLogMod;
+        const logMod = (x / Math.max(1, w - 1)) * maxLogMod;
         const modVal = Math.expm1(logMod);
-
-        // Re = modVal, Im = 0
-        const rgb = domainColorForValue(modVal, 0.0, tempState);
+        const rgb = domainColorForValue(
+            modVal * phaseRe,
+            modVal * phaseIm,
+            tempState
+        );
 
         for (let y = 0; y < h; y++) {
             const idx = (y * w + x) * 4;

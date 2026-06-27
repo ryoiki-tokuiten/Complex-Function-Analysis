@@ -6,15 +6,14 @@ import {
     renderPlanarDomainDynamics
 } from './domain-dynamics.js';
 import { hslToRgb } from './canvas-primitives.js';
-import { domainPalettes } from '../ui/theme-manager.js';
+import { getDomainPaletteStops } from '../constants/domain-palettes.js';
 
-const parsedPalettesCache = {};
 const DOMAIN_LIGHTNESS_MIN = 0.34;
 const DOMAIN_LIGHTNESS_MAX = 0.72;
 const DOMAIN_LIGHTNESS_DETAIL_BASE = 0.72;
 const DOMAIN_LIGHTNESS_DETAIL_SCALE = 0.28;
 
-function magnitudeLightness(logMod, cycles) {
+export function domainMagnitudeLightness(logMod, cycles) {
     if (!Number.isFinite(logMod)) return DOMAIN_LIGHTNESS_MAX;
 
     if (cycles <= 0.0001) return 0.5;
@@ -38,57 +37,6 @@ function getDomainColoringEvaluator(isWPC, map) {
 
 function cancelZPlaneDynamicsIfNeeded(isWPlaneColoring) {
     if (!isWPlaneColoring) cancelPlanarDomainDynamics();
-}
-
-function parsePaletteColors(colorsStr) {
-    return colorsStr.split(/,\s*(?![^(]*\))/).map(s => {
-        s = s.trim();
-        if (s.startsWith('hsl')) {
-            const match = s.match(/hsl\((\d+),\s*(\d+)%,\s*(\d+)%\)/);
-            if (match) {
-                const h = parseInt(match[1]) / 360;
-                const sat = parseInt(match[2]) / 100;
-                const l = parseInt(match[3]) / 100;
-                let r, g, b;
-                if (sat === 0) {
-                    r = g = b = l;
-                } else {
-                    const hue2rgb = (p, q, t) => {
-                        if (t < 0) t += 1;
-                        if (t > 1) t -= 1;
-                        if (t < 1/6) return p + (q - p) * 6 * t;
-                        if (t < 1/2) return q;
-                        if (t < 2/3) return p + (q - p) * (2/3 - t) * 6;
-                        return p;
-                    };
-                    const q = l < 0.5 ? l * (1 + sat) : l + sat - l * sat;
-                    const p = 2 * l - q;
-                    r = hue2rgb(p, q, h + 1/3);
-                    g = hue2rgb(p, q, h);
-                    b = hue2rgb(p, q, h - 1/3);
-                }
-                return [r, g, b];
-            }
-            return [0, 0, 0];
-        } else if (s.startsWith('rgb')) {
-            const match = s.match(/rgb\((\d+),\s*(\d+),\s*(\d+)\)/);
-            if (match) {
-                return [
-                    parseInt(match[1]) / 255,
-                    parseInt(match[2]) / 255,
-                    parseInt(match[3]) / 255
-                ];
-            }
-            return [0, 0, 0];
-        } else if (s.startsWith('#')) {
-            const hex = s.substring(1);
-            const r = parseInt(hex.slice(0, 2), 16) / 255;
-            const g = parseInt(hex.slice(2, 4), 16) / 255;
-            const b = parseInt(hex.slice(4, 6), 16) / 255;
-            return [r, g, b];
-        }
-        return [0, 0, 0];
-    });
 }
 
 export function getDomainColorPlaneKey(targetCtx) {
@@ -158,11 +106,7 @@ export function getPaletteColor(paletteId, h) {
         return [rgb[0] / 255, rgb[1] / 255, rgb[2] / 255];
     }
 
-    const palette = domainPalettes.find(p => p.id === paletteId) || domainPalettes[0];
-    if (!parsedPalettesCache[palette.id]) {
-        parsedPalettesCache[palette.id] = parsePaletteColors(palette.colors);
-    }
-    const stops = parsedPalettesCache[palette.id];
+    const stops = getDomainPaletteStops(paletteId);
     const n = stops.length;
     const val = h * (n - 1);
     const idx = Math.min(n - 2, Math.floor(val));
@@ -216,7 +160,7 @@ export function domainColorForValue(re, im, runtimeState) {
 
     const logMod = Math.log1p(modValue);
     const cycles = (runtimeState && Number.isFinite(runtimeState.domainLightnessCycles)) ? runtimeState.domainLightnessCycles : 0;
-    const lBase = magnitudeLightness(logMod, cycles);
+    const lBase = domainMagnitudeLightness(logMod, cycles);
 
     const contrast = (runtimeState && Number.isFinite(runtimeState.domainContrast)) ? runtimeState.domainContrast : 1;
     const brightness = (runtimeState && Number.isFinite(runtimeState.domainBrightness)) ? runtimeState.domainBrightness : 1;

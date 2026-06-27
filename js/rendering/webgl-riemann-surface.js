@@ -20,6 +20,11 @@ import {
   getVisibleBranchIndices,
   surfaceStageHasBranches
 } from '../analysis/riemann-surface.js';
+import { orbitColoringModeId } from '../constants/rendering.js';
+import {
+  createDomainPaletteGlslSource,
+  getDomainPaletteShaderId
+} from '../constants/domain-palettes.js';
 
 const DEFAULT_CAMERA = Object.freeze({ rotX: -0.82, rotY: 0.62, distance: 3.8 });
 
@@ -58,83 +63,7 @@ const SURFACE_COMPONENT_IDS = Object.freeze({
 const POLYNOMIAL_FUNCTION_ID = getWebGLDomainColorFunctionIdShared('polynomial', true);
 const MOBIUS_FUNCTION_ID = getWebGLDomainColorFunctionIdShared('mobius', true);
 
-const PALETTE_IDS = Object.freeze({
-  'analytic-base': 0,
-  'arctic-frost': 4,
-  calming: 11,
-  mandelbrot: 14,
-  lava: 15,
-  fall: 16,
-  jewellery: 20
-});
-
-const PALETTE_STOPS = Object.freeze({
-  0: [
-    [0.68, 0.12, 0.12],
-    [0.60, 0.60, 0.11],
-    [0.11, 0.60, 0.11],
-    [0.11, 0.60, 0.60],
-    [0.135, 0.135, 0.765],
-    [0.68, 0.12, 0.68],
-    [0.68, 0.12, 0.12]
-  ],
-  4: [
-    [0.059, 0.090, 0.165],
-    [0.118, 0.161, 0.231],
-    [0.231, 0.510, 0.965],
-    [0.576, 0.773, 0.992],
-    [0.231, 0.510, 0.965],
-    [0.118, 0.161, 0.231],
-    [0.059, 0.090, 0.165]
-  ],
-  11: [
-    [0.851, 0.773, 0.757],
-    [0.769, 0.545, 0.502],
-    [0.792, 0.576, 0.522],
-    [0.922, 0.863, 0.824],
-    [0.608, 0.443, 0.412],
-    [0.584, 0.416, 0.388],
-    [0.851, 0.773, 0.757]
-  ],
-  14: [
-    [0.000, 0.027, 0.392],
-    [0.075, 0.337, 0.741],
-    [0.522, 0.753, 0.929],
-    [0.969, 0.976, 0.867],
-    [1.000, 0.675, 0.000],
-    [0.039, 0.027, 0.000],
-    [0.000, 0.027, 0.392]
-  ],
-  15: [
-    [0.000, 0.000, 0.000],
-    [0.314, 0.000, 0.000],
-    [1.000, 0.627, 0.000],
-    [1.000, 1.000, 1.000],
-    [1.000, 0.627, 0.000],
-    [0.314, 0.000, 0.000],
-    [0.000, 0.000, 0.000]
-  ],
-  16: [
-    [0.098, 0.098, 0.098],
-    [0.502, 0.000, 0.000],
-    [1.000, 0.271, 0.000],
-    [1.000, 0.549, 0.000],
-    [1.000, 0.843, 0.000],
-    [1.000, 0.937, 0.722],
-    [0.098, 0.098, 0.098]
-  ],
-  20: [
-    [0.000, 0.000, 0.200],
-    [0.000, 0.082, 0.667],
-    [0.051, 0.451, 0.557],
-    [0.800, 0.800, 1.000],
-    [1.000, 0.000, 0.259],
-    [0.482, 0.776, 1.000],
-    [0.000, 0.000, 0.200]
-  ]
-});
-
-const FALLBACK_PALETTE_STOPS = PALETTE_STOPS[4];
+const SURFACE_PALETTE_GLSL = createDomainPaletteGlslSource('surfacePaletteColor');
 
 const UNIFORM_NAMES = Object.freeze({
   uViewBounds: 'u_viewBounds',
@@ -187,7 +116,7 @@ uniform vec2 u_taylorCoefficients[9];
 #define u_domainPalette int(u_domainIntParams.x)
 #define u_chainCount int(u_domainIntParams.y)
 #define u_taylorOrder int(u_domainIntParams.z)
-#define u_useOrbitColoring u_domainIntParams.w
+#define u_orbitColoringMode int(u_domainIntParams.w)
 #define u_branchIndex u_branchParams.x
 #define u_branchCutWidth u_branchParams.y
 #define u_sheetTint u_branchParams.z
@@ -293,7 +222,7 @@ function getSurfaceComponentId(component) {
 }
 
 function getPaletteId(palette) {
-  return tableValue(PALETTE_IDS, palette, PALETTE_IDS['analytic-base']);
+  return getDomainPaletteShaderId(palette);
 }
 
 function normalizeStage(stage) {
@@ -338,35 +267,6 @@ function complexRe(value) {
 function complexIm(value) {
   return value && typeof value === 'object' ? (+value.im || 0) : 0;
 }
-
-function emitVec3(rgb) {
-  return `vec3(${rgb.map(channel => Number(channel).toFixed(3)).join(', ')})`;
-}
-
-function emitPaletteAssignments(stops) {
-  return stops.map((stop, index) => `    c${index} = ${emitVec3(stop)};`).join('\n');
-}
-
-function emitPaletteBranches() {
-  const branches = Object.keys(PALETTE_STOPS)
-    .map(Number)
-    .sort((a, b) => a - b)
-    .map((paletteId, index) => {
-      const prefix = index === 0 ? 'if' : 'else if';
-
-      return `  ${prefix} (paletteId == ${paletteId}) {
-${emitPaletteAssignments(PALETTE_STOPS[paletteId])}
-  }`;
-    });
-
-  branches.push(`  else {
-${emitPaletteAssignments(FALLBACK_PALETTE_STOPS)}
-  }`);
-
-  return branches.join(' ');
-}
-
-const SURFACE_PALETTE_BRANCH_GLSL = emitPaletteBranches();
 
 function emitAlgebraicFactor(factor) {
   if (!factor || !factor.func || factor.func === 'none') return '';
@@ -710,38 +610,9 @@ ${buildAlgebraicBranchBody(appState)}
 });
 
 const VERTEX_SURFACE_GLSL = Object.freeze({
-  hslToRgbSurface: {
-    deps: [],
-    source: `vec3 hslToRgbSurface(float h, float s, float l) {
-  h = fract(h);
-  vec3 p = abs(fract(h + vec3(0.0, 0.6666667, 0.3333333)) * 6.0 - 3.0);
-  vec3 rgb = clamp(p - 1.0, 0.0, 1.0);
-  rgb = rgb * rgb * (3.0 - 2.0 * rgb);
-  return l + s * (rgb - 0.5) * (1.0 - abs(2.0 * l - 1.0));
-}`
-  },
-
-  interpolate7: {
-    deps: [],
-    source: `vec3 interpolate7(vec3 c0, vec3 c1, vec3 c2, vec3 c3, vec3 c4, vec3 c5, vec3 c6, float h) {
-  float val = h * 6.0;
-  if (val < 1.0) return mix(c0, c1, val);
-  else if (val < 2.0) return mix(c1, c2, val - 1.0);
-  else if (val < 3.0) return mix(c2, c3, val - 2.0);
-  else if (val < 4.0) return mix(c3, c4, val - 3.0);
-  else if (val < 5.0) return mix(c4, c5, val - 4.0);
-  else return mix(c5, c6, val - 5.0);
-}`
-  },
-
   surfacePaletteColor: {
-    deps: ['hslToRgbSurface', 'interpolate7'],
-    source: () => `vec3 surfacePaletteColor(int paletteId, float h) {
-  if (paletteId == 10) return hslToRgbSurface(h, 1.0, 0.5);
-  vec3 c0, c1, c2, c3, c4, c5, c6;
-${SURFACE_PALETTE_BRANCH_GLSL}
-  return interpolate7(c0, c1, c2, c3, c4, c5, c6, fract(h));
-}`
+    deps: [],
+    source: () => SURFACE_PALETTE_GLSL
   },
 
   surfaceHeight: {
@@ -933,12 +804,50 @@ const FRAGMENT_GLSL = Object.freeze({
   return vec4(mix(vec3(gray), lit, clamp(u_domainSaturation, 0.0, 1.0)), 1.0);
 }
 
+vec4 dynamicsPhaseEventColor(vec2 value, float intensity, float brightnessFactor) {
+  float hue = fract(atan(value.y, value.x) / TWO_PI);
+  vec3 baseColor = surfacePaletteColor(u_domainPalette, hue);
+  float t = clamp(intensity, 0.0, 1.0);
+  float lightnessBase = 0.24 + 0.58 * pow(t, 0.55);
+  float lightnessContrasted = 0.5 + (lightnessBase - 0.5) * u_domainContrast;
+  float lightnessFinal = clamp(lightnessContrasted * u_domainBrightness * brightnessFactor, 0.05, 0.95);
+  vec3 lit = lightnessFinal < 0.5 ? baseColor * (lightnessFinal / 0.5) : mix(baseColor, vec3(1.0), (lightnessFinal - 0.5) / 0.5);
+  float gray = dot(lit, vec3(0.299, 0.587, 0.114));
+  return vec4(mix(vec3(gray), lit, clamp(u_domainSaturation, 0.0, 1.0)), 1.0);
+}
+
+vec4 dynamicsValueColor(vec2 value, float brightnessFactor) {
+  float phase = atan(value.y, value.x);
+  float logMagnitude = log(1.0 + length(value));
+  float detail = max(0.05, u_domainLightnessCycles);
+  float tone = atan(logMagnitude * (0.72 + detail * 0.28)) / 1.5707963267948966;
+  float lightnessBase = u_domainLightnessCycles <= 0.0001
+    ? 0.5
+    : mix(0.34, 0.72, clamp(tone, 0.0, 1.0));
+  float lightnessContrasted = 0.5 + (lightnessBase - 0.5) * u_domainContrast;
+  float lightnessFinal = clamp(lightnessContrasted * u_domainBrightness * brightnessFactor, 0.05, 0.95);
+  vec3 baseColor = surfacePaletteColor(u_domainPalette, fract(phase / TWO_PI));
+  vec3 lit = lightnessFinal < 0.5 ? baseColor * (lightnessFinal / 0.5) : mix(baseColor, vec3(1.0), (lightnessFinal - 0.5) / 0.5);
+  float gray = dot(lit, vec3(0.299, 0.587, 0.114));
+  return vec4(mix(vec3(gray), lit, clamp(u_domainSaturation, 0.0, 1.0)), 1.0);
+}
+
+float convergenceIntensity(float iteration) {
+  return 1.0 - clamp((iteration - 1.0) / max(float(u_chainCount), 1.0), 0.0, 1.0);
+}
+
 vec4 iteratedDynamicsColor(vec2 parameterValue, int chainMode, float brightnessFactor) {
+  int orbitMode = u_orbitColoringMode;
   vec2 current = chainMode == 7 ? vec2(0.0) : parameterValue;
+  vec2 lastFinite = current;
+  vec2 eventValue = current;
   float escapeRadius = 64.0;
   float escapeRadiusSq = escapeRadius * escapeRadius;
+  float convergenceEpsilonSq = 1.0e-14;
   float smoothIteration = float(u_chainCount);
+  float eventIteration = float(u_chainCount);
   bool escaped = false;
+  bool converged = false;
 
   for (int i = 0; i < 512; i++) {
     if (i >= u_chainCount) break;
@@ -963,15 +872,41 @@ vec4 iteratedDynamicsColor(vec2 parameterValue, int chainMode, float brightnessF
       }
 
       escaped = true;
+      eventValue = ok && isFiniteVec2Compat(nextValue) ? nextValue : lastFinite;
+      eventIteration = float(i) + 1.0;
+      break;
+    }
+
+    if ((orbitMode == 2 || orbitMode == 3) && dot(nextValue - current, nextValue - current) <= convergenceEpsilonSq * max(1.0, magSq)) {
+      converged = true;
+      eventValue = nextValue;
+      eventIteration = float(i) + 1.0;
       break;
     }
 
     current = nextValue;
+    lastFinite = current;
   }
 
-  return escaped
+  if (orbitMode == 1) return escaped
     ? dynamicsEscapeColor(smoothIteration, brightnessFactor)
     : vec4(0.0, 0.0, 0.0, 1.0);
+
+  if (orbitMode == 2) return converged
+    ? dynamicsPhaseEventColor(eventValue, convergenceIntensity(eventIteration), brightnessFactor)
+    : vec4(0.0, 0.0, 0.0, 1.0);
+
+  if (orbitMode == 3) {
+    if (escaped) {
+      return dynamicsPhaseEventColor(eventValue, 1.0 - clamp(smoothIteration / max(float(u_chainCount), 1.0), 0.0, 1.0), brightnessFactor);
+    }
+    if (converged) {
+      return dynamicsPhaseEventColor(eventValue, convergenceIntensity(eventIteration), brightnessFactor);
+    }
+    return dynamicsValueColor(current, brightnessFactor);
+  }
+
+  return dynamicsValueColor(current, brightnessFactor);
 }`
   },
 
@@ -986,7 +921,7 @@ vec4 iteratedDynamicsColor(vec2 parameterValue, int chainMode, float brightnessF
   
   vec3 baseColor = v_color;
   
-  if (u_useOrbitColoring > 0.5 && u_chainCount > 1 && (u_chainMode == 1 || u_chainMode == 7)) {
+  if (u_orbitColoringMode != 0 && u_chainCount > 1 && (u_chainMode == 1 || u_chainMode == 7)) {
     baseColor = iteratedDynamicsColor(v_z, u_chainMode, 1.0).rgb;
   } else {
     vec2 mapped = vec2(0.0);
@@ -1666,6 +1601,12 @@ function setCommonUniforms(renderer, options) {
   let contrast = +state.domainContrast;
   let saturation = +state.domainSaturation;
   let lightnessCycles = +state.domainLightnessCycles;
+  const chainingEnabled = !!state.chainingEnabled;
+  const chainCount = chainingEnabled ? (state.chainCount | 0 || 1) : 1;
+  const chainMode = chainingEnabled ? (CHAIN_MODE_IDS[state.chainingMode] || 1) : 0;
+  const orbitMode = chainingEnabled
+    ? orbitColoringModeId(state.orbitColoringMode)
+    : 0;
   if (!Number.isFinite(heightScale)) heightScale = 1;
   if (!Number.isFinite(heightClip)) heightClip = 1;
   if (!Number.isFinite(brightness)) brightness = 1;
@@ -1677,7 +1618,7 @@ function setCommonUniforms(renderer, options) {
     locations.uIntParams,
     polyDegree,
     options.stage,
-    CHAIN_MODE_IDS[state.chainingMode] || 1,
+    chainMode,
     SURFACE_COMPONENT_IDS[state.riemannSurfaceComponent] || 2
   );
   gl.uniform4f(
@@ -1692,10 +1633,10 @@ function setCommonUniforms(renderer, options) {
   gl.uniform4f(locations.uDomainParams, brightness, contrast, saturation, lightnessCycles);
   gl.uniform4f(
     locations.uDomainIntParams,
-    PALETTE_IDS[state.domainPalette] ?? 4,
-    state.chainCount | 0 || 1,
+    getDomainPaletteShaderId(state.domainPalette),
+    chainCount,
     renderer.currentTaylorOrder,
-    state.fractalOrbitColoringEnabled ? 1 : 0
+    orbitMode
   );
 }
 

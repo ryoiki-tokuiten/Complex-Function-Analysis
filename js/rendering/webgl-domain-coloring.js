@@ -19,8 +19,13 @@ import {
   SPHERE_TEXTURE_AMBIENT_INTENSITY,
   SPHERE_TEXTURE_DIFFUSE_INTENSITY,
   SPHERE_TEXTURE_SPECULAR_INTENSITY,
-  SPHERE_TEXTURE_SHININESS_FACTOR
+  SPHERE_TEXTURE_SHININESS_FACTOR,
+  orbitColoringModeId
 } from '../constants/rendering.js';
+import {
+  createDomainPaletteGlslSource,
+  getDomainPaletteShaderId
+} from '../constants/domain-palettes.js';
 
 const { webglDomainColorSupport } = context;
 
@@ -51,16 +56,6 @@ const WEBGL_CONTEXT_ATTRIBUTES = Object.freeze({
   premultipliedAlpha: true,
   preserveDrawingBuffer: false,
   powerPreference: 'high-performance'
-});
-
-export const DOMAIN_PALETTE_IDS = Object.freeze({
-  'analytic-base': 0,
-  'arctic-frost': 4,
-  calming: 11,
-  mandelbrot: 14,
-  lava: 15,
-  fall: 16,
-  jewellery: 20
 });
 
 export const CHAIN_MODE_IDS = Object.freeze({
@@ -109,28 +104,10 @@ const UNIFORM_ALIASES = Object.freeze({
   uChainCount: 'u_chainCount',
   uChainMode: 'u_chainMode',
   uDerivativeMode: 'u_derivativeMode',
-  uUseOrbitColoring: 'u_useOrbitColoring'
+  uOrbitColoringMode: 'u_orbitColoringMode'
 });
 
-const PALETTES = Object.freeze([
-  [0, [[0.68, 0.12, 0.12], [0.60, 0.60, 0.11], [0.11, 0.60, 0.11], [0.11, 0.60, 0.60], [0.135, 0.135, 0.765], [0.68, 0.12, 0.68], [0.68, 0.12, 0.12]]],
-  [4, [[0.059, 0.090, 0.165], [0.118, 0.161, 0.231], [0.231, 0.510, 0.965], [0.576, 0.773, 0.992], [0.231, 0.510, 0.965], [0.118, 0.161, 0.231], [0.059, 0.090, 0.165]]],
-  [11, [[0.851, 0.773, 0.757], [0.769, 0.545, 0.502], [0.792, 0.576, 0.522], [0.922, 0.863, 0.824], [0.608, 0.443, 0.412], [0.584, 0.416, 0.388], [0.851, 0.773, 0.757]]],
-  [14, [[0.000, 0.027, 0.392], [0.075, 0.337, 0.741], [0.522, 0.753, 0.929], [0.969, 0.976, 0.867], [1.000, 0.675, 0.000], [0.039, 0.027, 0.000], [0.000, 0.027, 0.392]]],
-  [15, [[0.000, 0.000, 0.000], [0.314, 0.000, 0.000], [1.000, 0.627, 0.000], [1.000, 1.000, 1.000], [1.000, 0.627, 0.000], [0.314, 0.000, 0.000], [0.000, 0.000, 0.000]]],
-  [16, [[0.098, 0.098, 0.098], [0.502, 0.000, 0.000], [1.000, 0.271, 0.000], [1.000, 0.549, 0.000], [1.000, 0.843, 0.000], [1.000, 0.937, 0.722], [0.098, 0.098, 0.098]]],
-  [20, [[0.000, 0.000, 0.200], [0.000, 0.082, 0.667], [0.051, 0.451, 0.557], [0.800, 0.800, 1.000], [1.000, 0.000, 0.259], [0.482, 0.776, 1.000], [0.000, 0.000, 0.200]]]
-]);
-
-const FALLBACK_PALETTE = Object.freeze([
-  [0.110, 0.098, 0.090],
-  [0.471, 0.208, 0.059],
-  [0.882, 0.114, 0.282],
-  [0.996, 0.643, 0.686],
-  [0.882, 0.114, 0.282],
-  [0.471, 0.208, 0.059],
-  [0.110, 0.098, 0.090]
-]);
+const DOMAIN_PALETTE_GLSL = createDomainPaletteGlslSource('getPaletteColor');
 
 const VERTEX_SOURCE = lines(
   'attribute vec2 a_position;',
@@ -176,7 +153,7 @@ const FRAGMENT_UNIFORMS = lines(
   'uniform int u_chainCount;',
   'uniform int u_chainMode;',
   'uniform float u_derivativeMode;',
-  'uniform float u_useOrbitColoring;'
+  'uniform int u_orbitColoringMode;'
 );
 
 const DYNAMICS_COLOR_HELPERS = `
@@ -194,12 +171,45 @@ vec4 dynamicsEscapeColor(float smoothIteration, float brightnessFactor) {
   return vec4(applyLightnessAndSaturation(baseColor, lightnessFinal, clamp(u_domainSaturation, 0.0, 1.0)), 1.0);
 }
 
+vec4 dynamicsPhaseEventColor(vec2 value, float intensity, float brightnessFactor) {
+  float logMod = complexLogMagnitude(value);
+  if (!isFiniteFloatCompat(logMod)) return dynamicsInteriorColor();
+  float hue = fract(atan(value.y, value.x) / TWO_PI);
+  vec3 baseColor = getPaletteColor(u_domainPalette, hue);
+  float t = clamp(intensity, 0.0, 1.0);
+  float lightnessBase = 0.24 + 0.58 * pow(t, 0.55);
+  float lightnessContrasted = 0.5 + (lightnessBase - 0.5) * u_domainContrast;
+  float lightnessFinal = clamp(lightnessContrasted * u_domainBrightness * brightnessFactor, 0.05, 0.95);
+  return vec4(applyLightnessAndSaturation(baseColor, lightnessFinal, clamp(u_domainSaturation, 0.0, 1.0)), 1.0);
+}
+
+vec4 dynamicsValueColor(vec2 value, float brightnessFactor) {
+  float phase = atan(value.y, value.x);
+  float logMod = complexLogMagnitude(value);
+  if (!isFiniteFloatCompat(logMod)) return dynamicsInteriorColor();
+  float lightnessBase = magnitudeLightness(logMod, u_domainLightnessCycles);
+  float lightnessContrasted = 0.5 + (lightnessBase - 0.5) * u_domainContrast;
+  float lightnessFinal = clamp(lightnessContrasted * u_domainBrightness * brightnessFactor, 0.05, 0.95);
+  vec3 baseColor = getPaletteColor(u_domainPalette, fract(phase / TWO_PI));
+  return vec4(applyLightnessAndSaturation(baseColor, lightnessFinal, clamp(u_domainSaturation, 0.0, 1.0)), 1.0);
+}
+
+float convergenceIntensity(float iteration) {
+  return 1.0 - clamp((iteration - 1.0) / max(float(u_chainCount), 1.0), 0.0, 1.0);
+}
+
 vec4 iteratedDynamicsColor(vec2 parameterValue, int chainMode, float brightnessFactor) {
+  int orbitMode = u_orbitColoringMode;
   vec2 current = chainMode == 7 ? vec2(0.0) : parameterValue;
+  vec2 lastFinite = current;
+  vec2 eventValue = current;
   float escapeRadius = 64.0;
   float escapeRadiusSq = escapeRadius * escapeRadius;
+  float convergenceEpsilonSq = 1.0e-14;
   float smoothIteration = float(u_chainCount);
+  float eventIteration = float(u_chainCount);
   bool escaped = false;
+  bool converged = false;
 
   for (int i = 0; i < ${CFG.maxChainStepsGlsl}; i++) {
     if (i >= u_chainCount) break;
@@ -218,15 +228,41 @@ vec4 iteratedDynamicsColor(vec2 parameterValue, int chainMode, float brightnessF
       }
 
       escaped = true;
+      eventValue = ok && isFiniteVec2Compat(nextValue) ? nextValue : lastFinite;
+      eventIteration = float(i) + 1.0;
+      break;
+    }
+
+    if ((orbitMode == 2 || orbitMode == 3) && dot(nextValue - current, nextValue - current) <= convergenceEpsilonSq * max(1.0, magSq)) {
+      converged = true;
+      eventValue = nextValue;
+      eventIteration = float(i) + 1.0;
       break;
     }
 
     current = nextValue;
+    lastFinite = current;
   }
 
-  return escaped
+  if (orbitMode == 1) return escaped
     ? dynamicsEscapeColor(smoothIteration, brightnessFactor)
     : dynamicsInteriorColor();
+
+  if (orbitMode == 2) return converged
+    ? dynamicsPhaseEventColor(eventValue, convergenceIntensity(eventIteration), brightnessFactor)
+    : dynamicsInteriorColor();
+
+  if (orbitMode == 3) {
+    if (escaped) {
+      return dynamicsPhaseEventColor(eventValue, 1.0 - clamp(smoothIteration / max(float(u_chainCount), 1.0), 0.0, 1.0), brightnessFactor);
+    }
+    if (converged) {
+      return dynamicsPhaseEventColor(eventValue, convergenceIntensity(eventIteration), brightnessFactor);
+    }
+    return dynamicsValueColor(current, brightnessFactor);
+  }
+
+  return dynamicsValueColor(current, brightnessFactor);
 }
 `;
 
@@ -255,38 +291,7 @@ vec3 safeNormalize3(vec3 value, vec3 fallbackValue) {
   return mag > 1.0e-7 ? value / mag : fallbackValue;
 }
 
-vec3 hslToRgb(vec3 hsl) {
-  float h = fract(hsl.x);
-  float s = clamp(hsl.y, 0.0, 1.0);
-  float l = clamp(hsl.z, 0.0, 1.0);
-  float c = (1.0 - abs(2.0 * l - 1.0)) * s;
-  vec3 rgb = clamp(abs(mod(h * 6.0 + vec3(0.0, 4.0, 2.0), 6.0) - 3.0) - 1.0, 0.0, 1.0);
-  return l + (rgb - 0.5) * c;
-}
-
-vec3 interpolate7(vec3 c0, vec3 c1, vec3 c2, vec3 c3, vec3 c4, vec3 c5, vec3 c6, float h) {
-  float val = fract(h) * 6.0;
-  if (val < 1.0) return mix(c0, c1, val);
-  if (val < 2.0) return mix(c1, c2, val - 1.0);
-  if (val < 3.0) return mix(c2, c3, val - 2.0);
-  if (val < 4.0) return mix(c3, c4, val - 3.0);
-  if (val < 5.0) return mix(c4, c5, val - 4.0);
-  return mix(c5, c6, val - 5.0);
-}
-
-vec3 getPaletteColor(int paletteId, float h) {
-  if (paletteId == 10) return hslToRgb(vec3(h, 1.0, 0.5));
-
-  vec3 c0;
-  vec3 c1;
-  vec3 c2;
-  vec3 c3;
-  vec3 c4;
-  vec3 c5;
-  vec3 c6;
-  loadPalette(paletteId, c0, c1, c2, c3, c4, c5, c6);
-  return interpolate7(c0, c1, c2, c3, c4, c5, c6, h);
-}
+${DOMAIN_PALETTE_GLSL}
 
 vec3 applyLightnessAndSaturation(vec3 rgb, float lightness, float saturation) {
   vec3 lit = lightness < 0.5
@@ -546,7 +551,7 @@ void main() {
   }
 
   vec2 mappedValue = vec2(0.0);
-  if (u_derivativeMode < 0.5 && u_useOrbitColoring > 0.5 && u_isWPlaneColoring < 0.5 && u_chainCount > 1 && (u_chainMode == 1 || u_chainMode == 7)) {
+  if (u_derivativeMode < 0.5 && u_orbitColoringMode != 0 && u_isWPlaneColoring < 0.5 && u_chainCount > 1 && (u_chainMode == 1 || u_chainMode == 7)) {
     gl_FragColor = iteratedDynamicsColor(zInput, u_chainMode, brightnessFactor);
     return;
   }
@@ -640,44 +645,11 @@ function assignPlaneRecord(target, source) {
   return target;
 }
 
-function glslFloat(value) {
-  const number = Number.isFinite(value) ? value : 0;
-  return Number.isInteger(number) ? `${number}.0` : String(number);
-}
-
-function glslVec3(rgb) {
-  return `vec3(${rgb.map(glslFloat).join(', ')})`;
-}
-
-function glslPaletteWrites(stops, indent) {
-  return stops.map((rgb, index) => `${indent}c${index} = ${glslVec3(rgb)};`).join('\n');
-}
-
-function glslPaletteBranch([paletteId, stops], index) {
-  return lines(
-    `  ${index ? 'else if' : 'if'} (paletteId == ${paletteId}) {`,
-    glslPaletteWrites(stops, '    '),
-    '    return;',
-    '  }'
-  );
-}
-
-function createPaletteLoaderSource() {
-  return lines(
-    'void loadPalette(int paletteId, out vec3 c0, out vec3 c1, out vec3 c2, out vec3 c3, out vec3 c4, out vec3 c5, out vec3 c6) {',
-    PALETTES.map(glslPaletteBranch).join('\n'),
-    glslPaletteWrites(FALLBACK_PALETTE, '  '),
-    '}'
-  );
-}
-
 function createFragmentSource() {
   return lines(
     FRAGMENT_UNIFORMS,
     '',
     getGLSLComplexMathLibrary(state),
-    '',
-    createPaletteLoaderSource(),
     '',
     FRAGMENT_HELPERS,
     '',
@@ -1363,7 +1335,7 @@ function uploadDomainStyleUniforms(uniformGL, renderer) {
     uniformGL.uniform1f(renderer[spec[0]], stateNumber(spec[1], spec[2]));
   }
 
-  uniformGL.uniform1i(renderer.uDomainPalette, enumId(DOMAIN_PALETTE_IDS, state?.domainPalette, 0));
+  uniformGL.uniform1i(renderer.uDomainPalette, getDomainPaletteShaderId(state?.domainPalette));
 }
 
 function uploadSphereUniforms(uniformGL, renderer, job, metrics) {
@@ -1418,7 +1390,10 @@ function uploadChainingUniforms(uniformGL, renderer) {
 
   uniformGL.uniform1i(renderer.uChainCount, chainCount);
   uniformGL.uniform1i(renderer.uChainMode, chainMode);
-  uniformGL.uniform1f(renderer.uUseOrbitColoring, state?.fractalOrbitColoringEnabled ? 1 : 0);
+  uniformGL.uniform1i(renderer.uOrbitColoringMode, enabled
+    ? orbitColoringModeId(state?.orbitColoringMode)
+    : 0
+  );
 }
 
 function uploadRenderUniforms(renderer, job, metrics) {
@@ -1682,7 +1657,7 @@ export function getThreeSphereShaderConfig(planeType) {
         uniform int u_chainCount;
         uniform int u_chainMode;
         uniform float u_derivativeMode;
-        uniform float u_useOrbitColoring;
+        uniform int u_orbitColoringMode;
     `;
 
   const fragmentHelpers = `
@@ -1694,31 +1669,7 @@ export function getThreeSphereShaderConfig(planeType) {
           return vec2(sr * cos(angle), sr * sin(angle));
         }
 
-        vec3 hslToRgb(vec3 hsl) {
-          float h = fract(hsl.x);
-          float s = clamp(hsl.y, 0.0, 1.0);
-          float l = clamp(hsl.z, 0.0, 1.0);
-          float c = (1.0 - abs(2.0 * l - 1.0)) * s;
-          vec3 rgb = clamp(abs(mod(h * 6.0 + vec3(0.0, 4.0, 2.0), 6.0) - 3.0) - 1.0, 0.0, 1.0);
-          return l + (rgb - 0.5) * c;
-        }
-
-        vec3 interpolate7(vec3 c0, vec3 c1, vec3 c2, vec3 c3, vec3 c4, vec3 c5, vec3 c6, float h) {
-          float val = fract(h) * 6.0;
-          if (val < 1.0) return mix(c0, c1, val);
-          if (val < 2.0) return mix(c1, c2, val - 1.0);
-          if (val < 3.0) return mix(c2, c3, val - 2.0);
-          if (val < 4.0) return mix(c3, c4, val - 3.0);
-          if (val < 5.0) return mix(c4, c5, val - 4.0);
-          return mix(c5, c6, val - 5.0);
-        }
-
-        vec3 getPaletteColor(int paletteId, float h) {
-          if (paletteId == 10) return hslToRgb(vec3(h, 1.0, 0.5));
-          vec3 c0; vec3 c1; vec3 c2; vec3 c3; vec3 c4; vec3 c5; vec3 c6;
-          loadPalette(paletteId, c0, c1, c2, c3, c4, c5, c6);
-          return interpolate7(c0, c1, c2, c3, c4, c5, c6, h);
-        }
+        ${DOMAIN_PALETTE_GLSL}
 
         vec3 applyLightnessAndSaturation(vec3 rgb, float lightness, float saturation) {
           vec3 lit = lightness < 0.5
@@ -1889,7 +1840,7 @@ export function getThreeSphereShaderConfig(planeType) {
             vec2 zInput = vec2(vLocalPosition.x / den, vLocalPosition.z / den);
             
             vec2 mappedValue = vec2(0.0);
-            if (u_derivativeMode < 0.5 && u_useOrbitColoring > 0.5 && u_isWPlaneColoring < 0.5 && u_chainCount > 1 && (u_chainMode == 1 || u_chainMode == 7)) {
+            if (u_derivativeMode < 0.5 && u_orbitColoringMode != 0 && u_isWPlaneColoring < 0.5 && u_chainCount > 1 && (u_chainMode == 1 || u_chainMode == 7)) {
                 gl_FragColor = iteratedDynamicsColor(zInput, u_chainMode, 1.0);
                 return;
             }
@@ -1907,8 +1858,6 @@ export function getThreeSphereShaderConfig(planeType) {
     uniformsDecl,
     '',
     getGLSLComplexMathLibrary(state),
-    '',
-    createPaletteLoaderSource(),
     '',
     fragmentHelpers,
     '',
@@ -1942,7 +1891,7 @@ export function getThreeSphereShaderConfig(planeType) {
     u_fracPower: { value: 0.5 },
     u_chainCount: { value: 1 },
     u_chainMode: { value: 1 },
-    u_useOrbitColoring: { value: 0.0 }
+    u_orbitColoringMode: { value: 0 }
   };
 
   return {

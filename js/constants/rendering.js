@@ -10,6 +10,41 @@ export const WEBGL_SUPERSAMPLE_FACTOR = 2.25;
 export const WEBGL_DOMAIN_COLOR_SUPERSAMPLE = 2.0;
 export const WEBGL_DOMAIN_COLOR_STRESS_SCALE = 1.0;
 
+export const ORBIT_COLORING_MODES = Object.freeze({
+    value: 'value',
+    escape: 'escape',
+    attractor: 'attractor',
+    hybrid: 'hybrid'
+});
+
+export const ORBIT_COLORING_MODE_LABELS = Object.freeze({
+    value: 'Final Value',
+    escape: 'Escape',
+    attractor: 'Attractor',
+    hybrid: 'Hybrid'
+});
+
+export const ORBIT_COLORING_MODE_IDS = Object.freeze({
+    value: 0,
+    escape: 1,
+    attractor: 2,
+    hybrid: 3
+});
+
+export const DEFAULT_ORBIT_COLORING_MODE = ORBIT_COLORING_MODES.value;
+
+export function normalizeOrbitColoringMode(mode) {
+    if (Object.prototype.hasOwnProperty.call(ORBIT_COLORING_MODES, mode)) {
+        return mode;
+    }
+    return DEFAULT_ORBIT_COLORING_MODE;
+}
+
+export function orbitColoringModeId(mode) {
+    const normalized = normalizeOrbitColoringMode(mode);
+    return ORBIT_COLORING_MODE_IDS[normalized] ?? ORBIT_COLORING_MODE_IDS.value;
+}
+
 export const SPHERE_VIEW_RADIUS_FACTOR = 0.85;
 export const SPHERE_INITIAL_ROT_X = 0.4;
 export const SPHERE_INITIAL_ROT_Y = -0.6;

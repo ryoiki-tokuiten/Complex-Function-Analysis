@@ -1,4 +1,7 @@
 import { state } from '../store/state.js';
+import { domainPalettes } from '../constants/domain-palettes.js';
+
+export { domainPalettes };
 
 // Curated & Locked UI Themes
 export const themes = [
@@ -8,87 +11,6 @@ export const themes = [
     { id: "sage", name: "Sage", desc: "Muted forest green — calm and soft.", colors: { bg: '#0C120E', panel: '#111813', border: '#1E2922', text: '#E0E6E2', textMuted: '#89998F', accent: '#8B9E77', accentGlow: 'rgba(139,158,119,0.3)', gridPri: '#8B9E77', gridSec: '#6F8091' } },
     { id: "caffeine", name: "Caffeine", desc: "Warm coffee tones — cream and espresso.", colors: { bg: '#14100E', panel: '#1A1513', border: '#2B221E', text: '#E8DCD1', textMuted: '#A69285', accent: '#D4A373', accentGlow: 'rgba(212,163,115,0.3)', gridPri: '#D4A373', gridSec: '#8A6F62' } },
     { id: "gradient", name: "Gradient", desc: "Original app theme, deep obsidian and vivid accents.", colors: { bg: '#0d0f26', panel: 'rgba(40, 22, 66, 0.3)', border: 'rgba(128, 137, 255, 0.3)', text: '#e0e4ff', textMuted: '#a0a8d8', accent: '#a78bfa', accentGlow: 'rgba(160, 170, 255, 0.7)', gridPri: '#FB923C', gridSec: '#C084FC' } }
-];
-
-// Domain Phase Palettes logically mapped (Base -> Mid -> Peak -> Mid -> Base) for smooth 2PI wrap
-export const domainPalettes = [
-    {
-        id: "analytic-base",
-        name: "Analytic Base",
-        colors: "hsl(0,70%,40%), hsl(60,70%,35%), hsl(120,70%,35%), hsl(180,70%,35%), hsl(240,70%,45%), hsl(300,70%,40%), hsl(360,70%,40%)",
-        key: [
-            { label: "Red", color: "hsl(0,70%,40%)", angle: "0° (Positive Real)" },
-            { label: "Green", color: "hsl(120,70%,35%)", angle: "90° (Positive Imaginary)" },
-            { label: "Cyan", color: "hsl(180,70%,35%)", angle: "180° (Negative Real)" },
-            { label: "Blue", color: "hsl(240,70%,45%)", angle: "-90° (Negative Imaginary)" }
-        ]
-    },
-    {
-        id: "arctic-frost",
-        name: "Arctic Frost",
-        colors: "#0f172a, #1e293b, #3b82f6, #93c5fd, #3b82f6, #1e293b, #0f172a",
-        key: [
-            { label: "Deep Slate", color: "#0f172a", angle: "0° (Positive Real)" },
-            { label: "Steel Blue", color: "#1e293b", angle: "90° (Positive Imaginary)" },
-            { label: "Ice Blue", color: "#93c5fd", angle: "180° (Negative Real)" },
-            { label: "Frost Blue", color: "#3b82f6", angle: "-90° (Negative Imaginary)" }
-        ]
-    },
-    {
-        id: "calming",
-        name: "Calming",
-        colors: "#d9c5c1, #c48b80, #ca9385, #ebdcd2, #9b7169, #956a63, #d9c5c1",
-        key: [
-            { label: "Cream", color: "#ebdcd2", angle: "0° (Positive Real)" },
-            { label: "Caramel", color: "#733c34", angle: "90° (Positive Imaginary)" },
-            { label: "Mahogany", color: "#d9c5c1", angle: "180° (Negative Real)" },
-            { label: "Copper", color: "#b96e5f", angle: "-90° (Negative Imaginary)" }
-        ]
-    },
-    {
-        id: "mandelbrot",
-        name: "Mandelbrot",
-        colors: "rgb(0, 7, 100), rgb(19, 86, 189), rgb(133, 192, 237), rgb(247, 249, 221), rgb(255, 172, 0), rgb(10, 7, 0), rgb(0, 7, 100)",
-        key: [
-            { label: "Dark Blue", color: "rgb(0, 7, 100)", angle: "0° (Positive Real)" },
-            { label: "Cyan", color: "rgb(133, 192, 237)", angle: "90° (Positive Imaginary)" },
-            { label: "Yellow", color: "rgb(255, 172, 0)", angle: "180° (Negative Real)" },
-            { label: "Black", color: "rgb(10, 7, 0)", angle: "-90° (Negative Imaginary)" }
-        ]
-    },
-    {
-        id: "lava",
-        name: "Lava",
-        colors: "rgb(0, 0, 0), rgb(80, 0, 0), rgb(255, 160, 0), rgb(255, 255, 255), rgb(255, 160, 0), rgb(80, 0, 0), rgb(0, 0, 0)",
-        key: [
-            { label: "Black", color: "rgb(0, 0, 0)", angle: "0° (Positive Real)" },
-            { label: "Dark Red", color: "rgb(80, 0, 0)", angle: "90° (Positive Imaginary)" },
-            { label: "Orange", color: "rgb(255, 160, 0)", angle: "180° (Negative Real)" },
-            { label: "White", color: "rgb(255, 255, 255)", angle: "-90° (Negative Imaginary)" }
-        ]
-    },
-    {
-        id: "fall",
-        name: "Fall",
-        colors: "rgb(25, 25, 25), rgb(128, 0, 0), rgb(255, 69, 0), rgb(255, 140, 0), rgb(255, 215, 0), rgb(255, 239, 184), rgb(25, 25, 25)",
-        key: [
-            { label: "Dark Grey", color: "rgb(25, 25, 25)", angle: "0° (Positive Real)" },
-            { label: "Burnt Orange", color: "rgb(255, 69, 0)", angle: "90° (Positive Imaginary)" },
-            { label: "Gold", color: "rgb(255, 215, 0)", angle: "180° (Negative Real)" },
-            { label: "Pale Yellow", color: "rgb(255, 239, 184)", angle: "-90° (Negative Imaginary)" }
-        ]
-    },
-    {
-        id: "jewellery",
-        name: "Jewellery",
-        colors: "rgb(0, 0, 51), rgb(0, 21, 170), rgb(13, 115, 142), rgb(204, 204, 255), rgb(255, 0, 66), rgb(123, 198, 255), rgb(0, 0, 51)",
-        key: [
-            { label: "Deep Blue", color: "rgb(0, 0, 51)", angle: "0° (Positive Real)" },
-            { label: "Teal", color: "rgb(13, 115, 142)", angle: "90° (Positive Imaginary)" },
-            { label: "Rose", color: "rgb(255, 0, 66)", angle: "180° (Negative Real)" },
-            { label: "Light Blue", color: "rgb(123, 198, 255)", angle: "-90° (Negative Imaginary)" }
-        ]
-    }
 ];
 
 const hexToRgbStr = hex => {

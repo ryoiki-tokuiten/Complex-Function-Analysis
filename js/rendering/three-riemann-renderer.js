@@ -5,11 +5,12 @@ import { requestRedrawAll } from '../main.js';
 import { getChainedTransformFunction } from '../math-utils.js';
 import {
     CHAIN_MODE_IDS,
-    DOMAIN_PALETTE_IDS,
     getThreeSphereShaderConfig,
     isWebGLDomainColoringFunctionSupported
 } from './webgl-domain-coloring.js';
 import { getWebGLDomainColorFunctionIdShared } from './webgl-shared.js';
+import { orbitColoringModeId } from '../constants/rendering.js';
+import { getDomainPaletteShaderId } from '../constants/domain-palettes.js';
 
 const COLOR_BACKGROUND = 0x0b0914;
 const SPHERE_RADIUS = 5.0;
@@ -542,7 +543,7 @@ export class ThreeRiemannRenderer {
                     u_chainCount: { value: 1 },
                     u_chainMode: { value: 1 },
                     u_derivativeMode: { value: 0.0 },
-                    u_useOrbitColoring: { value: 0.0 }
+                    u_orbitColoringMode: { value: 0 }
                 };
                 this.ghostSphere.material = new THREE.ShaderMaterial({
                     uniforms: uniforms,
@@ -578,8 +579,7 @@ export class ThreeRiemannRenderer {
         uniforms.u_domainSaturation.value = state.domainSaturation !== undefined ? state.domainSaturation : 1.0;
         uniforms.u_domainLightnessCycles.value = state.domainLightnessCycles !== undefined ? state.domainLightnessCycles : 0.0;
         
-        const paletteVal = DOMAIN_PALETTE_IDS[state.domainPalette];
-        uniforms.u_domainPalette.value = paletteVal !== undefined ? paletteVal : 0;
+        uniforms.u_domainPalette.value = getDomainPaletteShaderId(state.domainPalette);
 
         uniforms.u_isWPlaneColoring.value = this.planeType === 'w' ? 1.0 : 0.0;
         uniforms.u_functionId.value = getWebGLDomainColorFunctionIdShared(state.currentFunction);
@@ -615,9 +615,11 @@ export class ThreeRiemannRenderer {
             : 1;
         
         const chainModeVal = CHAIN_MODE_IDS[state.chainingMode];
-        uniforms.u_chainMode.value = chainModeVal !== undefined ? chainModeVal : 1;
+        uniforms.u_chainMode.value = state.chainingEnabled && chainModeVal !== undefined ? chainModeVal : 0;
         uniforms.u_derivativeMode.value = state.mapPresentation === 'derivative' ? 1.0 : 0.0;
-        uniforms.u_useOrbitColoring.value = state.fractalOrbitColoringEnabled ? 1.0 : 0.0;
+        uniforms.u_orbitColoringMode.value = state.chainingEnabled
+            ? orbitColoringModeId(state.orbitColoringMode)
+            : 0;
     }
 
     startAnimationLoop() {

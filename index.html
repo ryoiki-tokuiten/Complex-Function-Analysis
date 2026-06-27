@@ -2036,6 +2036,16 @@
                                         <!-- Circles generated dynamically -->
                                     </div>
                                 </div>
+                                <div class="control-group" id="orbit_coloring_mode_group">
+                                    <label for="orbit_coloring_mode_select" style="font-size:0.8rem;">Orbit Coloring:</label>
+                                    <select id="orbit_coloring_mode_select" class="control-select"
+                                        data-tooltip="Choose which orbit observable colors recursive output chains">
+                                        <option value="value">Final Value</option>
+                                        <option value="escape">Escape</option>
+                                        <option value="attractor">Attractor</option>
+                                        <option value="hybrid">Hybrid</option>
+                                    </select>
+                                </div>
                                 <div class="control-group">
                                     <label for="domain_brightness_slider" style="font-size:0.8rem;">
                                         Brightness:
@@ -2646,7 +2656,7 @@
             </div>
             <div class="dynamic-intro-copy"
                 style="font-size: 0.75rem; margin-bottom: 0.75rem; color: var(--text-muted);">
-                Shows how magnitude |z| maps to lightness cycles and shading (from |z| = 0 to 10¹², logarithmic).
+                Shows current magnitude lightness shading on a representative active-palette hue (from |z| = 0 to 10¹², logarithmic).
             </div>
             <div
                 style="position: relative; background: rgba(0, 0, 0, 0.25); border: 1px solid var(--border-color); border-radius: 8px; padding: 1rem 1.25rem 0.75rem;">

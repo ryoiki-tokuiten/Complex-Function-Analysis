@@ -214,7 +214,7 @@ const rawState = {
     chainingMode: 'recursion',
     chainCount: 1,
     currentFunctionPreset: null,
-    fractalOrbitColoringEnabled: false,
+    orbitColoringMode: 'value',
 
     algebraicChainingEnabled: false,
     algebraicChainingZExpr: 'z',

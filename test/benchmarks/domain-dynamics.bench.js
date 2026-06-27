@@ -49,7 +49,7 @@ function configureAlgebraicDynamics() {
         chainingEnabled: true,
         chainingMode: 'recursion',
         chainCount: 24,
-        fractalOrbitColoringEnabled: false,
+        orbitColoringMode: 'value',
         taylorSeriesEnabled: false,
         zetaContinuationEnabled: false
     });
