@@ -8,14 +8,7 @@ import { updateFourierTransform } from '../analysis/fourier-transform.js';
 import { updateLaplaceTransform, updateLaplaceEvaluationPoint, analyzeStability, findPolesZeros } from '../analysis/laplace-transform.js';
 import { ComplexPointsUI } from './complex-points-ui.js';
 import { TAYLOR_CENTER_PRESET_GROUPS, ZOOM_IN_FACTOR, ZOOM_OUT_FACTOR, MIN_STATE_ZOOM_LEVEL, MAX_STATE_ZOOM_LEVEL } from '../constants/numerical.js';
-import {
-    SPHERE_SENSITIVITY,
-    SPHERE_INITIAL_ROT_X,
-    SPHERE_INITIAL_ROT_Y,
-    ORBIT_COLORING_MODES,
-    isOrbitColoringModeActive,
-    normalizeOrbitColoringMode
-} from '../constants/rendering.js';
+import { SPHERE_SENSITIVITY, SPHERE_INITIAL_ROT_X, SPHERE_INITIAL_ROT_Y } from '../constants/rendering.js';
 import { updateTitlesAndGlobalUI, syncTaylorSeriesCenterStatus, updateDomainColoringKey, syncParameterControlsPanelVisibility, syncRiemannTransformationUI, updateCustomFormulaPreview } from './ui-updates.js';
 import { stopLaplaceAnimation, toggleLaplaceAnimation, resetLaplaceAnimation, showFullLaplaceSpiral } from '../rendering/laplace-animation.js';
 import { toggleRiemannTransformationAnimationZ, toggleRiemannTransformationAnimationW, syncRiemannTransformationPlayPauseButton } from '../rendering/riemann-transformation-animation.js';
@@ -318,17 +311,6 @@ function checked(controlKey, value) {
     if (controls[controlKey]) controls[controlKey].checked = Boolean(value);
 }
 
-function setOrbitColoringMode(mode) {
-    const normalized = normalizeOrbitColoringMode(mode, false);
-    state.orbitColoringMode = normalized;
-    state.fractalOrbitColoringEnabled = isOrbitColoringModeActive(normalized);
-    if (controls.orbitColoringModeSelect) controls.orbitColoringModeSelect.value = normalized;
-}
-
-function resetOrbitColoringMode() {
-    setOrbitColoringMode(ORBIT_COLORING_MODES.value);
-}
-
 function closest(target, selector) {
     return target && typeof target.closest === 'function' ? target.closest(selector) : null;
 }
@@ -586,12 +568,6 @@ function syncDomainControlsFromState() {
     hidden(controls.domainColoringKeyDiv, !state.domainColoringEnabled);
     hidden(controls.riemannSphereDomainColoringOptions, !state.domainColoringEnabled);
     if (controls.domainPaletteSelect) controls.domainPaletteSelect.value = state.domainPalette;
-    if (controls.orbitColoringModeSelect) {
-        controls.orbitColoringModeSelect.value = normalizeOrbitColoringMode(
-            state.orbitColoringMode,
-            state.fractalOrbitColoringEnabled
-        );
-    }
     call(renderDomainPalettesUI, $('domain_palette_circles'));
     call(updateDomainColoringKey);
 }
@@ -743,7 +719,7 @@ function activateFunctionMode(key) {
 
     state.currentFunction = key;
     state.currentFunctionPreset = null;
-    resetOrbitColoringMode();
+    state.fractalOrbitColoringEnabled = false;
     state.fourierModeEnabled = enteringFourier;
     state.laplaceModeEnabled = enteringLaplace;
 
@@ -972,19 +948,6 @@ function bindDomainColoringControls() {
         state.domainPalette = button.dataset.paletteId;
         syncPalette(selectors, paletteContainer);
     });
-
-    if (controls.orbitColoringModeSelect) {
-        controls.orbitColoringModeSelect.value = normalizeOrbitColoringMode(
-            state.orbitColoringMode,
-            state.fractalOrbitColoringEnabled
-        );
-        bindElementListener(controls.orbitColoringModeSelect, 'change', event => {
-            setOrbitColoringMode(event.target.value);
-            state.currentFunctionPreset = null;
-            call(updateDomainColoringKey);
-            requestDomainRedraw(true);
-        });
-    }
 
     [
         ['grid_color_1_input', 'grid_color_1_picker_wrapper', 'gridColor1'],
@@ -1891,6 +1854,7 @@ function bindChainingControls() {
 
     bindElementListener(controls.enableChainingCb, 'change', event => {
         state.chainingEnabled = event.target.checked;
+        state.fractalOrbitColoringEnabled = false;
         state.currentFunctionPreset = null;
         display(controls.chainingControlsContainer, state.chainingEnabled);
         call(updateChainingColumns, state.chainingEnabled ? state.chainCount : 1);
@@ -1901,6 +1865,7 @@ function bindChainingControls() {
 
     bindElementListener(controls.chainModeSelector, 'change', event => {
         state.chainingMode = event.target.value;
+        state.fractalOrbitColoringEnabled = false;
         state.currentFunctionPreset = null;
         call(updateChainingTitles);
         requestUiRedraw();
@@ -2184,6 +2149,7 @@ function handleFullScreenToggle(planeType, index = 0) {
 function bindAlgebraicChainingControls() {
     bindElementListener(controls.enableAlgebraicChainingCb, 'change', event => {
         state.algebraicChainingEnabled = event.target.checked;
+        state.fractalOrbitColoringEnabled = false;
         state.currentFunctionPreset = null;
         display(controls.algebraicChainingControlsContainer, state.algebraicChainingEnabled);
 

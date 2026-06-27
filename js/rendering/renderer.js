@@ -9,10 +9,7 @@ import {
     COLOR_W_ORIGIN_GLOW
 } from '../constants/colors.js';
 import { MAX_POLY_DEGREE, ZETA_REFLECTION_POINT_RE } from '../constants/numerical.js';
-import {
-    ORIGIN_GLOW_DURATION_MS,
-    normalizeOrbitColoringMode
-} from '../constants/rendering.js';
+import { ORIGIN_GLOW_DURATION_MS } from '../constants/rendering.js';
 import { mapToCanvasCoords } from '../utils/canvas-utils.js';
 import { resolveActiveMap } from '../math/active-map.js';
 import {
@@ -141,7 +138,7 @@ const PLANAR_CACHE_FIELDS = Object.freeze([
     ['vidOpacity', () => toCacheKeyNumber(state.videoOpacity)],
     ['vidVer', () => state.videoFrameVersion || 0],
     ['dynamic', () => getDynamicPlottingCacheKey()],
-    ['dc', () => state.domainColoringEnabled ? `${state.domainPalette}|${toCacheKeyNumber(state.domainBrightness)}|${toCacheKeyNumber(state.domainContrast)}|${toCacheKeyNumber(state.domainSaturation)}|${toCacheKeyNumber(state.domainLightnessCycles)}|${normalizeOrbitColoringMode(state.orbitColoringMode, state.fractalOrbitColoringEnabled)}` : '0']
+    ['dc', () => state.domainColoringEnabled ? `${state.domainPalette}|${toCacheKeyNumber(state.domainBrightness)}|${toCacheKeyNumber(state.domainContrast)}|${toCacheKeyNumber(state.domainSaturation)}|${toCacheKeyNumber(state.domainLightnessCycles)}|${state.fractalOrbitColoringEnabled ? 1 : 0}` : '0']
 ]);
 
 const Z_FLOW_CACHE_FIELDS = Object.freeze([
@@ -487,7 +484,7 @@ function appendChainingCacheKey(parts) {
 
     appendKey(parts, 'cM', state.chainingMode);
     appendKey(parts, 'cC', state.chainCount);
-    appendKey(parts, 'orbit', normalizeOrbitColoringMode(state.orbitColoringMode, state.fractalOrbitColoringEnabled));
+    appendKey(parts, 'orbit', state.fractalOrbitColoringEnabled ? 1 : 0);
 }
 
 function appendTaylorCacheKey(parts, isWPlane) {

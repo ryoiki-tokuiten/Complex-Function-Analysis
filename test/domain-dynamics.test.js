@@ -15,7 +15,6 @@ import {
     selectDomainDynamicsBackend
 } from '../js/rendering/domain-dynamics.js';
 import {
-    colorDomainDynamicsPoint,
     evaluateDomainDynamicsValue,
     renderDomainDynamicsTile
 } from '../js/rendering/domain-dynamics-core.js';
@@ -32,7 +31,6 @@ const STATE_KEYS = [
     'chainingEnabled',
     'chainingMode',
     'chainCount',
-    'orbitColoringMode',
     'fractalOrbitColoringEnabled',
     'algebraicChainingEnabled',
     'algebraicChainingTerms',
@@ -89,7 +87,6 @@ function configureDynamics(overrides = {}) {
         chainingEnabled: true,
         chainingMode: 'recursion',
         chainCount: 4,
-        orbitColoringMode: 'value',
         fractalOrbitColoringEnabled: false,
         algebraicChainingEnabled: false,
         algebraicChainingTerms: [],
@@ -224,7 +221,6 @@ function makeAlgebraicDynamicsSnapshot(overrides = {}) {
         chainingEnabled: false,
         chainMode: 'recursion',
         chainCount: 1,
-        orbitColoringMode: 'value',
         fractalOrbitColoringEnabled: false,
         algebraicChainingEnabled: true,
         algebraicChainingZExpr: 'z',
@@ -275,7 +271,6 @@ test('dynamics snapshots represent Mandelbrot, Newton, and generic output chains
         assert.equal(snapshot.functionKey, 'algebraic_chaining');
         assert.equal(snapshot.chainMode, 'zero_seed');
         assert.equal(snapshot.chainCount, 256);
-        assert.equal(snapshot.orbitColoringMode, 'escape');
         assert.equal(snapshot.fractalOrbitColoringEnabled, true);
         assert.equal(snapshot.paletteStops.length >= 2, true);
 
@@ -283,8 +278,7 @@ test('dynamics snapshots represent Mandelbrot, Newton, and generic output chains
         snapshot = buildPlanarDomainDynamicsSnapshot(state, PLANE, { isWPlaneColoring: false });
         assert.equal(snapshot.functionKey, 'algebraic_chaining');
         assert.equal(snapshot.chainMode, 'recursion');
-        assert.equal(snapshot.orbitColoringMode, 'attractor');
-        assert.equal(snapshot.fractalOrbitColoringEnabled, true);
+        assert.equal(snapshot.fractalOrbitColoringEnabled, false);
         assert.equal(snapshot.algebraicChainingTerms.length, 2);
 
         configureDynamics({ currentFunction: 'exp', chainingMode: 'power', chainCount: 7 });
@@ -292,29 +286,6 @@ test('dynamics snapshots represent Mandelbrot, Newton, and generic output chains
         assert.equal(snapshot.functionKey, 'exp');
         assert.equal(snapshot.chainMode, 'power');
         assert.equal(snapshot.chainCount, 7);
-        assert.equal(snapshot.orbitColoringMode, 'value');
-    } finally {
-        restoreState(before);
-    }
-});
-
-test('orbit coloring modes distinguish escape and attractor observables', () => {
-    const before = snapshotState();
-
-    try {
-        applyFractalPreset(state, 'mandelbrot');
-        let snapshot = buildPlanarDomainDynamicsSnapshot(state, PLANE, { isWPlaneColoring: false });
-        const interior = colorDomainDynamicsPoint(snapshot, 0, 0);
-        const exterior = colorDomainDynamicsPoint(snapshot, 2, 2);
-        assert.deepEqual(interior, [0, 0, 0]);
-        assert.ok(exterior[0] + exterior[1] + exterior[2] > 0);
-
-        applyFractalPreset(state, 'newton_fractal');
-        snapshot = buildPlanarDomainDynamicsSnapshot(state, PLANE, { isWPlaneColoring: false });
-        const convergedValue = evaluateDomainDynamicsValue(snapshot, 2, 0);
-        const basinColor = colorDomainDynamicsPoint(snapshot, 2, 0);
-        approxComplex(convergedValue, { re: 1, im: 0 }, 1e-9);
-        assert.ok(basinColor[0] + basinColor[1] + basinColor[2] > 0);
     } finally {
         restoreState(before);
     }
@@ -368,7 +339,6 @@ test('generic polynomial-parameter orbit rendering defines pixel indices', () =>
         chainingEnabled: true,
         chainMode: 'zero_seed',
         chainCount: 2,
-        orbitColoringMode: 'escape',
         fractalOrbitColoringEnabled: true,
         polynomialN: 3,
         polynomialCoeffs: [

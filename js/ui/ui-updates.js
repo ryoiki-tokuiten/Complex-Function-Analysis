@@ -2,7 +2,6 @@ import { state, context, sliderParamKeys } from '../store/state.js';
 import { getChainedTransformFunction } from '../math-utils.js';
 import { resolveActiveMap } from '../math/active-map.js';
 import { DEFAULT_TAYLOR_SERIES_CENTER, CRITICAL_POINT_EPSILON } from '../constants/numerical.js';
-import { normalizeOrbitColoringMode } from '../constants/rendering.js';
 import { updatePolynomialCoeffDisplays } from './polynomial-ui.js';
 import { syncLaplacePlayPauseButton } from './event-listeners.js';
 import { syncVideoPlaybackUI } from '../utils/raster-media.js';
@@ -1284,14 +1283,6 @@ function syncDomainColoringControls() {
         }
     }
 
-    const orbitSelector = control('orbitColoringModeSelect');
-    if (orbitSelector) {
-        orbitSelector.value = normalizeOrbitColoringMode(
-            state.orbitColoringMode,
-            state.fractalOrbitColoringEnabled
-        );
-    }
-
     setHidden('domainColoringKeyDiv', !state.domainColoringEnabled);
     if (control('domainColoringKeyDiv')) {
         updateDomainColoringKey();
@@ -1383,7 +1374,6 @@ export function updateDomainColoringKey() {
 
     const paletteId = state.domainPalette || 'analytic-base';
     const paletteObj = domainPalettes.find(palette => palette.id === paletteId) || domainPalettes[0];
-    const orbitMode = normalizeOrbitColoringMode(state.orbitColoringMode, state.fractalOrbitColoringEnabled);
     const lines = ['<strong>Domain Coloring Key:</strong><br>'];
 
     if (paletteObj?.key) {
@@ -1396,7 +1386,6 @@ export function updateDomainColoringKey() {
         }
     }
 
-    lines.push(`<span style="display:inline-block; margin-top: 4px;">- Orbit observable: ${orbitMode}</span><br>`);
     lines.push('<span style="display:inline-block; margin-top: 4px;">- Optional lightness shading can emphasize magnitude.</span>');
     keyDiv.innerHTML = lines.join('');
 }

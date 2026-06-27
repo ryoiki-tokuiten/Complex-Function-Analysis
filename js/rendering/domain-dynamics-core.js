@@ -8,17 +8,10 @@ const DOMAIN_LIGHTNESS_MAX = 0.72;
 const DOMAIN_LIGHTNESS_DETAIL_BASE = 0.72;
 const DOMAIN_LIGHTNESS_DETAIL_SCALE = 0.28;
 import { compileExpression } from '../math/expression/evaluator.js';
-import {
-    ORBIT_COLORING_MODES,
-    normalizeOrbitColoringMode
-} from '../constants/rendering.js';
 
 const DYNAMICS_ESCAPE_RADIUS = 1e4;
 const DYNAMICS_ESCAPE_RADIUS_SQ = DYNAMICS_ESCAPE_RADIUS * DYNAMICS_ESCAPE_RADIUS;
 const DOMAIN_COLOR_CHAIN_BAILOUT_MAGNITUDE = 1e8;
-const ORBIT_ATTRACTOR_CONVERGENCE_EPSILON = 1e-7;
-const ORBIT_ATTRACTOR_CONVERGENCE_EPSILON_SQ =
-    ORBIT_ATTRACTOR_CONVERGENCE_EPSILON * ORBIT_ATTRACTOR_CONVERGENCE_EPSILON;
 const NUM_ZETA_TERMS_DIRECT_SUM = 100;
 const NUM_ZETA_TERMS_ETA_SERIES = 500;
 const NUM_ZETA_HASSE_LEVELS = 32;
@@ -1938,29 +1931,6 @@ function snapshotChainCount(snapshot) {
     return Math.max(1, Math.floor(Number(snapshot.chainCount) || 1));
 }
 
-function resolveOrbitColoringMode(snapshot) {
-    const mode = normalizeOrbitColoringMode(
-        snapshot?.orbitColoringMode,
-        !!snapshot?.fractalOrbitColoringEnabled
-    );
-    if (mode !== ORBIT_COLORING_MODES.auto) return mode;
-
-    const chainMode = snapshot?.chainMode || 'recursion';
-    if (chainMode === 'zero_seed') return ORBIT_COLORING_MODES.escape;
-    if (chainMode === 'recursion' && !!snapshot?.chainingEnabled && snapshotChainCount(snapshot) > 1) {
-        return ORBIT_COLORING_MODES.attractor;
-    }
-    return ORBIT_COLORING_MODES.value;
-}
-
-function snapshotUsesValueColoring(snapshot) {
-    return resolveOrbitColoringMode(snapshot) === ORBIT_COLORING_MODES.value;
-}
-
-function snapshotUsesEscapeColoring(snapshot) {
-    return resolveOrbitColoringMode(snapshot) === ORBIT_COLORING_MODES.escape;
-}
-
 function evaluateChainStep(mode, current, baseValue, snapshot, c, accelerator = NO_ACCELERATOR) {
     switch (mode) {
         case 'power': return validOrNull(complexMul(current, baseValue));
@@ -2237,43 +2207,6 @@ function dynamicsEscapeColor(smoothIteration, count, snapshot) {
     return applyLightnessAndSaturation(baseColor, lightness, Math.min(1, Math.max(0, saturation)));
 }
 
-function dynamicsPhaseEventColor(value, intensity, snapshot) {
-    if (!validComplex(value)) return [0, 0, 0];
-    const phase = Math.atan2(value.im, value.re);
-    const modValue = Math.hypot(value.re, value.im);
-    if (!finite(modValue)) return [0, 0, 0];
-
-    let hue = (phase / TWO_PI) % 1;
-    if (hue < 0) hue += 1;
-
-    const t = Math.max(0, Math.min(1, intensity));
-    const style = snapshot.style || {};
-    const baseColor = paletteColor(snapshot.paletteStops, hue);
-    const lightnessBase = 0.24 + 0.58 * Math.pow(t, 0.55);
-    const contrast = finite(style.contrast) ? style.contrast : 1;
-    const brightness = finite(style.brightness) ? style.brightness : 1;
-    const saturation = finite(style.saturation) ? style.saturation : 1;
-    const lightness = Math.min(0.95, Math.max(0.05, (0.5 + (lightnessBase - 0.5) * contrast) * brightness));
-    return applyLightnessAndSaturation(baseColor, lightness, Math.min(1, Math.max(0, saturation)));
-}
-
-function convergenceIntensity(iteration, count) {
-    const denom = Math.max(1, count);
-    return 1 - Math.max(0, Math.min(1, (iteration - 1) / denom));
-}
-
-function escapeSmoothIteration(iteration, count, magSq, next) {
-    const magnitude = Math.sqrt(Math.max(magSq, DYNAMICS_ESCAPE_RADIUS));
-    let smoothIteration = iteration + 1;
-    if (next && finite(magnitude) && magnitude > 1.0001) {
-        const smoothAdjust = Math.log(
-            Math.max(Math.log(magnitude) / Math.log(DYNAMICS_ESCAPE_RADIUS), 1e-6)
-        ) / Math.LN2;
-        smoothIteration = Math.max(0, Math.min(count, smoothIteration - smoothAdjust));
-    }
-    return smoothIteration;
-}
-
 function byteFromUnit(value) {
     if (value <= 0) return 0;
     if (value >= 1) return 255;
@@ -2503,11 +2436,12 @@ export function writeDynamicsEscapeColor(data, idx, smoothIteration, count, snap
     writeStyledColor(data, idx, base.r, base.g, base.b, lightness, style.saturation);
 }
 
-function traceOrbitForPoint(snapshot, re, im, accelerator = createDynamicsAccelerator(snapshot), detectConvergence = true) {
+export function orbitColorForPoint(snapshot, re, im, accelerator = createDynamicsAccelerator(snapshot)) {
     const count = snapshotChainCount(snapshot);
     const c = { re, im };
     let current = snapshot.chainMode === 'zero_seed' ? { re: 0, im: 0 } : c;
-    let lastFinite = validComplex(current) ? current : null;
+    let smoothIteration = count;
+    let escaped = false;
 
     for (let i = 0; i < count; i += 1) {
         const next = validOrNull(evaluateBase(snapshot, current, c, accelerator));
@@ -2518,87 +2452,29 @@ function traceOrbitForPoint(snapshot, re, im, accelerator = createDynamicsAccele
         );
 
         if (!next || tooLarge) {
-            return {
-                escaped: true,
-                converged: false,
-                smoothIteration: escapeSmoothIteration(i, count, magSq, next),
-                iteration: i + 1,
-                value: next || lastFinite,
-                count
-            };
-        }
-
-        const deltaRe = next.re - current.re;
-        const deltaIm = next.im - current.im;
-        const deltaSq = deltaRe * deltaRe + deltaIm * deltaIm;
-        const convergenceScale = Math.max(1, magSq);
-        if (detectConvergence && deltaSq <= ORBIT_ATTRACTOR_CONVERGENCE_EPSILON_SQ * convergenceScale) {
-            return {
-                escaped: false,
-                converged: true,
-                smoothIteration: i + 1,
-                iteration: i + 1,
-                value: next,
-                count
-            };
+            const magnitude = Math.sqrt(Math.max(magSq, DYNAMICS_ESCAPE_RADIUS));
+            smoothIteration = i + 1;
+            if (next && finite(magnitude) && magnitude > 1.0001) {
+                const smoothAdjust = Math.log(
+                    Math.max(Math.log(magnitude) / Math.log(DYNAMICS_ESCAPE_RADIUS), 1e-6)
+                ) / Math.LN2;
+                smoothIteration = Math.max(0, Math.min(count, smoothIteration - smoothAdjust));
+            }
+            escaped = true;
+            break;
         }
 
         current = next;
-        lastFinite = next;
     }
 
-    return {
-        escaped: false,
-        converged: false,
-        smoothIteration: count,
-        iteration: count,
-        value: lastFinite,
-        count
-    };
-}
-
-export function orbitColorForPoint(snapshot, re, im, accelerator = createDynamicsAccelerator(snapshot)) {
-    const mode = resolveOrbitColoringMode(snapshot);
-    if (mode === ORBIT_COLORING_MODES.value) {
-        return domainColorForValue(evaluateDomainDynamicsValue(snapshot, re, im, accelerator), snapshot);
-    }
-
-    const trace = traceOrbitForPoint(
-        snapshot,
-        re,
-        im,
-        accelerator,
-        mode === ORBIT_COLORING_MODES.attractor || mode === ORBIT_COLORING_MODES.hybrid
-    );
-    if (mode === ORBIT_COLORING_MODES.escape) {
-        return trace.escaped ? dynamicsEscapeColor(trace.smoothIteration, trace.count, snapshot) : [0, 0, 0];
-    }
-    if (mode === ORBIT_COLORING_MODES.attractor) {
-        return trace.converged
-            ? dynamicsPhaseEventColor(trace.value, convergenceIntensity(trace.iteration, trace.count), snapshot)
-            : [0, 0, 0];
-    }
-    if (mode === ORBIT_COLORING_MODES.hybrid) {
-        if (trace.escaped) {
-            return dynamicsPhaseEventColor(
-                trace.value,
-                1 - Math.max(0, Math.min(1, trace.smoothIteration / Math.max(1, trace.count))),
-                snapshot
-            );
-        }
-        if (trace.converged) {
-            return dynamicsPhaseEventColor(trace.value, convergenceIntensity(trace.iteration, trace.count), snapshot);
-        }
-        return domainColorForValue(trace.value, snapshot);
-    }
-
-    return domainColorForValue(evaluateDomainDynamicsValue(snapshot, re, im, accelerator), snapshot);
+    return escaped ? dynamicsEscapeColor(smoothIteration, count, snapshot) : [0, 0, 0];
 }
 
 export function colorDomainDynamicsPoint(snapshot, re, im, accelerator = createDynamicsAccelerator(snapshot)) {
-    return snapshotUsesValueColoring(snapshot)
-        ? domainColorForValue(evaluateDomainDynamicsValue(snapshot, re, im, accelerator), snapshot)
-        : orbitColorForPoint(snapshot, re, im, accelerator);
+    if (snapshot.fractalOrbitColoringEnabled) {
+        return orbitColorForPoint(snapshot, re, im, accelerator);
+    }
+    return domainColorForValue(evaluateDomainDynamicsValue(snapshot, re, im, accelerator), snapshot);
 }
 
 export function createDomainDynamicsTileRenderer(snapshot) {
@@ -2888,13 +2764,12 @@ function renderQuadraticPolynomialParameterValueTile(snapshot, tile, accelerator
 
 function renderPolynomialParameterTile(snapshot, tile, accelerator) {
     if (accelerator.type !== 'polynomial-parameter') return null;
-    if (!snapshotUsesValueColoring(snapshot) && !snapshotUsesEscapeColoring(snapshot)) return null;
     if (accelerator.degree === 2) {
-        return snapshotUsesEscapeColoring(snapshot)
+        return snapshot.fractalOrbitColoringEnabled
             ? renderQuadraticPolynomialParameterOrbitTile(snapshot, tile, accelerator)
             : renderQuadraticPolynomialParameterValueTile(snapshot, tile, accelerator);
     }
-    if (snapshotUsesEscapeColoring(snapshot)) {
+    if (snapshot.fractalOrbitColoringEnabled) {
         return renderPolynomialParameterOrbitTile(snapshot, tile, accelerator);
     }
     return renderPolynomialParameterValueTile(snapshot, tile, accelerator);
@@ -3322,18 +3197,17 @@ function renderLaurentParameterValueTile(snapshot, tile, accelerator) {
 
 function renderLaurentParameterTile(snapshot, tile, accelerator) {
     if (accelerator.type !== 'laurent-parameter') return null;
-    if (!snapshotUsesValueColoring(snapshot) && !snapshotUsesEscapeColoring(snapshot)) return null;
     if (accelerator.isPositiveMonomial) {
         if (accelerator.monomialExponent === 2) {
-            return snapshotUsesEscapeColoring(snapshot)
+            return snapshot.fractalOrbitColoringEnabled
                 ? renderQuadraticMonomialParameterOrbitTile(snapshot, tile, accelerator)
                 : renderQuadraticMonomialParameterValueTile(snapshot, tile, accelerator);
         }
-        return snapshotUsesEscapeColoring(snapshot)
+        return snapshot.fractalOrbitColoringEnabled
             ? renderPositiveMonomialParameterOrbitTile(snapshot, tile, accelerator)
             : renderPositiveMonomialParameterValueTile(snapshot, tile, accelerator);
     }
-    if (snapshotUsesEscapeColoring(snapshot)) {
+    if (snapshot.fractalOrbitColoringEnabled) {
         return renderLaurentParameterOrbitTile(snapshot, tile, accelerator);
     }
     return renderLaurentParameterValueTile(snapshot, tile, accelerator);
@@ -3535,7 +3409,7 @@ function evaluateCompiledChainStepComponents(mode, currentRe, currentIm, baseRe,
 }
 
 function renderCompiledAlgebraicValueTile(snapshot, tile, accelerator) {
-    if (!snapshotUsesValueColoring(snapshot) || accelerator.type !== 'compiled-algebraic') return null;
+    if (snapshot.fractalOrbitColoringEnabled || accelerator.type !== 'compiled-algebraic') return null;
     const mode = snapshot.chainMode || 'recursion';
     if (mode !== 'recursion' && mode !== 'zero_seed' && mode !== 'power' &&
         mode !== 'sqrt' && mode !== 'ln' && mode !== 'exp' && mode !== 'reciprocal') return null;
@@ -3616,7 +3490,7 @@ function renderCompiledAlgebraicValueTile(snapshot, tile, accelerator) {
 }
 
 function renderCompiledAlgebraicOrbitTile(snapshot, tile, accelerator) {
-    if (!snapshotUsesEscapeColoring(snapshot) || accelerator.type !== 'compiled-algebraic') return null;
+    if (!snapshot.fractalOrbitColoringEnabled || accelerator.type !== 'compiled-algebraic') return null;
     const mode = snapshot.chainMode || 'recursion';
     if (mode !== 'recursion' && mode !== 'zero_seed') return null;
 
@@ -3685,8 +3559,7 @@ function renderCompiledAlgebraicOrbitTile(snapshot, tile, accelerator) {
 
 function renderCompiledAlgebraicTile(snapshot, tile, accelerator) {
     if (accelerator.type !== 'compiled-algebraic') return null;
-    if (!snapshotUsesValueColoring(snapshot) && !snapshotUsesEscapeColoring(snapshot)) return null;
-    return snapshotUsesEscapeColoring(snapshot)
+    return snapshot.fractalOrbitColoringEnabled
         ? renderCompiledAlgebraicOrbitTile(snapshot, tile, accelerator)
         : renderCompiledAlgebraicValueTile(snapshot, tile, accelerator);
 }
@@ -3706,7 +3579,7 @@ function directPolynomialCoefficientArrays(snapshot) {
 }
 
 function renderDirectPolynomialValueTile(snapshot, tile) {
-    if (snapshot.functionKey !== 'polynomial' || !snapshotUsesValueColoring(snapshot)) return null;
+    if (snapshot.functionKey !== 'polynomial' || snapshot.fractalOrbitColoringEnabled) return null;
     const mode = snapshot.chainMode || 'recursion';
     if (mode !== 'recursion' && mode !== 'zero_seed') return null;
 
@@ -3763,7 +3636,7 @@ function renderDirectPolynomialValueTile(snapshot, tile) {
 
 
 function renderDirectMobiusValueTile(snapshot, tile) {
-    if (snapshot.functionKey !== 'mobius' || !snapshotUsesValueColoring(snapshot)) return null;
+    if (snapshot.functionKey !== 'mobius' || snapshot.fractalOrbitColoringEnabled) return null;
     const mode = snapshot.chainMode || 'recursion';
     if (mode !== 'recursion') return null;
 
@@ -3820,7 +3693,7 @@ function renderDirectMobiusValueTile(snapshot, tile) {
 }
 
 function renderDirectZetaValueTile(snapshot, tile) {
-    if (snapshot.functionKey !== 'zeta' || !snapshotUsesValueColoring(snapshot)) return null;
+    if (snapshot.functionKey !== 'zeta' || snapshot.fractalOrbitColoringEnabled) return null;
     const mode = snapshot.chainMode || 'recursion';
     if (mode !== 'recursion') return null;
     if (snapshot.chainingEnabled && snapshotChainCount(snapshot) > 1) return null;
@@ -3928,7 +3801,7 @@ function renderDirectZetaValueTile(snapshot, tile) {
 }
 
 function renderBuiltinValueTile(snapshot, tile, accelerator) {
-    if (!snapshotUsesValueColoring(snapshot) || accelerator.type !== 'none') return null;
+    if (snapshot.fractalOrbitColoringEnabled || accelerator.type !== 'none') return null;
     const mode = snapshot.chainMode || 'recursion';
     if (mode !== 'recursion' && mode !== 'zero_seed' && mode !== 'power' &&
         mode !== 'sqrt' && mode !== 'ln' && mode !== 'exp' && mode !== 'reciprocal') return null;
@@ -4025,7 +3898,7 @@ export function renderDomainDynamicsTile(snapshot, tile, accelerator = createDyn
     const spanX = xRange[1] - xRange[0];
     const spanY = yRange[1] - yRange[0];
 
-    if (snapshotUsesValueColoring(snapshot)) {
+    if (!snapshot.fractalOrbitColoringEnabled) {
         const colors = colorContext(snapshot);
         for (let y = 0; y < tile.height; y += 1) {
             const sampleY = (tile.y + y + 0.5) * tile.scale;
@@ -4064,8 +3937,6 @@ export function domainDynamicsSignature(snapshot) {
         chainingEnabled: snapshot.chainingEnabled,
         chainMode: snapshot.chainMode,
         chainCount: snapshot.chainCount,
-        orbitColoringMode: snapshot.orbitColoringMode,
-        resolvedOrbitColoringMode: resolveOrbitColoringMode(snapshot),
         fractalOrbitColoringEnabled: snapshot.fractalOrbitColoringEnabled,
         algebraicChainingEnabled: snapshot.algebraicChainingEnabled,
         algebraicChainingTerms: snapshot.algebraicChainingTerms,
@@ -4085,14 +3956,9 @@ export function domainDynamicsSignature(snapshot) {
 }
 
 export function isDomainDynamicsSnapshot(snapshot) {
-    const orbitColoringMode = resolveOrbitColoringMode(snapshot);
     return !!snapshot &&
         !snapshot.isWPlaneColoring &&
         snapshot.chainingEnabled &&
         (snapshot.chainCount > 1 || snapshot.chainMode === 'zero_seed') &&
-        (
-            orbitColoringMode === ORBIT_COLORING_MODES.value ||
-            snapshot.chainMode === 'recursion' ||
-            snapshot.chainMode === 'zero_seed'
-        );
+        (snapshot.chainMode === 'recursion' || snapshot.chainMode === 'zero_seed' || !snapshot.fractalOrbitColoringEnabled);
 }

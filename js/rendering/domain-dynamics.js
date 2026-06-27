@@ -7,10 +7,6 @@ import {
     isDomainDynamicsSnapshot,
     renderDomainDynamicsTile
 } from './domain-dynamics-core.js';
-import {
-    isOrbitColoringModeActive,
-    normalizeOrbitColoringMode
-} from '../constants/rendering.js';
 
 const PASS_SCALES = Object.freeze([16, 4, 1]);
 const TILE_SIZE = 64;
@@ -124,10 +120,6 @@ export function buildPlanarDomainDynamicsSnapshot(runtimeState, planeParams, opt
 
     const functionKey = runtimeState.currentFunction;
     if (!SUPPORTED_FUNCTIONS.has(functionKey)) return null;
-    const orbitColoringMode = normalizeOrbitColoringMode(
-        runtimeState.orbitColoringMode,
-        runtimeState.fractalOrbitColoringEnabled
-    );
 
     const snapshot = {
         isWPlaneColoring: !!options?.isWPlaneColoring,
@@ -135,8 +127,7 @@ export function buildPlanarDomainDynamicsSnapshot(runtimeState, planeParams, opt
         chainingEnabled: !!runtimeState.chainingEnabled,
         chainMode: runtimeState.chainingMode || 'recursion',
         chainCount: Math.max(1, Math.floor(Number(runtimeState.chainCount) || 1)),
-        orbitColoringMode,
-        fractalOrbitColoringEnabled: isOrbitColoringModeActive(orbitColoringMode),
+        fractalOrbitColoringEnabled: !!runtimeState.fractalOrbitColoringEnabled,
         algebraicChainingEnabled: !!runtimeState.algebraicChainingEnabled,
         algebraicChainingTerms: cloneAlgebraicTerms(runtimeState.algebraicChainingTerms),
         algebraicChainingZExpr: runtimeState.algebraicChainingZExpr || 'z',
@@ -502,7 +493,6 @@ export function domainDynamicsFuncSignature(snapshot) {
         chainingEnabled: snapshot.chainingEnabled,
         chainMode: snapshot.chainMode,
         chainCount: snapshot.chainCount,
-        orbitColoringMode: snapshot.orbitColoringMode,
         fractalOrbitColoringEnabled: snapshot.fractalOrbitColoringEnabled,
         algebraicChainingEnabled: snapshot.algebraicChainingEnabled,
         algebraicChainingTerms: snapshot.algebraicChainingTerms,
@@ -528,8 +518,7 @@ export function getCurrentFuncSignature(isWPlane = false) {
         chainingEnabled: !!state.chainingEnabled,
         chainMode: state.chainingMode || 'recursion',
         chainCount: Math.max(1, Math.floor(Number(state.chainCount) || 1)),
-        orbitColoringMode: normalizeOrbitColoringMode(state.orbitColoringMode, state.fractalOrbitColoringEnabled),
-        fractalOrbitColoringEnabled: isOrbitColoringModeActive(state.orbitColoringMode, state.fractalOrbitColoringEnabled),
+        fractalOrbitColoringEnabled: !!state.fractalOrbitColoringEnabled,
         algebraicChainingEnabled: !!state.algebraicChainingEnabled,
         algebraicChainingTerms: state.algebraicChainingTerms,
         algebraicChainingZExpr: state.algebraicChainingZExpr || 'z',
