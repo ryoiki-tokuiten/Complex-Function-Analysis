@@ -45,13 +45,13 @@ function configureSurfaceState() {
             { re: 0.08, im: -0.02 }
         ],
         algebraicChainingTerms: [
-            { coeff: { re: 0.42, im: -0.17 }, factors: [factor('sin', { chainedFunc: 'exp', power: 2 })] },
-            { coeff: { re: -0.3, im: 0.11 }, factors: [factor('cosh', { reciprocal: true })] },
-            { coeff: { re: 0.07, im: 0.05 }, factors: [factor('ln', { chainedFunc: 'polynomial', exp: true })] },
-            { coeff: { re: 0.2, im: -0.08 }, factors: [factor('c')] }
+            { coeff: { re: 0.24, im: -0.08 }, factors: [factor('sin', { chainedFunc: 'polynomial', power: 2 })] },
+            { coeff: { re: -0.12, im: 0.05 }, factors: [factor('cosh', { reciprocal: true })] },
+            { coeff: { re: 0.06, im: 0.02 }, factors: [factor('ln', { chainedFunc: 'exp' })] },
+            { coeff: { re: 0.1, im: -0.03 }, factors: [factor('c')] }
         ],
         chainingEnabled: true,
-        chainingMode: 'sqrt',
+        chainingMode: 'recursion',
         chainCount: 4,
         fractionalPowerN: 0.5,
         zetaContinuationEnabled: false,

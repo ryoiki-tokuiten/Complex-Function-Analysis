@@ -24,15 +24,13 @@ const DEFAULT_ALPHA_CUTOFF = 0.05;
 const DEFAULT_INVALID_CLIP = 10.0;
 const DEFAULT_RASTER_RESOLUTION = 300;
 const UINT16_VERTEX_LIMIT = 65535;
+const EMPTY_ARRAY = Object.freeze([]);
+const MESH_CACHE_LIMIT = 12;
+const MAX_INVERSE_CHAIN_INDEX = 15;
 
 const CHAIN_MODE = Object.freeze({
     recursion: 1,
-    power: 2,
-    sqrt: 3,
-    ln: 4,
-    exp: 5,
-    reciprocal: 6,
-    zero_seed: 7
+    zero_seed: 2
 });
 
 const VECTOR_MODE = Object.freeze({
@@ -71,87 +69,161 @@ function complexPart(value, key) {
     return finiteOr(value && value[key], 0);
 }
 
-function clonePlain(value, seen = new WeakMap()) {
-    if (value === null || typeof value !== 'object') return value;
+const SNAPSHOT_POLY_COEFFS = Array.from({ length: MAX_POLY_DEGREE + 1 }, () => ({ re: 0, im: 0 }));
+const RENDER_SNAPSHOT = {
+    currentInputShape: null,
+    currentFunction: null,
+    a0: 0,
+    b0: 0,
+    mobiusA: { re: 1, im: 0 },
+    mobiusB: { re: 0, im: 0 },
+    mobiusC: { re: 0, im: 0 },
+    mobiusD: { re: 1, im: 0 },
+    polynomialN: 0,
+    polynomialCoeffs: SNAPSHOT_POLY_COEFFS,
+    fractionalPowerN: 0.5,
+    algebraicChainingTerms: EMPTY_ARRAY,
+    algebraicChainingZExpr: 'z',
+    chainingEnabled: false,
+    chainCount: 0,
+    chainingMode: null,
+    navigationModeEnabled: false,
+    zetaContinuationEnabled: false,
+    gridDensity: 10,
+    vectorFieldScale: 1,
+    vectorArrowThickness: 1.5,
+    vectorArrowHeadSize: 8,
+    vectorFieldFunction: null,
+    domainBrightness: 1
+};
 
-    if (seen.has(value)) return seen.get(value);
-    if (typeof structuredClone === 'function') {
-        try {
-            return structuredClone(value);
-        } catch (_) {
-            // Fall through for host objects or functions embedded in state.
-        }
-    }
-
-    if (Array.isArray(value)) {
-        const copy = [];
-        seen.set(value, copy);
-        for (const item of value) copy.push(clonePlain(item, seen));
-        return copy;
-    }
-
-    const copy = {};
-    seen.set(value, copy);
-    for (const [key, item] of Object.entries(value)) {
-        if (typeof item !== 'function') copy[key] = clonePlain(item, seen);
-    }
-    return copy;
+function writeComplex(out, value, fallbackRe, fallbackIm) {
+    out.re = finiteOr(value && value.re, fallbackRe);
+    out.im = finiteOr(value && value.im, fallbackIm);
+    return out;
 }
 
-function cloneComplex(value, fallback) {
-    const source = value || fallback;
-    return {
-        re: finiteOr(source && source.re, fallback.re),
-        im: finiteOr(source && source.im, fallback.im)
-    };
+function writePolynomialCoeffs(target, coeffs) {
+    const source = Array.isArray(coeffs) ? coeffs : EMPTY_ARRAY;
+
+    for (let i = 0; i <= MAX_POLY_DEGREE; i++) {
+        const coeff = source[i];
+        target[i].re = finiteOr(coeff && coeff.re, 0);
+        target[i].im = finiteOr(coeff && coeff.im, 0);
+    }
+
+    return target;
 }
 
-function clonePolynomialCoeffs(coeffs) {
-    const source = Array.isArray(coeffs) ? coeffs : [];
-    return Array.from({ length: MAX_POLY_DEGREE + 1 }, (_, i) => cloneComplex(source[i], { re: 0, im: 0 }));
+function cloneAlgebraicTerms(terms) {
+    if (!Array.isArray(terms) || terms.length === 0) return EMPTY_ARRAY;
+
+    return terms.map(term => {
+        const coeff = term && term.coeff;
+        const factors = Array.isArray(term && term.factors) ? term.factors : EMPTY_ARRAY;
+
+        return {
+            coeff: {
+                re: finiteOr(coeff && coeff.re, 0),
+                im: finiteOr(coeff && coeff.im, 0)
+            },
+            factors: factors.map(factor => ({
+                func: factor && factor.func ? String(factor.func) : 'none',
+                chainedFunc: factor && factor.chainedFunc ? String(factor.chainedFunc) : 'none',
+                power: finiteOr(factor && factor.power, 1),
+                reciprocal: Boolean(factor && factor.reciprocal),
+                log: Boolean(factor && factor.log),
+                exp: Boolean(factor && factor.exp)
+            }))
+        };
+    });
 }
 
 /*
- * The public API remains drop-in compatible. Internally, each render starts from
- * a detached state snapshot so the GPU pipeline never observes mid-frame object
- * mutations from UI controls.
+ * Render state is sampled into a stable, reusable frame capsule. The original
+ * implementation deep-cloned UI state on every draw; this path keeps the same
+ * public shape while avoiding broad structuredClone/JSON churn. Algebraic
+ * shader terms are copied narrowly because shader source generation depends on
+ * their nested values.
  */
 function readRenderState() {
-    return {
-        currentInputShape: state.currentInputShape,
-        currentFunction: state.currentFunction,
+    const snapshot = RENDER_SNAPSHOT;
 
-        a0: finiteOr(state.a0, 0),
-        b0: finiteOr(state.b0, 0),
+    snapshot.currentInputShape = state.currentInputShape;
+    snapshot.currentFunction = state.currentFunction;
 
-        mobiusA: cloneComplex(state.mobiusA, { re: 1, im: 0 }),
-        mobiusB: cloneComplex(state.mobiusB, { re: 0, im: 0 }),
-        mobiusC: cloneComplex(state.mobiusC, { re: 0, im: 0 }),
-        mobiusD: cloneComplex(state.mobiusD, { re: 1, im: 0 }),
+    snapshot.a0 = finiteOr(state.a0, 0);
+    snapshot.b0 = finiteOr(state.b0, 0);
 
-        polynomialN: finiteOr(state.polynomialN, 0),
-        polynomialCoeffs: clonePolynomialCoeffs(state.polynomialCoeffs),
-        fractionalPowerN: state.fractionalPowerN !== undefined ? finiteOr(state.fractionalPowerN, 0.5) : 0.5,
+    writeComplex(snapshot.mobiusA, state.mobiusA, 1, 0);
+    writeComplex(snapshot.mobiusB, state.mobiusB, 0, 0);
+    writeComplex(snapshot.mobiusC, state.mobiusC, 0, 0);
+    writeComplex(snapshot.mobiusD, state.mobiusD, 1, 0);
 
-        algebraicChainingTerms: clonePlain(state.algebraicChainingTerms || []),
-        chainingEnabled: Boolean(state.chainingEnabled),
-        chainCount: finiteOr(state.chainCount, 0),
-        chainingMode: state.chainingMode,
-        navigationModeEnabled: Boolean(state.navigationModeEnabled),
+    snapshot.polynomialN = finiteOr(state.polynomialN, 0);
+    writePolynomialCoeffs(snapshot.polynomialCoeffs, state.polynomialCoeffs);
+    snapshot.fractionalPowerN = state.fractionalPowerN !== undefined ? finiteOr(state.fractionalPowerN, 0.5) : 0.5;
 
-        zetaContinuationEnabled: Boolean(state.zetaContinuationEnabled),
+    snapshot.algebraicChainingTerms = cloneAlgebraicTerms(state.algebraicChainingTerms);
+    snapshot.algebraicChainingZExpr = state.algebraicChainingZExpr || 'z';
+    snapshot.chainingEnabled = Boolean(state.chainingEnabled);
+    snapshot.chainCount = finiteOr(state.chainCount, 0);
+    snapshot.chainingMode = state.chainingMode;
+    snapshot.navigationModeEnabled = Boolean(state.navigationModeEnabled);
 
-        gridDensity: finiteOr(state.gridDensity, 10),
-        vectorFieldScale: finiteOr(state.vectorFieldScale, 1),
-        vectorArrowThickness: finiteOr(state.vectorArrowThickness, 1.5),
-        vectorArrowHeadSize: finiteOr(state.vectorArrowHeadSize, 8),
-        vectorFieldFunction: state.vectorFieldFunction,
-        domainBrightness: finiteOr(state.domainBrightness, 1)
-    };
+    snapshot.zetaContinuationEnabled = Boolean(state.zetaContinuationEnabled);
+
+    snapshot.gridDensity = finiteOr(state.gridDensity, 10);
+    snapshot.vectorFieldScale = finiteOr(state.vectorFieldScale, 1);
+    snapshot.vectorArrowThickness = finiteOr(state.vectorArrowThickness, 1.5);
+    snapshot.vectorArrowHeadSize = finiteOr(state.vectorArrowHeadSize, 8);
+    snapshot.vectorFieldFunction = state.vectorFieldFunction;
+    snapshot.domainBrightness = finiteOr(state.domainBrightness, 1);
+
+    return snapshot;
+}
+
+function mixHash(hash, value) {
+    hash ^= value >>> 0;
+    return Math.imul(hash, 16777619) >>> 0;
+}
+
+function hashString(hash, text) {
+    for (let i = 0; i < text.length; i++) hash = mixHash(hash, text.charCodeAt(i));
+    return hash;
+}
+
+function hashScalar(hash, value) {
+    if (typeof value === 'number') {
+        return hashString(hash, Number.isFinite(value) ? value.toPrecision(12) : String(value));
+    }
+    if (typeof value === 'string') return hashString(hash, value);
+    if (typeof value === 'boolean') return mixHash(hash, value ? 1 : 0);
+    return mixHash(hash, 2166136261);
+}
+
+function hashStructure(value, hash = 2166136261) {
+    if (value === null || typeof value !== 'object') return hashScalar(hash, value);
+
+    if (Array.isArray(value)) {
+        hash = mixHash(hash, value.length);
+        for (let i = 0; i < value.length; i++) hash = hashStructure(value[i], hash);
+        return hash;
+    }
+
+    for (const key in value) {
+        const item = value[key];
+        if (typeof item === 'function') continue;
+        hash = hashString(hash, key);
+        hash = hashStructure(item, hash);
+    }
+
+    return hash;
 }
 
 function getAlgebraicHash(snapshot) {
-    return JSON.stringify(snapshot.algebraicChainingTerms || []);
+    const terms = snapshot.algebraicChainingTerms || EMPTY_ARRAY;
+    return `${snapshot.algebraicChainingZExpr || 'z'}:${terms.length}:${hashStructure(terms)}`;
 }
 
 function markSupportUnavailable(reason) {
@@ -225,11 +297,6 @@ function deleteRendererVao(renderer, key) {
     renderer[key] = null;
 }
 
-function resetForwardVaos(renderer) {
-    deleteRendererVao(renderer, 'forwardGpuVao');
-    deleteRendererVao(renderer, 'forwardCpuVao');
-}
-
 function bindOrCreateVao(renderer, key, configure) {
     if (!renderer.vao.supported) return false;
 
@@ -277,11 +344,27 @@ function createTexture(gl) {
     return texture;
 }
 
+function getTextureAnisotropyExtension(gl) {
+    if (Object.prototype.hasOwnProperty.call(gl, '__drawImageAnisotropyExt')) return gl.__drawImageAnisotropyExt;
+
+    gl.__drawImageAnisotropyExt = gl.getExtension('EXT_texture_filter_anisotropic')
+        || gl.getExtension('MOZ_EXT_texture_filter_anisotropic')
+        || gl.getExtension('WEBKIT_EXT_texture_filter_anisotropic')
+        || null;
+    return gl.__drawImageAnisotropyExt;
+}
+
 function setTextureSampling(gl) {
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+
+    const anisotropy = getTextureAnisotropyExtension(gl);
+    if (anisotropy && typeof gl.texParameterf === 'function' && typeof gl.getParameter === 'function') {
+        const maxAnisotropy = gl.getParameter(anisotropy.MAX_TEXTURE_MAX_ANISOTROPY_EXT) || 1;
+        gl.texParameterf(gl.TEXTURE_2D, anisotropy.TEXTURE_MAX_ANISOTROPY_EXT, Math.min(8, maxAnisotropy));
+    }
 }
 
 function createStaticBuffer(gl, target, data) {
@@ -347,11 +430,13 @@ function resizeRendererCanvas(renderer, width, height) {
     return true;
 }
 
+const TARGET_SIZE_SCRATCH = { width: 0, height: 0 };
+const VIEW_BOUNDS_SCRATCH = { x0: 0, x1: 0, y0: 0, y1: 0, xSpan: 0, ySpan: 0 };
+
 function getTargetSize(targetCtx, planeParams) {
-    return {
-        width: (targetCtx && targetCtx.canvas && targetCtx.canvas.width) || (planeParams && planeParams.width) || 0,
-        height: (targetCtx && targetCtx.canvas && targetCtx.canvas.height) || (planeParams && planeParams.height) || 0
-    };
+    TARGET_SIZE_SCRATCH.width = (targetCtx && targetCtx.canvas && targetCtx.canvas.width) || (planeParams && planeParams.width) || 0;
+    TARGET_SIZE_SCRATCH.height = (targetCtx && targetCtx.canvas && targetCtx.canvas.height) || (planeParams && planeParams.height) || 0;
+    return TARGET_SIZE_SCRATCH;
 }
 
 function clearTransparent(gl) {
@@ -389,24 +474,18 @@ function isVideoAwaitingFrame(shape, source) {
     return shape === 'video' && source && source.readyState < HTMLMediaElement.HAVE_CURRENT_DATA;
 }
 
-function getVisibleRanges(planeParams) {
-    return {
-        xRange: planeParams.currentVisXRange || planeParams.xRange,
-        yRange: planeParams.currentVisYRange || planeParams.yRange
-    };
-}
-
 function getViewBounds(planeParams) {
-    const { xRange, yRange } = getVisibleRanges(planeParams);
+    const xRange = planeParams.currentVisXRange || planeParams.xRange;
+    const yRange = planeParams.currentVisYRange || planeParams.yRange;
+    const bounds = VIEW_BOUNDS_SCRATCH;
 
-    return {
-        x0: xRange[0],
-        x1: xRange[1],
-        y0: yRange[0],
-        y1: yRange[1],
-        xSpan: xRange[1] - xRange[0],
-        ySpan: yRange[1] - yRange[0]
-    };
+    bounds.x0 = xRange[0];
+    bounds.x1 = xRange[1];
+    bounds.y0 = yRange[0];
+    bounds.y1 = yRange[1];
+    bounds.xSpan = bounds.x1 - bounds.x0;
+    bounds.ySpan = bounds.y1 - bounds.y0;
+    return bounds;
 }
 
 function hasUsableBounds(bounds) {
@@ -523,7 +602,11 @@ function createInverseVertexShader() {
 
 function createInverseFragmentShader(snapshot) {
     return glsl(
+        '#ifdef GL_FRAGMENT_PRECISION_HIGH',
+        'precision highp float;',
+        '#else',
         'precision mediump float;',
+        '#endif',
         'varying vec2 v_uv;',
         'uniform sampler2D u_texture;',
         'uniform vec2 u_resolution;',
@@ -547,11 +630,6 @@ function createInverseFragmentShader(snapshot) {
         getGLSLComplexMathLibrary(snapshot),
         GLSL_COMPLEX_INVERSE_LIBRARY,
         '',
-        'vec2 complexPowReal(vec2 b, float e) {',
-        '  vec2 l = complexLn(b);',
-        '  return complexExp(vec2(l.x * e, l.y * e));',
-        '}',
-        '',
         'bool applyInverseChain(inout vec2 z) {',
         '  if (u_chainMode == 1) {',
         '    for (int i = 0; i < 16; i++) {',
@@ -560,15 +638,6 @@ function createInverseFragmentShader(snapshot) {
         '      if (!evaluateInverseFunction(p, u_functionId, u_mobiusA, u_mobiusB, u_mobiusC, u_mobiusD, u_polyDegree, u_polyCoeffs, u_fracPower, z)) return false;',
         '    }',
         '    return true;',
-        '  }',
-        '',
-        '  for (int i = 0; i < 16; i++) {',
-        '    if (i >= u_chainIndex) break;',
-        '    if (u_chainMode == 2) { z = complexPowReal(z, 1.0 / float(u_chainIndex + 1)); break; }',
-        '    if (u_chainMode == 3) { z = complexPowReal(z, pow(2.0, float(u_chainIndex))); break; }',
-        '    if (u_chainMode == 4) z = complexExp(z);',
-        '    if (u_chainMode == 5) { if (dot(z, z) < 1e-20) return false; z = complexLn(z); }',
-        '    if (u_chainMode == 6) { if (dot(z, z) < 1e-18) return false; z = complexDiv(vec2(1.0, 0.0), z); }',
         '  }',
         '',
         '  vec2 p = z;',
@@ -676,7 +745,11 @@ function createForwardVertexShader(snapshot) {
 
 function createForwardFragmentShader() {
     return glsl(
+        '#ifdef GL_FRAGMENT_PRECISION_HIGH',
+        'precision highp float;',
+        '#else',
         'precision mediump float;',
+        '#endif',
         'varying vec2 v_uv;',
         'varying float v_valid;',
         'uniform sampler2D u_texture;',
@@ -710,12 +783,34 @@ function createRendererResources(gl) {
     return { texture, quadBuffer, forwardVertexBuffer, forwardIndexBuffer, forwardMappedBuffer };
 }
 
+function getResolutionTier(currentRes) {
+    const value = Math.max(2, finiteOr(currentRes, DEFAULT_RASTER_RESOLUTION));
+    if (value <= 192) return 192;
+    if (value <= 320) return 320;
+    if (value <= 384) return 384;
+    if (value <= 512) return 512;
+    if (value <= 768) return 768;
+    return Math.ceil(value / 256) * 256;
+}
+
+function getCpuForwardResolution(currentRes) {
+    const value = Math.max(2, finiteOr(currentRes, DEFAULT_RASTER_RESOLUTION));
+    if (value <= 192) return 192;
+    if (value <= 320) return 320;
+    return 384;
+}
+
 function getMeshDimensions(currentRes, currentShape) {
     const aspect = getRasterAspectRatioForShape(currentShape) || 1.0;
-    const resX = Math.max(2, aspect >= 1 ? currentRes : Math.round(currentRes * aspect));
-    const resY = Math.max(2, aspect >= 1 ? Math.round(currentRes / aspect) : currentRes);
+    const res = getResolutionTier(currentRes);
 
-    return { aspect, resX, resY, vertexCount: resX * resY };
+    /*
+     * A canonical square UV lattice is independent of media aspect; aspect is
+     * already applied in shader space through u_imageSize. Bucketing upward
+     * prevents continuous buffer churn while preserving or improving visual
+     * tessellation quality relative to the requested resolution.
+     */
+    return { aspect, resX: res, resY: res, vertexCount: res * res };
 }
 
 function getSafeMeshDimensions(gl, currentRes, currentShape) {
@@ -725,29 +820,45 @@ function getSafeMeshDimensions(gl, currentRes, currentShape) {
     if (gl.getExtension('OES_element_index_uint')) return Object.assign(requested, { useUint32: true });
 
     const scale = Math.sqrt(UINT16_VERTEX_LIMIT / requested.vertexCount);
-    return Object.assign(getMeshDimensions(Math.max(2, Math.floor(currentRes * scale)), currentShape), {
+    const scaledRes = Math.max(2, Math.floor(requested.resX * scale));
+    return {
+        aspect: requested.aspect,
+        resX: scaledRes,
+        resY: scaledRes,
+        vertexCount: scaledRes * scaledRes,
         useUint32: false
-    });
+    };
 }
 
 function getMeshKey(currentRes, currentShape) {
-    const aspect = getRasterAspectRatioForShape(currentShape) || 1.0;
-    return `${currentShape}:${currentRes}:${aspect.toPrecision(8)}`;
+    const dimensions = getMeshDimensions(currentRes, currentShape);
+    return `${getResolutionTier(currentRes)}:${dimensions.resX}x${dimensions.resY}`;
+}
+
+
+const meshCache = new Map();
+
+function getMeshCacheKey(resX, resY, useUint32) {
+    return `${resX}x${resY}:${useUint32 ? 1 : 0}`;
 }
 
 function buildMeshVertices(resX, resY) {
     const vertices = new Float32Array(resX * resY * 2);
+    const stepX = 1 / (resX - 1);
+    const stepY = 1 / (resY - 1);
     let offset = 0;
+    let ty = 0;
 
-    for (let y = 0; y < resY; y++) {
-        const ty = y / (resY - 1);
-
-        for (let x = 0; x < resX; x++) {
-            vertices[offset++] = x / (resX - 1);
+    for (let y = 0; y < resY; y++, ty += stepY) {
+        let tx = 0;
+        for (let x = 0; x < resX; x++, tx += stepX) {
+            vertices[offset++] = tx;
             vertices[offset++] = ty;
         }
     }
 
+    vertices[vertices.length - 2] = 1;
+    vertices[vertices.length - 1] = 1;
     return vertices;
 }
 
@@ -758,13 +869,11 @@ function buildMeshIndices(resX, resY, useUint32) {
     let offset = 0;
 
     for (let y = 0; y < resY - 1; y++) {
-        const row = y * resX;
-        const nextRow = row + resX;
+        let tl = y * resX;
+        let bl = tl + resX;
 
-        for (let x = 0; x < resX - 1; x++) {
-            const tl = row + x;
+        for (let x = 0; x < resX - 1; x++, tl++, bl++) {
             const tr = tl + 1;
-            const bl = nextRow + x;
             const br = bl + 1;
 
             indices[offset++] = tl;
@@ -779,19 +888,37 @@ function buildMeshIndices(resX, resY, useUint32) {
     return indices;
 }
 
+function getCachedMesh(dimensions) {
+    const key = getMeshCacheKey(dimensions.resX, dimensions.resY, dimensions.useUint32);
+    const cached = meshCache.get(key);
+
+    if (cached) {
+        meshCache.delete(key);
+        meshCache.set(key, cached);
+        return cached;
+    }
+
+    const mesh = {
+        vertices: buildMeshVertices(dimensions.resX, dimensions.resY),
+        indices: buildMeshIndices(dimensions.resX, dimensions.resY, dimensions.useUint32)
+    };
+
+    meshCache.set(key, mesh);
+    if (meshCache.size > MESH_CACHE_LIMIT) meshCache.delete(meshCache.keys().next().value);
+    return mesh;
+}
+
 function uploadForwardMesh(renderer, dimensions) {
     const gl = renderer.gl;
-
-    resetForwardVaos(renderer);
+    const mesh = getCachedMesh(dimensions);
 
     gl.bindBuffer(gl.ARRAY_BUFFER, renderer.forwardVertexBuffer);
-    gl.bufferData(gl.ARRAY_BUFFER, buildMeshVertices(dimensions.resX, dimensions.resY), gl.STATIC_DRAW);
+    gl.bufferData(gl.ARRAY_BUFFER, mesh.vertices, gl.STATIC_DRAW);
 
-    const indices = buildMeshIndices(dimensions.resX, dimensions.resY, dimensions.useUint32);
     gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, renderer.forwardIndexBuffer);
-    gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, indices, gl.STATIC_DRAW);
+    gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, mesh.indices, gl.STATIC_DRAW);
 
-    renderer.forwardIndexCount = indices.length;
+    renderer.forwardIndexCount = mesh.indices.length;
     renderer.forwardIndexType = dimensions.useUint32 ? gl.UNSIGNED_INT : gl.UNSIGNED_SHORT;
     renderer.forwardMeshDimensions = dimensions;
 }
@@ -808,15 +935,17 @@ function getForwardTransform(isWP, map) {
     return isWP ? (map?.evaluate || getChainedTransformFunction()) : (re, im) => ({ re, im });
 }
 
-function clipMappedPoint(value, bounds) {
-    if (!value || !Number.isFinite(value.re) || !Number.isFinite(value.im)) {
-        return [DEFAULT_INVALID_CLIP, DEFAULT_INVALID_CLIP];
+function getMappedPositionBuffer(renderer, vertexCount) {
+    const length = vertexCount * 2;
+    if (!renderer.forwardMappedCpuBuffer || renderer.forwardMappedCpuBuffer.length !== length) {
+        renderer.forwardMappedCpuBuffer = new Float32Array(length);
     }
+    return renderer.forwardMappedCpuBuffer;
+}
 
-    return [
-        ((value.re - bounds.x0) / bounds.xSpan) * 2.0 - 1.0,
-        ((value.im - bounds.y0) / bounds.ySpan) * 2.0 - 1.0
-    ];
+function writeInvalidMappedPoint(mapped, offset) {
+    mapped[offset] = DEFAULT_INVALID_CLIP;
+    mapped[offset + 1] = DEFAULT_INVALID_CLIP;
 }
 
 function buildCpuMappedPositions(renderer, planeParams, currentShape, isWP, snapshot, map) {
@@ -828,20 +957,32 @@ function buildCpuMappedPositions(renderer, planeParams, currentShape, isWP, snap
 
     const media = getRasterDisplayDimensions(currentShape);
     const transform = getForwardTransform(isWP, map);
-    const mapped = new Float32Array(dimensions.resX * dimensions.resY * 2);
+    const mapped = getMappedPositionBuffer(renderer, dimensions.resX * dimensions.resY);
+    const stepX = 1 / (dimensions.resX - 1);
+    const stepY = 1 / (dimensions.resY - 1);
+    const halfWidth = media.width * 0.5;
+    const halfHeight = media.height * 0.5;
+    const invXSpan = 2.0 / bounds.xSpan;
+    const invYSpan = 2.0 / bounds.ySpan;
     let offset = 0;
+    let ty = 0;
 
-    for (let y = 0; y < dimensions.resY; y++) {
-        const ty = y / (dimensions.resY - 1);
-        const im = snapshot.b0 - (ty * 2.0 - 1.0) * (media.height / 2.0);
+    for (let y = 0; y < dimensions.resY; y++, ty += stepY) {
+        const im = snapshot.b0 - (ty * 2.0 - 1.0) * halfHeight;
+        let tx = 0;
 
-        for (let x = 0; x < dimensions.resX; x++) {
-            const tx = x / (dimensions.resX - 1);
-            const re = snapshot.a0 + (tx * 2.0 - 1.0) * (media.width / 2.0);
-            const [clipX, clipY] = clipMappedPoint(transform(re, im), bounds);
+        for (let x = 0; x < dimensions.resX; x++, tx += stepX) {
+            const re = snapshot.a0 + (tx * 2.0 - 1.0) * halfWidth;
+            const value = transform(re, im);
 
-            mapped[offset++] = clipX;
-            mapped[offset++] = clipY;
+            if (!value || !Number.isFinite(value.re) || !Number.isFinite(value.im)) {
+                writeInvalidMappedPoint(mapped, offset);
+            } else {
+                mapped[offset] = (value.re - bounds.x0) * invXSpan - 1.0;
+                mapped[offset + 1] = (value.im - bounds.y0) * invYSpan - 1.0;
+            }
+
+            offset += 2;
         }
     }
 
@@ -937,6 +1078,14 @@ function getInverseChainMode(chainIndex, snapshot) {
         : 0;
 }
 
+function normalizeChainIndex(value) {
+    return Math.max(0, Math.floor(Number.isFinite(value) ? value : 0));
+}
+
+export function getImageRenderChainIndex(chainIndex = 0, map = null) {
+    return normalizeChainIndex(Number.isFinite(map?.stage) ? map.stage : chainIndex);
+}
+
 function setImageUniformsForSnapshot(gl, locs, planeParams, isWP, currentShape, snapshot) {
     if (!gl || !locs || !planeParams) return;
 
@@ -970,12 +1119,12 @@ function drawForwardImagePath(renderer, planeParams, isWP, currentShape, snapsho
     if (!renderer.forwardProgram || !renderer.forwardLocs) return false;
 
     const currentRes = getRasterResolutionForShape(currentShape) || DEFAULT_RASTER_RESOLUTION;
-    ensureForwardMesh(renderer, currentRes);
+    const useCpuEval = shouldUseCpuForwardEvaluation(isWP, snapshot, map);
+    ensureForwardMesh(renderer, useCpuEval ? getCpuForwardResolution(currentRes) : currentRes);
     if (!renderer.forwardIndexCount) return false;
 
     const gl = renderer.gl;
     const locs = renderer.forwardLocs;
-    const useCpuEval = shouldUseCpuForwardEvaluation(isWP, snapshot, map);
 
     gl.useProgram(renderer.forwardProgram);
     if (!prepareForwardGeometry(renderer, locs, planeParams, currentShape, isWP, snapshot, useCpuEval, map)) {
@@ -1004,8 +1153,10 @@ function isInverseImageRenderSupportedForSnapshot(snapshot) {
     return funcId >= 1 && funcId <= 15;
 }
 
-function shouldUseInverseImagePath(isWP, snapshot) {
-    return !isWP || (isWP && isInverseImageRenderSupportedForSnapshot(snapshot) && !snapshot.navigationModeEnabled);
+export function shouldUseInverseImagePath(isWP, snapshot, chainIndex = 0) {
+    if (!isWP) return true;
+    if (normalizeChainIndex(chainIndex) > MAX_INVERSE_CHAIN_INDEX) return false;
+    return isInverseImageRenderSupportedForSnapshot(snapshot) && !snapshot.navigationModeEnabled;
 }
 
 function getDrawableRasterSource(snapshot) {
@@ -1023,7 +1174,11 @@ function createVectorVertexShader() {
 
 function createVectorFragmentShader(snapshot) {
     return glsl(
+        '#ifdef GL_FRAGMENT_PRECISION_HIGH',
+        'precision highp float;',
+        '#else',
         'precision mediump float;',
+        '#endif',
         'varying vec2 v_uv;',
         'uniform vec4 u_viewBounds;',
         'uniform float u_density;',
@@ -1257,6 +1412,7 @@ export function createWebGLImageRenderer() {
         forwardVertexBuffer: resources.forwardVertexBuffer,
         forwardIndexBuffer: resources.forwardIndexBuffer,
         forwardMappedBuffer: resources.forwardMappedBuffer,
+        forwardMappedCpuBuffer: null,
         forwardGpuVao: null,
         forwardCpuVao: null,
 
@@ -1267,7 +1423,6 @@ export function createWebGLImageRenderer() {
 
         forwardIndexCount: 0,
         forwardIndexType: gl.UNSIGNED_SHORT,
-        forwardResolution: 0,
         forwardMeshKey: '',
         forwardMeshDimensions: null,
 
@@ -1320,6 +1475,7 @@ export function disposeWebGLRenderer(renderer) {
     renderer.forwardVertexBuffer = null;
     renderer.forwardIndexBuffer = null;
     renderer.forwardMappedBuffer = null;
+    renderer.forwardMappedCpuBuffer = null;
     renderer.inverseProgram = null;
     renderer.forwardProgram = null;
     renderer.inverseLocs = null;
@@ -1375,7 +1531,6 @@ export function updateImageTexture(renderer) {
 
     gl.bindTexture(gl.TEXTURE_2D, renderer.texture);
     gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, source);
-    setTextureSampling(gl);
     return true;
 }
 
@@ -1387,11 +1542,10 @@ export function ensureForwardMesh(renderer, currentRes) {
     const currentShape = snapshot.currentInputShape;
     const meshKey = getMeshKey(currentRes, currentShape);
 
-    if (renderer.forwardMeshKey === meshKey && renderer.forwardResolution === currentRes) return;
+    if (renderer.forwardMeshKey === meshKey) return;
 
     const dimensions = getSafeMeshDimensions(gl, currentRes, currentShape);
 
-    renderer.forwardResolution = currentRes;
     renderer.forwardMeshKey = meshKey;
     uploadForwardMesh(renderer, dimensions);
 }
@@ -1402,6 +1556,7 @@ export function setImageUniforms(gl, locs, planeParams, isWP, currentShape) {
 
 export function drawImageWithWebGL(targetCtx, planeParams, isWP, chainIndex, map = null) {
     const snapshot = readRenderState();
+    const effectiveChainIndex = getImageRenderChainIndex(chainIndex, map);
 
     invalidateImageRendererForDynamicAlgebra(snapshot);
     initWebGLImageSupportIfNeeded();
@@ -1422,13 +1577,13 @@ export function drawImageWithWebGL(targetCtx, planeParams, isWP, chainIndex, map
     enablePremultipliedAlphaBlend(gl);
     bindTextureUnit0(gl, renderer.texture);
 
-    const rendered = map?.presentation !== 'derivative' && shouldUseInverseImagePath(isWP, snapshot)
+    const rendered = map?.presentation !== 'derivative' && shouldUseInverseImagePath(isWP, snapshot, effectiveChainIndex)
         ? drawInverseImagePath(
             renderer,
             planeParams,
             isWP,
             raster.currentShape,
-            chainIndex || 0,
+            effectiveChainIndex,
             size.width,
             size.height,
             snapshot

@@ -3,23 +3,22 @@ import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { state, zPlaneParams } from '../store/state.js';
 import { getChainedTransformFunction } from '../math-utils.js';
 import { compileExpression } from '../math/expression/evaluator.js';
-import { updatePlaneViewportRanges } from '../utils/canvas-utils.js';
-import { setupVisualParameters } from '../utils/dom-utils.js';
+import { POLE_MAGNITUDE_THRESHOLD } from '../constants/numerical.js';
 
-const BACKGROUND = 0x0b0914;
+const BACKGROUND = 0x070812;
 const CAMERA_HOME = Object.freeze({ x: 6.0, y: 5.0, z: 8.0 });
 const SURFACE_SIZE = 6.0;
 const SURFACE_HEIGHT = 3.5;
-const GRID_SEGMENTS = 96;
-const GRID_STRIDE = GRID_SEGMENTS + 1;
-const GRID_VERTEX_COUNT = GRID_STRIDE * GRID_STRIDE;
-const GRID_INDEX_COUNT = GRID_SEGMENTS * GRID_SEGMENTS * 6;
+const DEFAULT_SAMPLE_SEGMENTS = 96;
+const RENDER_SEGMENTS = 192;
 const HALF_SURFACE = SURFACE_SIZE * 0.5;
 const HALF_HEIGHT = SURFACE_HEIGHT * 0.5;
 const CLAMP_LIMIT = 8.0;
 const INV_TWO_PI = 1 / (2 * Math.PI);
 const PALETTE_LUT_SIZE = 1024;
 const PALETTE_LUT_MASK = PALETTE_LUT_SIZE - 1;
+const COMPLEX_ZERO_EPSILON = 1e-15;
+const RECIPROCAL_POLE_CAP = POLE_MAGNITUDE_THRESHOLD * 2;
 
 const INPUT_PRESET = Object.freeze({
     GENERIC: 0,
@@ -40,13 +39,23 @@ const OUTPUT_COMPONENT = Object.freeze({
     MAGNITUDE: 2
 });
 
+const TRANSFORM_KERNEL = Object.freeze({
+    CALL: 0,
+    IDENTITY: 1,
+    SQUARE: 2,
+    RECIPROCAL: 3,
+    EXP: 4,
+    SIN: 5,
+    COS: 6
+});
+
 const PALETTE_HEX = Object.freeze({
-    ocean: [0x004d40, 0x00acc1, 0x80cbc4],
-    cyberpunk: [0x4a148c, 0xd81b60, 0x00e5ff],
-    copper: [0x3e2723, 0xd84315, 0xffe0b2],
-    forest: [0x0e3a14, 0x2e7d32, 0xa5d6a7, 0xfff9c4],
+    ocean: [0x001b2e, 0x005f73, 0x0a9396, 0x94d2bd, 0xe9d8a6],
+    cyberpunk: [0x11001c, 0x3a0ca3, 0xf72585, 0x4cc9f0, 0xfaff00],
+    copper: [0x170f0a, 0x5c2e12, 0xb85c24, 0xf6aa52, 0xffecd1],
+    forest: [0x03190e, 0x0b3d20, 0x2d6a4f, 0x95d5b2, 0xfff3b0],
     viridis: [0x440154, 0x3b528b, 0x21908d, 0x5dc963, 0xfde725],
-    sunset: [0x1a0b36, 0x880e4f, 0xff5722, 0xffeb3b]
+    sunset: [0x12001f, 0x3c096c, 0x9d174d, 0xf97316, 0xfef3c7]
 });
 
 export let active3DRenderer = null;
@@ -76,17 +85,17 @@ function createPaletteLut(hexStops) {
     const lut = new Float32Array(PALETTE_LUT_SIZE * 3);
     if (!hexStops || hexStops.length === 0) return lut;
     if (hexStops.length === 1) {
-        for (let i = 0; i < PALETTE_LUT_SIZE; i += 1) {
-            writeInterpolatedHex(lut, i * 3, hexStops[0], hexStops[0], 0);
+        for (let i = 0, offset = 0; i < PALETTE_LUT_SIZE; i += 1, offset += 3) {
+            writeInterpolatedHex(lut, offset, hexStops[0], hexStops[0], 0);
         }
         return lut;
     }
 
     const lastSegment = hexStops.length - 1;
-    for (let i = 0; i < PALETTE_LUT_SIZE; i += 1) {
+    for (let i = 0, offset = 0; i < PALETTE_LUT_SIZE; i += 1, offset += 3) {
         const scaled = i / (PALETTE_LUT_SIZE - 1) * lastSegment;
         const segment = Math.min(lastSegment - 1, scaled | 0);
-        writeInterpolatedHex(lut, i * 3, hexStops[segment], hexStops[segment + 1], scaled - segment);
+        writeInterpolatedHex(lut, offset, hexStops[segment], hexStops[segment + 1], scaled - segment);
     }
     return lut;
 }
@@ -108,23 +117,26 @@ function writePaletteColor(lut, ratio, colors, offset) {
 
 function makeAxisLabel(text, color) {
     const canvas = document.createElement('canvas');
-    canvas.width = 256;
-    canvas.height = 96;
+    canvas.width = 384;
+    canvas.height = 144;
     const context = canvas.getContext('2d');
-    context.font = '600 42px "STIX Two Math", serif';
+    context.font = '700 58px "STIX Two Math", "Cambria Math", serif';
     context.textAlign = 'center';
     context.textBaseline = 'middle';
+    context.shadowColor = 'rgba(0, 0, 0, 0.55)';
+    context.shadowBlur = 14;
     context.fillStyle = color;
-    context.fillText(text, 128, 48);
+    context.fillText(text, 192, 72);
 
     const texture = new THREE.CanvasTexture(canvas);
     texture.colorSpace = THREE.SRGBColorSpace;
+    texture.anisotropy = 4;
     const sprite = new THREE.Sprite(new THREE.SpriteMaterial({
         map: texture,
         transparent: true,
         depthWrite: false
     }));
-    sprite.scale.set(1.2, 0.45, 1);
+    sprite.scale.set(1.35, 0.5, 1);
     return sprite;
 }
 
@@ -147,17 +159,27 @@ function disposeObject(object) {
     });
 }
 
+function canonicalExpression(expression) {
+    return String(expression || 'x')
+        .toLowerCase()
+        .replace(/[\s_]+/g, '')
+        .replace(/−/g, '-')
+        .replace(/\*\*/g, '^')
+        .replace(/²/g, '^2')
+        .replace(/·/g, '*');
+}
+
 function presetType(expr) {
-    switch (expr) {
+    switch (canonicalExpression(expr)) {
         case 'x': return INPUT_PRESET.X;
         case 'y': return INPUT_PRESET.Y;
         case '0': return INPUT_PRESET.ZERO;
-        case 'x+y': return INPUT_PRESET.X_PLUS_Y;
+        case 'x+y': case 'y+x': return INPUT_PRESET.X_PLUS_Y;
         case 'x-y': return INPUT_PRESET.X_MINUS_Y;
-        case 'x*y': return INPUT_PRESET.X_TIMES_Y;
-        case '2x+y': return INPUT_PRESET.TWO_X_PLUS_Y;
-        case 'sin(x)+cos(y)': return INPUT_PRESET.SIN_X_PLUS_COS_Y;
-        case 'x*x-y*y': return INPUT_PRESET.X2_MINUS_Y2;
+        case 'x*y': case 'xy': return INPUT_PRESET.X_TIMES_Y;
+        case '2x+y': case '2*x+y': case 'x+x+y': case 'y+2x': case 'y+2*x': return INPUT_PRESET.TWO_X_PLUS_Y;
+        case 'sin(x)+cos(y)': case 'cos(y)+sin(x)': return INPUT_PRESET.SIN_X_PLUS_COS_Y;
+        case 'x*x-y*y': case 'x^2-y^2': return INPUT_PRESET.X2_MINUS_Y2;
         default: return INPUT_PRESET.GENERIC;
     }
 }
@@ -259,11 +281,13 @@ class InputEvaluator {
 }
 
 class StaticSurfaceTopology {
-    constructor(segments = GRID_SEGMENTS) {
-        this.segments = segments;
-        this.stride = segments + 1;
+    constructor(segments = DEFAULT_SAMPLE_SEGMENTS) {
+        this.segments = Math.max(1, segments | 0);
+        this.stride = this.segments + 1;
         this.vertexCount = this.stride * this.stride;
-        this.indices = new Uint16Array(segments * segments * 6);
+        const indexCount = this.segments * this.segments * 6;
+        const IndexArray = this.vertexCount > 65535 ? Uint32Array : Uint16Array;
+        this.indices = new IndexArray(indexCount);
         this.gridX = new Float32Array(this.vertexCount);
         this.gridZ = new Float32Array(this.vertexCount);
         this.#buildGrid();
@@ -271,11 +295,12 @@ class StaticSurfaceTopology {
     }
 
     #buildGrid() {
+        const scale = SURFACE_SIZE / this.segments;
         let index = 0;
         for (let j = 0; j <= this.segments; j += 1) {
-            const z = (j / this.segments - 0.5) * SURFACE_SIZE;
+            const z = j * scale - HALF_SURFACE;
             for (let i = 0; i <= this.segments; i += 1) {
-                this.gridX[index] = (i / this.segments - 0.5) * SURFACE_SIZE;
+                this.gridX[index] = i * scale - HALF_SURFACE;
                 this.gridZ[index] = z;
                 index += 1;
             }
@@ -304,19 +329,32 @@ class StaticSurfaceTopology {
     }
 }
 
-const SURFACE_TOPOLOGY = new StaticSurfaceTopology();
+const topologyCache = new Map();
+
+function topologyFor(segments) {
+    const safeSegments = Math.max(1, Math.floor(Number(segments) || DEFAULT_SAMPLE_SEGMENTS));
+    let topology = topologyCache.get(safeSegments);
+    if (!topology) {
+        topology = new StaticSurfaceTopology(safeSegments);
+        topologyCache.set(safeSegments, topology);
+    }
+    return topology;
+}
 
 class SurfaceMeshStore {
-    constructor() {
-        this.positions = new Float32Array(GRID_VERTEX_COUNT * 3);
-        this.normals = new Float32Array(GRID_VERTEX_COUNT * 3);
-        this.colors = new Float32Array(GRID_VERTEX_COUNT * 3);
-        this.rawValues = new Float32Array(GRID_VERTEX_COUNT);
-        this.values = new Float64Array(GRID_VERTEX_COUNT);
-        this.phases = new Float32Array(GRID_VERTEX_COUNT);
+    constructor(segments = RENDER_SEGMENTS) {
+        this.topology = topologyFor(segments);
+        this.segments = this.topology.segments;
+        this.vertexCount = this.topology.vertexCount;
+        this.positions = new Float32Array(this.vertexCount * 3);
+        this.normals = new Float32Array(this.vertexCount * 3);
+        this.colors = new Float32Array(this.vertexCount * 3);
+        this.rawValues = new Float32Array(this.vertexCount);
+        this.values = new Float64Array(this.vertexCount);
+        this.phases = new Float32Array(this.vertexCount);
         this.u = new Float64Array(2);
         this.v = new Float64Array(2);
-        
+
         this.contourUniforms = {
             uContoursEnabled: { value: 0.0 },
             uContourInterval: { value: 0.5 },
@@ -348,7 +386,7 @@ class SurfaceMeshStore {
         geometry.setAttribute('normal', normal);
         geometry.setAttribute('color', color);
         geometry.setAttribute('rawValue', rawValue);
-        geometry.setIndex(new THREE.BufferAttribute(SURFACE_TOPOLOGY.indices, 1));
+        geometry.setIndex(new THREE.BufferAttribute(this.topology.indices, 1));
         return geometry;
     }
 
@@ -357,16 +395,17 @@ class SurfaceMeshStore {
         const material = new THREE.MeshPhysicalMaterial({
             vertexColors: true,
             side: THREE.DoubleSide,
-            roughness: 0.12,
-            metalness: 0.08,
-            clearcoat: 0.85,
-            clearcoatRoughness: 0.08,
-            transmission: 0.22,
-            ior: 1.52,
-            thickness: 0.85,
-            specularIntensity: 0.9,
+            roughness: 0.18,
+            metalness: 0.16,
+            clearcoat: 1.0,
+            clearcoatRoughness: 0.055,
+            transmission: 0.08,
+            ior: 1.58,
+            thickness: 0.72,
+            specularIntensity: 1.0,
             transparent: true,
-            opacity: 0.96
+            opacity: 0.975,
+            envMapIntensity: 1.35
         });
 
         material.onBeforeCompile = (shader) => {
@@ -374,17 +413,25 @@ class SurfaceMeshStore {
             shader.uniforms.uContourInterval = contourUniforms.uContourInterval;
             shader.uniforms.uContourThickness = contourUniforms.uContourThickness;
 
-            shader.vertexShader = 'attribute float rawValue;\nvarying float v_heightVal;\n' + shader.vertexShader;
+            shader.vertexShader = 'attribute float rawValue;\nvarying float v_heightVal;\nvarying vec3 v_worldNormalFast;\n' + shader.vertexShader;
+            shader.vertexShader = shader.vertexShader.replace(
+                '#include <beginnormal_vertex>',
+                `#include <beginnormal_vertex>
+                v_worldNormalFast = normalize(normalMatrix * objectNormal);`
+            );
             shader.vertexShader = shader.vertexShader.replace(
                 '#include <begin_vertex>',
                 `#include <begin_vertex>
                 v_heightVal = rawValue;`
             );
 
-            shader.fragmentShader = 'varying float v_heightVal;\nuniform float uContoursEnabled;\nuniform float uContourInterval;\nuniform float uContourThickness;\n' + shader.fragmentShader;
+            shader.fragmentShader = 'varying float v_heightVal;\nvarying vec3 v_worldNormalFast;\nuniform float uContoursEnabled;\nuniform float uContourInterval;\nuniform float uContourThickness;\n' + shader.fragmentShader;
             shader.fragmentShader = shader.fragmentShader.replace(
                 '#include <dithering_fragment>',
                 `#include <dithering_fragment>
+                vec3 viewRimNormal = normalize(v_worldNormalFast);
+                float fresnelBoost = pow(1.0 - clamp(abs(viewRimNormal.z), 0.0, 1.0), 2.6);
+                gl_FragColor.rgb += vec3(0.08, 0.13, 0.20) * fresnelBoost;
                 if (uContoursEnabled > 0.5) {
                     float valDeriv = length(vec2(dFdx(v_heightVal), dFdy(v_heightVal)));
                     if (valDeriv > 1.0e-6) {
@@ -392,10 +439,10 @@ class SurfaceMeshStore {
                         float contourCoord = v_heightVal / safeInterval;
                         float distToContour = abs(contourCoord - floor(contourCoord + 0.5)) * safeInterval;
                         float pixelDist = distToContour / valDeriv;
-                        float lineIntensity = 1.0 - smoothstep(max(0.0, uContourThickness - 0.75), uContourThickness + 0.75, pixelDist);
+                        float lineIntensity = 1.0 - smoothstep(max(0.0, uContourThickness - 0.8), uContourThickness + 0.8, pixelDist);
                         float contourLum = dot(gl_FragColor.rgb, vec3(0.2126, 0.7152, 0.0722));
-                        vec3 contourInk = contourLum < 0.57 ? vec3(0.965, 0.976, 1.0) : vec3(0.031, 0.039, 0.071);
-                        gl_FragColor.rgb = mix(gl_FragColor.rgb, contourInk, lineIntensity * 0.86);
+                        vec3 contourInk = contourLum < 0.57 ? vec3(0.965, 0.976, 1.0) : vec3(0.025, 0.030, 0.055);
+                        gl_FragColor.rgb = mix(gl_FragColor.rgb, contourInk, lineIntensity * 0.88);
                     }
                 }`
             );
@@ -407,9 +454,9 @@ class SurfaceMeshStore {
     #createWireMaterial() {
         const MaterialCtor = THREE.MeshBasicMaterial || THREE.LineBasicMaterial;
         return new MaterialCtor({
-            color: 0xd8e7ff,
+            color: 0xf4f8ff,
             transparent: true,
-            opacity: 0.055,
+            opacity: 0.04,
             depthWrite: false,
             wireframe: true
         });
@@ -469,142 +516,102 @@ function evalScalarInput(type, x, y) {
     }
 }
 
-
 function softClampHeight(value) {
     const abs = Math.abs(value);
     if (abs <= CLAMP_LIMIT) return value;
-    return Math.sign(value) * (CLAMP_LIMIT + Math.tanh(abs - CLAMP_LIMIT));
+    return (value < 0 ? -1 : 1) * (CLAMP_LIMIT + Math.tanh(abs - CLAMP_LIMIT));
+}
+
+function expSafeForPlot(value) {
+    if (value > 700) return Math.exp(700);
+    if (value < -745) return 0;
+    return Math.exp(value);
+}
+
+function writeReciprocalKernel(re, im, out) {
+    if (re === 0 && im === 0) {
+        out[0] = NaN;
+        out[1] = NaN;
+        return out;
+    }
+
+    const absRe = Math.abs(re);
+    const absIm = Math.abs(im);
+    const scale = Math.max(absRe, absIm);
+
+    if (scale < COMPLEX_ZERO_EPSILON) {
+        out[0] = RECIPROCAL_POLE_CAP;
+        out[1] = 0;
+        return out;
+    }
+
+    if (absRe >= absIm) {
+        const ratio = im / re;
+        const divisor = re + im * ratio;
+        out[0] = 1 / divisor;
+        out[1] = -ratio / divisor;
+        return out;
+    }
+
+    const ratio = re / im;
+    const divisor = im + re * ratio;
+    out[0] = ratio / divisor;
+    out[1] = -1 / divisor;
+    return out;
+}
+
+function transformKernelKind(transformFunc) {
+    const meta = transformFunc?.realPlotsKernel ?? transformFunc?.realPlotKernel ?? transformFunc?.kernel;
+    const kind = typeof meta === 'string' ? meta : meta?.kind;
+    switch (String(kind || '').toLowerCase()) {
+        case 'identity': case 'id': return TRANSFORM_KERNEL.IDENTITY;
+        case 'square': case 'z2': return TRANSFORM_KERNEL.SQUARE;
+        case 'reciprocal': case 'inverse': case 'inv': return TRANSFORM_KERNEL.RECIPROCAL;
+        case 'exp': case 'exponential': return TRANSFORM_KERNEL.EXP;
+        case 'sin': return TRANSFORM_KERNEL.SIN;
+        case 'cos': return TRANSFORM_KERNEL.COS;
+        default: break;
+    }
+
+    const name = String(transformFunc?.name || '').toLowerCase();
+    if (name === 'identity' || name === 'id') return TRANSFORM_KERNEL.IDENTITY;
+    if (name === 'square' || name === 'z2') return TRANSFORM_KERNEL.SQUARE;
+    if (name === 'reciprocal' || name === 'inverse' || name === 'complexreciprocal') return TRANSFORM_KERNEL.RECIPROCAL;
+    if (name === 'expc' || name === 'exp' || name === 'complexexp') return TRANSFORM_KERNEL.EXP;
+    if (name === 'complexsin') return TRANSFORM_KERNEL.SIN;
+    if (name === 'complexcos') return TRANSFORM_KERNEL.COS;
+    return TRANSFORM_KERNEL.CALL;
 }
 
 function writeHeightfieldNormals(positions, normals, segments, gridStep) {
     const stride = segments + 1;
     const inverseCell = 1 / (2 * gridStep);
     for (let j = 0; j <= segments; j += 1) {
-        const jPrev = j === 0 ? 0 : j - 1;
-        const jNext = j === segments ? segments : j + 1;
+        const row = j * stride;
+        const prevRow = (j === 0 ? 0 : j - 1) * stride;
+        const nextRow = (j === segments ? segments : j + 1) * stride;
         for (let i = 0; i <= segments; i += 1) {
             const iPrev = i === 0 ? 0 : i - 1;
             const iNext = i === segments ? segments : i + 1;
-            const index = j * stride + i;
-            const left = (j * stride + iPrev) * 3 + 1;
-            const right = (j * stride + iNext) * 3 + 1;
-            const down = (jPrev * stride + i) * 3 + 1;
-            const up = (jNext * stride + i) * 3 + 1;
-            let nx = -(positions[right] - positions[left]) * inverseCell;
-            let ny = 1;
-            let nz = -(positions[up] - positions[down]) * inverseCell;
-            const invLen = 1 / Math.hypot(nx, ny, nz);
-            const offset = index * 3;
-            normals[offset] = nx * invLen;
-            normals[offset + 1] = ny * invLen;
-            normals[offset + 2] = nz * invLen;
+            const index = row + i;
+            const centerOffset = index * 3;
+            const nx = -(positions[(row + iNext) * 3 + 1] - positions[(row + iPrev) * 3 + 1]) * inverseCell;
+            const nz = -(positions[(nextRow + i) * 3 + 1] - positions[(prevRow + i) * 3 + 1]) * inverseCell;
+            const invLen = 1 / Math.sqrt(nx * nx + nz * nz + 1);
+            normals[centerOffset] = nx * invLen;
+            normals[centerOffset + 1] = invLen;
+            normals[centerOffset + 2] = nz * invLen;
         }
     }
 }
 
-export function sampleRealPlotSurface(transformFunc, options = {}) {
-    const segments = Math.max(1, Math.floor(Number(options.segments) || GRID_SEGMENTS));
-    const valuesOnly = options.valuesOnly === true;
-    const topology = valuesOnly
-        ? null
-        : options.topology || (segments === GRID_SEGMENTS ? SURFACE_TOPOLOGY : new StaticSurfaceTopology(segments));
-    const stride = segments + 1;
-    const vertexCount = valuesOnly ? stride * stride : topology.vertexCount;
-    const positions = valuesOnly ? null : options.positions || new Float32Array(vertexCount * 3);
-    const normals = valuesOnly ? null : options.normals || new Float32Array(vertexCount * 3);
-    const colors = valuesOnly ? null : options.colors || new Float32Array(vertexCount * 3);
-    const values = options.values || new Float64Array(vertexCount);
-    const phases = valuesOnly ? null : options.phases || new Float32Array(vertexCount);
-    const u = options.u || new Float64Array(2);
-    const v = options.v || new Float64Array(2);
-    const xRange = options.xRange || zPlaneParams.currentVisXRange;
-    const yRange = options.yRange || zPlaneParams.currentVisYRange;
-    const xMin = xRange[0];
-    const xMax = xRange[1];
-    const yMin = yRange[0];
-    const yMax = yRange[1];
-    const xScale = (xMax - xMin) / segments;
-    const yScale = (yMax - yMin) / segments;
-    const inputU = InputEvaluator.for(options.inputExpr ?? state.realPlotsInputExpr);
-    const inputV = InputEvaluator.for(options.imagExpr ?? state.realPlotsImagExpr);
-    const inputUType = inputU.type;
-    const inputVType = inputV.type;
-    const scalarInputs = isScalarInputType(inputUType) && isScalarInputType(inputVType);
-    const outputMode = outputComponentMode(options.outputComponent ?? state.realPlotsOutputComponent);
-    const invalidValue = options.invalidAsNaN === true ? NaN : 0;
-    const heightScale = options.heightScale !== undefined
-        ? options.heightScale
-        : state.realPlotsHeightScale !== undefined ? state.realPlotsHeightScale : 1.0;
-    const usePhaseColor = (options.colorMode ?? state.realPlotsColorMode) === 'phase';
-    const paletteLut = paletteLutFor(options.palette || state.realPlotsPalette || 'sunset');
-    const heightFactor = (HALF_HEIGHT * heightScale) / CLAMP_LIMIT;
-    const gridStep = SURFACE_SIZE / segments;
-    let minZ = Infinity;
-    let maxZ = -Infinity;
-    let finiteResultCount = 0;
-    let vertex = 0;
+function selectRawValue(re, im, outputMode) {
+    if (outputMode === OUTPUT_COMPONENT.IMAG) return im;
+    if (outputMode === OUTPUT_COMPONENT.MAGNITUDE) return Math.sqrt(re * re + im * im);
+    return re;
+}
 
-    for (let j = 0; j <= segments; j += 1) {
-        const yVal = yMin + j * yScale;
-        for (let i = 0; i <= segments; i += 1) {
-            const xVal = xMin + i * xScale;
-            let zInRe;
-            let zInIm;
-            if (scalarInputs) {
-                zInRe = evalScalarInput(inputUType, xVal, yVal);
-                zInIm = evalScalarInput(inputVType, xVal, yVal);
-            } else {
-                inputU.write(xVal, yVal, u);
-                inputV.write(xVal, yVal, v);
-                zInRe = u[0] - v[1];
-                zInIm = u[1] + v[0];
-            }
-
-            let rawValue = invalidValue;
-            let phase = 0.5;
-
-            try {
-                const result = transformFunc(zInRe, zInIm);
-                if (result && isFiniteNumber(result.re) && isFiniteNumber(result.im)) {
-                    finiteResultCount += 1;
-                    if (outputMode === OUTPUT_COMPONENT.IMAG) {
-                        rawValue = result.im;
-                    } else if (outputMode === OUTPUT_COMPONENT.MAGNITUDE) {
-                        rawValue = Math.hypot(result.re, result.im);
-                    } else {
-                        rawValue = result.re;
-                    }
-                    if (usePhaseColor) {
-                        phase = (Math.atan2(result.im, result.re) + Math.PI) * INV_TWO_PI;
-                    }
-                }
-            } catch (e) {
-                rawValue = invalidValue;
-                phase = 0.5;
-            }
-
-            values[vertex] = rawValue;
-            if (phases) phases[vertex] = phase;
-            if (isFiniteNumber(rawValue)) {
-                if (rawValue < minZ) minZ = rawValue;
-                if (rawValue > maxZ) maxZ = rawValue;
-            }
-            vertex += 1;
-        }
-    }
-
-    if (valuesOnly) {
-        return {
-            segments,
-            vertexCount,
-            values,
-            minValue: finiteResultCount > 0 ? minZ : NaN,
-            maxValue: finiteResultCount > 0 ? maxZ : NaN,
-            finiteResultCount
-        };
-    }
-
-    const rawValues = options.rawValues || new Float32Array(vertexCount);
+function finishSampleGeometry({ segments, vertexCount, topology, positions, normals, colors, rawValues, values, phases, minZ, maxZ, usePhaseColor, paletteLut, heightFactor }) {
     const spanZ = maxZ - minZ || 1.0;
     const inverseSpanZ = 1 / spanZ;
     for (let index = 0, offset = 0; index < vertexCount; index += 1, offset += 3) {
@@ -620,8 +627,191 @@ export function sampleRealPlotSurface(transformFunc, options = {}) {
             offset
         );
     }
+    writeHeightfieldNormals(positions, normals, segments, SURFACE_SIZE / segments);
+}
 
-    writeHeightfieldNormals(positions, normals, segments, gridStep);
+function sampleValuesPass(transformFunc, config, catchPerVertex) {
+    const {
+        segments, values, phases, u, v, xMin, yMin, xScale, yScale,
+        inputU, inputV, inputUType, inputVType, scalarInputs, outputMode, invalidValue,
+        usePhaseColor, kernelKind
+    } = config;
+    let minZ = Infinity;
+    let maxZ = -Infinity;
+    let finiteResultCount = 0;
+    let vertex = 0;
+    const fastXY = scalarInputs && inputUType === INPUT_PRESET.X && inputVType === INPUT_PRESET.Y;
+    const fastX0 = scalarInputs && inputUType === INPUT_PRESET.X && inputVType === INPUT_PRESET.ZERO;
+    const hasKernel = kernelKind !== TRANSFORM_KERNEL.CALL;
+    const kernelOut = hasKernel ? (config.kernelOut || (config.kernelOut = new Float64Array(2))) : null;
+
+    for (let j = 0; j <= segments; j += 1) {
+        const yVal = yMin + j * yScale;
+        for (let i = 0; i <= segments; i += 1) {
+            const xVal = xMin + i * xScale;
+            let zInRe;
+            let zInIm;
+            if (fastXY) {
+                zInRe = xVal;
+                zInIm = yVal;
+            } else if (fastX0) {
+                zInRe = xVal;
+                zInIm = 0;
+            } else if (scalarInputs) {
+                zInRe = evalScalarInput(inputUType, xVal, yVal);
+                zInIm = evalScalarInput(inputVType, xVal, yVal);
+            } else {
+                inputU.write(xVal, yVal, u);
+                inputV.write(xVal, yVal, v);
+                zInRe = u[0] - v[1];
+                zInIm = u[1] + v[0];
+            }
+
+            let rawValue = invalidValue;
+            let phase = 0.5;
+            if (hasKernel) {
+                let outRe;
+                let outIm;
+                switch (kernelKind) {
+                    case TRANSFORM_KERNEL.IDENTITY:
+                        outRe = zInRe; outIm = zInIm; break;
+                    case TRANSFORM_KERNEL.SQUARE:
+                        outRe = zInRe * zInRe - zInIm * zInIm; outIm = 2 * zInRe * zInIm; break;
+                    case TRANSFORM_KERNEL.RECIPROCAL: {
+                        writeReciprocalKernel(zInRe, zInIm, kernelOut);
+                        outRe = kernelOut[0];
+                        outIm = kernelOut[1];
+                        break;
+                    }
+                    case TRANSFORM_KERNEL.EXP: {
+                        const expRe = expSafeForPlot(zInRe);
+                        outRe = expRe * Math.cos(zInIm); outIm = expRe * Math.sin(zInIm); break;
+                    }
+                    case TRANSFORM_KERNEL.SIN:
+                        outRe = Math.sin(zInRe) * Math.cosh(zInIm); outIm = Math.cos(zInRe) * Math.sinh(zInIm); break;
+                    case TRANSFORM_KERNEL.COS:
+                        outRe = Math.cos(zInRe) * Math.cosh(zInIm); outIm = -Math.sin(zInRe) * Math.sinh(zInIm); break;
+                    default:
+                        outRe = 0; outIm = 0;
+                }
+                if (isFiniteNumber(outRe) && isFiniteNumber(outIm)) {
+                    finiteResultCount += 1;
+                    rawValue = selectRawValue(outRe, outIm, outputMode);
+                    if (usePhaseColor) phase = (Math.atan2(outIm, outRe) + Math.PI) * INV_TWO_PI;
+                }
+            } else if (catchPerVertex) {
+                try {
+                    const result = transformFunc(zInRe, zInIm);
+                    if (result && isFiniteNumber(result.re) && isFiniteNumber(result.im)) {
+                        finiteResultCount += 1;
+                        rawValue = selectRawValue(result.re, result.im, outputMode);
+                        if (usePhaseColor) phase = (Math.atan2(result.im, result.re) + Math.PI) * INV_TWO_PI;
+                    }
+                } catch (e) {
+                    rawValue = invalidValue;
+                    phase = 0.5;
+                }
+            } else {
+                const result = transformFunc(zInRe, zInIm);
+                if (result && isFiniteNumber(result.re) && isFiniteNumber(result.im)) {
+                    finiteResultCount += 1;
+                    rawValue = selectRawValue(result.re, result.im, outputMode);
+                    if (usePhaseColor) phase = (Math.atan2(result.im, result.re) + Math.PI) * INV_TWO_PI;
+                }
+            }
+
+            values[vertex] = rawValue;
+            if (phases) phases[vertex] = phase;
+            if (isFiniteNumber(rawValue)) {
+                if (rawValue < minZ) minZ = rawValue;
+                if (rawValue > maxZ) maxZ = rawValue;
+            }
+            vertex += 1;
+        }
+    }
+
+    return { minZ, maxZ, finiteResultCount };
+}
+
+
+export function sampleRealPlotSurface(transformFunc, options = {}) {
+    const segments = Math.max(1, Math.floor(Number(options.segments) || DEFAULT_SAMPLE_SEGMENTS));
+    const valuesOnly = options.valuesOnly === true;
+    const topology = valuesOnly ? null : options.topology || topologyFor(segments);
+    const stride = segments + 1;
+    const vertexCount = valuesOnly ? stride * stride : topology.vertexCount;
+    const positions = valuesOnly ? null : options.positions || new Float32Array(vertexCount * 3);
+    const normals = valuesOnly ? null : options.normals || new Float32Array(vertexCount * 3);
+    const colors = valuesOnly ? null : options.colors || new Float32Array(vertexCount * 3);
+    const rawValues = valuesOnly ? null : options.rawValues || new Float32Array(vertexCount);
+    const values = options.values || new Float64Array(vertexCount);
+    const phases = valuesOnly ? null : options.phases || new Float32Array(vertexCount);
+    const u = options.u || new Float64Array(2);
+    const v = options.v || new Float64Array(2);
+    const xRange = options.xRange || zPlaneParams.currentVisXRange;
+    const yRange = options.yRange || zPlaneParams.currentVisYRange;
+    const xMin = xRange[0];
+    const yMin = yRange[0];
+    const xScale = (xRange[1] - xMin) / segments;
+    const yScale = (yRange[1] - yMin) / segments;
+    const inputU = InputEvaluator.for(options.inputExpr ?? state.realPlotsInputExpr);
+    const inputV = InputEvaluator.for(options.imagExpr ?? state.realPlotsImagExpr);
+    const inputUType = inputU.type;
+    const inputVType = inputV.type;
+    const scalarInputs = isScalarInputType(inputUType) && isScalarInputType(inputVType);
+    const outputMode = outputComponentMode(options.outputComponent ?? state.realPlotsOutputComponent);
+    const invalidValue = options.invalidAsNaN === true ? NaN : 0;
+    const heightScale = options.heightScale !== undefined
+        ? options.heightScale
+        : state.realPlotsHeightScale !== undefined ? state.realPlotsHeightScale : 1.0;
+    const usePhaseColor = (options.colorMode ?? state.realPlotsColorMode) === 'phase';
+    const paletteLut = paletteLutFor(options.palette || state.realPlotsPalette || 'sunset');
+    const heightFactor = (HALF_HEIGHT * heightScale) / CLAMP_LIMIT;
+    const kernelKind = transformKernelKind(transformFunc);
+
+    const config = {
+        segments, values, phases, u, v, xMin, yMin, xScale, yScale,
+        inputU, inputV, inputUType, inputVType, scalarInputs, outputMode, invalidValue,
+        usePhaseColor, kernelKind
+    };
+
+    let sample;
+    try {
+        sample = sampleValuesPass(transformFunc, config, false);
+    } catch (e) {
+        sample = sampleValuesPass(transformFunc, config, true);
+    }
+
+    const minValue = sample.finiteResultCount > 0 ? sample.minZ : NaN;
+    const maxValue = sample.finiteResultCount > 0 ? sample.maxZ : NaN;
+
+    if (valuesOnly) {
+        return {
+            segments,
+            vertexCount,
+            values,
+            minValue,
+            maxValue,
+            finiteResultCount: sample.finiteResultCount
+        };
+    }
+
+    finishSampleGeometry({
+        segments,
+        vertexCount,
+        topology,
+        positions,
+        normals,
+        colors,
+        rawValues,
+        values,
+        phases,
+        minZ: sample.finiteResultCount > 0 ? sample.minZ : 0,
+        maxZ: sample.finiteResultCount > 0 ? sample.maxZ : 0,
+        usePhaseColor,
+        paletteLut,
+        heightFactor
+    });
 
     return {
         segments,
@@ -632,9 +822,9 @@ export function sampleRealPlotSurface(transformFunc, options = {}) {
         values,
         rawValues,
         phases,
-        minValue: minZ,
-        maxValue: maxZ,
-        finiteResultCount
+        minValue,
+        maxValue,
+        finiteResultCount: sample.finiteResultCount
     };
 }
 
@@ -642,19 +832,25 @@ class RealPlots3DRenderer {
     constructor(container) {
         this.container = container;
         this.scene = new THREE.Scene();
-        this.scene.fog = new THREE.FogExp2(BACKGROUND, 0.04);
+        this.scene.fog = new THREE.FogExp2(BACKGROUND, 0.028);
 
-        this.camera = new THREE.PerspectiveCamera(40, 1, 0.1, 100);
+        this.camera = new THREE.PerspectiveCamera(38, 1, 0.08, 120);
         this.camera.position.set(CAMERA_HOME.x, CAMERA_HOME.y, CAMERA_HOME.z);
 
-        this.renderer = new THREE.WebGLRenderer({ antialias: true, alpha: false, powerPreference: 'high-performance' });
+        this.renderer = new THREE.WebGLRenderer({
+            antialias: true,
+            alpha: false,
+            powerPreference: 'high-performance',
+            stencil: false,
+            depth: true
+        });
         this.renderer.setClearColor(BACKGROUND);
-        this.renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+        this.#syncPixelRatio();
         this.renderer.outputColorSpace = THREE.SRGBColorSpace;
         this.renderer.shadowMap.enabled = true;
         this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
         this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
-        this.renderer.toneMappingExposure = 1.0;
+        this.renderer.toneMappingExposure = 1.08;
         this.container.replaceChildren(this.renderer.domElement);
 
         this.controls = new OrbitControls(this.camera, this.renderer.domElement);
@@ -671,7 +867,7 @@ class RealPlots3DRenderer {
 
         this.surfaceGroup = new THREE.Group();
         this.scene.add(this.surfaceGroup);
-        this.surfaceStore = new SurfaceMeshStore();
+        this.surfaceStore = new SurfaceMeshStore(RENDER_SEGMENTS);
         this.surfaceGroup.add(this.surfaceStore.mesh, this.surfaceStore.wireframe);
 
         this.zLabelText = '';
@@ -686,6 +882,11 @@ class RealPlots3DRenderer {
         this.animate = this.animate.bind(this);
         this.animateActive = true;
         requestAnimationFrame(this.animate);
+    }
+
+    #syncPixelRatio() {
+        const ratio = window.devicePixelRatio || 1;
+        this.renderer.setPixelRatio(Math.min(ratio, 2.75));
     }
 
     #syncMathCameraTarget() {
@@ -708,17 +909,18 @@ class RealPlots3DRenderer {
 
     createCoordinateLabel(color) {
         const canvas = document.createElement('canvas');
-        canvas.width = 512;
-        canvas.height = 128;
+        canvas.width = 768;
+        canvas.height = 192;
         const context = canvas.getContext('2d');
         const texture = new THREE.CanvasTexture(canvas);
         texture.colorSpace = THREE.SRGBColorSpace;
+        texture.anisotropy = 4;
         const sprite = new THREE.Sprite(new THREE.SpriteMaterial({
             map: texture,
             transparent: true,
             depthWrite: false
         }));
-        sprite.scale.set(2.0, 0.5, 1);
+        sprite.scale.set(2.15, 0.54, 1);
 
         return {
             sprite,
@@ -730,49 +932,51 @@ class RealPlots3DRenderer {
                 if (text === this.text) return;
                 this.text = text;
                 context.clearRect(0, 0, canvas.width, canvas.height);
-                context.font = '500 48px "STIX Two Math", serif';
+                context.font = '600 64px "STIX Two Math", "Cambria Math", serif';
                 context.textAlign = 'center';
                 context.textBaseline = 'middle';
+                context.shadowColor = 'rgba(0, 0, 0, 0.65)';
+                context.shadowBlur = 18;
                 context.fillStyle = color;
-                context.fillText(text, 256, 64);
+                context.fillText(text, 384, 96);
                 texture.needsUpdate = true;
             }
         };
     }
 
     addReferenceFrame() {
-        const grid = new THREE.GridHelper(8, 16, 0x41436e, 0x22243d);
+        const grid = new THREE.GridHelper(8, 32, 0x5b5f92, 0x242846);
         grid.position.y = -HALF_HEIGHT - 0.01;
         this.scene.add(grid);
 
-        const floorGeo = new THREE.PlaneGeometry(30, 30);
-        const floorMat = new THREE.ShadowMaterial({ opacity: 0.25 });
+        const floorGeo = new THREE.PlaneGeometry(34, 34);
+        const floorMat = new THREE.ShadowMaterial({ opacity: 0.32 });
         const floor = new THREE.Mesh(floorGeo, floorMat);
         floor.rotation.x = -Math.PI / 2;
-        floor.position.y = -HALF_HEIGHT - 0.02;
+        floor.position.y = -HALF_HEIGHT - 0.025;
         floor.receiveShadow = true;
         this.scene.add(floor);
 
-        const xLabel = makeAxisLabel('x', 'rgba(216, 228, 255, 0.9)');
+        const xLabel = makeAxisLabel('x', 'rgba(232, 239, 255, 0.96)');
         xLabel.position.set(HALF_SURFACE + 0.4, -HALF_HEIGHT, 0);
 
-        const yLabel = makeAxisLabel('y', 'rgba(216, 228, 255, 0.9)');
+        const yLabel = makeAxisLabel('y', 'rgba(232, 239, 255, 0.96)');
         yLabel.position.set(0, -HALF_HEIGHT, HALF_SURFACE + 0.4);
 
-        this.zLabel = makeAxisLabel('z = Re(f)', 'rgba(216, 228, 255, 0.9)');
+        this.zLabel = makeAxisLabel('z = Re(f)', 'rgba(232, 239, 255, 0.96)');
         this.zLabel.position.set(0, HALF_HEIGHT + 0.4, 0);
         this.zLabelText = 'z = Re(f)';
         this.scene.add(xLabel, yLabel, this.zLabel);
 
         this.coordLabels = {
-            bottomLeft: this.createCoordinateLabel('rgba(216, 228, 255, 0.6)'),
-            bottomRight: this.createCoordinateLabel('rgba(216, 228, 255, 0.6)'),
-            topLeft: this.createCoordinateLabel('rgba(216, 228, 255, 0.6)'),
-            topRight: this.createCoordinateLabel('rgba(216, 228, 255, 0.6)')
+            bottomLeft: this.createCoordinateLabel('rgba(232, 239, 255, 0.68)'),
+            bottomRight: this.createCoordinateLabel('rgba(232, 239, 255, 0.68)'),
+            topLeft: this.createCoordinateLabel('rgba(232, 239, 255, 0.68)'),
+            topRight: this.createCoordinateLabel('rgba(232, 239, 255, 0.68)')
         };
 
         const yLevel = -HALF_HEIGHT - 0.05;
-        const offset = 0.5;
+        const offset = 0.55;
         this.coordLabels.bottomLeft.sprite.position.set(-HALF_SURFACE - offset, yLevel, -HALF_SURFACE - offset);
         this.coordLabels.bottomRight.sprite.position.set(HALF_SURFACE + offset, yLevel, -HALF_SURFACE - offset);
         this.coordLabels.topLeft.sprite.position.set(-HALF_SURFACE - offset, yLevel, HALF_SURFACE + offset);
@@ -788,26 +992,37 @@ class RealPlots3DRenderer {
     }
 
     #addLights() {
-        this.scene.add(new THREE.AmbientLight(0xffffff, 0.25));
-        this.scene.add(new THREE.HemisphereLight(0xa5b4fc, 0x090714, 1.4));
+        this.scene.add(new THREE.AmbientLight(0xffffff, 0.18));
+        this.scene.add(new THREE.HemisphereLight(0xb8c7ff, 0x05040a, 1.6));
 
-        const keyLight = new THREE.DirectionalLight(0xf4e8ff, 3.0);
-        keyLight.position.set(6, 12, 6);
+        const keyLight = new THREE.DirectionalLight(0xfff4ea, 4.1);
+        keyLight.position.set(6.5, 12.5, 7.5);
         keyLight.castShadow = true;
-        keyLight.shadow.mapSize.width = 2048;
-        keyLight.shadow.mapSize.height = 2048;
-        keyLight.shadow.camera.near = 0.5;
-        keyLight.shadow.camera.far = 30;
-        keyLight.shadow.camera.left = -6;
-        keyLight.shadow.camera.right = 6;
-        keyLight.shadow.camera.top = 6;
-        keyLight.shadow.camera.bottom = -6;
-        keyLight.shadow.bias = -0.0002;
+        keyLight.shadow.mapSize.width = 4096;
+        keyLight.shadow.mapSize.height = 4096;
+        keyLight.shadow.camera.near = 0.35;
+        keyLight.shadow.camera.far = 34;
+        keyLight.shadow.camera.left = -7;
+        keyLight.shadow.camera.right = 7;
+        keyLight.shadow.camera.top = 7;
+        keyLight.shadow.camera.bottom = -7;
+        keyLight.shadow.bias = -0.00012;
         this.scene.add(keyLight);
 
-        const rimLight = new THREE.DirectionalLight(0x38bdf8, 1.5);
-        rimLight.position.set(-6, 4, -6);
+        const fillLight = new THREE.DirectionalLight(0x8ec5ff, 1.15);
+        fillLight.position.set(-5, 5, 4);
+        this.scene.add(fillLight);
+
+        const rimLight = new THREE.DirectionalLight(0x60a5fa, 2.1);
+        rimLight.position.set(-7, 4.5, -7);
         this.scene.add(rimLight);
+
+        if (THREE.RectAreaLight) {
+            const areaLight = new THREE.RectAreaLight(0xffffff, 2.2, 7, 4);
+            areaLight.position.set(0, 5.5, -5);
+            areaLight.lookAt?.(0, 0, 0);
+            this.scene.add(areaLight);
+        }
     }
 
     resetCamera() {
@@ -827,6 +1042,7 @@ class RealPlots3DRenderer {
         const width = this.container.clientWidth;
         const height = this.container.clientHeight;
         if (!width || !height) return;
+        this.#syncPixelRatio();
         this.camera.aspect = width / height;
         this.camera.updateProjectionMatrix();
         this.renderer.setSize(width, height);
@@ -858,7 +1074,7 @@ class RealPlots3DRenderer {
         this.scene.remove(this.zLabel);
         this.zLabel.material.map?.dispose?.();
         this.zLabel.material.dispose?.();
-        this.zLabel = makeAxisLabel(labelText, 'rgba(216, 228, 255, 0.9)');
+        this.zLabel = makeAxisLabel(labelText, 'rgba(232, 239, 255, 0.96)');
         this.zLabel.position.set(0, HALF_HEIGHT + 0.4, 0);
         this.zLabelText = labelText;
         this.scene.add(this.zLabel);
@@ -885,7 +1101,8 @@ class RealPlots3DRenderer {
     #sampleSurface(transformFunc) {
         const store = this.surfaceStore;
         const result = sampleRealPlotSurface(transformFunc, {
-            topology: SURFACE_TOPOLOGY,
+            segments: store.segments,
+            topology: store.topology,
             positions: store.positions,
             normals: store.normals,
             colors: store.colors,

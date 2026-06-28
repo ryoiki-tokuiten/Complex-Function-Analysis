@@ -90,11 +90,8 @@ export function baseExpressionHasBranches(runtimeState) {
 }
 
 export function surfaceStageHasBranches(runtimeState, stage = 1) {
-    const safeStage = Math.max(1, Math.floor(stage));
     const baseHasBranches = baseExpressionHasBranches(runtimeState);
-    if (baseHasBranches) return true;
-    if (!runtimeState || !runtimeState.chainingEnabled || safeStage <= 1) return false;
-    return runtimeState.chainingMode === 'sqrt' || runtimeState.chainingMode === 'ln';
+    return baseHasBranches;
 }
 
 export function getVisibleBranchIndices(sheetCount, branchCenter = 0, hasBranches = true) {

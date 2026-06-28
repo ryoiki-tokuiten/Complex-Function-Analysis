@@ -48,12 +48,7 @@ const LIMITS = Object.freeze({
 
 const CHAIN_MODE_IDS = Object.freeze({
   recursion: 1,
-  power: 2,
-  sqrt: 3,
-  ln: 4,
-  exp: 5,
-  reciprocal: 6,
-  zero_seed: 7
+  zero_seed: 2
 });
 
 const SURFACE_COMPONENT_IDS = Object.freeze({
@@ -152,9 +147,9 @@ function gridIndexArrayType(resolution) {
   return vertexCount > UINT16_INDEX_LIMIT ? Uint32Array : Uint16Array;
 }
 
-// Program signatures are control-plane data. State managers in this app replace
-// formula arrays when formulas change, so reference-aware caching removes deep
-// JSON serialization from the steady render loop while preserving rebuilds on edits.
+// Program signatures are control-plane data. Keep the signature canonical so
+// in-place formula edits still rebuild shaders, while caching derived metadata
+// such as function-uniform usage for unchanged signatures.
 const PROGRAM_SIGNATURE_BY_STATE = new WeakMap();
 
 // Dynamic aggregate validation is expensive because it emits GLSL. The result is
@@ -556,7 +551,7 @@ ${buildAlgebraicBranchBody(appState)}
   },
 
   evaluateSurfaceStage: {
-    deps: ['evaluateSurfaceBase', 'complexPowRealOnSheet', 'complexLnOnSheet'],
+    deps: ['evaluateSurfaceBase'],
     source: `bool evaluateSurfaceStage(
   vec2 z,
   vec2 c,
@@ -580,7 +575,7 @@ ${buildAlgebraicBranchBody(appState)}
   vec2 taylorCoefficients[9],
   out vec2 mapped
 ) {
-  if (chainMode == 7) {
+  if (chainMode == 2) {
     mapped = vec2(0.0);
     for (int i = 0; i < 512; i++) {
       if (i >= stage) break;
@@ -600,27 +595,13 @@ ${buildAlgebraicBranchBody(appState)}
     useTaylor, taylorCenter, taylorOrder, taylorCoefficients, mapped
   );
   if (!ok) return false;
-  vec2 baseValue = mapped;
   for (int i = 1; i < 512; i++) {
     if (i >= stage) break;
-    if (chainMode == 1) {
-      ok = evaluateSurfaceBase(
-        mapped, c, functionId, branchIndex, branchCutWidth, mA, mB, mC, mD,
-        polyDeg, polyCoeffs, zetaCont, zetaRefl, fracPower,
-        useTaylor, taylorCenter, taylorOrder, taylorCoefficients, mapped
-      );
-    } else if (chainMode == 2) {
-      mapped = complexMul(mapped, baseValue);
-    } else if (chainMode == 3) {
-      ok = complexPowRealOnSheet(mapped, 0.5, branchIndex, branchCutWidth, mapped);
-    } else if (chainMode == 4) {
-      ok = complexLnOnSheet(mapped, branchIndex, branchCutWidth, mapped);
-    } else if (chainMode == 5) {
-      mapped = complexExp(mapped);
-    } else if (chainMode == 6) {
-      if (dot(mapped, mapped) < 1.0e-20) return false;
-      mapped = complexDiv(vec2(1.0, 0.0), mapped);
-    }
+    ok = evaluateSurfaceBase(
+      mapped, c, functionId, branchIndex, branchCutWidth, mA, mB, mC, mD,
+      polyDeg, polyCoeffs, zetaCont, zetaRefl, fracPower,
+      useTaylor, taylorCenter, taylorOrder, taylorCoefficients, mapped
+    );
     if (!ok || !isFiniteVec2Compat(mapped)) return false;
   }
   return isFiniteVec2Compat(mapped);
@@ -871,7 +852,7 @@ float convergenceIntensity(float iteration) {
 
 vec4 iteratedDynamicsColor(vec2 parameterValue, int chainMode, float brightnessFactor) {
   int orbitMode = u_orbitColoringMode;
-  vec2 current = chainMode == 7 ? vec2(0.0) : parameterValue;
+  vec2 current = chainMode == 2 ? vec2(0.0) : parameterValue;
   vec2 lastFinite = current;
   vec2 eventValue = current;
   float escapeRadius = 64.0;
@@ -954,7 +935,7 @@ vec4 iteratedDynamicsColor(vec2 parameterValue, int chainMode, float brightnessF
   
   vec3 baseColor = v_color;
 
-  if (u_orbitColoringMode != 0 && u_chainCount > 1 && (u_chainMode == 1 || u_chainMode == 7)) {
+  if (u_orbitColoringMode != 0 && u_chainCount > 1 && (u_chainMode == 1 || u_chainMode == 2)) {
     baseColor = iteratedDynamicsColor(v_z, u_chainMode, 1.0).rgb;
   }
 
@@ -968,9 +949,7 @@ vec4 iteratedDynamicsColor(vec2 parameterValue, int chainMode, float brightnessF
       float distToContour = abs(contourCoord - floor(contourCoord + 0.5)) * safeInterval;
       float pixelDist = distToContour / valDeriv;
       float lineIntensity = 1.0 - smoothstep(max(0.0, u_contourThickness - 0.75), u_contourThickness + 0.75, pixelDist);
-      float contourLum = dot(finalColor, vec3(0.2126, 0.7152, 0.0722));
-      vec3 contourInk = contourLum < 0.57 ? vec3(0.965, 0.976, 1.0) : vec3(0.031, 0.039, 0.071);
-      finalColor = mix(finalColor, contourInk, lineIntensity * 0.86);
+      finalColor = mix(finalColor, vec3(0.06), lineIntensity * 0.55);
     }
   }
   gl_FragColor = vec4(finalColor, 0.88);
@@ -1281,16 +1260,24 @@ function getProgramSignature(appState) {
     ? dynamicAggregateGLSLSignature(appState)
     : '';
   const signature = `az:${algebraicZ}|a:${algebraicSignature}|d:${dynamicSignature}`;
-
   const cached = PROGRAM_SIGNATURE_BY_STATE.get(appState);
-  if (cached && cached.signature === signature) {
-    return signature;
+
+  if (cached
+    && cached.algebraicZ === algebraicZ
+    && cached.dynamicActive === dynamicActive
+    && cached.algebraicSignature === algebraicSignature
+    && cached.dynamicSignature === dynamicSignature) {
+    return cached.signature;
   }
 
   const usesPolynomial = formulaRefsFunction(algebraic, dynamicTerms, algebraicZ, 'polynomial');
   const usesMobius = formulaRefsFunction(algebraic, dynamicTerms, algebraicZ, 'mobius');
 
   PROGRAM_SIGNATURE_BY_STATE.set(appState, {
+    algebraicZ,
+    dynamicActive,
+    algebraicSignature,
+    dynamicSignature,
     usesPolynomial,
     usesMobius,
     signature

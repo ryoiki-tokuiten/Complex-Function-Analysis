@@ -225,7 +225,7 @@ test('deep escaped recursion still provides a finite domain-coloring value', () 
     }
 });
 
-test('domain coloring and staged output chains share non-recursive mode semantics', () => {
+test('domain coloring and staged output chains share recursive mode semantics', () => {
     const keys = [
         'currentFunction',
         'algebraicChainingEnabled',
@@ -242,8 +242,9 @@ test('domain coloring and staged output chains share non-recursive mode semantic
         Object.assign(state, {
             currentFunction: 'algebraic_chaining',
             algebraicChainingEnabled: true,
-            polynomialN: 1,
+            polynomialN: 2,
             polynomialCoeffs: [
+                { re: 0, im: 0 },
                 { re: 0, im: 0 },
                 { re: 1, im: 0 }
             ],
@@ -254,7 +255,7 @@ test('domain coloring and staged output chains share non-recursive mode semantic
                 }
             ],
             chainingEnabled: true,
-            chainingMode: 'power',
+            chainingMode: 'recursion',
             chainCount: 3
         });
 
@@ -266,9 +267,9 @@ test('domain coloring and staged output chains share non-recursive mode semantic
         const stageOne = getChainedStageTransformFunction('algebraic_chaining', 1);
         const stageTwo = getChainedStageTransformFunction('algebraic_chaining', 2);
 
-        assert.deepEqual(mapped, { re: 8, im: 0 });
-        assert.deepEqual(stageOne(2, 0), { re: 4, im: 0 });
-        assert.deepEqual(stageTwo(2, 0), { re: 8, im: 0 });
+        assert.deepEqual(mapped, { re: 256, im: 0 });
+        assert.deepEqual(stageOne(2, 0), { re: 16, im: 0 });
+        assert.deepEqual(stageTwo(2, 0), { re: 256, im: 0 });
     } finally {
         restoreState(before);
     }
@@ -435,9 +436,9 @@ test('algebraic modifier chains agree between domain coloring and staged output 
         );
         const point = { re: 0.35, im: -0.45 };
 
-        for (const mode of ['power', 'sqrt', 'ln', 'exp', 'reciprocal', 'recursion']) {
+        for (const mode of ['recursion', 'zero_seed']) {
             state.chainingMode = mode;
-            state.chainCount = mode === 'exp' ? 2 : 4;
+            state.chainCount = 4;
 
             const domainColoring = evaluateDomainColoringMappedTransform(baseProfile, point.re, point.im, 'algebraic_chaining');
             const staged = getChainedStageTransformFunction('algebraic_chaining', state.chainCount - 1);
@@ -516,9 +517,9 @@ test('compiled and fallback algebraic chains agree for composite expressions acr
             chainingEnabled: true
         });
 
-        for (const mode of ['recursion', 'zero_seed', 'power', 'sqrt', 'ln', 'exp', 'reciprocal']) {
+        for (const mode of ['recursion', 'zero_seed']) {
             state.chainingMode = mode;
-            state.chainCount = mode === 'exp' ? 2 : 3;
+            state.chainCount = 3;
 
             state.algebraicChainingZExpr = 'z';
             let profile = getMappedTransformProfile(

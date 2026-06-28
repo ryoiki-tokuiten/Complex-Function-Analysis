@@ -573,6 +573,7 @@ function disableRealPlots() {
 }
 
 function syncChainingControlsFromState() {
+    if (state.chainingMode !== 'zero_seed') state.chainingMode = 'recursion';
     checked('enableChainingCb', state.chainingEnabled);
     display(controls.chainingControlsContainer, state.chainingEnabled);
     if (controls.chainModeSelector) controls.chainModeSelector.value = state.chainingMode;
@@ -1915,7 +1916,7 @@ function bindChainingControls() {
     });
 
     bindElementListener(controls.chainModeSelector, 'change', event => {
-        state.chainingMode = event.target.value;
+        state.chainingMode = event.target.value === 'zero_seed' ? 'zero_seed' : 'recursion';
         state.currentFunctionPreset = null;
         syncOrbitColoringModeControl();
         call(updateChainingTitles);

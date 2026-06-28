@@ -588,9 +588,7 @@ export function getChainingTitleHTML(i, mode) {
     if (i === 0) {
         return mode === 'zero_seed' ? `w = f(0; c=z)` : `w = f(z)`;
     }
-    const prevSub = i === 1 ? `0` : `${i-1}`;
     
-    // Abstracted helper to generate standard nesting string (e.g. f(f(... f(z))))
     const getNestedHTML = (count, innerText) => {
         if (count <= 3) {
             let res = innerText;
@@ -604,16 +602,7 @@ export function getChainingTitleHTML(i, mode) {
         return `w = ${res}`;
     };
 
-    switch (mode) {
-        case 'recursion': return getNestedHTML(i + 1, 'z');
-        case 'zero_seed': return getNestedHTML(i + 1, '0');
-        case 'power': return `w = f(z)<sup>${i+1}</sup>`;
-        case 'sqrt': return `w = &radic;w<sub>${prevSub}</sub>`;
-        case 'ln': return `w = ln(w<sub>${prevSub}</sub>)`;
-        case 'exp': return `w = e<sup>w<sub>${prevSub}</sub></sup>`;
-        case 'reciprocal': return `w = 1 / w<sub>${prevSub}</sub>`;
-        default: return getNestedHTML(i + 1, 'z');
-    }
+    return getNestedHTML(i + 1, mode === 'zero_seed' ? '0' : 'z');
 }
 
 export function updateChainingTitles() {

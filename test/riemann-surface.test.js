@@ -70,13 +70,12 @@ test('Taylor surfaces are single-valued polynomial approximations', () => {
     assert.equal(surfaceStageHasBranches(runtimeState, 1), false);
 });
 
-test('output sqrt and log chaining introduce sheets at later stages', () => {
-    const sqrtState = makeState({ chainingEnabled: true, chainingMode: 'sqrt' });
-    assert.equal(surfaceStageHasBranches(sqrtState, 1), false);
-    assert.equal(surfaceStageHasBranches(sqrtState, 2), true);
+test('recursive chaining modes do not introduce sheets without a branch-bearing base map', () => {
+    const recursionState = makeState({ chainingEnabled: true, chainingMode: 'recursion' });
+    assert.equal(surfaceStageHasBranches(recursionState, 4), false);
 
-    const logState = makeState({ chainingEnabled: true, chainingMode: 'ln' });
-    assert.equal(surfaceStageHasBranches(logState, 4), true);
+    const zeroSeedState = makeState({ chainingEnabled: true, chainingMode: 'zero_seed' });
+    assert.equal(surfaceStageHasBranches(zeroSeedState, 4), false);
 });
 
 test('branch windows remain odd, bounded, and centered', () => {

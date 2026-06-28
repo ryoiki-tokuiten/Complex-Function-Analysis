@@ -1960,19 +1960,6 @@ function snapshotUsesEscapeColoring(snapshot) {
     return resolveOrbitColoringMode(snapshot) === ORBIT_COLORING_MODES.escape;
 }
 
-function evaluateChainStep(mode, current, baseValue, snapshot, c, accelerator = NO_ACCELERATOR) {
-    switch (mode) {
-        case 'power': return validOrNull(complexMul(current, baseValue));
-        case 'sqrt': return validOrNull(complexPow(current, { re: 0.5, im: 0 }));
-        case 'ln': return validOrNull(complexLn(current));
-        case 'exp': return validOrNull(complexExp(current));
-        case 'reciprocal': return validOrNull(complexReciprocal(current));
-        case 'recursion':
-        default: return validOrNull(evaluateBase(snapshot, current, c, accelerator));
-    }
-}
-
-
 function evaluatePolynomialParameterInto(accelerator, zr, zi, cr, ci, out) {
     let nr = accelerator.coeffsRe[accelerator.degree] || 0;
     let ni = accelerator.coeffsIm[accelerator.degree] || 0;
@@ -2008,26 +1995,6 @@ function evaluateComponentBaseInto(snapshot, accelerator, zr, zi, cr, ci, out) {
             return evaluateBuiltinComponents(snapshot.functionKey, zr, zi, snapshot, out);
         default:
             return null;
-    }
-}
-
-function evaluateComponentChainStepInto(mode, currentRe, currentIm, baseRe, baseIm, snapshot, cr, ci, accelerator, out) {
-    switch (mode) {
-        case 'power':
-            out[0] = currentRe * baseRe - currentIm * baseIm;
-            out[1] = currentRe * baseIm + currentIm * baseRe;
-            return out;
-        case 'sqrt':
-            return sqrtComponents(currentRe, currentIm, out);
-        case 'ln':
-            return lnComponents(currentRe, currentIm, out);
-        case 'exp':
-            return expComponents(currentRe, currentIm, out);
-        case 'reciprocal':
-            return divideComponents(1, 0, currentRe, currentIm, out);
-        case 'recursion':
-        default:
-            return evaluateComponentBaseInto(snapshot, accelerator, currentRe, currentIm, cr, ci, out);
     }
 }
 
@@ -2078,10 +2045,8 @@ function evaluateDomainDynamicsValueComponents(snapshot, re, im, accelerator) {
         return { re: currentRe, im: currentIm };
     }
 
-    const baseRe = currentRe;
-    const baseIm = currentIm;
     for (let i = 1; i < count; i += 1) {
-        if (!evaluateComponentChainStepInto(mode, currentRe, currentIm, baseRe, baseIm, snapshot, re, im, accelerator, scratch)) {
+        if (!evaluateComponentBaseInto(snapshot, accelerator, currentRe, currentIm, re, im, scratch)) {
             return { re: lastRe, im: lastIm };
         }
         currentRe = scratch[0];
@@ -2109,8 +2074,7 @@ function supportsComponentValueEvaluation(snapshot, accelerator) {
         accelerator.type === 'direct-zeta') return true;
     if (accelerator.type !== 'none') return false;
     const mode = snapshot.chainMode || 'recursion';
-    if (mode !== 'recursion' && mode !== 'zero_seed' && mode !== 'power' &&
-        mode !== 'sqrt' && mode !== 'ln' && mode !== 'exp' && mode !== 'reciprocal') return false;
+    if (mode !== 'recursion' && mode !== 'zero_seed') return false;
     return !!evaluateBuiltinComponents(snapshot.functionKey, 0.125, -0.25, snapshot, new Float64Array(2));
 }
 
@@ -2143,9 +2107,8 @@ export function evaluateDomainDynamicsValue(snapshot, re, im, accelerator = crea
     let lastFinite = current;
     if (exceedsChainBailout(lastFinite)) return lastFinite;
 
-    const baseValue = lastFinite;
     for (let i = 1; i < count; i += 1) {
-        current = evaluateChainStep(snapshot.chainMode || 'recursion', current, baseValue, snapshot, c, accelerator);
+        current = validOrNull(evaluateBase(snapshot, current, c, accelerator));
         if (!current) return lastFinite;
         lastFinite = current;
         if (exceedsChainBailout(current)) return current;
@@ -3378,15 +3341,6 @@ function lnComponents(re, im, out) {
     return out;
 }
 
-function sqrtComponents(re, im, out) {
-    const magnitude = Math.hypot(re, im);
-    const rootRe = Math.sqrt(Math.max(0, (magnitude + re) * 0.5));
-    const rootIm = (im < 0 ? -1 : 1) * Math.sqrt(Math.max(0, (magnitude - re) * 0.5));
-    out[0] = rootRe;
-    out[1] = rootIm;
-    return out;
-}
-
 function evaluateBuiltinComponents(functionKey, re, im, snapshot, out) {
     switch (functionKey) {
         case 'exp':
@@ -3489,54 +3443,10 @@ function evaluateBuiltinComponents(functionKey, re, im, snapshot, out) {
     }
 }
 
-function evaluateChainStepComponents(mode, currentRe, currentIm, baseRe, baseIm, snapshot, out) {
-    switch (mode) {
-        case 'power': {
-            out[0] = currentRe * baseRe - currentIm * baseIm;
-            out[1] = currentRe * baseIm + currentIm * baseRe;
-            return out;
-        }
-        case 'sqrt':
-            return sqrtComponents(currentRe, currentIm, out);
-        case 'ln':
-            return lnComponents(currentRe, currentIm, out);
-        case 'exp':
-            return expComponents(currentRe, currentIm, out);
-        case 'reciprocal':
-            return divideComponents(1, 0, currentRe, currentIm, out);
-        case 'recursion':
-        default:
-            return evaluateBuiltinComponents(snapshot.functionKey, currentRe, currentIm, snapshot, out);
-    }
-}
-
-
-function evaluateCompiledChainStepComponents(mode, currentRe, currentIm, baseRe, baseIm, cr, ci, accelerator, out) {
-    switch (mode) {
-        case 'power': {
-            out[0] = currentRe * baseRe - currentIm * baseIm;
-            out[1] = currentRe * baseIm + currentIm * baseRe;
-            return out;
-        }
-        case 'sqrt':
-            return sqrtComponents(currentRe, currentIm, out);
-        case 'ln':
-            return lnComponents(currentRe, currentIm, out);
-        case 'exp':
-            return expComponents(currentRe, currentIm, out);
-        case 'reciprocal':
-            return divideComponents(1, 0, currentRe, currentIm, out);
-        case 'recursion':
-        default:
-            return evaluateCompiledAlgebraicInto(accelerator, currentRe, currentIm, cr, ci, out);
-    }
-}
-
 function renderCompiledAlgebraicValueTile(snapshot, tile, accelerator) {
     if (!snapshotUsesValueColoring(snapshot) || accelerator.type !== 'compiled-algebraic') return null;
     const mode = snapshot.chainMode || 'recursion';
-    if (mode !== 'recursion' && mode !== 'zero_seed' && mode !== 'power' &&
-        mode !== 'sqrt' && mode !== 'ln' && mode !== 'exp' && mode !== 'reciprocal') return null;
+    if (mode !== 'recursion' && mode !== 'zero_seed') return null;
 
     const data = new Uint8ClampedArray(tile.width * tile.height * 4);
     const xRange = snapshot.viewport.xRange;
@@ -3588,12 +3498,10 @@ function renderCompiledAlgebraicValueTile(snapshot, tile, accelerator) {
                 if (currentRe === currentRe && currentIm === currentIm && finite(currentRe) && finite(currentIm)) {
                     lastRe = currentRe;
                     lastIm = currentIm;
-                    const baseRe = currentRe;
-                    const baseIm = currentIm;
                     if (!((currentRe < 0 ? -currentRe : currentRe) >= DOMAIN_COLOR_CHAIN_BAILOUT_MAGNITUDE ||
                         (currentIm < 0 ? -currentIm : currentIm) >= DOMAIN_COLOR_CHAIN_BAILOUT_MAGNITUDE)) {
                         for (let i = 1; i < count; i += 1) {
-                            evaluateCompiledChainStepComponents(mode, currentRe, currentIm, baseRe, baseIm, cr, ci, accelerator, scratch);
+                            evaluateCompiledAlgebraicInto(accelerator, currentRe, currentIm, cr, ci, scratch);
                             currentRe = scratch[0];
                             currentIm = scratch[1];
                             if (!(currentRe === currentRe && currentIm === currentIm && finite(currentRe) && finite(currentIm))) break;
@@ -3928,8 +3836,7 @@ function renderDirectZetaValueTile(snapshot, tile) {
 function renderBuiltinValueTile(snapshot, tile, accelerator) {
     if (!snapshotUsesValueColoring(snapshot) || accelerator.type !== 'none') return null;
     const mode = snapshot.chainMode || 'recursion';
-    if (mode !== 'recursion' && mode !== 'zero_seed' && mode !== 'power' &&
-        mode !== 'sqrt' && mode !== 'ln' && mode !== 'exp' && mode !== 'reciprocal') return null;
+    if (mode !== 'recursion' && mode !== 'zero_seed') return null;
     if (!evaluateBuiltinComponents(snapshot.functionKey, 0.125, -0.25, snapshot, [0, 0])) return null;
 
     const data = new Uint8ClampedArray(tile.width * tile.height * 4);
@@ -3982,12 +3889,10 @@ function renderBuiltinValueTile(snapshot, tile, accelerator) {
                 if (currentRe === currentRe && currentIm === currentIm && finite(currentRe) && finite(currentIm)) {
                     lastRe = currentRe;
                     lastIm = currentIm;
-                    const baseRe = currentRe;
-                    const baseIm = currentIm;
                     if (!((currentRe < 0 ? -currentRe : currentRe) >= DOMAIN_COLOR_CHAIN_BAILOUT_MAGNITUDE ||
                         (currentIm < 0 ? -currentIm : currentIm) >= DOMAIN_COLOR_CHAIN_BAILOUT_MAGNITUDE)) {
                         for (let i = 1; i < count; i += 1) {
-                            evaluateChainStepComponents(mode, currentRe, currentIm, baseRe, baseIm, snapshot, scratch);
+                            evaluateBuiltinComponents(snapshot.functionKey, currentRe, currentIm, snapshot, scratch);
                             currentRe = scratch[0];
                             currentIm = scratch[1];
                             if (!(currentRe === currentRe && currentIm === currentIm && finite(currentRe) && finite(currentIm))) break;

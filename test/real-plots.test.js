@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 
 import { sampleRealPlotSurface } from '../js/rendering/real-plots-renderer.js';
+import { transformFunctions } from '../js/math-utils.js';
 
 function allFinite(values) {
     return values.every(Number.isFinite);
@@ -58,4 +59,68 @@ test('real 3D plot sampling preserves the selected real component range', () => 
         );
         assert.ok(Math.abs(length - 1) < 1e-5);
     }
+});
+
+test('real 3D plot kernels are explicit and preserve singular samples', () => {
+    assert.equal(transformFunctions.sin.realPlotsKernel, 'sin');
+    assert.equal(transformFunctions.reciprocal.realPlotsKernel, 'reciprocal');
+
+    const sampled = sampleRealPlotSurface(
+        transformFunctions.reciprocal,
+        {
+            segments: 2,
+            xRange: [-1, 1],
+            yRange: [-1, 1],
+            inputExpr: 'x',
+            imagExpr: 'y',
+            outputComponent: 'magnitude',
+            valuesOnly: true,
+            invalidAsNaN: true
+        }
+    );
+
+    assert.equal(sampled.vertexCount, 9);
+    assert.equal(sampled.finiteResultCount, 8);
+    assert.equal(Number.isNaN(sampled.values[4]), true);
+
+    const nearPole = sampleRealPlotSurface(
+        transformFunctions.reciprocal,
+        {
+            segments: 2,
+            xRange: [-1e-16, 1e-16],
+            yRange: [0, 0],
+            inputExpr: 'x',
+            imagExpr: '0',
+            outputComponent: 'real',
+            valuesOnly: true,
+            invalidAsNaN: true
+        }
+    );
+
+    assert.equal(nearPole.values[0], 10000);
+    assert.equal(Number.isNaN(nearPole.values[1]), true);
+    assert.equal(nearPole.values[2], 10000);
+});
+
+test('real 3D plot sampling can use declared kernels without calling the transform', () => {
+    const transform = () => {
+        throw new Error('declared kernels should not call the object-producing transform');
+    };
+    Object.defineProperty(transform, 'realPlotsKernel', { value: 'sin' });
+
+    const sampled = sampleRealPlotSurface(
+        transform,
+        {
+            segments: 2,
+            xRange: [0, 0],
+            yRange: [0, 0],
+            inputExpr: 'x',
+            imagExpr: '0',
+            outputComponent: 'real',
+            valuesOnly: true
+        }
+    );
+
+    assert.equal(sampled.finiteResultCount, 9);
+    assert.ok(sampled.values.every(value => Math.abs(value) < 1e-12));
 });

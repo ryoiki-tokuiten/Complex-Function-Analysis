@@ -73,6 +73,10 @@ function planeRanges(planeParams) {
         : null;
 }
 
+function normalizeChainMode(mode) {
+    return mode === 'zero_seed' ? 'zero_seed' : 'recursion';
+}
+
 export function buildPlanarDomainDynamicsSnapshot(runtimeState, planeParams, options = null) {
     const ranges = planeRanges(planeParams);
     if (!runtimeState || !planeParams || !ranges) return null;
@@ -85,7 +89,7 @@ export function buildPlanarDomainDynamicsSnapshot(runtimeState, planeParams, opt
         isWPlaneColoring: !!options?.isWPlaneColoring,
         functionKey,
         chainingEnabled: !!runtimeState.chainingEnabled,
-        chainMode: runtimeState.chainingMode || 'recursion',
+        chainMode: normalizeChainMode(runtimeState.chainingMode),
         chainCount: Math.max(1, Math.floor(Number(runtimeState.chainCount) || 1)),
         orbitColoringMode,
         algebraicChainingEnabled: !!runtimeState.algebraicChainingEnabled,
@@ -476,7 +480,7 @@ export function getCurrentFuncSignature(isWPlane = false) {
         isWPlaneColoring: isWPlane,
         functionKey: state.currentFunction,
         chainingEnabled: !!state.chainingEnabled,
-        chainMode: state.chainingMode || 'recursion',
+        chainMode: normalizeChainMode(state.chainingMode),
         chainCount: Math.max(1, Math.floor(Number(state.chainCount) || 1)),
         orbitColoringMode: normalizeOrbitColoringMode(state.orbitColoringMode),
         algebraicChainingEnabled: !!state.algebraicChainingEnabled,

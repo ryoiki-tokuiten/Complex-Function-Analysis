@@ -1325,12 +1325,14 @@ function renderWCanvasRiemannSphere(map, index) {
 }
 
 function drawWTransformedShape(index, map, targetCtx) {
+    const stageIndex = Number.isFinite(map?.stage) ? map.stage : index;
+
     if (index === 0) {
-        drawPlanarTransformedShapeHybrid(targetCtx, wPlaneParams, map.evaluate, 'w', map);
+        drawPlanarTransformedShapeHybrid(targetCtx, wPlaneParams, map.evaluate, 'w', map, { index: stageIndex });
         return;
     }
 
-    drawPlanarTransformedShape(targetCtx, wPlaneParams, map.evaluate, { index, map });
+    drawPlanarTransformedShape(targetCtx, wPlaneParams, map.evaluate, { index: stageIndex, map });
 }
 
 function renderWPlanarTransformedShape(index, map) {

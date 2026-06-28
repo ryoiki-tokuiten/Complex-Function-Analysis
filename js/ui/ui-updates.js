@@ -925,14 +925,6 @@ function currentFunctionFormulaHtml() {
     }
 }
 
-function repeatedFormulaWrap(baseFormula, count, wrap) {
-    let formula = baseFormula;
-    for (let i = 1; i < count; i += 1) {
-        formula = wrap(formula);
-    }
-    return formula;
-}
-
 function compactRecursionSymbol() {
     switch (state.currentFunction) {
         case 'polynomial':
@@ -1012,16 +1004,6 @@ function getChainedFormula(baseFormula, chainingMode, chainCount) {
             for (let i = 0; i < Math.min(chainCount, 3); i++) repeatedFZero += ')';
             
             return `${repeatedFZero} <span style="font-size:0.85em; opacity:0.8;">[${chainCount} times, where f(z, c) = ${baseFormula}]</span>`;
-        case 'power':
-            return `(${baseFormula})<sup>${chainCount}</sup>`;
-        case 'sqrt':
-            return repeatedFormulaWrap(baseFormula, chainCount, formula => `√(${formula})`);
-        case 'ln':
-            return repeatedFormulaWrap(baseFormula, chainCount, formula => `ln(${formula})`);
-        case 'exp':
-            return repeatedFormulaWrap(baseFormula, chainCount, formula => `e<sup>${formula}</sup>`);
-        case 'reciprocal':
-            return repeatedFormulaWrap(baseFormula, chainCount, formula => `1/(${formula})`);
         case 'recursion':
         default:
             return recursiveChainFormula(baseFormula, chainCount);
@@ -1110,14 +1092,12 @@ function syncPrimaryPlaneTitles() {
     const chainText = document.getElementById('enable_chaining_text');
     const algText = document.getElementById('enable_algebraic_chaining_text');
     const algLabel = document.querySelector('label[for="enable_algebraic_chaining_cb"]');
-    const powerOption = document.querySelector('#chain_mode_selector option[value="power"]');
 
     if (state.realPlotsEnabled) {
         syncRealPlotsUI();
         if (chainText) chainText.textContent = 'Enable Output Chaining (z)';
         if (algText) algText.textContent = 'Enable Algebraic Chaining (z)';
         if (algLabel) algLabel.setAttribute('data-tooltip', 'Sum multiple functions together: a*f(z)*g(z) + b*h(z)...');
-        if (powerOption) powerOption.textContent = 'Higher Powers: w * f(z)';
 
         const label = document.getElementById('real_plots_title_label');
         if (label) {
@@ -1152,7 +1132,6 @@ function syncPrimaryPlaneTitles() {
         if (chainText) chainText.textContent = 'Enable Output Chaining';
         if (algText) algText.textContent = 'Enable Algebraic Chaining';
         if (algLabel) algLabel.setAttribute('data-tooltip', 'Sum multiple complex functions together: a*f(z)*g(z) + b*h(z)...');
-        if (powerOption) powerOption.textContent = 'Higher Powers: w * f(z)';
     }
 
     const zPlaneTitle = defaultZPlaneTitle(model.fND);

@@ -282,10 +282,10 @@ test('dynamics snapshots represent Mandelbrot, Newton, and generic output chains
         assert.equal(snapshot.orbitColoringMode, 'attractor');
         assert.equal(snapshot.algebraicChainingTerms.length, 2);
 
-        configureDynamics({ currentFunction: 'exp', chainingMode: 'power', chainCount: 7 });
+        configureDynamics({ currentFunction: 'exp', chainingMode: 'recursion', chainCount: 7 });
         snapshot = buildPlanarDomainDynamicsSnapshot(state, PLANE, { isWPlaneColoring: false });
         assert.equal(snapshot.functionKey, 'exp');
-        assert.equal(snapshot.chainMode, 'power');
+        assert.equal(snapshot.chainMode, 'recursion');
         assert.equal(snapshot.chainCount, 7);
         assert.equal(snapshot.orbitColoringMode, 'value');
     } finally {
@@ -491,7 +491,7 @@ test('worker algebraic output chains match the main domain-coloring pipeline acr
     ];
 
     try {
-        for (const mode of ['recursion', 'power', 'sqrt', 'ln', 'exp', 'reciprocal']) {
+        for (const mode of ['recursion', 'zero_seed']) {
             configureDynamics({
                 currentFunction: 'algebraic_chaining',
                 algebraicChainingEnabled: true,
@@ -505,7 +505,7 @@ test('worker algebraic output chains match the main domain-coloring pipeline acr
                 ],
                 chainingEnabled: true,
                 chainingMode: mode,
-                chainCount: mode === 'exp' ? 2 : 4
+                chainCount: 4
             });
 
             const snapshot = buildPlanarDomainDynamicsSnapshot(state, plane, { isWPlaneColoring: false });

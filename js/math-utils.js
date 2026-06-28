@@ -1589,6 +1589,21 @@ export const transformFunctions = {
     algebraic_chaining: evaluateAlgebraicChaining
 };
 
+const REAL_PLOT_KERNELS = Object.freeze({
+    cos: 'cos',
+    sin: 'sin',
+    exp: 'exp',
+    reciprocal: 'reciprocal'
+});
+
+for (const [key, kernel] of Object.entries(REAL_PLOT_KERNELS)) {
+    Object.defineProperty(transformFunctions[key], 'realPlotsKernel', {
+        value: kernel,
+        enumerable: false,
+        configurable: false
+    });
+}
+
 const MAPPED_TRANSFORM_ABS_EPSILON = 1e-5;
 const MAPPED_TRANSFORM_REL_EPSILON = 1e-7;
 const MAPPED_TRANSFORM_MIN_AGREEMENT_RATIO = 0.9;
@@ -1889,24 +1904,6 @@ function evaluateChainBase(profileOrTransform, value, functionKey, c) {
     ));
 }
 
-function evaluateChainStep(mode, current, baseValue, profileOrTransform, functionKey, c) {
-    switch (mode) {
-        case 'power':
-            return validOrNull(complexMul(current, baseValue));
-        case 'sqrt':
-            return validOrNull(complexPow(current, 0.5, 0));
-        case 'ln':
-            return validOrNull(complexLn(current));
-        case 'exp':
-            return validOrNull(complexExp(current));
-        case 'reciprocal':
-            return validOrNull(complexReciprocal(current));
-        case 'recursion':
-        default:
-            return evaluateChainBase(profileOrTransform, current, functionKey, c);
-    }
-}
-
 function evaluateMappedChainStage(profileOrTransform, re, im, functionKey, stageIndex, options = null) {
     const c = { re, im };
     const stage = chainStageIndex(stageIndex);
@@ -1932,11 +1929,8 @@ function evaluateMappedChainStage(profileOrTransform, re, im, functionKey, stage
     let lastFinite = validOrNull(current);
     if (!lastFinite || exceedsDomainColorChainBailout(lastFinite)) return returnLastFinite ? lastFinite : null;
 
-    const mode = state.chainingMode || 'recursion';
-    const baseValue = lastFinite;
-
     for (let i = 1; i <= stage; i += 1) {
-        current = evaluateChainStep(mode, current, baseValue, profileOrTransform, functionKey, c);
+        current = evaluateChainBase(profileOrTransform, current, functionKey, c);
         if (!current) return returnLastFinite ? lastFinite : null;
 
         lastFinite = current;
@@ -1961,39 +1955,11 @@ export function evaluateDomainColoringMappedTransform(profileOrTransform, re, im
     );
 }
 
-
-function writeChainStepRaw(mode, currentRe, currentIm, baseRe, baseIm, kernel, functionKey, cRe, cIm, out, offset = 0) {
-    switch (mode) {
-        case 'power': {
-            out[offset] = currentRe * baseRe - currentIm * baseIm;
-            out[offset + 1] = currentRe * baseIm + currentIm * baseRe;
-            return out;
-        }
-        case 'sqrt':
-            return powRawInto(currentRe, currentIm, 0.5, 0, out, offset);
-        case 'ln':
-            out[offset] = currentRe === 0 && currentIm === 0 ? -Infinity : logHypot(currentRe, currentIm);
-            out[offset + 1] = currentRe === 0 && currentIm === 0 ? 0 : Math.atan2(currentIm, currentRe);
-            return out;
-        case 'exp':
-            return expRawInto(currentRe, currentIm, out, offset);
-        case 'reciprocal':
-            return divideRawInto(1, 0, currentRe, currentIm, out, offset);
-        case 'recursion':
-        case 'repeat':
-        case 'compose':
-        default:
-            if (functionKey === 'algebraic_chaining') return kernel(currentRe, currentIm, cRe, cIm, out, offset);
-            return null;
-    }
-}
-
 function createFastAlgebraicChainedTransform(stage) {
     const kernel = getCompiledAlgebraicKernel(state.algebraicChainingTerms);
     if (!kernel) return null;
     const rawKernel = kernel.raw || null;
 
-    const mode = state.chainingMode || 'recursion';
     return (re, im) => {
         const tmp = ALG_TMP;
         const cRe = re;
@@ -2003,7 +1969,7 @@ function createFastAlgebraicChainedTransform(stage) {
         let lastRe = NaN;
         let lastIm = NaN;
 
-        if (mode === 'zero_seed') {
+        if (state.chainingMode === 'zero_seed') {
             currentRe = 0;
             currentIm = 0;
             for (let i = 0; i <= stage; i++) {
@@ -2025,17 +1991,9 @@ function createFastAlgebraicChainedTransform(stage) {
         currentIm = tmp[1];
         if (!finite(currentRe) || !finite(currentIm)) return { re: NaN, im: NaN };
         if (Math.max(Math.abs(currentRe), Math.abs(currentIm)) >= DOMAIN_COLOR_CHAIN_BAILOUT_MAGNITUDE) return { re: NaN, im: NaN };
-        const baseRe = currentRe;
-        const baseIm = currentIm;
-
         for (let i = 1; i <= stage; i++) {
-            if (mode === 'recursion' || mode === 'repeat' || mode === 'compose') {
-                if (rawKernel) rawKernel(currentRe, currentIm, cRe, cIm, tmp, 0);
-                else kernel(currentRe, currentIm, cRe, cIm, tmp, 0);
-            } else {
-                const step = writeChainStepRaw(mode, currentRe, currentIm, baseRe, baseIm, kernel, 'algebraic_chaining', cRe, cIm, tmp, 0);
-                if (!step) return null;
-            }
+            if (rawKernel) rawKernel(currentRe, currentIm, cRe, cIm, tmp, 0);
+            else kernel(currentRe, currentIm, cRe, cIm, tmp, 0);
             currentRe = tmp[0];
             currentIm = tmp[1];
             if (!finite(currentRe) || !finite(currentIm)) return { re: NaN, im: NaN };
