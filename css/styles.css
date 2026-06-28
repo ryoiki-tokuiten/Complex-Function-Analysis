@@ -5020,3 +5020,112 @@ body.vertical-layout #controls_options_section .vector-settings-grid {
     grid-template-columns: 1fr !important;
     gap: 0.9rem !important;
 }
+
+/* 2D Contour Plot Column and Button styling */
+.contour-controls-panel {
+    display: flex;
+    flex-direction: column;
+    gap: 0.95rem;
+    margin-top: 0.55rem;
+    padding-top: 1rem;
+    border-top: 1px solid color-mix(in srgb, var(--border-color) 78%, transparent);
+}
+
+.contour-controls-panel--grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 0.9rem 1rem;
+    align-items: end;
+}
+
+.contour-slider-field {
+    gap: 0.45rem;
+    margin: 0;
+    min-width: 0;
+}
+
+.contour-slider-label {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.75rem;
+    min-height: 1.35rem;
+}
+
+.contour-slider-label label {
+    display: block;
+    margin: 0;
+    color: var(--text-secondary-color);
+    font-size: 0.8rem;
+    line-height: 1.2;
+}
+
+.contour-slider-label output {
+    min-width: 3rem;
+    padding: 0.16rem 0.45rem;
+    border-radius: 6px;
+    background: rgba(0, 0, 0, 0.24);
+    color: color-mix(in srgb, var(--accent-purple) 70%, var(--text-color));
+    font-family: monospace;
+    font-size: 0.78rem;
+    text-align: right;
+}
+
+.contour-action-row {
+    display: flex;
+    grid-column: 1 / -1;
+    margin-top: 0.55rem;
+    padding-top: 0.8rem;
+    border-top: 1px solid color-mix(in srgb, var(--border-color) 58%, transparent);
+}
+
+.contour-2d-toggle-btn {
+    width: 100%;
+    min-height: 42px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.55rem;
+    padding: 0.68rem 0.95rem;
+    border-color: color-mix(in srgb, var(--accent-purple) 32%, var(--border-color));
+    background: color-mix(in srgb, var(--card-bg-color) 94%, var(--accent-purple));
+    color: var(--text-color);
+    box-shadow: none;
+}
+
+.contour-2d-toggle-btn svg {
+    width: 17px;
+    height: 17px;
+    stroke-width: 1.9;
+}
+
+.contour-2d-toggle-btn:hover {
+    border-color: color-mix(in srgb, var(--accent-purple) 68%, var(--border-color));
+    background: color-mix(in srgb, var(--accent-purple) 10%, var(--card-bg-color));
+    transform: none;
+}
+
+.contour-btn-active {
+    background: color-mix(in srgb, var(--accent-purple) 18%, var(--card-bg-color)) !important;
+    border-color: color-mix(in srgb, var(--accent-purple) 78%, var(--border-color)) !important;
+    color: color-mix(in srgb, var(--accent-purple) 34%, white) !important;
+    box-shadow: 0 0 0 1px color-mix(in srgb, var(--accent-purple) 12%, transparent);
+}
+
+.two-column-layout:has(#real_plots_column:not(.hidden)):has(#contour_2d_column:not(.hidden)) > div:not(.hidden) {
+    flex: 1 1 calc(50% - 1rem) !important;
+    width: auto !important;
+    max-width: 50% !important;
+}
+
+#contour_2d_column:not(.hidden) {
+    min-height: 340px;
+}
+
+#contour_2d_canvas {
+    width: 100%;
+    height: 100%;
+    background-color: #0c0c12;
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+}

@@ -1238,6 +1238,12 @@ function syncRiemannSurfaceControls() {
     setChecked('enableRiemannSurfaceCb', state.riemannSurfaceEnabled);
     setValue('riemannSurfaceComponentSelector', state.riemannSurfaceComponent);
     setChecked('riemannSurfaceWireframeCb', state.riemannSurfaceWireframe);
+    setChecked('riemannSurfaceContoursCb', state.contoursEnabled);
+    setValue('riemannSurfaceContourIntervalSlider', state.contourInterval);
+    setText('riemannSurfaceContourIntervalValueDisplay', Number(state.contourInterval).toFixed(2));
+    setValue('riemannSurfaceContourThicknessSlider', state.contourThickness);
+    setText('riemannSurfaceContourThicknessValueDisplay', Number(state.contourThickness).toFixed(1));
+    setHidden('riemannSurfaceContoursDetails', !state.contoursEnabled);
 
     if (control('riemannSurfaceStatus')) {
         const hasBranches = surfaceStageHasBranches(state, 1);
@@ -1375,6 +1381,7 @@ export function updateTitlesAndGlobalUI() {
         syncPrimaryPlaneTitles();
         syncVisualizationOptionControls();
         syncRiemannTransformationUI();
+        sync2DContourUI();
     });
 }
 
@@ -1503,6 +1510,14 @@ export function syncRealPlotsUI() {
             heightScaleDisplay.textContent = state.realPlotsHeightScale.toFixed(2);
         }
     }
+
+    // Sync Real Plots Contours
+    setChecked('realPlotsContoursCb', state.contoursEnabled);
+    setValue('realPlotsContourIntervalSlider', state.contourInterval);
+    setText('realPlotsContourIntervalValueDisplay', Number(state.contourInterval).toFixed(2));
+    setValue('realPlotsContourThicknessSlider', state.contourThickness);
+    setText('realPlotsContourThicknessValueDisplay', Number(state.contourThickness).toFixed(1));
+    setHidden('realPlotsContoursDetails', !state.contoursEnabled);
 }
 
 export function updateCustomFormulaPreview(inputEl, displayEl) {
@@ -1516,5 +1531,66 @@ export function updateCustomFormulaPreview(inputEl, displayEl) {
     } catch (error) {
         displayEl.textContent = error?.message || String(error);
         displayEl.classList.add('dynamic-math-error');
+    }
+}
+
+export function sync2DContourUI() {
+    const is3D = state.realPlotsEnabled || state.riemannSurfaceEnabled;
+    const showContour = state.show2DContourPlot && is3D;
+
+    // Toggle button active states and labels
+    const active = state.show2DContourPlot;
+    [control('riemannSurfaceShow2DContourBtn'), control('realPlotsShow2DContourBtn')].forEach(btn => {
+        if (btn) {
+            btn.classList.toggle('contour-btn-active', active);
+            btn.setAttribute('aria-pressed', active ? 'true' : 'false');
+            const textSpan = btn.querySelector('span');
+            if (textSpan) {
+                textSpan.textContent = active ? 'Hide 2D Contour Plot' : 'Show 2D Contour Plot';
+            }
+            const icon = btn.querySelector('[data-lucide]');
+            if (icon) {
+                icon.setAttribute('data-lucide', active ? 'image-off' : 'image');
+            }
+        }
+    });
+
+    if (typeof lucide !== 'undefined' && lucide.createIcons) {
+        lucide.createIcons();
+    }
+
+    // Update column visibility
+    const contourCol = control('contour2DColumn');
+    if (contourCol) {
+        contourCol.classList.toggle('hidden', !showContour);
+    }
+
+    if (state.realPlotsEnabled) {
+        // Real plots active: z_plane and w_plane are hidden, real_plots is visible
+        const zCard = control('zCanvasCard');
+        const wCard = control('wCanvasCard');
+        const rpCol = control('realPlotsColumn');
+        if (zCard) zCard.classList.add('hidden');
+        if (wCard) wCard.classList.add('hidden');
+        if (rpCol) rpCol.classList.remove('hidden');
+    } else if (state.riemannSurfaceEnabled) {
+        // Riemann surface active:
+        // If showContour is true, we hide zCanvasCard so we only have wCanvasCard (3D Riemann) and contour2DColumn (2D contour) side-by-side!
+        // If showContour is false, we restore zCanvasCard and wCanvasCard.
+        const zCard = control('zCanvasCard');
+        const wCard = control('wCanvasCard');
+        const rpCol = control('realPlotsColumn');
+        if (rpCol) rpCol.classList.add('hidden');
+        if (zCard) {
+            zCard.classList.toggle('hidden', showContour);
+        }
+        if (wCard) {
+            wCard.classList.remove('hidden');
+        }
+    } else {
+        // Neither 3D plot is active: hide the 2D contour plot column
+        if (contourCol) {
+            contourCol.classList.add('hidden');
+        }
     }
 }

@@ -10,7 +10,7 @@ const BACKGROUND = 0x0b0914;
 const CAMERA_HOME = Object.freeze({ x: 6.0, y: 5.0, z: 8.0 });
 const SURFACE_SIZE = 6.0;
 const SURFACE_HEIGHT = 3.5;
-const GRID_SEGMENTS = 40;
+const GRID_SEGMENTS = 96;
 const GRID_STRIDE = GRID_SEGMENTS + 1;
 const GRID_VERTEX_COUNT = GRID_STRIDE * GRID_STRIDE;
 const GRID_INDEX_COUNT = GRID_SEGMENTS * GRID_SEGMENTS * 6;
@@ -49,7 +49,7 @@ const PALETTE_HEX = Object.freeze({
     sunset: [0x1a0b36, 0x880e4f, 0xff5722, 0xffeb3b]
 });
 
-let active3DRenderer = null;
+export let active3DRenderer = null;
 
 function isFiniteNumber(value) {
     return typeof value === 'number' && value === value && value !== Infinity && value !== -Infinity;
@@ -95,7 +95,7 @@ const PALETTE_LUTS = Object.freeze(Object.fromEntries(
     Object.entries(PALETTE_HEX).map(([name, stops]) => [name, createPaletteLut(stops)])
 ));
 
-function paletteLutFor(name) {
+export function paletteLutFor(name) {
     return PALETTE_LUTS[name] || PALETTE_LUTS.sunset;
 }
 
@@ -311,10 +311,18 @@ class SurfaceMeshStore {
         this.positions = new Float32Array(GRID_VERTEX_COUNT * 3);
         this.normals = new Float32Array(GRID_VERTEX_COUNT * 3);
         this.colors = new Float32Array(GRID_VERTEX_COUNT * 3);
+        this.rawValues = new Float32Array(GRID_VERTEX_COUNT);
         this.values = new Float64Array(GRID_VERTEX_COUNT);
         this.phases = new Float32Array(GRID_VERTEX_COUNT);
         this.u = new Float64Array(2);
         this.v = new Float64Array(2);
+        
+        this.contourUniforms = {
+            uContoursEnabled: { value: 0.0 },
+            uContourInterval: { value: 0.5 },
+            uContourThickness: { value: 1.5 }
+        };
+
         this.geometry = this.#createGeometry();
         this.material = this.#createSurfaceMaterial();
         this.wireMaterial = this.#createWireMaterial();
@@ -331,18 +339,22 @@ class SurfaceMeshStore {
         const position = new THREE.BufferAttribute(this.positions, 3);
         const normal = new THREE.BufferAttribute(this.normals, 3);
         const color = new THREE.BufferAttribute(this.colors, 3);
+        const rawValue = new THREE.BufferAttribute(this.rawValues, 1);
         position.setUsage?.(THREE.DynamicDrawUsage);
         normal.setUsage?.(THREE.DynamicDrawUsage);
         color.setUsage?.(THREE.DynamicDrawUsage);
+        rawValue.setUsage?.(THREE.DynamicDrawUsage);
         geometry.setAttribute('position', position);
         geometry.setAttribute('normal', normal);
         geometry.setAttribute('color', color);
+        geometry.setAttribute('rawValue', rawValue);
         geometry.setIndex(new THREE.BufferAttribute(SURFACE_TOPOLOGY.indices, 1));
         return geometry;
     }
 
     #createSurfaceMaterial() {
-        return new THREE.MeshPhysicalMaterial({
+        const contourUniforms = this.contourUniforms;
+        const material = new THREE.MeshPhysicalMaterial({
             vertexColors: true,
             side: THREE.DoubleSide,
             roughness: 0.12,
@@ -356,6 +368,40 @@ class SurfaceMeshStore {
             transparent: true,
             opacity: 0.96
         });
+
+        material.onBeforeCompile = (shader) => {
+            shader.uniforms.uContoursEnabled = contourUniforms.uContoursEnabled;
+            shader.uniforms.uContourInterval = contourUniforms.uContourInterval;
+            shader.uniforms.uContourThickness = contourUniforms.uContourThickness;
+
+            shader.vertexShader = 'attribute float rawValue;\nvarying float v_heightVal;\n' + shader.vertexShader;
+            shader.vertexShader = shader.vertexShader.replace(
+                '#include <begin_vertex>',
+                `#include <begin_vertex>
+                v_heightVal = rawValue;`
+            );
+
+            shader.fragmentShader = 'varying float v_heightVal;\nuniform float uContoursEnabled;\nuniform float uContourInterval;\nuniform float uContourThickness;\n' + shader.fragmentShader;
+            shader.fragmentShader = shader.fragmentShader.replace(
+                '#include <dithering_fragment>',
+                `#include <dithering_fragment>
+                if (uContoursEnabled > 0.5) {
+                    float valDeriv = length(vec2(dFdx(v_heightVal), dFdy(v_heightVal)));
+                    if (valDeriv > 1.0e-6) {
+                        float safeInterval = max(uContourInterval, 1.0e-6);
+                        float contourCoord = v_heightVal / safeInterval;
+                        float distToContour = abs(contourCoord - floor(contourCoord + 0.5)) * safeInterval;
+                        float pixelDist = distToContour / valDeriv;
+                        float lineIntensity = 1.0 - smoothstep(max(0.0, uContourThickness - 0.75), uContourThickness + 0.75, pixelDist);
+                        float contourLum = dot(gl_FragColor.rgb, vec3(0.2126, 0.7152, 0.0722));
+                        vec3 contourInk = contourLum < 0.57 ? vec3(0.965, 0.976, 1.0) : vec3(0.031, 0.039, 0.071);
+                        gl_FragColor.rgb = mix(gl_FragColor.rgb, contourInk, lineIntensity * 0.86);
+                    }
+                }`
+            );
+        };
+
+        return material;
     }
 
     #createWireMaterial() {
@@ -374,6 +420,7 @@ class SurfaceMeshStore {
         geometry.getAttribute('position').needsUpdate = true;
         geometry.getAttribute('normal').needsUpdate = true;
         geometry.getAttribute('color').needsUpdate = true;
+        geometry.getAttribute('rawValue').needsUpdate = true;
         geometry.computeBoundingSphere?.();
     }
 
@@ -457,13 +504,17 @@ function writeHeightfieldNormals(positions, normals, segments, gridStep) {
 
 export function sampleRealPlotSurface(transformFunc, options = {}) {
     const segments = Math.max(1, Math.floor(Number(options.segments) || GRID_SEGMENTS));
-    const topology = options.topology || (segments === GRID_SEGMENTS ? SURFACE_TOPOLOGY : new StaticSurfaceTopology(segments));
-    const vertexCount = topology.vertexCount;
-    const positions = options.positions || new Float32Array(vertexCount * 3);
-    const normals = options.normals || new Float32Array(vertexCount * 3);
-    const colors = options.colors || new Float32Array(vertexCount * 3);
+    const valuesOnly = options.valuesOnly === true;
+    const topology = valuesOnly
+        ? null
+        : options.topology || (segments === GRID_SEGMENTS ? SURFACE_TOPOLOGY : new StaticSurfaceTopology(segments));
+    const stride = segments + 1;
+    const vertexCount = valuesOnly ? stride * stride : topology.vertexCount;
+    const positions = valuesOnly ? null : options.positions || new Float32Array(vertexCount * 3);
+    const normals = valuesOnly ? null : options.normals || new Float32Array(vertexCount * 3);
+    const colors = valuesOnly ? null : options.colors || new Float32Array(vertexCount * 3);
     const values = options.values || new Float64Array(vertexCount);
-    const phases = options.phases || new Float32Array(vertexCount);
+    const phases = valuesOnly ? null : options.phases || new Float32Array(vertexCount);
     const u = options.u || new Float64Array(2);
     const v = options.v || new Float64Array(2);
     const xRange = options.xRange || zPlaneParams.currentVisXRange;
@@ -480,6 +531,7 @@ export function sampleRealPlotSurface(transformFunc, options = {}) {
     const inputVType = inputV.type;
     const scalarInputs = isScalarInputType(inputUType) && isScalarInputType(inputVType);
     const outputMode = outputComponentMode(options.outputComponent ?? state.realPlotsOutputComponent);
+    const invalidValue = options.invalidAsNaN === true ? NaN : 0;
     const heightScale = options.heightScale !== undefined
         ? options.heightScale
         : state.realPlotsHeightScale !== undefined ? state.realPlotsHeightScale : 1.0;
@@ -508,7 +560,7 @@ export function sampleRealPlotSurface(transformFunc, options = {}) {
                 zInIm = u[1] + v[0];
             }
 
-            let rawValue = 0;
+            let rawValue = invalidValue;
             let phase = 0.5;
 
             try {
@@ -527,22 +579,37 @@ export function sampleRealPlotSurface(transformFunc, options = {}) {
                     }
                 }
             } catch (e) {
-                rawValue = 0;
+                rawValue = invalidValue;
                 phase = 0.5;
             }
 
             values[vertex] = rawValue;
-            phases[vertex] = phase;
-            if (rawValue < minZ) minZ = rawValue;
-            if (rawValue > maxZ) maxZ = rawValue;
+            if (phases) phases[vertex] = phase;
+            if (isFiniteNumber(rawValue)) {
+                if (rawValue < minZ) minZ = rawValue;
+                if (rawValue > maxZ) maxZ = rawValue;
+            }
             vertex += 1;
         }
     }
 
+    if (valuesOnly) {
+        return {
+            segments,
+            vertexCount,
+            values,
+            minValue: finiteResultCount > 0 ? minZ : NaN,
+            maxValue: finiteResultCount > 0 ? maxZ : NaN,
+            finiteResultCount
+        };
+    }
+
+    const rawValues = options.rawValues || new Float32Array(vertexCount);
     const spanZ = maxZ - minZ || 1.0;
     const inverseSpanZ = 1 / spanZ;
     for (let index = 0, offset = 0; index < vertexCount; index += 1, offset += 3) {
         const rawValue = values[index];
+        rawValues[index] = rawValue;
         positions[offset] = topology.gridX[index];
         positions[offset + 1] = softClampHeight(rawValue) * heightFactor;
         positions[offset + 2] = topology.gridZ[index];
@@ -563,6 +630,7 @@ export function sampleRealPlotSurface(transformFunc, options = {}) {
         normals,
         colors,
         values,
+        rawValues,
         phases,
         minValue: minZ,
         maxValue: maxZ,
@@ -773,6 +841,11 @@ class RealPlots3DRenderer {
             state.realPlotsCameraNeedsReset = false;
         }
 
+        const store = this.surfaceStore;
+        store.contourUniforms.uContoursEnabled.value = state.contoursEnabled ? 1.0 : 0.0;
+        store.contourUniforms.uContourInterval.value = state.contourInterval !== undefined ? +state.contourInterval : 0.5;
+        store.contourUniforms.uContourThickness.value = state.contourThickness !== undefined ? +state.contourThickness : 1.5;
+
         this.#syncOutputLabel();
         this.#syncCoordinateLabels();
         this.#sampleSurface(transformFunc);
@@ -811,16 +884,19 @@ class RealPlots3DRenderer {
 
     #sampleSurface(transformFunc) {
         const store = this.surfaceStore;
-        sampleRealPlotSurface(transformFunc, {
+        const result = sampleRealPlotSurface(transformFunc, {
             topology: SURFACE_TOPOLOGY,
             positions: store.positions,
             normals: store.normals,
             colors: store.colors,
+            rawValues: store.rawValues,
             values: store.values,
             phases: store.phases,
             u: store.u,
             v: store.v
         });
+        store.minValue = result.minValue;
+        store.maxValue = result.maxValue;
     }
 
     dispose() {

@@ -255,7 +255,8 @@ const BINDERS = [
     bindThemeControls,
     bindDomainPaletteCirclePanelListeners,
     bindRealPlotsPaletteCirclePanelListeners,
-    bindRealPlotsControls
+    bindRealPlotsControls,
+    bindContourControls
 ];
 
 function bindDynamicPlottingControls() {
@@ -548,6 +549,8 @@ function disableRealPlots() {
     state.realPlotsEnabled = false;
     checked('enableRealPlotsCb', false);
     hidden(controls.realPlotsControlsContainer, true);
+    hidden(controls.realPlotsColumn, true);
+    disposeRealPlotsRenderer();
 
     const dynamicParams = document.getElementById('dynamic_plotting_params');
     const algParams = document.getElementById('algebraic_chaining_params');
@@ -1152,6 +1155,7 @@ function bindViewControls() {
 
     bindCheckbox('enableRiemannSurfaceCb', 'riemannSurfaceEnabled', () => {
         if (state.riemannSurfaceEnabled) {
+            disableRealPlots();
             Object.assign(state, { riemannSphereViewEnabled: false, riemannTransformationEnabled: false, splitViewEnabled: false, threeSphereEnabled: false });
             ['enableRiemannSphereCb', 'enableRiemannTransformationCb', 'enableSplitViewCb', 'enableThreeSphereCb'].forEach(key => checked(key, false));
             if (state.navigationModeEnabled) call(setNavigationModeEnabled, false);
@@ -1645,6 +1649,20 @@ function bindCanvasInteractions() {
         ctx.canvas.addEventListener('mouseleave', onCanvasMouseLeave, PASSIVE_LISTENER_OPTIONS);
         ctx.canvas.addEventListener('wheel', onCanvasWheel, ACTIVE_LISTENER_OPTIONS);
     });
+
+    // Wire up contour_2d_canvas organically to the z-plane transformation state
+    const contourCanvas = document.getElementById('contour_2d_canvas');
+    if (contourCanvas) {
+        // We reuse the 'z' context logic since the 2D contour plot maps the input domain [x, y] = z.
+        // Doing this instantly connects pan/zoom here directly to the Real/Riemann 3D plot calculations!
+        canvasContextByElement.set(contourCanvas, canvasInteractionContexts['z']);
+        
+        contourCanvas.addEventListener('mousemove', onCanvasMouseMove, PASSIVE_LISTENER_OPTIONS);
+        contourCanvas.addEventListener('mousedown', onCanvasMouseDown, PASSIVE_LISTENER_OPTIONS);
+        contourCanvas.addEventListener('mouseup', onCanvasMouseUp, PASSIVE_LISTENER_OPTIONS);
+        contourCanvas.addEventListener('mouseleave', onCanvasMouseLeave, PASSIVE_LISTENER_OPTIONS);
+        contourCanvas.addEventListener('wheel', onCanvasWheel, ACTIVE_LISTENER_OPTIONS);
+    }
 }
 
 function bindCanvasRectInvalidation() {
@@ -2817,6 +2835,7 @@ function bindRealPlotsControls() {
         hidden(controls.realPlotsControlsContainer, !val);
 
         if (val) {
+            disableRiemannSurface();
             const rpContainer = controls.realPlotsControlsContainer;
             const algParams = document.getElementById('algebraic_chaining_params');
             const chainParams = document.getElementById('chaining_params');
@@ -2962,8 +2981,77 @@ function toggleRealPlotsFullscreen() {
         if (column) column.classList.remove('hidden-visually');
     }
 
-    laterFrame(() => {
+        laterFrame(() => {
         setupVisualParameters(false, false);
         requestUiRedraw();
     }, state.isRealPlotsFullScreen ? 150 : 100);
+}
+
+function toggleContour2DFullscreen() {
+    const container = controls.contour2DCanvas;
+    const column = controls.contour2DColumn;
+    const shell = controls.fullscreenContainer;
+
+    if (!container || !shell) return;
+
+    state.isContour2DFullScreen = !state.isContour2DFullScreen;
+
+    if (state.isContour2DFullScreen) {
+        state.originalContour2DParent = container.parentElement;
+        setStyles(shell, fullscreenStyles('#000'));
+        attachCloseButton(shell, () => controls.toggleFullscreenContour2DBtn.click());
+        setStyles(container, { width: '100%', height: '100%' });
+        shell.appendChild(container);
+        document.body.appendChild(shell);
+        shell.classList.remove('hidden');
+        if (column) column.classList.add('hidden-visually');
+    } else {
+        if (state.originalContour2DParent) state.originalContour2DParent.appendChild(container);
+        setStyles(container, { width: '100%', height: '100%' });
+        resetFullscreenShell(shell);
+        if (column) column.classList.remove('hidden-visually');
+    }
+
+    laterFrame(() => {
+        setupVisualParameters(false, false);
+        requestUiRedraw();
+    }, state.isContour2DFullScreen ? 150 : 100);
+}
+
+function bindContourControls() {
+    bindCheckbox('riemannSurfaceContoursCb', 'contoursEnabled', (event, val) => {
+        state.contoursEnabled = val;
+        requestUiRedraw();
+    });
+    bindSlider('riemannSurfaceContourIntervalSlider', 'contourInterval', parseFloat, (val) => {
+        state.contourInterval = val;
+        requestUiRedraw();
+    });
+    bindSlider('riemannSurfaceContourThicknessSlider', 'contourThickness', parseFloat, (val) => {
+        state.contourThickness = val;
+        requestUiRedraw();
+    });
+    bindCheckbox('realPlotsContoursCb', 'contoursEnabled', (event, val) => {
+        state.contoursEnabled = val;
+        requestUiRedraw();
+    });
+    bindSlider('realPlotsContourIntervalSlider', 'contourInterval', parseFloat, (val) => {
+        state.contourInterval = val;
+        requestUiRedraw();
+    });
+    bindSlider('realPlotsContourThicknessSlider', 'contourThickness', parseFloat, (val) => {
+        state.contourThickness = val;
+        requestUiRedraw();
+    });
+    bindControlListener('riemannSurfaceShow2DContourBtn', 'click', () => {
+        state.show2DContourPlot = !state.show2DContourPlot;
+        updateTitlesAndGlobalUI();
+        requestUiRedraw();
+    });
+    bindControlListener('realPlotsShow2DContourBtn', 'click', () => {
+        state.show2DContourPlot = !state.show2DContourPlot;
+        updateTitlesAndGlobalUI();
+        requestUiRedraw();
+    });
+    bindControlListener('toggleFullscreenContour2DBtn', 'click', toggleContour2DFullscreen);
 }

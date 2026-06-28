@@ -54,7 +54,7 @@ const WEBGL_CONTEXT_ATTRIBUTES = Object.freeze({
   antialias: false,
   alpha: true,
   premultipliedAlpha: true,
-  preserveDrawingBuffer: false,
+  preserveDrawingBuffer: true,
   powerPreference: 'high-performance'
 });
 

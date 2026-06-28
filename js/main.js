@@ -7,6 +7,7 @@ import { drawZPlaneContent, drawWPlaneContent } from './rendering/renderer.js';
 import { updateTitlesAndGlobalUI } from './ui/ui-updates.js';
 import { drawLaplace3DSurface } from './rendering/laplace-3d-surface.js';
 import { drawRealPlot } from './rendering/real-plots-renderer.js';
+import { draw2DContourPlot } from './rendering/contour-2d.js';
 import { setupDOMReferences, setupVisualParameters } from './utils/dom-utils.js';
 import { initializePolynomialCoeffs, generatePolynomialCoeffSliders } from './ui/polynomial-ui.js';
 import { setupEventListeners, setActiveFunctionButton, initializeStateFromControls, getCachedCanvasEventPosition } from './ui/event-listeners.js';
@@ -104,6 +105,10 @@ export function requestRedrawAll() {
             syncRealPlotsColumn();
             if (state.realPlotsEnabled && typeof drawRealPlot === 'function') {
                 drawRealPlot();
+            }
+
+            if (state.show2DContourPlot && (state.realPlotsEnabled || state.riemannSurfaceEnabled)) {
+                draw2DContourPlot(controls.contour2DCanvas);
             }
 
             context.domainColoringDirty = context.domainColoringDirtyQueued;

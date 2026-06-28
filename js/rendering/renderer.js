@@ -1174,6 +1174,7 @@ function renderRiemannSurfaceIfEnabled(index, map) {
     const stage = state.chainingEnabled && state.chainCount > 25
         ? state.chainCount
         : index + 1;
+    context.riemannSurfaceContourPipeline = { index, stage, map };
     if (wCanvas && renderRiemannSurface(wCanvas, { stage, map })) {
         hideCanvas(wCanvas);
         return true;
@@ -1474,6 +1475,7 @@ function _renderSingleWPlaneMode(index, curFunc, isSpecialMode) {
 
 export function drawWPlaneContent() {
     syncRenderContext();
+    context.riemannSurfaceContourPipeline = null;
 
     if (!hasWPlaneTargets()) {
         return;

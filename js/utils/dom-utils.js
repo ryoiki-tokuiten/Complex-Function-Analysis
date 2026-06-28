@@ -282,12 +282,29 @@ const DOM_BINDINGS = [
     { key: 'realPlotsColorMode', id: 'real_plots_color_mode' },
     { key: 'toggleFullscreenRealPlotsBtn', id: 'toggle_fullscreen_real_plots_btn' },
     { key: 'realPlotsContainer', id: 'real_plots_container' },
+    { key: 'contour2DColumn', id: 'contour_2d_column' },
+    { key: 'contour2DCanvas', id: 'contour_2d_canvas' },
+    { key: 'riemannSurfaceShow2DContourBtn', id: 'riemann_surface_show_2d_contour_btn' },
+    { key: 'realPlotsShow2DContourBtn', id: 'real_plots_show_2d_contour_btn' },
+    { key: 'toggleFullscreenContour2DBtn', id: 'toggle_fullscreen_contour_2d_btn' },
     { key: 'preloader', id: 'preloader' },
     { key: 'functionControlsPanel', id: 'function-controls-panel' },
     { key: 'parameterControlsPanel', id: 'parameter-controls-panel' },
     { key: 'visualizationOptionsPanel', id: 'visualization-options-panel' },
     { key: 'realPlotsHeightScaleSlider', id: 'real_plots_height_scale_slider' },
-    { key: 'realPlotsHeightScaleValueDisplay', id: 'real_plots_height_scale_value_display' }
+    { key: 'realPlotsHeightScaleValueDisplay', id: 'real_plots_height_scale_value_display' },
+    { key: 'riemannSurfaceContoursCb', id: 'riemann_surface_contours_cb' },
+    { key: 'riemannSurfaceContoursDetails', id: 'riemann_surface_contours_details' },
+    { key: 'riemannSurfaceContourIntervalSlider', id: 'riemann_surface_contour_interval_slider' },
+    { key: 'riemannSurfaceContourIntervalValueDisplay', id: 'riemann_surface_contour_interval_value_display' },
+    { key: 'riemannSurfaceContourThicknessSlider', id: 'riemann_surface_contour_thickness_slider' },
+    { key: 'riemannSurfaceContourThicknessValueDisplay', id: 'riemann_surface_contour_thickness_value_display' },
+    { key: 'realPlotsContoursCb', id: 'real_plots_contours_cb' },
+    { key: 'realPlotsContoursDetails', id: 'real_plots_contours_details' },
+    { key: 'realPlotsContourIntervalSlider', id: 'real_plots_contour_interval_slider' },
+    { key: 'realPlotsContourIntervalValueDisplay', id: 'real_plots_contour_interval_value_display' },
+    { key: 'realPlotsContourThicknessSlider', id: 'real_plots_contour_thickness_slider' },
+    { key: 'realPlotsContourThicknessValueDisplay', id: 'real_plots_contour_thickness_value_display' }
 ];
 
 export function formatTaylorNumericValue(value) {

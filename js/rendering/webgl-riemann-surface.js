@@ -32,9 +32,12 @@ const LIMITS = Object.freeze({
   minStage: 1,
   maxStage: 512,
   minResolution: 42,
-  maxResolution: 254,
-  resolutionBase: 128,
-  resolutionScale: 6,
+  // WebGL1 UINT16 element indices top out at a 254x254 grid; renderers with
+  // OES_element_index_uint lift the surface to a much denser 510x510 lattice.
+  maxResolution: 510,
+  uint16MaxResolution: 254,
+  resolutionBase: 192,
+  resolutionScale: 10,
   minDistance: 0.001,
   maxDistance: 100,
   maxPixelRatio: 4,
@@ -79,7 +82,8 @@ const UNIFORM_NAMES = Object.freeze({
   uBranchParams: 'u_branchParams',
   uDomainStep: 'u_domainStep',
   uNormalizedStep: 'u_normalizedStep',
-  uTaylorCenter: 'u_taylorCenter'
+  uTaylorCenter: 'u_taylorCenter',
+  uContourParams: 'u_contourParams'
 });
 
 const PACKED_SURFACE_UNIFORMS_GLSL = `uniform vec4 u_functionParams;
@@ -90,6 +94,7 @@ uniform vec4 u_renderParams;
 uniform vec4 u_domainParams;
 uniform vec4 u_domainIntParams;
 uniform vec4 u_branchParams;
+uniform vec4 u_contourParams;
 uniform vec2 u_polyCoeffs[11];
 uniform vec2 u_taylorCenter;
 uniform vec2 u_taylorCoefficients[9];
@@ -120,7 +125,10 @@ uniform vec2 u_taylorCoefficients[9];
 #define u_branchIndex u_branchParams.x
 #define u_branchCutWidth u_branchParams.y
 #define u_sheetTint u_branchParams.z
-#define u_wirePass u_branchParams.w`;
+#define u_wirePass u_branchParams.w
+#define u_contoursEnabled u_contourParams.x
+#define u_contourInterval u_contourParams.y
+#define u_contourThickness u_contourParams.z`;
 
 const ARRAY_UNIFORMS = Object.freeze([
   { key: 'uPolyCoeffs', name: 'u_polyCoeffs', length: 11 },
@@ -137,6 +145,12 @@ const SHADER_LIBRARY_CACHE_LIMIT = 32;
 
 const EMPTY_ARRAY = Object.freeze([]);
 const ZERO_COMPLEX = Object.freeze({ re: 0, im: 0 });
+const UINT16_INDEX_LIMIT = 0xffff;
+
+function gridIndexArrayType(resolution) {
+  const vertexCount = (resolution + 1) * (resolution + 1);
+  return vertexCount > UINT16_INDEX_LIMIT ? Uint32Array : Uint16Array;
+}
 
 // Program signatures are control-plane data. State managers in this app replace
 // formula arrays when formulas change, so reference-aware caching removes deep
@@ -232,6 +246,11 @@ function normalizeStage(stage) {
 function normalizeResolution(gridDensity) {
   const requested = LIMITS.resolutionBase + finiteInteger(gridDensity, 15) * LIMITS.resolutionScale;
   return clamp(requested, LIMITS.minResolution, LIMITS.maxResolution);
+}
+
+function normalizeRendererResolution(gridDensity, supportsUint32Indices) {
+  const resolution = normalizeResolution(gridDensity);
+  return supportsUint32Indices ? resolution : Math.min(resolution, LIMITS.uint16MaxResolution);
 }
 
 function readRange(range, fallbackMin, fallbackMax) {
@@ -715,12 +734,22 @@ const VERTEX_SURFACE_GLSL = Object.freeze({
   v_normal = normalize(mat3(u_modelView) * localNormal);
   v_color = surfaceColor(mapped);
   v_valid = ok ? 1.0 : 0.0;
+  v_heightVal = ok ? surfaceHeight(mapped) : 0.0;
   gl_Position = u_projection * viewPosition;
 }`
   }
 });
 
 const FRAGMENT_GLSL = Object.freeze({
+  highQualityNormal: {
+    deps: [],
+    source: `vec3 highQualityNormal(vec3 interpolatedNormal, vec3 viewPosition) {
+  vec3 geometricNormal = normalize(cross(dFdx(viewPosition), dFdy(viewPosition)));
+  if (dot(geometricNormal, interpolatedNormal) < 0.0) geometricNormal = -geometricNormal;
+  return normalize(mix(interpolatedNormal, geometricNormal, 0.72));
+}`
+  },
+
   shadeSurface: {
     deps: [],
     source: `vec3 shadeSurface(vec3 color, vec3 normal, vec3 viewPosition) {
@@ -781,6 +810,10 @@ const FRAGMENT_GLSL = Object.freeze({
   vec3 ambient = albedo * vec3(0.03, 0.04, 0.05);
   totalLight += ambient + fresnel * envColor * 1.5;
   
+  // Horizon-weighted contact shadowing gives the mathematical sheet real mass without textures.
+  float horizonOcclusion = mix(0.72, 1.0, smoothstep(-0.2, 0.85, normal.y));
+  totalLight *= horizonOcclusion;
+
   // ACES Film Tonemapping
   vec3 x = totalLight;
   vec3 mapped = (x * (2.51 * x + 0.03)) / (x * (2.43 * x + 0.59) + 0.14);
@@ -911,7 +944,7 @@ vec4 iteratedDynamicsColor(vec2 parameterValue, int chainMode, float brightnessF
   },
 
   main: {
-    deps: ['shadeSurface', 'iteratedDynamicsColor'],
+    deps: ['highQualityNormal', 'shadeSurface', 'iteratedDynamicsColor'],
     source: `void main() {
   if (v_valid < 0.995) discard;
   if (u_wirePass > 0.5) {
@@ -920,23 +953,27 @@ vec4 iteratedDynamicsColor(vec2 parameterValue, int chainMode, float brightnessF
   }
   
   vec3 baseColor = v_color;
-  
+
   if (u_orbitColoringMode != 0 && u_chainCount > 1 && (u_chainMode == 1 || u_chainMode == 7)) {
     baseColor = iteratedDynamicsColor(v_z, u_chainMode, 1.0).rgb;
-  } else {
-    vec2 mapped = vec2(0.0);
-    bool ok = evaluateSurfaceStage(
-      v_z, v_z, u_stage, u_chainMode, u_functionId, u_branchIndex, u_branchCutWidth,
-      u_mobiusA, u_mobiusB, u_mobiusC, u_mobiusD, u_polyDegree, u_polyCoeffs,
-      u_zetaContinuationEnabled, u_zetaReflectionBoundary, u_fracPower,
-      u_useTaylor, u_taylorCenter, u_taylorOrder, u_taylorCoefficients, mapped
-    );
-    if (ok) {
-      baseColor = surfaceColor(mapped);
-    }
   }
 
-  gl_FragColor = vec4(shadeSurface(baseColor, normalize(v_normal), v_viewPosition), 0.88);
+  vec3 shadingNormal = highQualityNormal(normalize(v_normal), v_viewPosition);
+  vec3 finalColor = shadeSurface(baseColor, shadingNormal, v_viewPosition);
+  if (u_contoursEnabled > 0.5) {
+    float valDeriv = length(vec2(dFdx(v_heightVal), dFdy(v_heightVal)));
+    if (valDeriv > 1.0e-6) {
+      float safeInterval = max(u_contourInterval, 1.0e-6);
+      float contourCoord = v_heightVal / safeInterval;
+      float distToContour = abs(contourCoord - floor(contourCoord + 0.5)) * safeInterval;
+      float pixelDist = distToContour / valDeriv;
+      float lineIntensity = 1.0 - smoothstep(max(0.0, u_contourThickness - 0.75), u_contourThickness + 0.75, pixelDist);
+      float contourLum = dot(finalColor, vec3(0.2126, 0.7152, 0.0722));
+      vec3 contourInk = contourLum < 0.57 ? vec3(0.965, 0.976, 1.0) : vec3(0.031, 0.039, 0.071);
+      finalColor = mix(finalColor, contourInk, lineIntensity * 0.86);
+    }
+  }
+  gl_FragColor = vec4(finalColor, 0.88);
 }`
   }
 });
@@ -984,6 +1021,7 @@ varying vec3 v_normal;
 varying vec3 v_viewPosition;
 varying float v_valid;
 varying vec2 v_z;
+varying float v_heightVal;
 ${buildCachedRiemannSurfaceMathLibrary(appState, signature)}
 ${assembleGlslModules(VERTEX_SURFACE_GLSL, ['main'])}
 `;
@@ -991,6 +1029,7 @@ ${assembleGlslModules(VERTEX_SURFACE_GLSL, ['main'])}
 
 function buildFragmentShader(appState, signature = getProgramSignature(appState)) {
   return `
+#extension GL_OES_standard_derivatives : enable
 precision highp float;
 precision highp int;
 ${PACKED_SURFACE_UNIFORMS_GLSL}
@@ -1000,6 +1039,7 @@ varying vec3 v_normal;
 varying vec3 v_viewPosition;
 varying float v_valid;
 varying vec2 v_z;
+varying float v_heightVal;
 
 ${buildCachedRiemannSurfaceMathLibrary(appState, signature)}
 ${assembleGlslModules(VERTEX_SURFACE_GLSL, ['surfaceColor'])}
@@ -1081,7 +1121,7 @@ function createGridVertices(resolution) {
 
 function createGridTriangles(resolution) {
   const side = resolution + 1;
-  const triangles = new Uint16Array(resolution * resolution * 6);
+  const triangles = new (gridIndexArrayType(resolution))(resolution * resolution * 6);
   let offset = 0;
 
   for (let y = 0; y < resolution; y++) {
@@ -1106,7 +1146,7 @@ function createGridLines(resolution) {
   const stride = Math.max(1, Math.round(resolution / 18));
   const lineColumns = Math.floor(resolution / stride) + 1;
   const lineRows = Math.floor(resolution / stride) + 1;
-  const indices = new Uint16Array((lineColumns + lineRows) * resolution * 2);
+  const indices = new (gridIndexArrayType(resolution))((lineColumns + lineRows) * resolution * 2);
   let offset = 0;
 
   for (let x = 0; x <= resolution; x += stride) {
@@ -1182,8 +1222,10 @@ function createGridMesh(gl, resolution) {
     vertexBuffer,
     triangleBuffer,
     triangleCount: triangles.length,
+    triangleIndexType: triangles instanceof Uint32Array ? gl.UNSIGNED_INT : gl.UNSIGNED_SHORT,
     lineBuffer,
-    lineCount: lines.length
+    lineCount: lines.length,
+    lineIndexType: lines instanceof Uint32Array ? gl.UNSIGNED_INT : gl.UNSIGNED_SHORT
   };
 }
 
@@ -1234,14 +1276,13 @@ function getProgramSignature(appState) {
   const algebraicZ = appState.algebraicChainingZExpr || 'z';
   const dynamicActive = isDynamicAggregateGLSLActive(appState);
   const dynamicTerms = dynamicActive ? (appState.dynamicAggregateTerms || EMPTY_ARRAY) : EMPTY_ARRAY;
-  const cached = PROGRAM_SIGNATURE_BY_STATE.get(appState);
-
   const algebraicSignature = JSON.stringify(algebraic);
   const dynamicSignature = dynamicActive
     ? dynamicAggregateGLSLSignature(appState)
     : '';
   const signature = `az:${algebraicZ}|a:${algebraicSignature}|d:${dynamicSignature}`;
 
+  const cached = PROGRAM_SIGNATURE_BY_STATE.get(appState);
   if (cached && cached.signature === signature) {
     return signature;
   }
@@ -1250,8 +1291,6 @@ function getProgramSignature(appState) {
   const usesMobius = formulaRefsFunction(algebraic, dynamicTerms, algebraicZ, 'mobius');
 
   PROGRAM_SIGNATURE_BY_STATE.set(appState, {
-    algebraicSignature,
-    dynamicSignature,
     usesPolynomial,
     usesMobius,
     signature
@@ -1259,6 +1298,7 @@ function getProgramSignature(appState) {
 
   return signature;
 }
+
 
 export function getRiemannSurfaceProgramSignature(appState) {
   return getProgramSignature(appState);
@@ -1284,7 +1324,19 @@ function collectArrayUniformLocations(gl, program, name, length) {
   for (let index = 0; index < length; index++) {
     locations[index] = gl.getUniformLocation(program, `${name}[${index}]`);
   }
+  locations.base = locations[0];
   return locations;
+}
+
+function uploadComplexUniformArray(gl, locations, data) {
+  if (locations.base) {
+    gl.uniform2fv(locations.base, data);
+    return;
+  }
+
+  for (let i = 0; i < locations.length; i++) {
+    gl.uniform2f(locations[i], data[i * 2], data[i * 2 + 1]);
+  }
 }
 
 function collectUniformLocations(gl, program) {
@@ -1419,13 +1471,18 @@ function createHud() {
 }
 
 function getWebGLContext(canvas) {
-  return canvas.getContext('webgl', {
+  const gl = canvas.getContext('webgl', {
     antialias: true,
     alpha: false,
     depth: true,
     premultipliedAlpha: false,
     powerPreference: 'high-performance'
   });
+  if (gl) {
+    gl.getExtension('OES_standard_derivatives');
+    gl.getExtension('OES_element_index_uint');
+  }
+  return gl;
 }
 
 function resizeRenderer(renderer) {
@@ -1487,20 +1544,18 @@ function setTaylorUniforms(renderer) {
   const centerIm = center && typeof center === 'object' ? finiteNumber(center.im) : 0;
   gl.uniform2f(locations.uTaylorCenter, centerRe, centerIm);
 
-  const previousOrder = renderer.previousTaylorOrder;
-  const uploadLimit = renderer.forceUniformRefresh ? 8 : Math.max(order, previousOrder < 0 ? 8 : previousOrder);
-  for (let i = 0; i <= uploadLimit; i++) {
+  const packed = renderer.taylorCoeffUniformData;
+  for (let i = 0, offset = 0; i <= 8; i++, offset += 2) {
     const coefficient = i <= order ? coefficients[i] : ZERO_COMPLEX;
-    gl.uniform2f(
-      locations.uTaylorCoefficients[i],
-      coefficient && typeof coefficient === 'object' ? finiteNumber(coefficient.re) : 0,
-      coefficient && typeof coefficient === 'object' ? finiteNumber(coefficient.im) : 0
-    );
+    packed[offset] = coefficient && typeof coefficient === 'object' ? finiteNumber(coefficient.re) : 0;
+    packed[offset + 1] = coefficient && typeof coefficient === 'object' ? finiteNumber(coefficient.im) : 0;
   }
+  uploadComplexUniformArray(gl, locations.uTaylorCoefficients, packed);
 
   renderer.previousTaylorOrder = order;
   return true;
 }
+
 
 function uploadComplexFunctionUniforms(gl, locations, appState, renderer) {
   const functionId = getWebGLDomainColorFunctionIdShared(appState.currentFunction);
@@ -1536,12 +1591,13 @@ function uploadComplexFunctionUniforms(gl, locations, appState, renderer) {
 
   const poly = appState.polynomialCoeffs || EMPTY_ARRAY;
   const degree = Math.min(10, Math.max(0, (poly.length | 0) - 1));
-  const previousDegree = renderer.previousPolyDegree;
-  const uploadLimit = renderer.forceUniformRefresh ? 10 : Math.max(degree, previousDegree < 0 ? 10 : previousDegree);
-  for (let i = 0; i <= uploadLimit; i++) {
+  const packed = renderer.polyCoeffUniformData;
+  for (let i = 0, offset = 0; i <= 10; i++, offset += 2) {
     const coeff = i <= degree ? (poly[i] || ZERO_COMPLEX) : ZERO_COMPLEX;
-    gl.uniform2f(locations.uPolyCoeffs[i], complexRe(coeff), complexIm(coeff));
+    packed[offset] = complexRe(coeff);
+    packed[offset + 1] = complexIm(coeff);
   }
+  uploadComplexUniformArray(gl, locations.uPolyCoeffs, packed);
   renderer.previousPolyDegree = degree;
   return degree;
 }
@@ -1638,6 +1694,13 @@ function setCommonUniforms(renderer, options) {
     renderer.currentTaylorOrder,
     orbitMode
   );
+  gl.uniform4f(
+    locations.uContourParams,
+    state.contoursEnabled ? 1.0 : 0.0,
+    state.contourInterval !== undefined ? +state.contourInterval : 0.5,
+    state.contourThickness !== undefined ? +state.contourThickness : 1.5,
+    0.0
+  );
 }
 
 function updateHud(renderer, branchIndices, hasBranches, stage) {
@@ -1670,7 +1733,7 @@ function ensureCurrentProgram(renderer, signature = getProgramSignature(state)) 
  * after first use instead of deleting and reallocating three large WebGL buffers.
  */
 function ensureMesh(renderer) {
-  const resolution = normalizeResolution(state.gridDensity);
+  const resolution = normalizeRendererResolution(state.gridDensity, renderer.uint32ElementIndices);
 
   if (renderer.mesh && renderer.mesh.resolution === resolution) {
     return true;
@@ -1742,13 +1805,13 @@ function drawSurfaceSheet(renderer, branchIndex, sheetIndex, tintStep, cutWidth,
   const { gl, locations, mesh } = renderer;
 
   gl.uniform4f(locations.uBranchParams, branchIndex, cutWidth, sheetIndex * tintStep, 0);
-  gl.drawElements(gl.TRIANGLES, mesh.triangleCount, gl.UNSIGNED_SHORT, 0);
+  gl.drawElements(gl.TRIANGLES, mesh.triangleCount, mesh.triangleIndexType, 0);
 
   if (!wireframe) return;
 
   gl.uniform4f(locations.uBranchParams, branchIndex, cutWidth, sheetIndex * tintStep, 1);
   gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, mesh.lineBuffer);
-  gl.drawElements(gl.LINES, mesh.lineCount, gl.UNSIGNED_SHORT, 0);
+  gl.drawElements(gl.LINES, mesh.lineCount, mesh.lineIndexType, 0);
   gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, mesh.triangleBuffer);
 }
 
@@ -1910,6 +1973,8 @@ class RiemannSurfaceRendererFactory {
       meshCache: new Map(),
       modelViewMatrix: new Float32Array(16),
       projectionMatrix: new Float32Array(16),
+      polyCoeffUniformData: new Float32Array(22),
+      taylorCoeffUniformData: new Float32Array(18),
       frameOptions: { stage: 1, map: null, derivativeMode: 0 },
       camera: { ...DEFAULT_CAMERA },
       visible: false,
@@ -1940,6 +2005,7 @@ class RiemannSurfaceRendererFactory {
       lastPointerY: 0,
       lastOptions: null,
       backendInfo: getWebGLBackendInfoShared(gl),
+      uint32ElementIndices: Boolean(gl.getExtension('OES_element_index_uint')),
       failureReason: '',
       disposeInteraction: null
     };
