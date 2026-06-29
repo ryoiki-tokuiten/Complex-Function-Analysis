@@ -199,6 +199,98 @@ export function getWebGLBackendInfoShared(gl) {
     return info;
 }
 
+export function generateDirectEvaluationGLSL(funcName, valVar, outVar, isSheet = false) {
+    if (!funcName || funcName === 'none') return '';
+
+    switch (funcName) {
+        case 'cos':
+            return `        ${outVar} = complexCos(${valVar});\n` +
+                `        if (!isFiniteVec2Compat(${outVar})) return false;\n`;
+        case 'sin':
+            return `        ${outVar} = complexSin(${valVar});\n` +
+                `        if (!isFiniteVec2Compat(${outVar})) return false;\n`;
+        case 'tan':
+            return `        {\n` +
+                `          vec2 den = complexCos(${valVar});\n` +
+                `          if (dot(den, den) < 1.0e-18) return false;\n` +
+                `          ${outVar} = complexDiv(complexSin(${valVar}), den);\n` +
+                `          if (!isFiniteVec2Compat(${outVar})) return false;\n` +
+                `        }\n`;
+        case 'sec':
+            return `        {\n` +
+                `          vec2 den = complexCos(${valVar});\n` +
+                `          if (dot(den, den) < 1.0e-18) return false;\n` +
+                `          ${outVar} = complexDiv(vec2(1.0, 0.0), den);\n` +
+                `          if (!isFiniteVec2Compat(${outVar})) return false;\n` +
+                `        }\n`;
+        case 'exp':
+            return `        ${outVar} = complexExp(${valVar});\n` +
+                `        if (!isFiniteVec2Compat(${outVar})) return false;\n`;
+        case 'ln':
+            if (isSheet) {
+                return `        if (!complexLnOnSheet(${valVar}, branchIndex, branchCutWidth, ${outVar})) return false;\n`;
+            } else {
+                return `        if (dot(${valVar}, ${valVar}) < 1.0e-20) return false;\n` +
+                    `        ${outVar} = complexLn(${valVar});\n` +
+                    `        if (!isFiniteVec2Compat(${outVar})) return false;\n`;
+            }
+        case 'reciprocal':
+            return `        if (dot(${valVar}, ${valVar}) < 1.0e-18) return false;\n` +
+                `        ${outVar} = complexDiv(vec2(1.0, 0.0), ${valVar});\n` +
+                `        if (!isFiniteVec2Compat(${outVar})) return false;\n`;
+        case 'mobius':
+            return `        {\n` +
+                `          vec2 num = complexAdd(complexMul(mA, ${valVar}), mB);\n` +
+                `          vec2 den = complexAdd(complexMul(mC, ${valVar}), mD);\n` +
+                `          if (dot(den, den) < 1.0e-18) return false;\n` +
+                `          ${outVar} = complexDiv(num, den);\n` +
+                `          if (!isFiniteVec2Compat(${outVar})) return false;\n` +
+                `        }\n`;
+        case 'polynomial':
+            return `        ${outVar} = evalPolynomial(${valVar}, polyDeg, polyCoeffs);\n` +
+                `        if (!isFiniteVec2Compat(${outVar})) return false;\n`;
+        case 'poincare':
+            return `        {\n` +
+                `          if (${valVar}.y <= 1.0e-9) return false;\n` +
+                `          float rootY = sqrt(max(${valVar}.y, 0.0));\n` +
+                `          if (!isFiniteFloatCompat(rootY) || rootY <= 1.0e-8) return false;\n` +
+                `          ${outVar} = vec2(${valVar}.x / rootY, rootY);\n` +
+                `          if (!isFiniteVec2Compat(${outVar})) return false;\n` +
+                `        }\n`;
+        case 'zeta':
+            return `        if (!evaluateZeta(${valVar}, zetaCont, zetaRefl, ${outVar})) return false;\n`;
+        case 'sinh':
+            return `        ${outVar} = complexSinh(${valVar});\n` +
+                `        if (!isFiniteVec2Compat(${outVar})) return false;\n`;
+        case 'cosh':
+            return `        ${outVar} = complexCosh(${valVar});\n` +
+                `        if (!isFiniteVec2Compat(${outVar})) return false;\n`;
+        case 'tanh':
+            return `        ${outVar} = complexTanh(${valVar});\n` +
+                `        if (!isFiniteVec2Compat(${outVar})) return false;\n`;
+        case 'power':
+            if (isSheet) {
+                return `        {\n` +
+                    `          float nearestInteger = floor(fracPower + 0.5);\n` +
+                    `          bool isIntegerPower = abs(fracPower - nearestInteger) < 1.0e-5;\n` +
+                    `          if (!complexPowRealOnSheet(${valVar}, fracPower, isIntegerPower ? 0.0 : branchIndex, isIntegerPower ? 0.0 : branchCutWidth, ${outVar})) return false;\n` +
+                    `        }\n`;
+            } else {
+                return `        {\n` +
+                    `          if (dot(${valVar}, ${valVar}) < 1.0e-20) {\n` +
+                    `            ${outVar} = vec2(0.0);\n` +
+                    `          } else {\n` +
+                    `            vec2 lnZ = complexLn(${valVar});\n` +
+                    `            ${outVar} = complexExp(vec2(fracPower * lnZ.x, fracPower * lnZ.y));\n` +
+                    `          }\n` +
+                    `          if (!isFiniteVec2Compat(${outVar})) return false;\n` +
+                    `        }\n`;
+            }
+        default:
+            return '';
+    }
+}
+
 export function getWebGLDomainColorFunctionIdShared(functionName, ignoreDynamic = false) {
     if (!ignoreDynamic && isDynamicAggregateGLSLActive(state)) return 17;
     switch (functionName) {
@@ -228,12 +320,12 @@ export function setComplexFunctionUniformsShared(gl, locs, state) {
         gl.uniform1f(locs.uFunctionId, getWebGLDomainColorFunctionIdShared(state.currentFunction));
     }
 
-    const a = state.mobiusA || {re:1,im:0}, b = state.mobiusB || {re:0,im:0};
-    const c = state.mobiusC || {re:0,im:0}, d = state.mobiusD || {re:1,im:0};
-    if (locs.uMobiusA !== undefined && locs.uMobiusA !== null) gl.uniform2f(locs.uMobiusA, a.re||0, a.im||0);
-    if (locs.uMobiusB !== undefined && locs.uMobiusB !== null) gl.uniform2f(locs.uMobiusB, b.re||0, b.im||0);
-    if (locs.uMobiusC !== undefined && locs.uMobiusC !== null) gl.uniform2f(locs.uMobiusC, c.re||0, c.im||0);
-    if (locs.uMobiusD !== undefined && locs.uMobiusD !== null) gl.uniform2f(locs.uMobiusD, d.re||0, d.im||0);
+    const a = state.mobiusA || { re: 1, im: 0 }, b = state.mobiusB || { re: 0, im: 0 };
+    const c = state.mobiusC || { re: 0, im: 0 }, d = state.mobiusD || { re: 1, im: 0 };
+    if (locs.uMobiusA !== undefined && locs.uMobiusA !== null) gl.uniform2f(locs.uMobiusA, a.re || 0, a.im || 0);
+    if (locs.uMobiusB !== undefined && locs.uMobiusB !== null) gl.uniform2f(locs.uMobiusB, b.re || 0, b.im || 0);
+    if (locs.uMobiusC !== undefined && locs.uMobiusC !== null) gl.uniform2f(locs.uMobiusC, c.re || 0, c.im || 0);
+    if (locs.uMobiusD !== undefined && locs.uMobiusD !== null) gl.uniform2f(locs.uMobiusD, d.re || 0, d.im || 0);
 
     const deg = Math.max(0, Math.min(10, Number.isFinite(state.polynomialN) ? state.polynomialN : 0));
     if (locs.uPolyDegree !== undefined && locs.uPolyDegree !== null) gl.uniform1i(locs.uPolyDegree, deg);
@@ -241,7 +333,7 @@ export function setComplexFunctionUniformsShared(gl, locs, state) {
         for (let i = 0; i <= 10; i++) {
             if (locs.uPolyCoeffs[i] !== undefined && locs.uPolyCoeffs[i] !== null) {
                 const co = (state.polynomialCoeffs && state.polynomialCoeffs[i]) || null;
-                gl.uniform2f(locs.uPolyCoeffs[i], co ? (co.re||0) : 0, co ? (co.im||0) : 0);
+                gl.uniform2f(locs.uPolyCoeffs[i], co ? (co.re || 0) : 0, co ? (co.im || 0) : 0);
             }
         }
     }
@@ -249,9 +341,79 @@ export function setComplexFunctionUniformsShared(gl, locs, state) {
     if (locs.uZetaCont !== undefined && locs.uZetaCont !== null) gl.uniform1f(locs.uZetaCont, state.zetaContinuationEnabled ? 1 : 0);
     if (locs.uZetaRefl !== undefined && locs.uZetaRefl !== null) gl.uniform1f(locs.uZetaRefl, typeof ZETA_REFLECTION_POINT_RE !== 'undefined' ? ZETA_REFLECTION_POINT_RE : 0.5);
     if (locs.uFracPower !== undefined && locs.uFracPower !== null) gl.uniform1f(locs.uFracPower, state.fractionalPowerN !== undefined ? state.fractionalPowerN : 0.5);
+
+    if (locs.algebraicTerms) {
+        const terms = state.algebraicChainingTerms || [];
+        terms.forEach((term, termIndex) => {
+            const tLoc = locs.algebraicTerms[termIndex];
+            if (tLoc) {
+                if (tLoc.coeff !== undefined && tLoc.coeff !== null) {
+                    gl.uniform2f(tLoc.coeff, term.coeff?.re || 0, term.coeff?.im || 0);
+                }
+                const factors = term.factors || [];
+                factors.forEach((f, factorIndex) => {
+                    const fLoc = tLoc.factors?.[factorIndex];
+                    if (fLoc && fLoc.power !== undefined && fLoc.power !== null) {
+                        gl.uniform1f(fLoc.power, f.power !== undefined ? f.power : 1.0);
+                    }
+                });
+            }
+        });
+    }
 }
 
-export function getGLSLComplexMathLibrary(appState) {
+export function collectAlgebraicUniformLocationsShared(gl, program, appState, locs) {
+    if (!appState) return;
+    locs.algebraicTerms = (appState.algebraicChainingTerms || []).map((term, termIndex) => {
+        return {
+            coeff: gl.getUniformLocation(program, `u_algTermCoeff_${termIndex}`),
+            factors: (term.factors || []).map((factor, factorIndex) => {
+                return {
+                    power: gl.getUniformLocation(program, `u_algFactorPower_${termIndex}_${factorIndex}`)
+                };
+            })
+        };
+    });
+}
+
+
+export function getAlgebraicStructureSignatureShared(terms) {
+    const list = Array.isArray(terms) ? terms : [];
+    return JSON.stringify(list.map(term => {
+        const factors = Array.isArray(term && term.factors) ? term.factors : [];
+        return {
+            factors: factors.map(factor => (
+                factor && factor.func && factor.func !== 'none'
+                    ? {
+                        func: factor.func,
+                        chainedFunc: factor.chainedFunc,
+                        reciprocal: !!factor.reciprocal,
+                        log: !!factor.log,
+                        exp: !!factor.exp
+                    }
+                    : { func: 'none' }
+            ))
+        };
+    }));
+}
+
+const WEBGL_SHARED_LIBRARY_CACHE_LIMIT = 512;
+const webglSharedLibraryCache = new Map();
+
+function getGLSLComplexMathLibraryCacheKey(appState) {
+    if (!appState) return '';
+    try {
+        const dynamicActive = isDynamicAggregateGLSLActive(appState);
+        const dynamicSig = dynamicActive ? (appState.dynamicAggregateTerms || []).map(t => `${t.func}:${t.scale}`).join('|') : '';
+        const algebraicSig = getAlgebraicStructureSignatureShared(appState.algebraicChainingTerms);
+        const zExpr = appState.algebraicChainingZExpr || 'z';
+        return `d:${dynamicActive ? 1 : 0}:${dynamicSig}|z:${zExpr}|a:${algebraicSig}`;
+    } catch {
+        return null;
+    }
+}
+
+function buildGLSLComplexMathLibraryUncached(appState) {
     const dynamic = buildDynamicAggregateGLSL(
         appState,
         functionName => getWebGLDomainColorFunctionIdShared(functionName, true)
@@ -263,7 +425,22 @@ export function getGLSLComplexMathLibrary(appState) {
             functionName => getWebGLDomainColorFunctionIdShared(functionName, true)
         )
         : 'z';
-    let algStr = `bool evaluateMappedValueBase(vec2 z, vec2 c, float isWPlane, float functionId, vec2 mA, vec2 mB, vec2 mC, vec2 mD, int polyDeg, vec2 polyCoeffs[11], float zetaCont, float zetaRefl, float fracPower, out vec2 mapped) {\n`;
+
+    let uniformDecls = '';
+    if (appState && appState.algebraicChainingTerms) {
+        appState.algebraicChainingTerms.forEach((term, termIndex) => {
+            uniformDecls += `uniform vec2 u_algTermCoeff_${termIndex};\n`;
+            if (term.factors) {
+                term.factors.forEach((f, factorIndex) => {
+                    if (f.func && f.func !== 'none') {
+                        uniformDecls += `uniform float u_algFactorPower_${termIndex}_${factorIndex};\n`;
+                    }
+                });
+            }
+        });
+    }
+
+    let algStr = uniformDecls + `bool evaluateMappedValueBase(vec2 z, vec2 c, float isWPlane, float functionId, vec2 mA, vec2 mB, vec2 mC, vec2 mD, int polyDeg, vec2 polyCoeffs[11], float zetaCont, float zetaRefl, float fracPower, out vec2 mapped) {\n`;
     algStr += `  if (isWPlane > 0.5 || isWPlane < 0.0) { mapped = z; return isFiniteVec2Compat(mapped); }\n`;
     algStr += `  float fId = floor(functionId + 0.5);\n`;
     if (dynamic.source && !dynamic.error) {
@@ -278,13 +455,11 @@ export function getGLSLComplexMathLibrary(appState) {
     algStr += `    vec2 sum = vec2(0.0);\n`;
 
     if (appState && appState.algebraicChainingTerms && appState.algebraicChainingTerms.length > 0) {
-        appState.algebraicChainingTerms.forEach((term) => {
-            const re = Number.isFinite(term.coeff.re) ? term.coeff.re : 0;
-            const im = Number.isFinite(term.coeff.im) ? term.coeff.im : 0;
+        appState.algebraicChainingTerms.forEach((term, termIndex) => {
             algStr += `    {\n`;
-            algStr += `      vec2 termVal = vec2(${re.toFixed(10)}, ${im.toFixed(10)});\n`;
+            algStr += `      vec2 termVal = u_algTermCoeff_${termIndex};\n`;
             if (term.factors) {
-                term.factors.forEach((f) => {
+                term.factors.forEach((f, factorIndex) => {
                     if (!f.func || f.func === 'none') return;
                     algStr += `      {\n`;
                     algStr += `        vec2 argZ = z;\n`;
@@ -293,27 +468,29 @@ export function getGLSLComplexMathLibrary(appState) {
                         if (f.chainedFunc === 'c') {
                             algStr += `        argZ = c;\n`;
                         } else {
-                            const cfId = getWebGLDomainColorFunctionIdShared(f.chainedFunc);
-                            algStr += `        if (!evaluateBasicFuncShared(float(${cfId}.0), argZ, mA, mB, mC, mD, polyDeg, polyCoeffs, zetaCont, zetaRefl, fracPower, temp)) return false;\n`;
+                            algStr += generateDirectEvaluationGLSL(f.chainedFunc, 'argZ', 'temp', false);
                             algStr += `        argZ = temp;\n`;
                         }
                     }
                     if (f.func === 'c') {
                         algStr += `        argZ = c;\n`;
                     } else {
-                        const fId = getWebGLDomainColorFunctionIdShared(f.func);
-                        algStr += `        if (!evaluateBasicFuncShared(float(${fId}.0), argZ, mA, mB, mC, mD, polyDeg, polyCoeffs, zetaCont, zetaRefl, fracPower, temp)) return false;\n`;
+                        algStr += generateDirectEvaluationGLSL(f.func, 'argZ', 'temp', false);
                         algStr += `        argZ = temp;\n`;
                     }
 
-                    if (f.power !== undefined && f.power !== 1.0) {
-                        algStr += `        if (dot(argZ, argZ) < 1.0e-20) { argZ = vec2(0.0); } else {\n`;
-                        algStr += `          vec2 lnZ = complexLn(argZ);\n`;
-                        algStr += `          argZ = complexExp(vec2(float(${f.power.toFixed(10)}) * lnZ.x, float(${f.power.toFixed(10)}) * lnZ.y));\n`;
-                        algStr += `        }\n`;
-                    }
+                    algStr += `        float fPower = u_algFactorPower_${termIndex}_${factorIndex};\n`;
+                    algStr += `        if (abs(fPower - 1.0) >= 1.0e-9) {\n`;
+                    algStr += `          if (dot(argZ, argZ) < 1.0e-20) {\n`;
+                    algStr += `            argZ = vec2(0.0);\n`;
+                    algStr += `          } else {\n`;
+                    algStr += `            vec2 lnZ = complexLn(argZ);\n`;
+                    algStr += `            argZ = complexExp(vec2(fPower * lnZ.x, fPower * lnZ.y));\n`;
+                    algStr += `          }\n`;
+                    algStr += `        }\n`;
+
                     if (f.reciprocal) {
-                        algStr += `        if (dot(argZ, argZ) < 1.0e-20) return false;\n`;
+                        algStr += `        if (dot(argZ, argZ) < 1.0e-18) return false;\n`;
                         algStr += `        argZ = complexDiv(vec2(1.0, 0.0), argZ);\n`;
                     }
                     if (f.log) {
@@ -339,4 +516,20 @@ export function getGLSLComplexMathLibrary(appState) {
     algStr += `}\n`;
 
     return GLSL_COMPLEX_MATH_LIBRARY_BASE + GLSL_EXPRESSION_HELPERS + (dynamic.source || '') + algStr;
+}
+
+export function getGLSLComplexMathLibrary(appState) {
+    const cacheKey = getGLSLComplexMathLibraryCacheKey(appState);
+    if (cacheKey !== null && cacheKey !== '') {
+        const cached = webglSharedLibraryCache.get(cacheKey);
+        if (cached !== undefined) return cached;
+    }
+    const source = buildGLSLComplexMathLibraryUncached(appState);
+    if (cacheKey !== null && cacheKey !== '') {
+        if (webglSharedLibraryCache.size >= WEBGL_SHARED_LIBRARY_CACHE_LIMIT) {
+            webglSharedLibraryCache.clear();
+        }
+        webglSharedLibraryCache.set(cacheKey, source);
+    }
+    return source;
 }

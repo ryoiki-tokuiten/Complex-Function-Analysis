@@ -49,11 +49,9 @@ const PASSIVE_LISTENER_OPTIONS = Object.freeze({ passive: true });
 const PASSIVE_CAPTURE_LISTENER_OPTIONS = Object.freeze({ passive: true, capture: true });
 const ACTIVE_LISTENER_OPTIONS = Object.freeze({ passive: false });
 const DEFAULT_FRAME_DELAY = 0;
-const ALGEBRAIC_SURFACE_REDRAW_DELAY_MS = 120;
 
 let palettePanelFrameId = 0;
 let pendingPalettePanelRefresh = false;
-let algebraicSurfaceRedrawTimeout = 0;
 
 const canvasInteractionContexts = { z: null, w: null };
 const canvasContextByElement = new WeakMap();
@@ -507,24 +505,8 @@ export function requestDomainRedraw(markDomainDirty = false) {
     scheduleRedraw(markDomainDirty, isDomainPalettePanelOpen());
 }
 
-function clearAlgebraicSurfaceRedraw() {
-    if (!algebraicSurfaceRedrawTimeout) return;
-    clearTimeout(algebraicSurfaceRedrawTimeout);
-    algebraicSurfaceRedrawTimeout = 0;
-}
-
-function requestAlgebraicRedraw(immediate = false) {
-    if (!state.riemannSurfaceEnabled || immediate) {
-        clearAlgebraicSurfaceRedraw();
-        requestDomainRedraw(true);
-        return;
-    }
-
-    clearAlgebraicSurfaceRedraw();
-    algebraicSurfaceRedrawTimeout = setTimeout(() => {
-        algebraicSurfaceRedrawTimeout = 0;
-        requestDomainRedraw(true);
-    }, ALGEBRAIC_SURFACE_REDRAW_DELAY_MS);
+function requestAlgebraicRedraw() {
+    requestDomainRedraw(!state.riemannSurfaceEnabled);
 }
 
 export function syncLaplacePlayPauseButton() {
@@ -2241,7 +2223,7 @@ function bindAlgebraicChainingControls() {
         renderAlgebraicChainingTerms();
         updateTitlesAndGlobalUI();
         syncParameterControlsPanelVisibility();
-        requestDomainRedraw(true);
+        requestAlgebraicRedraw();
     });
 
     bindControlListener('algebraicChainingZInput', 'input', () => {
@@ -2375,10 +2357,10 @@ function algebraicRange(label, value, onInput) {
     ]);
 }
 
-function refreshAlgebraicFormula(preview, term, immediate = true) {
+function refreshAlgebraicFormula(preview, term, committed = true) {
     if (preview) preview.textContent = termPreview(term);
-    updateTitlesAndGlobalUI();
-    requestAlgebraicRedraw(immediate);
+    if (committed) updateTitlesAndGlobalUI();
+    requestAlgebraicRedraw(committed);
 }
 
 function trimFactors(factors) {
@@ -2409,7 +2391,7 @@ function renderAlgebraicHeader(term, termIndex) {
             renderAlgebraicChainingTerms();
             updateTitlesAndGlobalUI();
             syncParameterControlsPanelVisibility();
-            requestDomainRedraw(true);
+            requestAlgebraicRedraw();
         });
         header.appendChild(remove);
     }
@@ -2491,7 +2473,7 @@ function renderFactor(term, factor, index, preview) {
                 renderAlgebraicChainingTerms();
                 updateTitlesAndGlobalUI();
                 syncParameterControlsPanelVisibility();
-                requestDomainRedraw(true);
+                requestAlgebraicRedraw();
             })
         ])
     ]);
@@ -2865,6 +2847,7 @@ function bindRealPlotsControls() {
     bindCheckbox('enableRealPlotsCb', 'realPlotsEnabled', (event, val) => {
         state.realPlotsEnabled = val;
         hidden(controls.realPlotsControlsContainer, !val);
+        hidden(controls.realPlotsColumn, !val);
 
         if (val) {
             disableRiemannSurface();

@@ -60,6 +60,8 @@ const SURFACE_COMPONENT_IDS = Object.freeze({
 
 const POLYNOMIAL_FUNCTION_ID = getWebGLDomainColorFunctionIdShared('polynomial', true);
 const MOBIUS_FUNCTION_ID = getWebGLDomainColorFunctionIdShared('mobius', true);
+const ALGEBRAIC_C_FUNCTION_ID = -1;
+const ALGEBRAIC_INVALID_FUNCTION_ID = -2;
 
 const SURFACE_PALETTE_GLSL = createDomainPaletteGlslSource('surfacePaletteColor');
 
@@ -218,10 +220,6 @@ function tableValue(table, key, fallback) {
   return Object.prototype.hasOwnProperty.call(table, key) ? table[key] : fallback;
 }
 
-function glslNumber(value) {
-  return finiteNumber(value).toFixed(10);
-}
-
 function getChainModeId(mode) {
   return tableValue(CHAIN_MODE_IDS, mode, CHAIN_MODE_IDS.recursion);
 }
@@ -268,12 +266,6 @@ function rememberBounded(cache, key, value, limit) {
   return value;
 }
 
-function complexOrZero(value) {
-  return value && typeof value === 'object'
-    ? { re: finiteNumber(value.re), im: finiteNumber(value.im) }
-    : { re: 0, im: 0 };
-}
-
 function complexRe(value) {
   return value && typeof value === 'object' ? (+value.re || 0) : 0;
 }
@@ -282,87 +274,113 @@ function complexIm(value) {
   return value && typeof value === 'object' ? (+value.im || 0) : 0;
 }
 
-function emitAlgebraicFactor(factor) {
+function algebraicTermsArray(appState) {
+  return Array.isArray(appState && appState.algebraicChainingTerms)
+    ? appState.algebraicChainingTerms
+    : EMPTY_ARRAY;
+}
+
+const algebraicTermCoeffUniformName = termIndex => `u_algTermCoeff_${termIndex}`;
+const algebraicFactorInfoUniformName = (termIndex, factorIndex) => `u_algFactorInfo_${termIndex}_${factorIndex}`;
+
+function algebraicFunctionUniformId(functionName) {
+  if (!functionName || functionName === 'none') return 0;
+  if (functionName === 'c') return ALGEBRAIC_C_FUNCTION_ID;
+  const functionId = getWebGLDomainColorFunctionIdShared(functionName, true);
+  return functionId || ALGEBRAIC_INVALID_FUNCTION_ID;
+}
+
+function algebraicFactorFlags(factor) {
+  return (factor?.reciprocal ? 1 : 0)
+    + (factor?.log ? 2 : 0)
+    + (factor?.exp ? 4 : 0);
+}
+
+function emitAlgebraicFactor(factor, termIndex, factorIndex) {
   if (!factor || !factor.func || factor.func === 'none') return '';
 
-  const chainedId = getWebGLDomainColorFunctionIdShared(factor.chainedFunc);
-  const functionId = getWebGLDomainColorFunctionIdShared(factor.func);
-  const factorPower = finiteNumber(factor.power, 1);
-  const usesBranchPower = Math.abs(factorPower - Math.round(factorPower)) >= 1e-9;
-  const powerBranch = usesBranchPower ? 'branchIndex' : '0.0';
-  const powerCut = usesBranchPower ? 'branchCutWidth' : '0.0';
+  const infoUniform = algebraicFactorInfoUniformName(termIndex, factorIndex);
 
   const steps = [
     '      {',
     '        vec2 factorValue = z;',
-    '        vec2 tempValue = vec2(0.0);'
+    '        vec2 tempValue = vec2(0.0);',
+    `        vec4 factorInfo = ${infoUniform};`,
+    '        float factorFlags = floor(factorInfo.w + 0.5);',
+    '        if (abs(factorInfo.y) > 0.5) {',
+    '          if (factorInfo.y < -1.5) return false;',
+    '          if (factorInfo.y < -0.5) {',
+    '            factorValue = c;',
+    '          } else {',
+    '            if (!evaluateBasicOnSheet(factorInfo.y, factorValue, branchIndex, branchCutWidth, mA, mB, mC, mD, polyDeg, polyCoeffs, zetaCont, zetaRefl, fracPower, tempValue)) return false;',
+    '            factorValue = tempValue;',
+    '          }',
+    '        }',
+    '        if (factorInfo.x < -1.5) return false;',
+    '        if (factorInfo.x < -0.5) {',
+    '          factorValue = c;',
+    '        } else {',
+    '          if (!evaluateBasicOnSheet(factorInfo.x, factorValue, branchIndex, branchCutWidth, mA, mB, mC, mD, polyDeg, polyCoeffs, zetaCont, zetaRefl, fracPower, tempValue)) return false;',
+    '          factorValue = tempValue;',
+    '        }'
   ];
 
-  if (factor.chainedFunc === 'c') {
-    steps.push('        factorValue = c;');
-  } else if (chainedId) {
-    steps.push(
-      `        if (!evaluateBasicOnSheet(float(${chainedId}), factorValue, branchIndex, branchCutWidth, mA, mB, mC, mD, polyDeg, polyCoeffs, zetaCont, zetaRefl, fracPower, tempValue)) return false;`,
-      '        factorValue = tempValue;'
-    );
-  }
+  steps.push(
+    '        if (abs(factorInfo.z - 1.0) >= 1.0e-9) {',
+    '          float nearestPowerInteger = floor(factorInfo.z + 0.5);',
+    '          bool powerIsInteger = abs(factorInfo.z - nearestPowerInteger) < 1.0e-9;',
+    '          if (!complexPowRealOnSheet(factorValue, factorInfo.z, powerIsInteger ? 0.0 : branchIndex, powerIsInteger ? 0.0 : branchCutWidth, tempValue)) return false;',
+    '          factorValue = tempValue;',
+    '        }'
+  );
 
-  if (factor.func === 'c') {
-    steps.push('        factorValue = c;');
-  } else {
-    steps.push(
-      `        if (!evaluateBasicOnSheet(float(${functionId}), factorValue, branchIndex, branchCutWidth, mA, mB, mC, mD, polyDeg, polyCoeffs, zetaCont, zetaRefl, fracPower, tempValue)) return false;`,
-      '        factorValue = tempValue;'
-    );
-  }
-
-  if (factorPower !== 1) {
-    steps.push(
-      `        if (!complexPowRealOnSheet(factorValue, ${glslNumber(factorPower)}, ${powerBranch}, ${powerCut}, tempValue)) return false;`,
-      '        factorValue = tempValue;'
-    );
-  }
-
-  if (factor.reciprocal) {
-    steps.push(
-      '        if (dot(factorValue, factorValue) < 1.0e-20) return false;',
-      '        factorValue = complexDiv(vec2(1.0, 0.0), factorValue);'
-    );
-  }
-
-  if (factor.log) {
-    steps.push(
-      '        if (!complexLnOnSheet(factorValue, branchIndex, branchCutWidth, tempValue)) return false;',
-      '        factorValue = tempValue;'
-    );
-  }
-
-  if (factor.exp) {
-    steps.push('        factorValue = complexExp(factorValue);');
-  }
+  steps.push(
+    '        if (mod(factorFlags, 2.0) >= 0.5) {',
+    '          if (dot(factorValue, factorValue) < 1.0e-20) return false;',
+    '          factorValue = complexDiv(vec2(1.0, 0.0), factorValue);',
+    '        }',
+    '        if (mod(floor(factorFlags / 2.0), 2.0) >= 0.5) {',
+    '          if (!complexLnOnSheet(factorValue, branchIndex, branchCutWidth, tempValue)) return false;',
+    '          factorValue = tempValue;',
+    '        }',
+    '        if (mod(floor(factorFlags / 4.0), 2.0) >= 0.5) factorValue = complexExp(factorValue);'
+  );
 
   steps.push('        termValue = complexMul(termValue, factorValue);', '      }');
   return steps.join('\n');
 }
 
 function emitAlgebraicTerm(term, termIndex) {
-  const coefficient = complexOrZero(term && term.coeff);
   const factors = Array.isArray(term && term.factors) ? term.factors : [];
-  const factorBody = factors.map(emitAlgebraicFactor).filter(Boolean).join('\n');
+  const factorBody = factors
+    .map((factor, factorIndex) => emitAlgebraicFactor(factor, termIndex, factorIndex))
+    .filter(Boolean)
+    .join('\n');
 
   return `    {
-      vec2 termValue = vec2(${glslNumber(coefficient.re)}, ${glslNumber(coefficient.im)});
+      vec2 termValue = ${algebraicTermCoeffUniformName(termIndex)};
 ${factorBody}
       sum = complexAdd(sum, termValue);
     }
     // algebraic term ${termIndex + 1}`;
 }
 
-function buildAlgebraicBranchBody(appState) {
-  const terms = Array.isArray(appState && appState.algebraicChainingTerms)
-    ? appState.algebraicChainingTerms
-    : [];
+function buildAlgebraicUniformDeclarations(appState) {
+  const declarations = [];
+  algebraicTermsArray(appState).forEach((term, termIndex) => {
+    declarations.push(`uniform vec2 ${algebraicTermCoeffUniformName(termIndex)};`);
+    const factors = Array.isArray(term && term.factors) ? term.factors : EMPTY_ARRAY;
+    factors.forEach((factor, factorIndex) => {
+      if (factor && factor.func && factor.func !== 'none') {
+        declarations.push(`uniform vec4 ${algebraicFactorInfoUniformName(termIndex, factorIndex)};`);
+      }
+    });
+  });
+  return declarations.join('\n');
+}
 
+function buildAlgebraicBranchBody(appState) {
+  const terms = algebraicTermsArray(appState);
   const zExpr = appState?.algebraicChainingZExpr || 'z';
   const steps = [];
 
@@ -967,6 +985,7 @@ function buildRiemannSurfaceMathLibraryUncached(appState) {
   const dynamicSource = dynamic.source || EMPTY_DYNAMIC_AGGREGATE_GLSL;
   return `${GLSL_COMPLEX_MATH_LIBRARY_BASE}
 ${GLSL_EXPRESSION_HELPERS}
+${buildAlgebraicUniformDeclarations(appState)}
 ${dynamicSource}
 ${assembleGlslModules(SURFACE_MATH_GLSL, ['evaluateSurfaceStage'], { appState })}
 `;
@@ -1248,16 +1267,30 @@ function formulaRefsFunction(algebraicTerms, dynamicTerms, algebraicZ, functionN
   return false;
 }
 
+function algebraicStructureSignature(algebraicTerms) {
+  const terms = Array.isArray(algebraicTerms) ? algebraicTerms : EMPTY_ARRAY;
+  return JSON.stringify(terms.map(term => {
+    const factors = Array.isArray(term && term.factors) ? term.factors : EMPTY_ARRAY;
+    return {
+      factors: factors.map(factor => (
+        factor && factor.func && factor.func !== 'none'
+          ? { active: true }
+          : { func: 'none' }
+      ))
+    };
+  }));
+}
+
 function getProgramSignature(appState) {
   if (!appState || typeof appState !== 'object') {
     return 'az:z|a:[]|d:';
   }
 
-  const algebraic = appState.algebraicChainingTerms || EMPTY_ARRAY;
+  const algebraic = algebraicTermsArray(appState);
   const algebraicZ = appState.algebraicChainingZExpr || 'z';
   const dynamicActive = isDynamicAggregateGLSLActive(appState);
   const dynamicTerms = dynamicActive ? (appState.dynamicAggregateTerms || EMPTY_ARRAY) : EMPTY_ARRAY;
-  const algebraicSignature = JSON.stringify(algebraic);
+  const algebraicSignature = algebraicStructureSignature(algebraic);
   const dynamicSignature = dynamicActive
     ? dynamicAggregateGLSLSignature(appState)
     : '';
@@ -1328,7 +1361,62 @@ function uploadComplexUniformArray(gl, locations, data) {
   }
 }
 
-function collectUniformLocations(gl, program) {
+function collectAlgebraicUniformLocations(gl, program, appState) {
+  return algebraicTermsArray(appState).map((term, termIndex) => {
+    const factors = Array.isArray(term && term.factors) ? term.factors : EMPTY_ARRAY;
+    return {
+      coeff: gl.getUniformLocation(program, algebraicTermCoeffUniformName(termIndex)),
+      factors: factors.map((factor, factorIndex) => {
+        if (!factor || !factor.func || factor.func === 'none') return null;
+        return {
+          info: gl.getUniformLocation(program, algebraicFactorInfoUniformName(termIndex, factorIndex))
+        };
+      })
+    };
+  });
+}
+
+function uploadAlgebraicUniforms(gl, locations, appState) {
+  const terms = algebraicTermsArray(appState);
+  const termLocations = locations.algebraicTerms || EMPTY_ARRAY;
+  for (let termIndex = 0; termIndex < termLocations.length; termIndex++) {
+    const term = terms[termIndex];
+    const termLocation = termLocations[termIndex];
+    const coeff = term && term.coeff;
+    if (termLocation.coeff) {
+      gl.uniform2f(termLocation.coeff, finiteNumber(coeff?.re), finiteNumber(coeff?.im));
+    }
+
+    const factors = Array.isArray(term && term.factors) ? term.factors : EMPTY_ARRAY;
+    for (let factorIndex = 0; factorIndex < termLocation.factors.length; factorIndex++) {
+      const factorLocation = termLocation.factors[factorIndex];
+      if (!factorLocation) continue;
+
+      const factor = factors[factorIndex];
+      if (factorLocation.info) {
+        gl.uniform4f(
+          factorLocation.info,
+          algebraicFunctionUniformId(factor?.func),
+          algebraicFunctionUniformId(factor?.chainedFunc),
+          finiteNumber(factor?.power, 1),
+          algebraicFactorFlags(factor)
+        );
+      }
+    }
+  }
+}
+
+function updateFormulaUniformUsage(renderer, appState) {
+  const algebraic = algebraicTermsArray(appState);
+  const algebraicZ = appState.algebraicChainingZExpr || 'z';
+  const dynamicTerms = isDynamicAggregateGLSLActive(appState)
+    ? (appState.dynamicAggregateTerms || EMPTY_ARRAY)
+    : EMPTY_ARRAY;
+  renderer.formulaUsesPolynomial = formulaRefsFunction(algebraic, dynamicTerms, algebraicZ, 'polynomial');
+  renderer.formulaUsesMobius = formulaRefsFunction(algebraic, dynamicTerms, algebraicZ, 'mobius');
+}
+
+function collectUniformLocations(gl, program, appState) {
   const locations = {
     aGrid: gl.getAttribLocation(program, 'a_grid')
   };
@@ -1345,6 +1433,8 @@ function collectUniformLocations(gl, program) {
       descriptor.length
     );
   }
+
+  locations.algebraicTerms = collectAlgebraicUniformLocations(gl, program, appState);
 
   return locations;
 }
@@ -1365,7 +1455,7 @@ function rebuildProgram(renderer, signature = getProgramSignature(state)) {
   if (renderer.program) gl.deleteProgram(renderer.program);
 
   renderer.program = program;
-  renderer.locations = collectUniformLocations(gl, program);
+  renderer.locations = collectUniformLocations(gl, program, state);
   renderer.programSignature = signature;
   const usage = PROGRAM_SIGNATURE_BY_STATE.get(state);
   renderer.formulaUsesPolynomial = Boolean(usage && usage.usesPolynomial);
@@ -1637,7 +1727,9 @@ function setCommonUniforms(renderer, options) {
   gl.uniform4f(locations.uViewBounds, xMin, xMax, yMin, yMax);
   uploadMatrices(renderer);
 
+  updateFormulaUniformUsage(renderer, state);
   const polyDegree = uploadComplexFunctionUniforms(gl, locations, state, renderer);
+  uploadAlgebraicUniforms(gl, locations, state);
   setTaylorUniforms(renderer);
 
   let heightScale = +state.riemannSurfaceHeightScale;

@@ -12,6 +12,7 @@ import {
     findPolynomialRoots_DurandKerner,
     findGeneralRoots_Subdivision
 } from './root-finding.js';
+import { getAlgebraicStructureSignatureShared } from '../rendering/webgl-shared.js';
 import {
     CRITICAL_POINT_FIND_GRID_SIZE,
     ZP_CP_CHECK_DISTANCE_FACTOR,
@@ -30,7 +31,8 @@ function buildFeatureDetectionCacheKey() {
         state.chainingEnabled,
         state.chainCount,
         state.algebraicChainingEnabled,
-        JSON.stringify(state.algebraicChainingTerms),
+        getAlgebraicStructureSignatureShared(state.algebraicChainingTerms),
+        state.algebraicChainingZExpr || 'z',
         JSON.stringify(state.polynomialCoeffs),
         state.mobiusA?.re, state.mobiusA?.im,
         state.mobiusB?.re, state.mobiusB?.im,

@@ -99,7 +99,7 @@ test('dynamic aggregate expressions contribute branch metadata', () => {
     assert.equal(surfaceStageHasBranches(runtimeState, 1), true);
 });
 
-test('Riemann program signatures notice in-place algebraic edits', () => {
+test('Riemann program signatures keep algebraic parameter edits uniform-backed', () => {
     const runtimeState = makeState({
         currentFunction: 'algebraic_chaining',
         algebraicChainingZExpr: 'z',
@@ -117,10 +117,21 @@ test('Riemann program signatures notice in-place algebraic edits', () => {
     });
 
     const before = getRiemannSurfaceProgramSignature(runtimeState);
-    runtimeState.algebraicChainingTerms[0].factors[0].func = 'cos';
-    const after = getRiemannSurfaceProgramSignature(runtimeState);
+    runtimeState.algebraicChainingTerms[0].coeff.re = 2;
+    runtimeState.algebraicChainingTerms[0].factors[0].power = 2.5;
+    const afterNumericEdit = getRiemannSurfaceProgramSignature(runtimeState);
+    assert.equal(afterNumericEdit, before);
 
-    assert.notEqual(after, before);
+    runtimeState.algebraicChainingTerms[0].factors[0].func = 'cos';
+    runtimeState.algebraicChainingTerms[0].factors[0].chainedFunc = 'exp';
+    const afterFunctionEdit = getRiemannSurfaceProgramSignature(runtimeState);
+    assert.equal(afterFunctionEdit, before);
+
+    runtimeState.algebraicChainingTerms[0].factors[0].log = true;
+    runtimeState.algebraicChainingTerms[0].factors[0].reciprocal = true;
+    runtimeState.algebraicChainingTerms[0].factors[0].exp = true;
+    const afterModifierEdit = getRiemannSurfaceProgramSignature(runtimeState);
+    assert.equal(afterModifierEdit, before);
 });
 
 test('Riemann surface grid topology is cached and index-safe', () => {

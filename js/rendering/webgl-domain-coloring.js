@@ -5,7 +5,9 @@ import {
   getWebGLDomainColorFunctionIdShared,
   getWebGLBackendInfoShared,
   setComplexFunctionUniformsShared,
-  getGLSLComplexMathLibrary
+  getGLSLComplexMathLibrary,
+  collectAlgebraicUniformLocationsShared,
+  getAlgebraicStructureSignatureShared
 } from './webgl-shared.js';
 import {
   buildDynamicAggregateGLSL,
@@ -920,6 +922,8 @@ function createProgramRecord(gl, fragmentSource) {
     return null;
   }
 
+  collectAlgebraicUniformLocationsShared(gl, program, state, uniforms);
+
   return {
     program,
     aPosition,
@@ -939,6 +943,7 @@ function adoptProgramRecord(renderer, key, record) {
     renderer[publicName] = record.uniforms[publicName];
   }
   renderer.uPolyCoeffs = record.uniforms.uPolyCoeffs;
+  renderer.algebraicTerms = record.uniforms.algebraicTerms;
 
   if (renderer.pipelineState) {
     renderer.pipelineState.program = null;
@@ -1074,7 +1079,7 @@ function serializeProgramMathForCache() {
     const algebraicActive = state?.currentFunction === 'algebraic_chaining';
     return JSON.stringify({
       mode: dynamicActive ? 'dynamic' : (algebraicActive ? 'algebraic' : 'base'),
-      algebraic: algebraicActive ? state?.algebraicChainingTerms || [] : null,
+      algebraic: algebraicActive ? getAlgebraicStructureSignatureShared(state?.algebraicChainingTerms) : null,
       algebraicZ: algebraicActive ? state?.algebraicChainingZExpr || 'z' : null,
       dynamic: dynamicActive ? dynamicAggregateGLSLSignature(state) : null
     }, createCacheStringifier());

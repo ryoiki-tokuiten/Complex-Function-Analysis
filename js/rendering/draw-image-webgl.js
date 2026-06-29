@@ -4,7 +4,9 @@ import {
     getWebGLDomainColorFunctionIdShared,
     GLSL_COMPLEX_INVERSE_LIBRARY,
     setComplexFunctionUniformsShared,
-    getGLSLComplexMathLibrary
+    getGLSLComplexMathLibrary,
+    collectAlgebraicUniformLocationsShared,
+    getAlgebraicStructureSignatureShared
 } from './webgl-shared.js';
 import {
     getRasterSourceForShape,
@@ -222,8 +224,7 @@ function hashStructure(value, hash = 2166136261) {
 }
 
 function getAlgebraicHash(snapshot) {
-    const terms = snapshot.algebraicChainingTerms || EMPTY_ARRAY;
-    return `${snapshot.algebraicChainingZExpr || 'z'}:${terms.length}:${hashStructure(terms)}`;
+    return `${snapshot.algebraicChainingZExpr || 'z'}:${getAlgebraicStructureSignatureShared(snapshot.algebraicChainingTerms)}`;
 }
 
 function markSupportUnavailable(reason) {
@@ -563,22 +564,24 @@ function getCommonImageLocs(gl, program) {
     return locs;
 }
 
-function getInverseLocs(gl, program) {
+function getInverseLocs(gl, program, snapshot) {
     if (!program) return null;
 
-    return Object.assign(getCommonImageLocs(gl, program), {
+    const locs = Object.assign(getCommonImageLocs(gl, program), {
         aPosition: gl.getAttribLocation(program, 'a_position'),
         uResolution: gl.getUniformLocation(program, 'u_resolution'),
         uChainIndex: gl.getUniformLocation(program, 'u_chainIndex'),
         uChainMode: gl.getUniformLocation(program, 'u_chainMode'),
         uFracPower: gl.getUniformLocation(program, 'u_fracPower')
     });
+    collectAlgebraicUniformLocationsShared(gl, program, snapshot, locs);
+    return locs;
 }
 
-function getForwardLocs(gl, program) {
+function getForwardLocs(gl, program, snapshot) {
     if (!program) return null;
 
-    return Object.assign(getCommonImageLocs(gl, program), {
+    const locs = Object.assign(getCommonImageLocs(gl, program), {
         aTexCoord: gl.getAttribLocation(program, 'a_texCoord'),
         aMappedPos: gl.getAttribLocation(program, 'a_mappedPos'),
         uUseCpuEval: gl.getUniformLocation(program, 'u_useCpuEval'),
@@ -587,6 +590,8 @@ function getForwardLocs(gl, program) {
         uZetaReflectionBoundary: gl.getUniformLocation(program, 'u_zetaReflectionBoundary'),
         uFracPower: gl.getUniformLocation(program, 'u_fracPower')
     });
+    collectAlgebraicUniformLocationsShared(gl, program, snapshot, locs);
+    return locs;
 }
 
 function createInverseVertexShader() {
@@ -1295,7 +1300,7 @@ function createVectorFragmentShader(snapshot) {
     );
 }
 
-function getVectorLocs(gl, program) {
+function getVectorLocs(gl, program, snapshot) {
     const locs = {
         aPos: gl.getAttribLocation(program, 'a_position'),
         uViewBounds: gl.getUniformLocation(program, 'u_viewBounds'),
@@ -1321,6 +1326,7 @@ function getVectorLocs(gl, program) {
         locs.uPolyCoeffs.push(gl.getUniformLocation(program, `u_polyCoeffs[${i}]`));
     }
 
+    collectAlgebraicUniformLocationsShared(gl, program, snapshot, locs);
     return locs;
 }
 
@@ -1348,7 +1354,7 @@ function ensureVectorProgram(renderer, snapshot) {
     }
 
     _vfProgram = program;
-    _vfLocs = getVectorLocs(gl, program);
+    _vfLocs = getVectorLocs(gl, program, snapshot);
     _vfShaderHash = shaderHash;
     _vfGl = gl;
     return true;
@@ -1404,11 +1410,11 @@ export function createWebGLImageRenderer() {
         quadBuffer: resources.quadBuffer,
 
         inverseProgram: programs.inverseProgram,
-        inverseLocs: getInverseLocs(gl, programs.inverseProgram),
+        inverseLocs: getInverseLocs(gl, programs.inverseProgram, snapshot),
         inverseVao: null,
 
         forwardProgram: programs.forwardProgram,
-        forwardLocs: getForwardLocs(gl, programs.forwardProgram),
+        forwardLocs: getForwardLocs(gl, programs.forwardProgram, snapshot),
         forwardVertexBuffer: resources.forwardVertexBuffer,
         forwardIndexBuffer: resources.forwardIndexBuffer,
         forwardMappedBuffer: resources.forwardMappedBuffer,
