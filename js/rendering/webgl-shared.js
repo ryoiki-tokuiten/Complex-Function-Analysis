@@ -256,10 +256,13 @@ export function getGLSLComplexMathLibrary(appState) {
         appState,
         functionName => getWebGLDomainColorFunctionIdShared(functionName, true)
     );
-    const zCustomExprGLSL = compileCustomExpressionToGLSL(
-        appState?.algebraicChainingZExpr,
-        functionName => getWebGLDomainColorFunctionIdShared(functionName, true)
-    );
+    const hasCustomZExpr = !!(appState?.algebraicChainingZExpr && appState.algebraicChainingZExpr !== 'z');
+    const zCustomExprGLSL = hasCustomZExpr
+        ? compileCustomExpressionToGLSL(
+            appState.algebraicChainingZExpr,
+            functionName => getWebGLDomainColorFunctionIdShared(functionName, true)
+        )
+        : 'z';
     let algStr = `bool evaluateMappedValueBase(vec2 z, vec2 c, float isWPlane, float functionId, vec2 mA, vec2 mB, vec2 mC, vec2 mD, int polyDeg, vec2 polyCoeffs[11], float zetaCont, float zetaRefl, float fracPower, out vec2 mapped) {\n`;
     algStr += `  if (isWPlane > 0.5 || isWPlane < 0.0) { mapped = z; return isFiniteVec2Compat(mapped); }\n`;
     algStr += `  float fId = floor(functionId + 0.5);\n`;
@@ -267,7 +270,9 @@ export function getGLSLComplexMathLibrary(appState) {
         algStr += `  if (abs(fId - 17.0) < 0.5) return evaluateDynamicAggregate(z, c, mA, mB, mC, mD, polyDeg, polyCoeffs, zetaCont, zetaRefl, fracPower, mapped);\n`;
     }
     algStr += `  if (abs(fId - 16.0) < 0.5) {\n`;
-    if (zCustomExprGLSL && zCustomExprGLSL !== 'z') {
+    if (hasCustomZExpr && !zCustomExprGLSL) {
+        algStr += `    mapped = vec2(0.0); return false;\n`;
+    } else if (zCustomExprGLSL && zCustomExprGLSL !== 'z') {
         algStr += `    z = ${zCustomExprGLSL};\n`;
     }
     algStr += `    vec2 sum = vec2(0.0);\n`;

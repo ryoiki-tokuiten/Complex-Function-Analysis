@@ -371,7 +371,9 @@ function buildAlgebraicBranchBody(appState) {
       zExpr,
       functionName => getWebGLDomainColorFunctionIdShared(functionName, true)
     );
-    if (zCustomExprGLSL && zCustomExprGLSL !== 'z') {
+    if (!zCustomExprGLSL) {
+      steps.push('    mapped = vec2(0.0);', '    return false;');
+    } else if (zCustomExprGLSL !== 'z') {
       steps.push(`    z = ${zCustomExprGLSL};`);
     }
   }

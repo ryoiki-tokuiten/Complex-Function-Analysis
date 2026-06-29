@@ -9,7 +9,7 @@ import {
     initializeDynamicPlottingEngine,
     invalidateDynamicPlotting
 } from '../js/analysis/dynamic-plotting.js';
-import { buildDynamicAggregateGLSL } from '../js/math/expression/glsl.js';
+import { buildDynamicAggregateGLSL, compileCustomExpressionToGLSL } from '../js/math/expression/glsl.js';
 import {
     dynamicExpressionHasBranches,
     surfaceStageHasBranches
@@ -249,6 +249,10 @@ test('GLSL compiler emits finite-domain and sheet-aware aggregate evaluators', (
     assert.match(compiled.source, /evaluateDynamicAggregateOnSheet\(/);
     assert.match(compiled.source, /dynamicDomainValue/);
     assert.match(compiled.source, /complexMul\(accumulator, termValue\)/);
+});
+
+test('invalid custom GLSL z expressions do not compile as identity', () => {
+    assert.equal(compileCustomExpressionToGLSL('bad +', () => 0), null);
 });
 
 test('GPU aggregate compilation uses the complete visible term count', () => {

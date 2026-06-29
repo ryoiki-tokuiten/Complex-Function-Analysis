@@ -468,17 +468,19 @@ function evaluateAlgebraicChaining(z, snapshot, context = null) {
             }
             algebraicZExprCacheKey = snapshot.algebraicChainingZExpr;
         }
-        if (algebraicZExprCompiled) {
-            try {
-                const result = algebraicZExprCompiled({ z: point });
-                if (result !== null && result !== undefined) {
-                    if (typeof result === 'number') {
-                        point = { re: result, im: 0 };
-                    } else if (typeof result === 'object' && 're' in result) {
-                        point = { re: result.re, im: result.im || 0 };
-                    }
-                }
-            } catch (e) { }
+        if (!algebraicZExprCompiled) return { re: NaN, im: NaN };
+        try {
+            const result = algebraicZExprCompiled({ z: point });
+            if (typeof result === 'number') {
+                point = { re: result, im: 0 };
+            } else if (result && typeof result === 'object' && 're' in result) {
+                point = { re: result.re, im: result.im || 0 };
+            } else {
+                return { re: NaN, im: NaN };
+            }
+            if (!validComplex(point)) return { re: NaN, im: NaN };
+        } catch (e) {
+            return { re: NaN, im: NaN };
         }
     }
 
@@ -1766,6 +1768,11 @@ function evaluateCompiledAlgebraicInto(accelerator, zr, zi, cr, ci, out) {
         evaluatePrimitiveExpressionInto(accelerator.zExpr, zr, zi, cr, ci, scratch);
         pointRe = scratch[0];
         pointIm = scratch[1];
+        if (!(pointRe === pointRe && pointIm === pointIm && finite(pointRe) && finite(pointIm))) {
+            out[0] = NaN;
+            out[1] = NaN;
+            return out;
+        }
     }
 
     const termCoeffRe = accelerator.termCoeffRe;

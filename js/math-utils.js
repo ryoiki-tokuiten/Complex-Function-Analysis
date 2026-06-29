@@ -361,7 +361,14 @@ let polynomialKernelIm = new Float64Array(0);
 let polynomialEvalKernel = null;
 let algebraicKernelTerms = null;
 let algebraicKernelZExpr = null;
+let algebraicKernelPolynomialRef = null;
+let algebraicKernelPolynomialDegree = -1;
+let algebraicKernelMobiusA = null;
+let algebraicKernelMobiusB = null;
+let algebraicKernelMobiusC = null;
+let algebraicKernelMobiusD = null;
 let algebraicKernel = null;
+let algebraicTermKernelCache = new WeakMap();
 
 function invalidateHotPathCaches() {
     polynomialKernelRef = null;
@@ -371,6 +378,13 @@ function invalidateHotPathCaches() {
     polynomialEvalKernel = null;
     algebraicKernelTerms = null;
     algebraicKernelZExpr = null;
+    algebraicKernelPolynomialRef = null;
+    algebraicKernelPolynomialDegree = -1;
+    algebraicKernelMobiusA = null;
+    algebraicKernelMobiusB = null;
+    algebraicKernelMobiusC = null;
+    algebraicKernelMobiusD = null;
+    algebraicTermKernelCache = new WeakMap();
     algebraicKernel = null;
 }
 
@@ -529,23 +543,6 @@ export function complexPowerFractional(a, b) {
     const n = state.fractionalPowerN !== undefined ? state.fractionalPowerN : DEFAULT_FRACTIONAL_POWER;
     if (re === 0 && im === 0) return { re: 0, im: 0 };
     return powRaw(re, im, n, 0);
-}
-
-function normalizePowerArgs(baseRe, baseIm, expRe, expIm) {
-    if (isObject(baseRe)) {
-        const base = toComplex(baseRe);
-        const exp = isObject(baseIm) && expRe === undefined
-            ? toComplex(baseIm)
-            : complex(baseIm ?? 0, expRe ?? 0);
-        return { base, exp, baseInput: baseRe };
-    }
-
-    const base = complex(baseRe ?? 0, baseIm ?? 0);
-    const exp = isObject(expRe) && expIm === undefined
-        ? toComplex(expRe)
-        : complex(expRe ?? 0, expIm ?? 0);
-
-    return { base, exp, baseInput: base };
 }
 
 export function complexPow(base_re, base_im, exp_re, exp_im) {
@@ -1208,6 +1205,44 @@ function jsNumber(value) {
     return Number.isFinite(value) ? String(value) : (Number.isNaN(value) ? 'NaN' : (value < 0 ? '-Infinity' : 'Infinity'));
 }
 
+// The generated algebraic kernel snapshots stable state-dependent transforms.
+// Polynomial and Mobius factors are lowered into straight-line arithmetic so the
+// render hot path pays for math only, not state lookup or tiny helper dispatch.
+function emitPolynomialInline(inRe, inIm, outRe, outIm, tag) {
+    const degree = boundedPolynomialDegree();
+    let code = `let ${outRe}=0,${outIm}=0;`;
+    for (let k = degree; k >= 0; k--) {
+        const coeff = state.polynomialCoeffs?.[k];
+        const cr = jsNumber(coeff ? realOf(coeff) : 0);
+        const ci = jsNumber(coeff ? imagOf(coeff) : 0);
+        code += `const pnr_${tag}_${k}=${outRe}*(${inRe})-${outIm}*(${inIm});`;
+        code += `${outIm}=${outRe}*(${inIm})+${outIm}*(${inRe})+${ci};`;
+        code += `${outRe}=pnr_${tag}_${k}+${cr};`;
+    }
+    return code;
+}
+
+function emitMobiusInline(inRe, inIm, outRe, outIm, tag) {
+    const a = state.mobiusA || ZERO;
+    const b = state.mobiusB || ZERO;
+    const c = state.mobiusC || ZERO;
+    const d = state.mobiusD || ONE;
+    const ar = jsNumber(realOf(a));
+    const ai = jsNumber(imagOf(a));
+    const br = jsNumber(realOf(b));
+    const bi = jsNumber(imagOf(b));
+    const cr = jsNumber(realOf(c));
+    const ci = jsNumber(imagOf(c));
+    const dr = jsNumber(realOf(d));
+    const di = jsNumber(imagOf(d));
+    return `const mnr_${tag}=(${ar})*(${inRe})-(${ai})*(${inIm})+(${br}),` +
+        `mni_${tag}=(${ar})*(${inIm})+(${ai})*(${inRe})+(${bi}),` +
+        `mdr_${tag}=(${cr})*(${inRe})-(${ci})*(${inIm})+(${dr}),` +
+        `mdi_${tag}=(${cr})*(${inIm})+(${ci})*(${inRe})+(${di});` +
+        `divideRawInto(mnr_${tag},mni_${tag},mdr_${tag},mdi_${tag},tmp,0);` +
+        `let ${outRe}=tmp[0],${outIm}=tmp[1];`;
+}
+
 function emitRawTransform(func, inRe, inIm, outRe, outIm, tag) {
     switch (func) {
         case 'c':
@@ -1235,9 +1270,9 @@ function emitRawTransform(func, inRe, inIm, outRe, outIm, tag) {
         case 'power':
             return `powRawInto(${inRe},${inIm},state.fractionalPowerN!==undefined?state.fractionalPowerN:0.5,0,tmp,0);let ${outRe}=tmp[0],${outIm}=tmp[1];`;
         case 'mobius':
-            return `complexMobiusRawInto(${inRe},${inIm},tmp,0);let ${outRe}=tmp[0],${outIm}=tmp[1];`;
+            return emitMobiusInline(inRe, inIm, outRe, outIm, tag);
         case 'polynomial':
-            return `complexPolynomialRawInto(${inRe},${inIm},tmp,0);let ${outRe}=tmp[0],${outIm}=tmp[1];`;
+            return emitPolynomialInline(inRe, inIm, outRe, outIm, tag);
         case 'poincare':
             return `let ${outRe},${outIm};if((${inIm})<=1e-9){${outRe}=NaN;${outIm}=NaN;}else{${outIm}=Math.sqrt(${inIm});${outRe}=(${inRe})/${outIm};}`;
         case 'zeta':
@@ -1278,8 +1313,15 @@ function emitModifiers(factor, reVar, imVar, tag) {
 }
 
 
-function hasOnlyBaseFlags(factor) {
-    return factor && !factor.reciprocal && !factor.log && !factor.exp && (factor.chainedFunc === undefined || factor.chainedFunc === 'none');
+function isExpLogIdentityFactor(factor) {
+    return !!(
+        factor &&
+        factor.func === 'ln' &&
+        factor.exp === true &&
+        !factor.log &&
+        !factor.reciprocal &&
+        (factor.power === undefined || factor.power === 1)
+    );
 }
 
 
@@ -1307,10 +1349,14 @@ function createGeneratedAlgebraicKernel(compiledTerms) {
             }
             const fr = `fr_${tag}`;
             const fi = `fi_${tag}`;
-            const emitted = emitRawTransform(factor.func, argRe, argIm, fr, fi, `f_${tag}`);
-            if (!emitted) return null;
-            code += emitted;
-            code += emitModifiers(factor, fr, fi, `m_${tag}`);
+            if (isExpLogIdentityFactor(factor)) {
+                code += `let ${fr}=${argRe},${fi}=${argIm};`;
+            } else {
+                const emitted = emitRawTransform(factor.func, argRe, argIm, fr, fi, `f_${tag}`);
+                if (!emitted) return null;
+                code += emitted;
+                code += emitModifiers(factor, fr, fi, `m_${tag}`);
+            }
             code += `const nr_${tag}=vr_${i}*${fr}-vi_${i}*${fi};vi_${i}=vr_${i}*${fi}+vi_${i}*${fr};vr_${i}=nr_${tag};`;
         }
         code += `if(!finite(vr_${i})||!finite(vi_${i})){out[offset]=NaN;out[offset+1]=NaN;return out;}sumRe+=vr_${i};sumIm+=vi_${i};`;
@@ -1328,8 +1374,6 @@ function createGeneratedAlgebraicKernel(compiledTerms) {
             'expRawInto',
             'powRawInto',
             'powSmallIntegerInto',
-            'complexPolynomialRawInto',
-            'complexMobiusRawInto',
             'complexRiemannZeta',
             `return function generatedAlgebraicKernel(zRe,zIm,ctxRe,ctxIm,out,offset){${code}};`
         )(
@@ -1342,8 +1386,6 @@ function createGeneratedAlgebraicKernel(compiledTerms) {
             expRawInto,
             powRawInto,
             powSmallIntegerInto,
-            complexPolynomialRawInto,
-            complexMobiusRawInto,
             complexRiemannZeta
         );
 
@@ -1449,9 +1491,30 @@ function createCompiledAlgebraicKernel(terms) {
 }
 
 function getCompiledAlgebraicKernel(terms) {
-    if (terms !== algebraicKernelTerms || state.algebraicChainingZExpr !== algebraicKernelZExpr) {
+    const polynomialRef = state.polynomialCoeffs;
+    const polynomialDegree = boundedPolynomialDegree();
+    const mobiusA = state.mobiusA;
+    const mobiusB = state.mobiusB;
+    const mobiusC = state.mobiusC;
+    const mobiusD = state.mobiusD;
+    if (
+        terms !== algebraicKernelTerms ||
+        state.algebraicChainingZExpr !== algebraicKernelZExpr ||
+        polynomialRef !== algebraicKernelPolynomialRef ||
+        polynomialDegree !== algebraicKernelPolynomialDegree ||
+        mobiusA !== algebraicKernelMobiusA ||
+        mobiusB !== algebraicKernelMobiusB ||
+        mobiusC !== algebraicKernelMobiusC ||
+        mobiusD !== algebraicKernelMobiusD
+    ) {
         algebraicKernelTerms = terms;
         algebraicKernelZExpr = state.algebraicChainingZExpr;
+        algebraicKernelPolynomialRef = polynomialRef;
+        algebraicKernelPolynomialDegree = polynomialDegree;
+        algebraicKernelMobiusA = mobiusA;
+        algebraicKernelMobiusB = mobiusB;
+        algebraicKernelMobiusC = mobiusC;
+        algebraicKernelMobiusD = mobiusD;
         algebraicKernel = createCompiledAlgebraicKernel(terms);
     }
     return algebraicKernel;
@@ -1466,14 +1529,43 @@ export function evaluateFunctionBlock(block, z_re, z_im, context = null) {
         return isObject(z_re) ? z_re : { re: z_re, im: z_im };
     }
 
-    let arg = toComplex(z_re, z_im);
+    const zRe = argRe(z_re);
+    const zIm = argIm(z_re, z_im);
+
+    if (factorIsRawCompilable(block)) {
+        const contextC = context && context.c !== undefined && context.c !== null ? context.c : null;
+        const ctxRe = contextC ? argRe(contextC) : zRe;
+        const ctxIm = contextC ? argIm(contextC) : zIm;
+        let inRe = zRe;
+        let inIm = zIm;
+
+        if (block.chainedFunc && block.chainedFunc !== 'none') {
+            evaluateRawTransformInto(block.chainedFunc, inRe, inIm, ctxRe, ctxIm, ALG_TMP, 0);
+            inRe = ALG_TMP[0];
+            inIm = ALG_TMP[1];
+        }
+
+        const raw = evaluateRawTransformInto(block.func, inRe, inIm, ctxRe, ctxIm, ALG_TMP, 2);
+        if (raw) {
+            if (isExpLogIdentityFactor(block)) {
+                ALG_TMP[2] = inRe;
+                ALG_TMP[3] = inIm;
+            } else {
+                applyAlgebraicModifiersInto(block, ALG_TMP, 2);
+            }
+            return { re: ALG_TMP[2], im: ALG_TMP[3] };
+        }
+    }
+
+    let arg = { re: zRe, im: zIm };
 
     if (block.chainedFunc && block.chainedFunc !== 'none') {
         if (block.chainedFunc === 'c') {
             arg = algebraicParameter(context, arg);
         } else {
             const chained = transformFunctions[block.chainedFunc];
-            if (chained) arg = chained(arg);
+            if (!chained) return NAN_COMPLEX;
+            arg = chained(arg);
         }
     }
 
@@ -1482,7 +1574,7 @@ export function evaluateFunctionBlock(block, z_re, z_im, context = null) {
         value = algebraicParameter(context, arg);
     } else {
         const base = transformFunctions[block.func];
-        if (!base) return arg;
+        if (!base) return NAN_COMPLEX;
         value = base(arg);
     }
 
@@ -1497,8 +1589,25 @@ export function evaluateFunctionBlock(block, z_re, z_im, context = null) {
 export function evaluateAlgebraicTerm(term, z_re, z_im, context = null) {
     if (!term) return { re: NaN, im: NaN };
 
+    const signature = `${state.algebraicChainingZExpr || 'z'}|${serializeAlgebraicTerms([term])}|${buildMappedTransformProfileKey('polynomial')}|${buildMappedTransformProfileKey('mobius')}`;
+    let cached = algebraicTermKernelCache.get(term);
+    if (!cached || cached.signature !== signature) {
+        cached = { signature, kernel: createCompiledAlgebraicKernel([term]) || null };
+        algebraicTermKernelCache.set(term, cached);
+    }
+    const kernel = cached.kernel;
+    if (kernel?.raw) {
+        const zRe = argRe(z_re);
+        const zIm = argIm(z_re, z_im);
+        const contextC = context && context.c !== undefined && context.c !== null ? context.c : null;
+        const ctxRe = contextC ? argRe(contextC) : zRe;
+        const ctxIm = contextC ? argIm(contextC) : zIm;
+        kernel.raw(zRe, zIm, ctxRe, ctxIm, ALG_TMP, 0);
+        return { re: ALG_TMP[0], im: ALG_TMP[1] };
+    }
+
     let value = toComplex(term.coeff ?? ONE);
-    const z = toComplex(z_re, z_im);
+    const z = { re: argRe(z_re), im: argIm(z_re, z_im) };
     const evalContext = context || { c: z };
 
     for (const factor of term.factors ?? []) {
@@ -1544,17 +1653,19 @@ export function evaluateAlgebraicChaining(z_re, z_im, context = null) {
             }
             algebraicZExprCacheKey = state.algebraicChainingZExpr;
         }
-        if (algebraicZExprCompiled) {
-            try {
-                const result = algebraicZExprCompiled({ z });
-                if (result !== null && result !== undefined) {
-                    if (typeof result === 'number') {
-                        z = { re: result, im: 0 };
-                    } else if (typeof result === 'object' && 're' in result) {
-                        z = { re: result.re, im: result.im || 0 };
-                    }
-                }
-            } catch (e) { }
+        if (!algebraicZExprCompiled) return NAN_COMPLEX;
+        try {
+            const result = algebraicZExprCompiled({ z });
+            if (typeof result === 'number') {
+                z = { re: result, im: 0 };
+            } else if (result && typeof result === 'object' && 're' in result) {
+                z = { re: result.re, im: result.im || 0 };
+            } else {
+                return NAN_COMPLEX;
+            }
+            if (invalidComplex(z)) return NAN_COMPLEX;
+        } catch (e) {
+            return NAN_COMPLEX;
         }
     }
 
@@ -1904,10 +2015,78 @@ function evaluateChainBase(profileOrTransform, value, functionKey, c) {
     ));
 }
 
+function evaluateFastAlgebraicMappedChain(re, im, stageIndex, returnLastFinite) {
+    const terms = state.algebraicChainingTerms;
+    const kernel = state.algebraicChainingEnabled && Array.isArray(terms) && terms.length !== 0 ? getCompiledAlgebraicKernel(terms) : null;
+    const raw = kernel?.raw || null;
+    if (!raw) return undefined;
+
+    const tmp = ALG_TMP;
+    const stage = chainStageIndex(stageIndex);
+    const cRe = re;
+    const cIm = im;
+    let currentRe;
+    let currentIm;
+    let lastRe = NaN;
+    let lastIm = NaN;
+    let hasLast = false;
+
+    if (state.chainingMode === 'zero_seed') {
+        currentRe = 0;
+        currentIm = 0;
+        for (let i = 0; i <= stage; i++) {
+            raw(currentRe, currentIm, cRe, cIm, tmp, 0);
+            currentRe = tmp[0];
+            currentIm = tmp[1];
+            if (!finite(currentRe) || !finite(currentIm)) {
+                return returnLastFinite && hasLast ? { re: lastRe, im: lastIm } : null;
+            }
+            lastRe = currentRe;
+            lastIm = currentIm;
+            hasLast = true;
+            if (Math.max(Math.abs(currentRe), Math.abs(currentIm)) >= DOMAIN_COLOR_CHAIN_BAILOUT_MAGNITUDE) {
+                return returnLastFinite ? { re: currentRe, im: currentIm } : null;
+            }
+        }
+        return hasLast ? { re: lastRe, im: lastIm } : null;
+    }
+
+    raw(re, im, cRe, cIm, tmp, 0);
+    currentRe = tmp[0];
+    currentIm = tmp[1];
+    if (!finite(currentRe) || !finite(currentIm)) return null;
+    lastRe = currentRe;
+    lastIm = currentIm;
+    if (Math.max(Math.abs(currentRe), Math.abs(currentIm)) >= DOMAIN_COLOR_CHAIN_BAILOUT_MAGNITUDE) {
+        return returnLastFinite ? { re: currentRe, im: currentIm } : null;
+    }
+
+    for (let i = 1; i <= stage; i++) {
+        raw(currentRe, currentIm, cRe, cIm, tmp, 0);
+        currentRe = tmp[0];
+        currentIm = tmp[1];
+        if (!finite(currentRe) || !finite(currentIm)) {
+            return returnLastFinite ? { re: lastRe, im: lastIm } : null;
+        }
+        lastRe = currentRe;
+        lastIm = currentIm;
+        if (Math.max(Math.abs(currentRe), Math.abs(currentIm)) >= DOMAIN_COLOR_CHAIN_BAILOUT_MAGNITUDE) {
+            return returnLastFinite ? { re: currentRe, im: currentIm } : null;
+        }
+    }
+
+    return { re: currentRe, im: currentIm };
+}
+
 function evaluateMappedChainStage(profileOrTransform, re, im, functionKey, stageIndex, options = null) {
+    const returnLastFinite = !!options?.returnLastFinite;
+    if (functionKey === 'algebraic_chaining' && profileOrTransform?.transformFunc === transformFunctions.algebraic_chaining) {
+        const fast = evaluateFastAlgebraicMappedChain(re, im, stageIndex, returnLastFinite);
+        if (fast !== undefined) return fast;
+    }
+
     const c = { re, im };
     const stage = chainStageIndex(stageIndex);
-    const returnLastFinite = !!options?.returnLastFinite;
 
     if (state.chainingMode === 'zero_seed') {
         let current = { re: 0, im: 0 };

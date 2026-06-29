@@ -5,6 +5,7 @@ import { state } from '../js/store/state.js';
 import {
     evaluateDomainColoringMappedTransform,
     evaluateAlgebraicChaining,
+    evaluateAlgebraicTerm,
     getEffectiveBaseTransformFunction,
     getMappedTransformProfile,
     getChainedTransformFunction,
@@ -58,6 +59,39 @@ function configureQuadraticParameterChain(chainCount, chainingMode = 'recursion'
         chainCount
     });
 }
+
+test('algebraic term cache observes in-place term edits', () => {
+    const before = snapshotState(['algebraicChainingZExpr']);
+    const term = { coeff: { re: 1, im: 0 }, factors: [factor('cos')] };
+    const z = { re: Math.PI / 2, im: 0 };
+
+    try {
+        state.algebraicChainingZExpr = 'z';
+        approxComplex(evaluateAlgebraicTerm(term, z), { re: 0, im: 0 });
+        term.factors[0].func = 'sin';
+        approxComplex(evaluateAlgebraicTerm(term, z), { re: 1, im: 0 });
+        term.coeff.re = 2;
+        approxComplex(evaluateAlgebraicTerm(term, z), { re: 2, im: 0 });
+        term.factors[0].func = 'missing_transform';
+        assert.ok(Number.isNaN(evaluateAlgebraicTerm(term, z).re));
+    } finally {
+        restoreState(before);
+    }
+});
+
+test('invalid algebraic z expressions do not fall back to identity', () => {
+    const before = snapshotState(['algebraicChainingEnabled', 'algebraicChainingZExpr', 'algebraicChainingTerms']);
+    try {
+        Object.assign(state, {
+            algebraicChainingEnabled: true,
+            algebraicChainingZExpr: 'bad +',
+            algebraicChainingTerms: [{ coeff: { re: 1, im: 0 }, factors: [factor('c')] }]
+        });
+        assert.ok(Number.isNaN(evaluateAlgebraicChaining(2, 0).re));
+    } finally {
+        restoreState(before);
+    }
+});
 
 function iterateQuadraticParameter(c, count, bailout = Infinity) {
     let current = { re: c.re, im: c.im };

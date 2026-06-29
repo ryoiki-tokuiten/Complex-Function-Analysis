@@ -19,7 +19,23 @@ const PI_VEC = 'vec2(PI, 0.0)';
 const E_VEC = 'vec2(2.718281828459045, 0.0)';
 const TRUE_VEC = 'vec2(1.0, 0.0)';
 const FALSE_VEC = ZERO_VEC;
-const BOOLEAN_BINARY_OPERATORS = new Set(['&&', '||', '==', '!=', '<', '<=', '>', '>=']);
+const TEXT_HASH_CACHE = new Map();
+
+function isBooleanBinaryOperator(op) {
+    return op === '&&' || op === '||' || op === '==' || op === '!=' ||
+        op === '<' || op === '<=' || op === '>' || op === '>=';
+}
+
+function isSafeIdentifierName(name) {
+    if (typeof name !== 'string' || name.length === 0) return false;
+    let code = name.charCodeAt(0);
+    if (!((code >= 65 && code <= 90) || (code >= 97 && code <= 122) || code === 95)) return false;
+    for (let index = 1; index < name.length; index++) {
+        code = name.charCodeAt(index);
+        if (!((code >= 65 && code <= 90) || (code >= 97 && code <= 122) || code === 95 || (code >= 48 && code <= 57))) return false;
+    }
+    return true;
+}
 const GPU_ARITY = Object.freeze({
     sin: [1, 1], cos: [1, 1], tan: [1, 1], sec: [1, 1],
     exp: [1, 1], ln: [1, 1], log: [1, 1],
@@ -83,21 +99,14 @@ function dynamicEnabled(appState) {
 }
 
 function parameterMap(appState) {
-    return Object.fromEntries((appState?.dynamicPlotting?.parameters || [])
-        .filter(parameter => /^[A-Za-z_][A-Za-z0-9_]*$/.test(parameter?.name || ''))
-        .map(parameter => [parameter.name, { re: Number(parameter.value) || 0, im: 0 }]));
-}
-
-function nodeChildren(node) {
-    switch (node?.type) {
-        case 'group': return node.expression ? [node.expression] : [];
-        case 'unary':
-        case 'postfix': return node.argument ? [node.argument] : [];
-        case 'binary': return [node.left, node.right].filter(Boolean);
-        case 'conditional': return [node.test, node.consequent, node.alternate].filter(Boolean);
-        case 'call': return Array.isArray(node.args) ? node.args : [];
-        default: return [];
+    const parameters = appState?.dynamicPlotting?.parameters || [];
+    const output = {};
+    for (let index = 0; index < parameters.length; index++) {
+        const parameter = parameters[index];
+        const name = parameter?.name || '';
+        if (isSafeIdentifierName(name)) output[name] = { re: Number(parameter.value) || 0, im: 0 };
     }
+    return output;
 }
 
 function variableExpression(node, context) {
@@ -119,24 +128,56 @@ function literalSignature(value) {
 }
 
 function hashText(text) {
-    let hash = 2166136261;
     const source = String(text);
+    const cached = TEXT_HASH_CACHE.get(source);
+    if (cached !== undefined) return cached;
+    let hash = 2166136261;
     for (let index = 0; index < source.length; index++) {
         hash = Math.imul(hash ^ source.charCodeAt(index), 16777619) >>> 0;
     }
+    if (TEXT_HASH_CACHE.size > 512) TEXT_HASH_CACHE.clear();
+    TEXT_HASH_CACHE.set(source, hash);
     return hash;
 }
 
-function hashParts(tag, ...parts) {
-    let hash = Math.imul(2166136261 ^ tag, 16777619) >>> 0;
-    for (let index = 0; index < parts.length; index++) {
-        hash = Math.imul(hash ^ (parts[index] >>> 0), 16777619) >>> 0;
-    }
-    return hash;
+function hashMix(hash, part) {
+    return Math.imul(hash ^ (part >>> 0), 16777619) >>> 0;
+}
+
+function hashStart(tag) {
+    return Math.imul(2166136261 ^ tag, 16777619) >>> 0;
 }
 
 function sheetSalt(context, enabled) {
     return enabled && context.sheet ? 0x9e3779b9 : 0;
+}
+
+function pushAnalysisChildren(stack, node) {
+    switch (node.type) {
+        case 'group':
+            if (node.expression) stack.push([node.expression, 0]);
+            break;
+        case 'unary':
+        case 'postfix':
+            if (node.argument) stack.push([node.argument, 0]);
+            break;
+        case 'binary':
+            if (node.right) stack.push([node.right, 0]);
+            if (node.left) stack.push([node.left, 0]);
+            break;
+        case 'conditional':
+            if (node.alternate) stack.push([node.alternate, 0]);
+            if (node.consequent) stack.push([node.consequent, 0]);
+            if (node.test) stack.push([node.test, 0]);
+            break;
+        case 'call': {
+            const args = node.args || [];
+            for (let index = args.length - 1; index >= 0; index--) stack.push([args[index], 0]);
+            break;
+        }
+        default:
+            break;
+    }
 }
 
 function analyzeExpressionTree(root, context) {
@@ -147,65 +188,82 @@ function analyzeExpressionTree(root, context) {
     const stack = [[root, 0]];
 
     while (stack.length) {
-        const frame = stack[stack.length - 1];
+        const frame = stack.pop();
         const node = frame[0];
         assertExpressionNode(node);
-        const children = nodeChildren(node);
-        if (frame[1] < children.length) {
-            stack.push([children[frame[1]++], 0]);
+        if (frame[1] === 0) {
+            frame[1] = 1;
+            stack.push(frame);
+            pushAnalysisChildren(stack, node);
             continue;
         }
-        stack.pop();
 
         let hash;
         let cost = 1;
         switch (node.type) {
             case 'literal':
-                hash = hashParts(1, hashText(literalSignature(node.value)));
+                hash = hashMix(hashStart(1), hashText(literalSignature(node.value)));
                 break;
-            case 'variable':
-                hash = hashParts(2, hashText(node.name), hashText(variableExpression(node, context)));
+            case 'variable': {
+                hash = hashStart(2);
+                hash = hashMix(hash, hashText(node.name));
+                hash = hashMix(hash, hashText(variableExpression(node, context)));
                 break;
+            }
             case 'group': {
                 const child = meta.get(node.expression);
-                hash = hashParts(3, child.hash);
+                hash = hashMix(hashStart(3), child.hash);
                 cost = child.cost + 1;
                 break;
             }
             case 'unary': {
                 const child = meta.get(node.argument);
-                hash = hashParts(4, hashText(node.op), child.hash);
+                hash = hashStart(4);
+                hash = hashMix(hash, hashText(node.op));
+                hash = hashMix(hash, child.hash);
                 cost = child.cost + 2;
                 break;
             }
             case 'postfix': {
                 const child = meta.get(node.argument);
-                hash = hashParts(5, hashText(node.op || '!'), child.hash);
+                hash = hashStart(5);
+                hash = hashMix(hash, hashText(node.op || '!'));
+                hash = hashMix(hash, child.hash);
                 cost = child.cost + 6;
                 break;
             }
             case 'binary': {
                 const left = meta.get(node.left);
                 const right = meta.get(node.right);
-                hash = hashParts(6, hashText(node.op), sheetSalt(context, node.op === '^'), left.hash, right.hash);
-                cost = left.cost + right.cost + (node.op === '^' ? 14 : BOOLEAN_BINARY_OPERATORS.has(node.op) ? 5 : 3);
+                hash = hashStart(6);
+                hash = hashMix(hash, hashText(node.op));
+                hash = hashMix(hash, sheetSalt(context, node.op === '^'));
+                hash = hashMix(hash, left.hash);
+                hash = hashMix(hash, right.hash);
+                cost = left.cost + right.cost + (node.op === '^' ? 14 : isBooleanBinaryOperator(node.op) ? 5 : 3);
                 break;
             }
             case 'conditional': {
                 const test = meta.get(node.test);
                 const consequent = meta.get(node.consequent);
                 const alternate = meta.get(node.alternate);
-                hash = hashParts(7, test.hash, consequent.hash, alternate.hash);
+                hash = hashStart(7);
+                hash = hashMix(hash, test.hash);
+                hash = hashMix(hash, consequent.hash);
+                hash = hashMix(hash, alternate.hash);
                 cost = test.cost + consequent.cost + alternate.cost + 5;
                 break;
             }
             case 'call': {
-                const childHashes = (node.args || []).map(argument => {
-                    const child = meta.get(argument);
+                const args = node.args || [];
+                hash = hashStart(8);
+                hash = hashMix(hash, hashText(node.name));
+                hash = hashMix(hash, sheetSalt(context, node.name === 'ln' || node.name === 'log' || node.name === 'sqrt' || node.name === 'pow'));
+                for (let index = 0; index < args.length; index++) {
+                    const child = meta.get(args[index]);
                     cost += child.cost;
-                    return child.hash;
-                });
-                hash = hashParts(8, hashText(node.name), sheetSalt(context, node.name === 'ln' || node.name === 'log' || node.name === 'sqrt' || node.name === 'pow'), ...childHashes);
+                    hash = hashMix(hash, child.hash);
+                }
                 cost += node.name === 'pow' ? 14 : 8;
                 break;
             }
@@ -349,7 +407,7 @@ function compileNodeDirect(node, context) {
             throw new Error(`Unary operator "${node.op}" is not supported by the GPU expression compiler`);
         case 'postfix': return `vec2(dynamicFactorial(dynamicReal(${compileNodeDirect(node.argument, context)})), 0.0)`;
         case 'binary': {
-            if (BOOLEAN_BINARY_OPERATORS.has(node.op)) return `dynamicBool(${compileBooleanDirect(node, context)})`;
+            if (isBooleanBinaryOperator(node.op)) return `dynamicBool(${compileBooleanDirect(node, context)})`;
             const left = compileNodeDirect(node.left, context);
             const right = compileNodeDirect(node.right, context);
             if (node.op === '+') return `(${left} + ${right})`;
@@ -422,7 +480,7 @@ function compileCSEExpressionNode(node, state, allowMaterialize) {
             throw new Error(`Unary operator "${node.op}" is not supported by the GPU expression compiler`);
         case 'postfix': return `vec2(dynamicFactorial(dynamicReal(${compileCSEExpressionNode(node.argument, state, true)})), 0.0)`;
         case 'binary': {
-            if (BOOLEAN_BINARY_OPERATORS.has(node.op)) return `dynamicBool(${compileBooleanCSE(node, state)})`;
+            if (isBooleanBinaryOperator(node.op)) return `dynamicBool(${compileBooleanCSE(node, state)})`;
             const left = compileCSEExpressionNode(node.left, state, true);
             const right = compileCSEExpressionNode(node.right, state, true);
             if (node.op === '+') return `(${left} + ${right})`;
@@ -465,14 +523,21 @@ function compileExpressionWithCSE(ast, context, prefix) {
 
 
 function contextSignature(context) {
-    const variableKeys = Object.keys(context.variables || {}).sort();
-    const parameterKeys = Object.keys(context.parameters || {}).sort();
-    return JSON.stringify({
-        sheet: Boolean(context.sheet),
-        selectedFunctionId: context.selectedFunctionId || 0,
-        variables: variableKeys.map(key => [key, context.variables[key]]),
-        parameters: parameterKeys.map(key => [key, literalSignature(context.parameters[key])])
-    });
+    const variables = context.variables || {};
+    const parameters = context.parameters || {};
+    const variableKeys = Object.keys(variables).sort();
+    const parameterKeys = Object.keys(parameters).sort();
+    const parts = [context.sheet ? '1' : '0', '|', glslFloat(context.selectedFunctionId || 0), '|v'];
+    for (let index = 0; index < variableKeys.length; index++) {
+        const key = variableKeys[index];
+        parts.push('|', key, '=', variables[key]);
+    }
+    parts.push('|p');
+    for (let index = 0; index < parameterKeys.length; index++) {
+        const key = parameterKeys[index];
+        parts.push('|', key, '=', literalSignature(parameters[key]));
+    }
+    return parts.join('');
 }
 
 function compileSourceExpressionWithCSE(source, context) {
@@ -589,20 +654,15 @@ vec2 dynamicEvaluateBasicOnSheet(
 `;
 
 function sourceRecords(appState) {
-    const sourceConfig = JSON.parse(JSON.stringify(appState.dynamicPlotting.source || {}));
-    if (sourceConfig.kind === 'custom_points') {
-        sourceConfig.points = sourceConfig.points || [];
-    }
+    const raw = appState.dynamicPlotting.source || {};
+    const sourceConfig = { ...raw };
+    if (Array.isArray(raw.points)) sourceConfig.points = raw.points.slice();
+    if (sourceConfig.kind === 'custom_points') sourceConfig.points = sourceConfig.points || [];
     const parameters = parameterMap(appState);
     const source = generateDiscreteSource(sourceConfig, { parameters });
-    const visibleCount = Math.max(
-        0,
-        Math.min(
-            source.records.length,
-            Math.floor(Number(appState.dynamicPlotting.playback?.visibleCount) || 0)
-        )
-    );
-    return source.records.slice(0, visibleCount);
+    const limit = Math.floor(Number(appState.dynamicPlotting.playback?.visibleCount) || 0);
+    const visibleCount = Math.max(0, Math.min(source.records.length, limit));
+    return visibleCount === source.records.length ? source.records : source.records.slice(0, visibleCount);
 }
 
 function domainValueFunction(records) {
@@ -677,14 +737,15 @@ export function buildDynamicAggregateGLSL(appState, getFunctionId) {
             aggregateParameter: config.aggregateParameter,
             parameters
         });
-        const variables = Object.fromEntries(bindings.map(binding => [
-            binding.symbol,
-            binding.kind === 'parameter'
+        const variables = {};
+        for (let index = 0; index < bindings.length; index++) {
+            const binding = bindings[index];
+            variables[binding.symbol] = binding.kind === 'parameter'
                 ? 's'
                 : binding.kind === 'parameter_real'
                     ? 'vec2(s.x, 0.0)'
-                    : `dynamicBinding_${binding.symbol}(idx)`
-        ]));
+                    : `dynamicBinding_${binding.symbol}(idx)`;
+        }
         variables.c = 'c';
         const selectedFunctionId = getFunctionId(config.selectedFunction || appState.currentFunction, true);
         if (!selectedFunctionId || selectedFunctionId === 16 || selectedFunctionId === 17) {
@@ -813,8 +874,7 @@ export function compileCustomExpressionToGLSL(source, getFunctionId) {
             source,
             compileNode(ast, context)
         );
-    } catch (e) {
-        console.warn('Failed to compile custom Z expression to GLSL:', e);
-        return 'z';
+    } catch {
+        return null;
     }
 }

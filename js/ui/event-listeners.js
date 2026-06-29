@@ -49,9 +49,11 @@ const PASSIVE_LISTENER_OPTIONS = Object.freeze({ passive: true });
 const PASSIVE_CAPTURE_LISTENER_OPTIONS = Object.freeze({ passive: true, capture: true });
 const ACTIVE_LISTENER_OPTIONS = Object.freeze({ passive: false });
 const DEFAULT_FRAME_DELAY = 0;
+const ALGEBRAIC_SURFACE_REDRAW_DELAY_MS = 120;
 
 let palettePanelFrameId = 0;
 let pendingPalettePanelRefresh = false;
+let algebraicSurfaceRedrawTimeout = 0;
 
 const canvasInteractionContexts = { z: null, w: null };
 const canvasContextByElement = new WeakMap();
@@ -503,6 +505,26 @@ function requestUiRedraw() {
 
 export function requestDomainRedraw(markDomainDirty = false) {
     scheduleRedraw(markDomainDirty, isDomainPalettePanelOpen());
+}
+
+function clearAlgebraicSurfaceRedraw() {
+    if (!algebraicSurfaceRedrawTimeout) return;
+    clearTimeout(algebraicSurfaceRedrawTimeout);
+    algebraicSurfaceRedrawTimeout = 0;
+}
+
+function requestAlgebraicRedraw(immediate = false) {
+    if (!state.riemannSurfaceEnabled || immediate) {
+        clearAlgebraicSurfaceRedraw();
+        requestDomainRedraw(true);
+        return;
+    }
+
+    clearAlgebraicSurfaceRedraw();
+    algebraicSurfaceRedrawTimeout = setTimeout(() => {
+        algebraicSurfaceRedrawTimeout = 0;
+        requestDomainRedraw(true);
+    }, ALGEBRAIC_SURFACE_REDRAW_DELAY_MS);
 }
 
 export function syncLaplacePlayPauseButton() {
@@ -2226,7 +2248,14 @@ function bindAlgebraicChainingControls() {
         const val = controls.algebraicChainingZInput?.value || 'z';
         state.algebraicChainingZExpr = val;
         updateCustomFormulaPreview(controls.algebraicChainingZInput, controls.algebraicChainingZMath);
-        requestDomainRedraw(true);
+        requestAlgebraicRedraw(false);
+    });
+
+    bindControlListener('algebraicChainingZInput', 'change', () => {
+        const val = controls.algebraicChainingZInput?.value || 'z';
+        state.algebraicChainingZExpr = val;
+        updateCustomFormulaPreview(controls.algebraicChainingZInput, controls.algebraicChainingZMath);
+        requestAlgebraicRedraw(true);
     });
 }
 
@@ -2332,11 +2361,13 @@ function algebraicRange(label, value, onInput) {
     const slider = h('input', { type: 'range' });
 
     Object.assign(slider, { min: '-5', max: '5', step: '0.1', value });
-    slider.addEventListener('input', event => {
+    const update = event => {
         const next = parseFloat(event.target.value);
         valueNode.textContent = next.toFixed(1);
-        onInput(next);
-    });
+        onInput(next, event.type === 'change');
+    };
+    slider.addEventListener('input', update);
+    slider.addEventListener('change', update);
 
     return h('div', { className: 'algebraic-slider-row' }, [
         h('label', { className: 'algebraic-slider-label' }, [label, valueNode]),
@@ -2344,10 +2375,10 @@ function algebraicRange(label, value, onInput) {
     ]);
 }
 
-function refreshAlgebraicFormula(preview, term) {
+function refreshAlgebraicFormula(preview, term, immediate = true) {
     if (preview) preview.textContent = termPreview(term);
     updateTitlesAndGlobalUI();
-    requestDomainRedraw(true);
+    requestAlgebraicRedraw(immediate);
 }
 
 function trimFactors(factors) {
@@ -2388,13 +2419,13 @@ function renderAlgebraicHeader(term, termIndex) {
 
 function renderCoefficientControls(term, preview) {
     return h('div', { className: 'algebraic-coeff-grid' }, [
-        algebraicRange('Re coeff ', term.coeff.re, value => {
+        algebraicRange('Re coeff ', term.coeff.re, (value, immediate) => {
             term.coeff.re = value;
-            refreshAlgebraicFormula(preview, term);
+            refreshAlgebraicFormula(preview, term, immediate);
         }),
-        algebraicRange('Im coeff ', term.coeff.im, value => {
+        algebraicRange('Im coeff ', term.coeff.im, (value, immediate) => {
             term.coeff.im = value;
-            refreshAlgebraicFormula(preview, term);
+            refreshAlgebraicFormula(preview, term, immediate);
         })
     ]);
 }
@@ -2437,9 +2468,9 @@ function renderFactorDetails(term, factor, preview) {
     }
 
     rows.push(
-        algebraicRange('Power ', factor.power === undefined ? 1.0 : factor.power, value => {
+        algebraicRange('Power ', factor.power === undefined ? 1.0 : factor.power, (value, immediate) => {
             factor.power = value;
-            refreshAlgebraicFormula(preview, term);
+            refreshAlgebraicFormula(preview, term, immediate);
         }),
         h('div', { className: 'algebraic-checkbox-row' }, [
             modifierCheckbox(factor, 'reciprocal', '1/f', () => refreshAlgebraicFormula(preview, term)),

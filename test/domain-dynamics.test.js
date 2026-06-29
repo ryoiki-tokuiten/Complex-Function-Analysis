@@ -358,6 +358,15 @@ test('unknown algebraic functions are invalid instead of implicit identity', () 
     assert.equal(evaluateDomainDynamicsValue(snapshot, 0.25, -0.5), null);
 });
 
+test('invalid algebraic z expressions are invalid in domain dynamics', () => {
+    const snapshot = makeAlgebraicDynamicsSnapshot({
+        algebraicChainingZExpr: 'bad +',
+        algebraicChainingTerms: [{ coeff: { re: 1, im: 0 }, factors: [algebraicFactor('c')] }]
+    });
+
+    assert.equal(evaluateDomainDynamicsValue(snapshot, 0.25, -0.5), null);
+});
+
 test('generic polynomial-parameter orbit rendering defines pixel indices', () => {
     const snapshot = makeAlgebraicDynamicsSnapshot({
         chainingEnabled: true,
