@@ -58,8 +58,6 @@ const LINEAR_SOURCE_POINT_SET_ROLES = new Set([
     'grid-vertical',
     'polar-angular',
     'logpolar-angular',
-    'strip-boundary',
-    'sector-radial',
     'line-horizontal',
     'line-vertical'
 ]);

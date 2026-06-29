@@ -93,8 +93,10 @@ export function requestRedrawAll() {
             updateTaylorSeriesCenterAndRadius();
             performCauchyAnalysis();
 
-            drawZPlaneContent();
-            drawWPlaneContent();
+            if (!state.realPlotsEnabled) {
+                drawZPlaneContent();
+                drawWPlaneContent();
+            }
             updateTitlesAndGlobalUI();
 
             syncLaplaceSurfaceColumn();

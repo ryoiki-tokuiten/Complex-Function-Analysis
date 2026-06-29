@@ -85,16 +85,12 @@ const COMPLEX_PARTS = ['re', 'im'];
 const MOBIUS_PARAMS = ['A', 'B', 'C', 'D'];
 
 const DOMAIN_DIRTY_STATE_KEYS = new Set([
-    'a0', 'b0', 'circleR', 'ellipseA', 'ellipseB', 'hyperbolaA', 'hyperbolaB',
-    'stripY1', 'stripY2', 'sectorAngle1', 'sectorAngle2', 'sectorRMin', 'sectorRMax',
+    'a0', 'b0', 'circleR', 'ellipseA', 'ellipseB',
     'imageSize', 'imageOpacity', 'videoSize', 'videoOpacity', 'vectorFieldScale',
     'zPlaneZoom', 'wPlaneZoom', 'fractionalPowerN', 'threeSphereOpacity', 'sphereGridOpacity'
 ]);
 
 const BASIC_SLIDER_BINDINGS = [
-    ['stripY1Slider', 'stripY1'], ['stripY2Slider', 'stripY2'],
-    ['sectorAngle1Slider', 'sectorAngle1'], ['sectorAngle2Slider', 'sectorAngle2'],
-    ['sectorRMinSlider', 'sectorRMin'], ['sectorRMaxSlider', 'sectorRMax'],
     ['gridDensitySlider', 'gridDensity', parseInteger],
     ['neighborhoodSizeSlider', 'probeNeighborhoodSize'],
     ['vectorFieldScaleSlider', 'vectorFieldScale'],
@@ -506,7 +502,7 @@ export function requestDomainRedraw(markDomainDirty = false) {
 }
 
 function requestAlgebraicRedraw() {
-    requestDomainRedraw(!state.riemannSurfaceEnabled);
+    requestDomainRedraw(!(state.riemannSurfaceEnabled || state.realPlotsEnabled));
 }
 
 export function syncLaplacePlayPauseButton() {
@@ -597,7 +593,6 @@ function syncDomainControlsFromState() {
     checked('enableDomainColoringCb', state.domainColoringEnabled);
     hidden(controls.domainColoringOptionsDiv, !state.domainColoringEnabled);
     hidden(controls.domainColoringKeyDiv, !state.domainColoringEnabled);
-    hidden(controls.riemannSphereDomainColoringOptions, !state.domainColoringEnabled);
     if (controls.domainPaletteSelect) controls.domainPaletteSelect.value = state.domainPalette;
     syncOrbitColoringModeControl();
     call(renderDomainPalettesUI, $('domain_palette_circles'));
@@ -937,6 +932,16 @@ function syncPalette(selectors, container) {
 function bindDomainColoringControls() {
     bindCheckbox('enableDomainColoringCb', 'domainColoringEnabled', () => {
         if (state.domainColoringEnabled) {
+            if (state.riemannSphereViewEnabled) {
+                state.riemannSphereViewEnabled = false;
+                checked('enableRiemannSphereCb', false);
+                state.riemannTransformationEnabled = false;
+                checked('enableRiemannTransformationCb', false);
+                hidden(controls.threeSphereOptionsDiv, true);
+                hidden(controls.riemannSphereOptionsDiv, true);
+                call(syncRiemannTransformationUI);
+                call(updateChainingTitles);
+            }
             if (state.riemannTransformationEnabled) {
                 state.riemannTransformationEnabled = false;
                 checked('enableRiemannTransformationCb', false);
@@ -952,12 +957,11 @@ function bindDomainColoringControls() {
         }
         hidden(controls.domainColoringOptionsDiv, !state.domainColoringEnabled);
         hidden(controls.domainColoringKeyDiv, !state.domainColoringEnabled);
-        hidden(controls.riemannSphereDomainColoringOptions, !state.domainColoringEnabled);
         syncOrbitColoringModeControl();
         requestDomainRedraw(true);
     });
 
-    const selectors = [controls.riemannSurfacePaletteSelect, controls.riemannSpherePaletteSelect].filter(Boolean);
+    const selectors = [controls.riemannSurfacePaletteSelect].filter(Boolean);
     const paletteContainer = $('domain_palette_circles');
 
     selectors.forEach(selector => {
@@ -1093,6 +1097,15 @@ function bindViewControls() {
         if (state.riemannSphereViewEnabled) {
             if (state.riemannSurfaceEnabled) disableRiemannSurface();
 
+            if (state.domainColoringEnabled) {
+                state.domainColoringEnabled = false;
+                checked('enableDomainColoringCb', false);
+                hidden(controls.domainColoringOptionsDiv, true);
+                hidden(controls.domainColoringKeyDiv, true);
+                state.currentInputShape = 'grid_cartesian';
+                if (controls.inputShapeSelector) controls.inputShapeSelector.value = 'grid_cartesian';
+            }
+
             if (!state.threeSphereEnabled) {
                 state.threeSphereEnabled = true;
                 checked('enableThreeSphereCb', true);
@@ -1141,7 +1154,6 @@ function bindViewControls() {
                 checked('enableDomainColoringCb', false);
                 hidden(controls.domainColoringOptionsDiv, true);
                 hidden(controls.domainColoringKeyDiv, true);
-                hidden(controls.riemannSphereDomainColoringOptions, true);
             }
             if (state.splitViewEnabled) {
                 state.splitViewEnabled = false;
@@ -2215,7 +2227,7 @@ function bindAlgebraicChainingControls() {
 
         updateTitlesAndGlobalUI();
         syncParameterControlsPanelVisibility();
-        requestDomainRedraw(true);
+        requestAlgebraicRedraw();
     });
 
     bindElementListener(controls.addAlgebraicTermBtn, 'click', () => {
@@ -2230,14 +2242,14 @@ function bindAlgebraicChainingControls() {
         const val = controls.algebraicChainingZInput?.value || 'z';
         state.algebraicChainingZExpr = val;
         updateCustomFormulaPreview(controls.algebraicChainingZInput, controls.algebraicChainingZMath);
-        requestAlgebraicRedraw(false);
+        requestAlgebraicRedraw();
     });
 
     bindControlListener('algebraicChainingZInput', 'change', () => {
         const val = controls.algebraicChainingZInput?.value || 'z';
         state.algebraicChainingZExpr = val;
         updateCustomFormulaPreview(controls.algebraicChainingZInput, controls.algebraicChainingZMath);
-        requestAlgebraicRedraw(true);
+        requestAlgebraicRedraw();
     });
 }
 
@@ -2360,7 +2372,7 @@ function algebraicRange(label, value, onInput) {
 function refreshAlgebraicFormula(preview, term, committed = true) {
     if (preview) preview.textContent = termPreview(term);
     if (committed) updateTitlesAndGlobalUI();
-    requestAlgebraicRedraw(committed);
+    requestAlgebraicRedraw();
 }
 
 function trimFactors(factors) {

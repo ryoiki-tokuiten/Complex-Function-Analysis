@@ -21,8 +21,6 @@ export const COLOR_POLAR_RADIAL = 'rgba(255, 150, 100, 0.7)';
 export const COLOR_POLAR_ANGULAR = 'rgba(200, 150, 255, 0.7)';
 export const COLOR_LOGPOLAR_EXP_R = 'rgba(255, 150, 100, 0.7)';
 export const COLOR_LOGPOLAR_ANGULAR = 'rgba(200, 150, 255, 0.7)';
-export const COLOR_STRIP_LINES = 'rgba(120,200,255,0.8)';
-export const COLOR_SECTOR_LINES = 'rgba(255,120,200,0.8)';
 
 // Markers and Points
 export const COLOR_ZERO_MARKER = 'rgba(255, 60, 60, 0.9)';

@@ -34,11 +34,11 @@ export const sphereViewParams = {
     w: { rotX: SPHERE_INITIAL_ROT_X, rotY: SPHERE_INITIAL_ROT_Y, dragging: false, lastMouseX: 0, lastMouseY: 0, radius: 0, centerX: 0, centerY: 0 }
 };
 
-export const sliderParamKeys = ['a0', 'b0', 'circleR', 'ellipseA', 'ellipseB', 'hyperbolaA', 'hyperbolaB', 'fractionalPowerN'];
+export const sliderParamKeys = ['a0', 'b0', 'circleR', 'ellipseA', 'ellipseB', 'fractionalPowerN'];
 
 const rawState = {
     a0: 0.0, b0: 0.0,
-    circleR: 1.0, ellipseA: 1.5, ellipseB: 0.7, hyperbolaA: 1.0, hyperbolaB: 0.5,
+    circleR: 1.0, ellipseA: 1.5, ellipseB: 0.7,
     mobiusA: { re: 1, im: 0 },
     mobiusB: { re: 0, im: 0 },
     mobiusC: { re: 0, im: 0 },
@@ -73,9 +73,6 @@ const rawState = {
     zetaContinuationEnabled: false,
     wOriginGlowTime: 0,
     previousWindingNumber: null,
-
-    stripY1: -0.5, stripY2: 0.5,
-    sectorAngle1: 0, sectorAngle2: 45, sectorRMin: 0.5, sectorRMax: 2.0,
 
     vectorFieldEnabled: false,
     vectorFieldFunction: 'f(z)',

@@ -3,14 +3,7 @@ import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { state } from '../store/state.js';
 import { requestRedrawAll } from '../main.js';
 import { getChainedTransformFunction } from '../math-utils.js';
-import {
-    CHAIN_MODE_IDS,
-    getThreeSphereShaderConfig,
-    isWebGLDomainColoringFunctionSupported
-} from './webgl-domain-coloring.js';
-import { getWebGLDomainColorFunctionIdShared } from './webgl-shared.js';
-import { orbitColoringModeId } from '../constants/rendering.js';
-import { getDomainPaletteShaderId } from '../constants/domain-palettes.js';
+
 
 const COLOR_BACKGROUND = 0x0b0914;
 const SPHERE_RADIUS = 5.0;
@@ -471,15 +464,9 @@ export class ThreeRiemannRenderer {
 
         this.updateSphereMaterial();
 
-        if (this.isDomainColoringActive()) {
-            if (this.ghostSphere.material) {
-                this.ghostSphere.material.opacity = Math.pow(easedProgress, 2);
-            }
-        } else {
-            if (this.ghostSphere.material) {
-                const maxOpacity = state.threeSphereOpacity !== undefined ? state.threeSphereOpacity : 0.15;
-                this.ghostSphere.material.opacity = Math.pow(easedProgress, 2) * maxOpacity;
-            }
+        if (this.ghostSphere.material) {
+            const maxOpacity = state.threeSphereOpacity !== undefined ? state.threeSphereOpacity : 0.15;
+            this.ghostSphere.material.opacity = Math.pow(easedProgress, 2) * maxOpacity;
         }
 
         if (this.wireframeSphere) {
@@ -506,120 +493,21 @@ export class ThreeRiemannRenderer {
         this.updateProbeGeometry();
     }
 
-    isDomainColoringActive() {
-        return state.domainColoringEnabled &&
-            isWebGLDomainColoringFunctionSupported(
-                state.currentFunction,
-                this.planeType === 'w'
-            );
-    }
-
     updateSphereMaterial() {
         if (!this.ghostSphere) return;
 
-        const showDomainColoring = this.isDomainColoringActive();
-
-        if (showDomainColoring) {
-            if (!(this.ghostSphere.material instanceof THREE.ShaderMaterial)) {
-                if (this.ghostSphere.material) this.ghostSphere.material.dispose();
-                const shaderConfig = getThreeSphereShaderConfig(this.planeType);
-                const uniforms = {
-                    u_domainBrightness: { value: 1.0 },
-                    u_domainContrast: { value: 1.0 },
-                    u_domainSaturation: { value: 1.0 },
-                    u_domainLightnessCycles: { value: 0.0 },
-                    u_domainPalette: { value: 0 },
-                    u_isWPlaneColoring: { value: this.planeType === 'w' ? 1.0 : 0.0 },
-                    u_functionId: { value: 0.0 },
-                    u_mobiusA: { value: new THREE.Vector2(1.0, 0.0) },
-                    u_mobiusB: { value: new THREE.Vector2(0.0, 0.0) },
-                    u_mobiusC: { value: new THREE.Vector2(0.0, 0.0) },
-                    u_mobiusD: { value: new THREE.Vector2(1.0, 0.0) },
-                    u_polyDegree: { value: 0 },
-                    u_polyCoeffs: { value: Array.from({ length: 11 }, () => new THREE.Vector2(0.0, 0.0)) },
-                    u_zetaContinuationEnabled: { value: 0.0 },
-                    u_zetaReflectionBoundary: { value: 0.5 },
-                    u_fracPower: { value: 0.5 },
-                    u_chainCount: { value: 1 },
-                    u_chainMode: { value: 1 },
-                    u_derivativeMode: { value: 0.0 },
-                    u_orbitColoringMode: { value: 0 }
-                };
-                this.ghostSphere.material = new THREE.ShaderMaterial({
-                    uniforms: uniforms,
-                    vertexShader: shaderConfig.vertexShader,
-                    fragmentShader: shaderConfig.fragmentShader,
-                    depthWrite: true,
-                    transparent: true
-                });
-            }
-            this.updateShaderUniforms();
-        } else {
-            if (this.ghostSphere.material instanceof THREE.ShaderMaterial) {
-                this.ghostSphere.material.dispose();
-                this.ghostSphere.material = null;
-            }
-            if (!this.ghostSphere.material || this.ghostSphere.material.type !== 'MeshBasicMaterial') {
-                this.ghostSphere.material = new THREE.MeshBasicMaterial({ 
-                    color: 0x2a254a, 
-                    transparent: true, 
-                    depthWrite: false, 
-                    blending: THREE.AdditiveBlending 
-                });
-            }
+        if (this.ghostSphere.material instanceof THREE.ShaderMaterial) {
+            this.ghostSphere.material.dispose();
+            this.ghostSphere.material = null;
         }
-    }
-
-    updateShaderUniforms() {
-        if (!this.ghostSphere || !(this.ghostSphere.material instanceof THREE.ShaderMaterial)) return;
-        const uniforms = this.ghostSphere.material.uniforms;
-
-        uniforms.u_domainBrightness.value = state.domainBrightness !== undefined ? state.domainBrightness : 1.0;
-        uniforms.u_domainContrast.value = state.domainContrast !== undefined ? state.domainContrast : 1.0;
-        uniforms.u_domainSaturation.value = state.domainSaturation !== undefined ? state.domainSaturation : 1.0;
-        uniforms.u_domainLightnessCycles.value = state.domainLightnessCycles !== undefined ? state.domainLightnessCycles : 0.0;
-        
-        uniforms.u_domainPalette.value = getDomainPaletteShaderId(state.domainPalette);
-
-        uniforms.u_isWPlaneColoring.value = this.planeType === 'w' ? 1.0 : 0.0;
-        uniforms.u_functionId.value = getWebGLDomainColorFunctionIdShared(state.currentFunction);
-
-        const a = state.mobiusA || {re: 1, im: 0}, b = state.mobiusB || {re: 0, im: 0};
-        const c = state.mobiusC || {re: 0, im: 0}, d = state.mobiusD || {re: 1, im: 0};
-        uniforms.u_mobiusA.value.set(a.re !== undefined ? a.re : 1.0, a.im !== undefined ? a.im : 0.0);
-        uniforms.u_mobiusB.value.set(b.re !== undefined ? b.re : 0.0, b.im !== undefined ? b.im : 0.0);
-        uniforms.u_mobiusC.value.set(c.re !== undefined ? c.re : 0.0, c.im !== undefined ? c.im : 0.0);
-        uniforms.u_mobiusD.value.set(d.re !== undefined ? d.re : 1.0, d.im !== undefined ? d.im : 0.0);
-
-        uniforms.u_polyDegree.value = Math.max(0, Math.min(10, Number.isFinite(state.polynomialN) ? state.polynomialN : 0));
-        if (state.polynomialCoeffs) {
-            for (let i = 0; i <= 10; i++) {
-                const co = state.polynomialCoeffs[i];
-                if (co) {
-                    uniforms.u_polyCoeffs.value[i].set(co.re !== undefined ? co.re : 0.0, co.im !== undefined ? co.im : 0.0);
-                } else {
-                    uniforms.u_polyCoeffs.value[i].set(0.0, 0.0);
-                }
-            }
-        } else {
-            for (let i = 0; i <= 10; i++) {
-                uniforms.u_polyCoeffs.value[i].set(0.0, 0.0);
-            }
+        if (!this.ghostSphere.material || this.ghostSphere.material.type !== 'MeshBasicMaterial') {
+            this.ghostSphere.material = new THREE.MeshBasicMaterial({ 
+                color: 0x2a254a, 
+                transparent: true, 
+                depthWrite: false, 
+                blending: THREE.AdditiveBlending 
+            });
         }
-
-        uniforms.u_zetaContinuationEnabled.value = state.zetaContinuationEnabled ? 1.0 : 0.0;
-        uniforms.u_zetaReflectionBoundary.value = 0.5;
-        uniforms.u_fracPower.value = state.fractionalPowerN !== undefined ? state.fractionalPowerN : 0.5;
-        uniforms.u_chainCount.value = state.chainingEnabled
-            ? (this.planeType === 'w' ? this.chainCount : Math.max(1, Math.min(512, state.chainCount || 1)))
-            : 1;
-        
-        const chainModeVal = CHAIN_MODE_IDS[state.chainingMode];
-        uniforms.u_chainMode.value = state.chainingEnabled && chainModeVal !== undefined ? chainModeVal : 0;
-        uniforms.u_derivativeMode.value = state.mapPresentation === 'derivative' ? 1.0 : 0.0;
-        uniforms.u_orbitColoringMode.value = state.chainingEnabled
-            ? orbitColoringModeId(state.orbitColoringMode)
-            : 0;
     }
 
     startAnimationLoop() {
@@ -654,15 +542,9 @@ export class ThreeRiemannRenderer {
         
         this.updateSphereMaterial();
 
-        if (this.isDomainColoringActive()) {
-            if (this.ghostSphere.material) {
-                this.ghostSphere.material.opacity = 1.0;
-            }
-        } else {
-            if (this.ghostSphere.material) {
-                const maxOpacity = state.threeSphereOpacity !== undefined ? state.threeSphereOpacity : 0.15;
-                this.ghostSphere.material.opacity = maxOpacity;
-            }
+        if (this.ghostSphere.material) {
+            const maxOpacity = state.threeSphereOpacity !== undefined ? state.threeSphereOpacity : 0.15;
+            this.ghostSphere.material.opacity = maxOpacity;
         }
 
         if (this.wireframeSphere) {

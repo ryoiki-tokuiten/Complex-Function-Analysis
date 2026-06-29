@@ -43,7 +43,7 @@ import {
 } from './draw-planar.js';
 import { drawPlanarTaylorApproximation } from './taylor-series.js';
 import { drawNavigationLayer } from '../navigation-plane.js';
-import { renderSphereDomainColoring, renderPlanarDomainColoring } from './domain-coloring.js';
+import { renderPlanarDomainColoring } from './domain-coloring.js';
 import { drawRiemannSphereBase, drawSphereGridAndShape, drawSphereProbeAndNeighborhood } from './draw-sphere.js';
 import { updateWindingNumberDisplay } from '../analysis/cauchy.js';
 import {
@@ -88,7 +88,8 @@ const conformalIndicatrixCache = { key: null, value: [] };
 const GRID_INPUT_SHAPES = new Set([
     'grid_cartesian',
     'grid_polar',
-    'grid_logpolar'
+    'grid_logpolar',
+    'grid_logcartesian'
 ]);
 
 // A renderer is a tiny fallback pipeline: prefer capture when requested, degrade to raster.
@@ -122,14 +123,6 @@ const PLANAR_CACHE_FIELDS = Object.freeze([
     ['circleR', () => toCacheKeyNumber(state.circleR)],
     ['ellipseA', () => toCacheKeyNumber(state.ellipseA)],
     ['ellipseB', () => toCacheKeyNumber(state.ellipseB)],
-    ['hyperbolaA', () => toCacheKeyNumber(state.hyperbolaA)],
-    ['hyperbolaB', () => toCacheKeyNumber(state.hyperbolaB)],
-    ['stripY1', () => toCacheKeyNumber(state.stripY1)],
-    ['stripY2', () => toCacheKeyNumber(state.stripY2)],
-    ['sectorA1', () => toCacheKeyNumber(state.sectorAngle1)],
-    ['sectorA2', () => toCacheKeyNumber(state.sectorAngle2)],
-    ['sectorRMin', () => toCacheKeyNumber(state.sectorRMin)],
-    ['sectorRMax', () => toCacheKeyNumber(state.sectorRMax)],
     ['theme', () => state.themeId],
     ['gridCol1', () => state.gridColor1 || ''],
     ['gridCol2', () => state.gridColor2 || ''],
@@ -771,12 +764,6 @@ function renderFirstSignalMode(renderers, ctx, planeParams, planeKey) {
     return true;
 }
 
-function refreshZSphereDomainColoring(map) {
-    if (state.domainColoringEnabled && context.domainColoringDirty && zDomainColorCtx) {
-        renderSphereDomainColoring(zDomainColorCtx, sphereViewParams.z, zPlaneParams, false, map);
-    }
-}
-
 function refreshZPlanarDomainColoring(map) {
     if (state.domainColoringEnabled && context.domainColoringDirty && zDomainColorCtx) {
         renderPlanarDomainColoring(zDomainColorCtx, zPlaneParams, false, map);
@@ -786,10 +773,8 @@ function refreshZPlanarDomainColoring(map) {
 function renderZSphere(map) {
     const sphereParams = sphereViewParams.z;
 
-    refreshZSphereDomainColoring(map);
-
     drawPlaneLayer(zCtx, zPlaneParams, 'z', layerCtx => {
-        drawDomainOrSolidBackground(layerCtx, zDomainColorCanvas, zPlaneParams);
+        fillCanvasBackground(layerCtx, zPlaneParams);
     }, 'raster');
 
     drawPlaneLayer(zCtx, zPlaneParams, 'z', layerCtx => {
@@ -1298,19 +1283,11 @@ function renderWTaylorApproximation() {
     });
 }
 
-function refreshWSphereDomainColoring() {
-    if (state.domainColoringEnabled && context.domainColoringDirty && wDomainColorCtx) {
-        renderSphereDomainColoring(wDomainColorCtx, sphereViewParams.w, wPlaneParams, true, null);
-    }
-}
-
 function renderWCanvasRiemannSphere(map, index) {
     const sphereParams = sphereViewParams.w;
 
-    refreshWSphereDomainColoring();
-
     drawPlaneLayer(wCtx, wPlaneParams, 'w', layerCtx => {
-        drawDomainOrSolidBackground(layerCtx, wDomainColorCanvas, wPlaneParams);
+        fillCanvasBackground(layerCtx, wPlaneParams);
     }, 'raster');
 
     drawPlaneLayer(wCtx, wPlaneParams, 'w', layerCtx => {

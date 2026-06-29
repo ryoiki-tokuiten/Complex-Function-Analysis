@@ -10,9 +10,7 @@ const TAYLOR_Y_AXIS_ROLES = new Set([
     'grid-horizontal',
     'polar-angular',
     'logpolar-angular',
-    'strip-boundary',
-    'line-horizontal',
-    'sector-arc'
+    'line-horizontal'
 ]);
 
 export function getTaylorPointSetColor(pointSet, axisColorX, axisColorY) {

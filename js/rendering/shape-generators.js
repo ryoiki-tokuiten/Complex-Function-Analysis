@@ -8,8 +8,6 @@ import {
 import { LINE_WIDTH_THIN, LINE_WIDTH_NORMAL, LINE_WIDTH_MEDIUM, LINE_WIDTH_THICK } from '../constants/rendering.js';
 
 const EPSILON = 1e-9;
-const DEG_TO_RAD = Math.PI / 180;
-const HYPERBOLA_U_MAX = 2.5;
 const MIN_VISIBLE_RADIUS = 0.1;
 const MIN_LOGPOLAR_RADIUS = 0.05;
 const RADIAL_DISCRETE_STEP_COLOR = 'rgba(255, 255, 0, 0.7)';
@@ -232,15 +230,7 @@ export function buildInputShapeGeometryConfig(planeParams, options = {}) {
         b0: options.b0 ?? state.b0,
         circleR: options.circleR ?? state.circleR,
         ellipseA: options.ellipseA ?? state.ellipseA,
-        ellipseB: options.ellipseB ?? state.ellipseB,
-        hyperbolaA: options.hyperbolaA ?? state.hyperbolaA,
-        hyperbolaB: options.hyperbolaB ?? state.hyperbolaB,
-        stripY1: options.stripY1 ?? state.stripY1,
-        stripY2: options.stripY2 ?? state.stripY2,
-        sectorAngle1: options.sectorAngle1 ?? state.sectorAngle1,
-        sectorAngle2: options.sectorAngle2 ?? state.sectorAngle2,
-        sectorRMin: options.sectorRMin ?? state.sectorRMin,
-        sectorRMax: options.sectorRMax ?? state.sectorRMax
+        ellipseB: options.ellipseB ?? state.ellipseB
     };
 }
 
@@ -248,30 +238,7 @@ export function generateCirclePoints(cx, cy, radius, numPoints) {
     return makeCirclePoints(cx, cy, radius, numPoints);
 }
 
-export function generateEllipsePoints(cx, cy, a, b, numPoints) {
-    return makeEllipsePoints(cx, cy, a, b, numPoints);
-}
 
-export function generateHyperbolaPoints(cx, cy, a, b, numPoints) {
-    const halfSteps = integerAtLeast(numPoints / 2, 2);
-    const branchLength = halfSteps + 1;
-    const points = new Array(branchLength * 2 + 1);
-    const secondBranchOffset = branchLength + 1;
-    const inv = 1 / halfSteps;
-    const halfMax = HYPERBOLA_U_MAX / 2;
-
-    for (let index = 0; index <= halfSteps; index += 1) {
-        const u = HYPERBOLA_U_MAX * index * inv - halfMax;
-        const cosh = Math.cosh(u);
-        const sinh = Math.sinh(u);
-        const im = cy + b * sinh;
-        points[index] = { re: cx + a * cosh, im };
-        points[secondBranchOffset + index] = { re: cx - a * cosh, im };
-    }
-
-    points[branchLength] = null;
-    return points;
-}
 
 export function generateLinePoints(xMin, xMax, y, numPoints) {
     return cartesianSegment(xMin, y, xMax, y, numPoints);
@@ -383,60 +350,65 @@ export function generateLogPolarGridPointSets(config) {
     return pointSets;
 }
 
-export function generateStripPointSets(config) {
+export function generateLogCartesianGridPointSets(config) {
     const palette = currentGridPalette();
-    const sampleCount = integerAtLeast(config.curvePoints, 2);
+    const sampleCount = integerAtLeast(config.curvePoints / 2, 2);
+    const gridDensity = integerAtLeast(config.gridDensity, 1);
     const xRange = config.xRange;
+    const yRange = config.yRange;
 
-    return [
-        createLineSet(
-            cartesianSegment(xRange[0], config.stripY1, xRange[1], config.stripY1, sampleCount),
-            palette.horizontal,
-            'strip-boundary',
-            LINE_WIDTH_MEDIUM
-        ),
-        createLineSet(
-            cartesianSegment(xRange[0], config.stripY2, xRange[1], config.stripY2, sampleCount),
-            palette.vertical,
-            'strip-boundary',
-            LINE_WIDTH_MEDIUM
-        )
-    ];
-}
+    const minVal = MIN_LOGPOLAR_RADIUS;
 
-export function generateSectorPointSets(config) {
-    const palette = currentGridPalette();
-    const angle1 = degreesToRadians(config.sectorAngle1);
-    const angle2 = degreesToRadians(config.sectorAngle2);
-    const linePointCount = integerAtLeast(config.curvePoints / 2, 8);
-    const arcPointCount = integerAtLeast(config.curvePoints / 4, 8);
+    const xMax = Math.max(Math.abs(xRange[0]), Math.abs(xRange[1]));
+    const yMax = Math.max(Math.abs(yRange[0]), Math.abs(yRange[1]));
 
-    return [
-        createLineSet(
-            radialSegment(angle1, config.sectorRMin, config.sectorRMax, linePointCount),
+    const xLimit = Math.max(xMax, minVal * 2);
+    const yLimit = Math.max(yMax, minVal * 2);
+
+    const logXMin = Math.log(minVal);
+    const logXMax = Math.log(xLimit);
+    const logYMin = Math.log(minVal);
+    const logYMax = Math.log(yLimit);
+
+    const xValues = [];
+    const yValues = [];
+
+    for (let index = 0; index <= gridDensity; index += 1) {
+        const logX = logXMin + (logXMax - logXMin) * (index / gridDensity);
+        const valX = Math.exp(logX);
+        xValues.push(valX);
+        xValues.push(-valX);
+
+        const logY = logYMin + (logYMax - logYMin) * (index / gridDensity);
+        const valY = Math.exp(logY);
+        yValues.push(valY);
+        yValues.push(-valY);
+    }
+
+    const pointSets = [];
+    const zetaBlocked = config.currentFunction === 'zeta' && !config.zetaContinuationEnabled;
+
+    // Horizontal lines (constant y)
+    yValues.forEach(y => {
+        pointSets.push(createLineSet(
+            cartesianSegment(xRange[0], y, xRange[1], y, sampleCount),
             palette.horizontal,
-            'sector-radial',
-            LINE_WIDTH_MEDIUM
-        ),
-        createLineSet(
-            radialSegment(angle2, config.sectorRMin, config.sectorRMax, linePointCount),
-            palette.horizontal,
-            'sector-radial',
-            LINE_WIDTH_MEDIUM
-        ),
-        createLineSet(
-            arcPoints(config.sectorRMin, angle1, angle2, arcPointCount),
-            palette.vertical,
-            'sector-arc',
-            LINE_WIDTH_MEDIUM
-        ),
-        createLineSet(
-            arcPoints(config.sectorRMax, angle1, angle2, arcPointCount),
-            palette.vertical,
-            'sector-arc',
-            LINE_WIDTH_MEDIUM
-        )
-    ];
+            'grid-horizontal',
+            LINE_WIDTH_NORMAL
+        ));
+    });
+
+    // Vertical lines (constant x)
+    xValues.forEach(x => {
+        pointSets.push(createLineSet(
+            cartesianSegment(x, yRange[0], x, yRange[1], sampleCount),
+            zetaBlocked && x <= ZETA_REFLECTION_POINT_RE ? palette.zetaUndefinedSumRegion : palette.vertical,
+            'grid-vertical',
+            LINE_WIDTH_NORMAL
+        ));
+    });
+
+    return pointSets;
 }
 
 export function generateLineShapePointSets(config) {
@@ -462,8 +434,7 @@ export function generateLineShapePointSets(config) {
 
 const GEOMETRIC_POINT_FACTORIES = Object.freeze({
     circle: config => makeCirclePoints(config.a0, config.b0, config.circleR, config.curvePoints),
-    ellipse: config => makeEllipsePoints(config.a0, config.b0, config.ellipseA, config.ellipseB, config.curvePoints),
-    hyperbola: config => generateHyperbolaPoints(config.a0, config.b0, config.hyperbolaA, config.hyperbolaB, config.curvePoints)
+    ellipse: config => makeEllipsePoints(config.a0, config.b0, config.ellipseA, config.ellipseB, config.curvePoints)
 });
 
 export function generateGeometricShapePointSets(config) {
@@ -478,12 +449,10 @@ const INPUT_SHAPE_GENERATORS = Object.freeze({
     grid_cartesian: generateCartesianGridPointSets,
     grid_polar: generatePolarGridPointSets,
     grid_logpolar: generateLogPolarGridPointSets,
-    strip_horizontal: generateStripPointSets,
-    sector_angular: generateSectorPointSets,
+    grid_logcartesian: generateLogCartesianGridPointSets,
     line: generateLineShapePointSets,
     circle: generateGeometricShapePointSets,
     ellipse: generateGeometricShapePointSets,
-    hyperbola: generateGeometricShapePointSets,
     empty_grid: emptyPointSets,
     image: emptyPointSets,
     video: emptyPointSets

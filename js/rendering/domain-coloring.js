@@ -74,31 +74,6 @@ export function renderPlanarDomainColoring(tCtx, pP, isWPC, map) {
     renderPlanarDomainColoringCPU(tCtx, pP, isWPC, map);
 }
 
-export function renderSphereDomainColoring(tCtx, cSP, cDOMP, isWPC, map) {
-    const w = cDOMP.width; const h = cDOMP.height; if (w === 0 || h === 0) return;
-    const ok = renderDomainColoringWithWebGL(tCtx, cDOMP, {
-        planeKey: getDomainColorPlaneKey(tCtx),
-        isWPlaneColoring: !!isWPC,
-        sphereParams: cSP,
-        map
-    });
-    if (!ok) {
-        renderSphereDomainColoringCPU(tCtx, cSP, cDOMP, isWPC, map);
-    }
-}
-
-export function inverseRotate3D(x, y, z, rotX, rotY) {
-    const cY = Math.cos(-rotY);
-    const sY = Math.sin(-rotY);
-    const cX = Math.cos(-rotX);
-    const sX = Math.sin(-rotX);
-    const y1 = y * cX - z * sX;
-    const z1 = y * sX + z * cX;
-    const rx = x * cY + z1 * sY;
-    const ry = y1;
-    const rz = -x * sY + z1 * cY;
-    return { x: rx, y: ry, z: rz };
-}
 
 export function getPaletteColor(paletteId, h) {
     if (paletteId === 'classic') {
@@ -233,75 +208,3 @@ export function renderPlanarDomainColoringCPU(tCtx, pP, isWPC, map) {
     tCtx.restore();
 }
 
-export function renderSphereDomainColoringCPU(tCtx, cSP, cDOMP, isWPC, map) {
-    const targetW = cDOMP.width;
-    const targetH = cDOMP.height;
-    const w = Math.max(1, Math.floor(targetW));
-    const h = Math.max(1, Math.floor(targetH));
-
-    const tempCanvas = document.createElement('canvas');
-    tempCanvas.width = w;
-    tempCanvas.height = h;
-    const tempCtx = tempCanvas.getContext('2d');
-    const imgData = tempCtx.createImageData(w, h);
-    const data = imgData.data;
-
-    const sCenterX = cSP.centerX;
-    const sCenterY = cSP.centerY;
-    const sRadius = cSP.radius;
-    const rotX = cSP.rotX || 0;
-    const rotY = cSP.rotY || 0;
-
-    const evalFunc = getDomainColoringEvaluator(isWPC, map);
-
-    for (let py = 0; py < h; py++) {
-        for (let px = 0; px < w; px++) {
-            const nx = (px - sCenterX) / sRadius;
-            const ny = -(py - sCenterY) / sRadius;
-            const radialSq = nx * nx + ny * ny;
-
-            const idx = (py * w + px) * 4;
-            if (radialSq > 1.0 || sRadius <= 0) {
-                data[idx] = 0;
-                data[idx + 1] = 0;
-                data[idx + 2] = 0;
-                data[idx + 3] = 0;
-                continue;
-            }
-
-            const pz = Math.sqrt(Math.max(0.0, 1.0 - radialSq));
-            const pt = inverseRotate3D(nx, ny, pz, rotX, rotY);
-            const den = 1.0 - pt.z;
-
-            let reZ, imZ;
-            if (Math.abs(den) < 1e-6) {
-                data[idx] = 0;
-                data[idx + 1] = 0;
-                data[idx + 2] = 0;
-                data[idx + 3] = 0;
-                continue;
-            } else {
-                reZ = pt.x / den;
-                imZ = pt.y / den;
-            }
-
-            const mapped = evalFunc(reZ, imZ);
-            const rgb = (!mapped || isNaN(mapped.re) || isNaN(mapped.im) || !isFinite(mapped.re) || !isFinite(mapped.im))
-                ? [0, 0, 0]
-                : domainColorForValue(mapped.re, mapped.im, state);
-
-            data[idx] = rgb[0];
-            data[idx + 1] = rgb[1];
-            data[idx + 2] = rgb[2];
-            data[idx + 3] = 255;
-        }
-    }
-    tempCtx.putImageData(imgData, 0, 0);
-
-    tCtx.save();
-    tCtx.setTransform(1, 0, 0, 1, 0, 0);
-    tCtx.clearRect(0, 0, targetW, targetH);
-    tCtx.imageSmoothingEnabled = true;
-    tCtx.drawImage(tempCanvas, 0, 0, w, h, 0, 0, targetW, targetH);
-    tCtx.restore();
-}

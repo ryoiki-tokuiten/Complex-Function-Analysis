@@ -2,7 +2,6 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 
 import { drawComplexLineSetOnPlane } from '../js/rendering/draw-planar.js';
-import { getThreeSphereShaderConfig } from '../js/rendering/webgl-domain-coloring.js';
 import { PolylineCaptureContext } from '../js/rendering/webgl-planar.js';
 import {
     DOMAIN_PALETTE_IDS,
@@ -51,9 +50,6 @@ test('Newton Deep palette is registered across UI and shader paths', () => {
         ['three-b1b-newton-deep']
     );
     assert.equal(DOMAIN_PALETTE_IDS['three-b1b-newton-deep'], 21);
-
-    const sphereShader = getThreeSphereShaderConfig('z').fragmentShader;
-    assert.match(sphereShader, /paletteId == 21/);
 
     const generatedPaletteSource = createDomainPaletteGlslSource('surfacePaletteColor');
     assert.match(generatedPaletteSource, /paletteId == 21/);

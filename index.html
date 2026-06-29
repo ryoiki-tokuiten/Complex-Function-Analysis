@@ -1311,51 +1311,7 @@
                                         <option value="2">2x</option>
                                     </select>
                                 </div>
-                            </div>
-                        </div>
-                        <div id="hyperbola_params_slider_group" class="hidden">
-                            <div class="control-group">
-                                <label for="hyperbolaA_slider">
-                                    Param A:
-                                    <output id="hyperbolaA_value_display">1.0</output>
-                                </label>
-                                <div class="slider-container">
-                                    <input type="range" id="hyperbolaA_slider" name="hyperbolaA_slider" min="0.1"
-                                        max="2.5" step="0.05" value="1.0"
-                                        data-tooltip="Adjusts parameter A for the hyperbola input shape">
-                                    <button id="play_hyperbolaA_btn"
-                                        data-tooltip="Animate hyperbola parameter A">Play</button>
-                                    <select id="speed_hyperbolaA_selector" class="animation-speed-selector"
-                                        data-tooltip="Select animation speed for hyperbola parameter A">
-                                        <option value="0.01">0.01x</option>
-                                        <option value="0.1">0.1x</option>
-                                        <option value="0.5">0.5x</option>
-                                        <option value="1" selected>1x</option>
-                                        <option value="2">2x</option>
-                                    </select>
-                                </div>
-                            </div>
-                            <div class="control-group">
-                                <label for="hyperbolaB_slider">
-                                    Param B:
-                                    <output id="hyperbolaB_value_display">0.5</output>
-                                </label>
-                                <div class="slider-container">
-                                    <input type="range" id="hyperbolaB_slider" name="hyperbolaB_slider" min="0.1"
-                                        max="2.5" step="0.05" value="0.5"
-                                        data-tooltip="Adjusts parameter B for the hyperbola input shape">
-                                    <button id="play_hyperbolaB_btn"
-                                        data-tooltip="Animate hyperbola parameter B">Play</button>
-                                    <select id="speed_hyperbolaB_selector" class="animation-speed-selector"
-                                        data-tooltip="Select animation speed for hyperbola parameter B">
-                                        <option value="0.01">0.01x</option>
-                                        <option value="0.1">0.1x</option>
-                                        <option value="0.5">0.5x</option>
-                                        <option value="1" selected>1x</option>
-                                        <option value="2">2x</option>
-                                    </select>
-                                </div>
-                            </div>
+                             </div>
                         </div>
                     </div>
 
@@ -1475,71 +1431,9 @@
                         </div>
                     </div>
 
-                    <div id="strip_horizontal_params_sliders" class="dependent-settings-block hidden">
-                        <div class="control-group">
-                            <label>Horizontal Strip Parameters:</label>
-                        </div>
-                        <div class="control-group">
-                            <label for="stripY1_slider">
-                                y<sub>1</sub>:
-                                <output id="stripY1_value_display">-0.5</output>
-                            </label>
-                            <div class="slider-container"><input type="range" id="stripY1_slider" name="stripY1_slider"
-                                    min="-5" max="5" step="0.1" value="-0.5"
-                                    data-tooltip="Lower y-boundary for horizontal strip input shape"></div>
-                        </div>
-                        <div class="control-group">
-                            <label for="stripY2_slider">
-                                y<sub>2</sub>:
-                                <output id="stripY2_value_display">0.5</output>
-                            </label>
-                            <div class="slider-container"><input type="range" id="stripY2_slider" name="stripY2_slider"
-                                    min="-5" max="5" step="0.1" value="0.5"
-                                    data-tooltip="Upper y-boundary for horizontal strip input shape"></div>
-                        </div>
-                    </div>
 
-                    <div id="sector_angular_params_sliders" class="dependent-settings-block hidden">
-                        <div class="control-group">
-                            <label>Angular Sector Parameters:</label>
-                        </div>
-                        <div class="control-group">
-                            <label for="sectorAngle1_slider">
-                                θ<sub>1</sub> (deg):
-                                <output id="sectorAngle1_value_display">0</output>
-                            </label>
-                            <div class="slider-container"><input type="range" id="sectorAngle1_slider"
-                                    name="sectorAngle1_slider" min="0" max="360" step="1" value="0"
-                                    data-tooltip="Start angle (degrees) for angular sector input shape"></div>
-                        </div>
-                        <div class="control-group">
-                            <label for="sectorAngle2_slider">
-                                θ<sub>2</sub> (deg):
-                                <output id="sectorAngle2_value_display">45</output>
-                            </label>
-                            <div class="slider-container"><input type="range" id="sectorAngle2_slider"
-                                    name="sectorAngle2_slider" min="0" max="360" step="1" value="45"
-                                    data-tooltip="End angle (degrees) for angular sector input shape"></div>
-                        </div>
-                        <div class="control-group">
-                            <label for="sectorRMin_slider">
-                                R<sub>min</sub>:
-                                <output id="sectorRMin_value_display">0.5</output>
-                            </label>
-                            <div class="slider-container"><input type="range" id="sectorRMin_slider"
-                                    name="sectorRMin_slider" min="0" max="5" step="0.1" value="0.5"
-                                    data-tooltip="Minimum radius (Rmin) for angular sector input shape"></div>
-                        </div>
-                        <div class="control-group">
-                            <label for="sectorRMax_slider">
-                                R<sub>max</sub>:
-                                <output id="sectorRMax_value_display">2.0</output>
-                            </label>
-                            <div class="slider-container"><input type="range" id="sectorRMax_slider"
-                                    name="sectorRMax_slider" min="0.1" max="10" step="0.1" value="2.0"
-                                    data-tooltip="Maximum radius (Rmax) for angular sector input shape"></div>
-                        </div>
-                    </div>
+
+
 
                     <div id="mobius_params_sliders" class="dependent-settings-block hidden">
                         <div class="control-group">
@@ -2430,13 +2324,11 @@
                                 <option value="grid_cartesian" selected>Grid (Cartesian)</option>
                                 <option value="grid_polar">Grid (Polar)</option>
                                 <option value="grid_logpolar">Grid (Log-Polar)</option>
+                                <option value="grid_logcartesian">Grid (Log-Cartesian)</option>
                                 <option value="empty_grid">Grid (Empty)</option>
                                 <option value="line">Lines (Re/Im Fixed)</option>
                                 <option value="circle">Circle</option>
                                 <option value="ellipse">Ellipse</option>
-                                <option value="hyperbola">Hyperbola</option>
-                                <option value="strip_horizontal">Strip (Horizontal)</option>
-                                <option value="sector_angular">Sector (Angular)</option>
                                 <option value="image">Image Upload</option>
                                 <option value="video">Video Upload</option>
                             </select>

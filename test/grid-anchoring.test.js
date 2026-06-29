@@ -5,8 +5,7 @@ import {
     generateCartesianGridPointSets,
     generatePolarGridPointSets,
     generateLogPolarGridPointSets,
-    generateStripPointSets,
-    generateSectorPointSets,
+    generateLogCartesianGridPointSets,
     generateCurrentMappedInputShapePointSets
 } from '../js/rendering/shape-generators.js';
 import { state } from '../js/store/state.js';
@@ -128,13 +127,7 @@ test('Grid-style input shapes use active grid theme colors', () => {
             xRange: [-2.0, 2.0],
             yRange: [-2.0, 2.0],
             gridDensity: 4,
-            curvePoints: 32,
-            stripY1: -0.5,
-            stripY2: 0.5,
-            sectorAngle1: 10,
-            sectorAngle2: 80,
-            sectorRMin: 0.5,
-            sectorRMax: 2
+            curvePoints: 32
         };
 
         const polarSets = generatePolarGridPointSets(baseConfig);
@@ -145,16 +138,51 @@ test('Grid-style input shapes use active grid theme colors', () => {
         assert.equal(logPolarSets.find(set => set.role === 'logpolar-angular').color, state.gridColor1);
         assert.equal(logPolarSets.find(set => set.role === 'logpolar-radial').color, state.gridColor2);
 
-        const stripSets = generateStripPointSets(baseConfig);
-        assert.equal(stripSets[0].color, state.gridColor1);
-        assert.equal(stripSets[1].color, state.gridColor2);
-
-        const sectorSets = generateSectorPointSets(baseConfig);
-        assert.equal(sectorSets.find(set => set.role === 'sector-radial').color, state.gridColor1);
-        assert.equal(sectorSets.find(set => set.role === 'sector-arc').color, state.gridColor2);
+        const logCartesianSets = generateLogCartesianGridPointSets(baseConfig);
+        assert.equal(logCartesianSets.find(set => set.role === 'grid-horizontal').color, state.gridColor1);
+        assert.equal(logCartesianSets.find(set => set.role === 'grid-vertical').color, state.gridColor2);
     } finally {
         state.gridColor1 = previousGridColor1;
         state.gridColor2 = previousGridColor2;
+    }
+});
+
+test('Log-Cartesian grid lines are exponentially distributed and scale with density', () => {
+    const config = {
+        xRange: [-2.0, 2.0],
+        yRange: [-2.0, 2.0],
+        gridDensity: 10,
+        curvePoints: 100
+    };
+
+    const pointSets = generateLogCartesianGridPointSets(config);
+    assert.ok(pointSets.length > 0);
+
+    const xCoords = [];
+    const yCoords = [];
+
+    for (const set of pointSets) {
+        if (set.role === 'grid-vertical') {
+            xCoords.push(set.points[0].re);
+        } else if (set.role === 'grid-horizontal') {
+            yCoords.push(set.points[0].im);
+        }
+    }
+
+    // gridDensity = 10 -> 11 steps -> 22 positive & negative values per axis
+    assert.equal(xCoords.length, 22);
+    assert.equal(yCoords.length, 22);
+
+    // Check that positive coordinates are strictly increasing
+    const posX = xCoords.filter(x => x > 0).sort((a, b) => a - b);
+    assert.equal(posX.length, 11);
+
+    // Verify exponential spacing by checking log-linear spacing
+    const logPosX = posX.map(x => Math.log(x));
+    const step = logPosX[1] - logPosX[0];
+    for (let i = 1; i < logPosX.length - 1; i++) {
+        const currentStep = logPosX[i + 1] - logPosX[i];
+        assert.ok(Math.abs(currentStep - step) < 1e-9, `Step mismatch at index ${i}`);
     }
 });
 

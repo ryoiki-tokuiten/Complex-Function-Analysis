@@ -854,7 +854,7 @@ class RealPlots3DRenderer {
         this.container.replaceChildren(this.renderer.domElement);
 
         this.controls = new OrbitControls(this.camera, this.renderer.domElement);
-        this.controls.enableDamping = true;
+        this.controls.enableDamping = false;
         this.controls.dampingFactor = 0.05;
         this.controls.enablePan = true;
         this.controls.enableZoom = true;
@@ -863,7 +863,10 @@ class RealPlots3DRenderer {
         this.controls.minDistance = 0.1;
         this.controls.maxDistance = 200;
         this.controls.update();
-        this.controls.addEventListener('change', () => this.#syncMathCameraTarget());
+        this.controls.addEventListener('change', () => {
+            this.#syncMathCameraTarget();
+            this.render();
+        });
 
         this.surfaceGroup = new THREE.Group();
         this.scene.add(this.surfaceGroup);
@@ -879,9 +882,7 @@ class RealPlots3DRenderer {
         this.resizeObserver.observe(container);
         this.resize();
 
-        this.animate = this.animate.bind(this);
-        this.animateActive = true;
-        requestAnimationFrame(this.animate);
+        this.render();
     }
 
     #syncPixelRatio() {
@@ -1031,10 +1032,7 @@ class RealPlots3DRenderer {
         this.controls.update();
     }
 
-    animate() {
-        if (!this.animateActive) return;
-        requestAnimationFrame(this.animate);
-        this.controls.update();
+    render() {
         this.renderer.render(this.scene, this.camera);
     }
 
@@ -1046,6 +1044,7 @@ class RealPlots3DRenderer {
         this.camera.aspect = width / height;
         this.camera.updateProjectionMatrix();
         this.renderer.setSize(width, height);
+        this.render();
     }
 
     updateSurface(transformFunc) {
@@ -1066,6 +1065,7 @@ class RealPlots3DRenderer {
         this.#syncCoordinateLabels();
         this.#sampleSurface(transformFunc);
         this.surfaceStore.markDirty();
+        this.render();
     }
 
     #syncOutputLabel() {
@@ -1117,7 +1117,6 @@ class RealPlots3DRenderer {
     }
 
     dispose() {
-        this.animateActive = false;
         this.resizeObserver?.disconnect();
         this.controls.dispose();
         this.surfaceStore?.dispose();

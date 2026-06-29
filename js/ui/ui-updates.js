@@ -33,8 +33,6 @@ const TRANSFORM_MODE_PARAMETER_GROUPS = Object.freeze([
     'polynomialParamsSliders',
     'fractionalPowerParamsSliders',
     'shapeParamsSliders',
-    'stripHorizontalParamsSliders',
-    'sectorAngularParamsSliders',
     'chainingParamsBlock',
     'algebraicChainingParamsBlock',
     'dynamicPlottingParams'
@@ -72,12 +70,10 @@ const INPUT_SHAPE_TITLE_SUFFIX = Object.freeze({
     line: ': Lines)',
     circle: ': Circle)',
     ellipse: ': Ellipse)',
-    hyperbola: ': Hyperbola)',
     grid_cartesian: ': Cartesian Grid)',
     grid_polar: ': Polar Grid)',
     grid_logpolar: ': Log-Polar Grid)',
-    strip_horizontal: ': Horiz. Strip)',
-    sector_angular: ': Ang. Sector)',
+    grid_logcartesian: ': Log-Cartesian Grid)',
     image: ': Image)',
     video: ': Video)',
     empty_grid: ': Empty)'
@@ -85,8 +81,7 @@ const INPUT_SHAPE_TITLE_SUFFIX = Object.freeze({
 
 const SHAPE_SPECIFIC_GROUPS = Object.freeze({
     circle: 'circleRSliderGroup',
-    ellipse: 'ellipseParamsSliderGroup',
-    hyperbola: 'hyperbolaParamsSliderGroup'
+    ellipse: 'ellipseParamsSliderGroup'
 });
 
 const SIMPLE_FUNCTION_LABELS = Object.freeze({
@@ -442,17 +437,7 @@ function syncMobiusDisplays() {
     }
 }
 
-function syncStripDisplays() {
-    setFixedText('stripY1ValueDisplay', state.stripY1, 1);
-    setFixedText('stripY2ValueDisplay', state.stripY2, 1);
-}
 
-function syncSectorDisplays() {
-    setFixedText('sectorAngle1ValueDisplay', state.sectorAngle1, 0);
-    setFixedText('sectorAngle2ValueDisplay', state.sectorAngle2, 0);
-    setFixedText('sectorRMinValueDisplay', state.sectorRMin, 1);
-    setFixedText('sectorRMaxValueDisplay', state.sectorRMax, 1);
-}
 
 function syncPolynomialDisplays() {
     setText('polynomialNValueDisplay', state.polynomialN);
@@ -486,24 +471,19 @@ function syncComplexParameterControls() {
     const isLine = shape === 'line';
     const isCircle = shape === 'circle';
     const isEllipse = shape === 'ellipse';
-    const isHyperbola = shape === 'hyperbola';
     const isImage = shape === 'image';
     const isVideo = shape === 'video';
-    const showCommonParams = isLine || isCircle || isEllipse || isHyperbola;
+    const showCommonParams = isLine || isCircle || isEllipse;
     const showMediaCenterParams = isImage || isVideo;
-    const showShapeSpecificSliders = isCircle || isEllipse || isHyperbola;
+    const showShapeSpecificSliders = isCircle || isEllipse;
     const isMobiusFunc = activeFunctions.has('mobius');
     const isPolyFunc = activeFunctions.has('polynomial');
     const isPowerFunc = activeFunctions.has('power');
-    const isStripH = shape === 'strip_horizontal';
-    const isSectorA = shape === 'sector_angular';
 
     setHidden('commonParamsSliders', !(showCommonParams || showMediaCenterParams));
     setHidden('mobiusParamsSliders', !isMobiusFunc);
     setHidden('polynomialParamsSliders', !isPolyFunc);
     setHidden('fractionalPowerParamsSliders', !isPowerFunc);
-    setHidden('stripHorizontalParamsSliders', !isStripH);
-    setHidden('sectorAngularParamsSliders', !isSectorA);
     setHidden('imageUploadControls', !isImage);
     setHidden('videoUploadControls', !isVideo);
 
@@ -517,14 +497,6 @@ function syncComplexParameterControls() {
 
     if (isMobiusFunc) {
         syncMobiusDisplays();
-    }
-
-    if (isStripH) {
-        syncStripDisplays();
-    }
-
-    if (isSectorA) {
-        syncSectorDisplays();
     }
 
     if (isPolyFunc) {
@@ -1252,7 +1224,6 @@ function syncRiemannSurfaceControls() {
 
 function syncDomainColoringControls() {
     setHidden('domainColoringOptionsDiv', !state.domainColoringEnabled);
-    setHidden('riemannSphereDomainColoringOptions', !state.domainColoringEnabled);
     setHidden('orbitColoringModeGroup', !(state.domainColoringEnabled && state.chainingEnabled));
 
     const paletteCirclesContainer = typeof document !== 'undefined'
@@ -1265,8 +1236,7 @@ function syncDomainColoringControls() {
 
     for (const selector of [
         control('domainPaletteSelect'),
-        control('riemannSurfacePaletteSelect'),
-        control('riemannSpherePaletteSelect')
+        control('riemannSurfacePaletteSelect')
     ]) {
         if (selector) {
             selector.value = state.domainPalette || 'analytic-base';
