@@ -1148,13 +1148,14 @@ function renderSpecialWPlaneMode() {
     renderFirstSignalMode(W_SIGNAL_RENDERERS, wCtx, wPlaneParams, 'w');
 }
 
-function renderRiemannSurfaceIfEnabled(index, map) {
+function renderRiemannSurfaceIfEnabled(index, map, enabled) {
     if (!state.riemannSurfaceEnabled) {
         hideRiemannSurface(wCanvas);
         return false;
     }
 
     hideThreeContainer();
+    if (!enabled) return true;
 
     const stage = state.chainingEnabled && state.chainCount > 25
         ? state.chainCount
@@ -1408,8 +1409,8 @@ function renderWCommonOverlays(index, map, isRiemannW) {
     }
 }
 
-function renderNormalWPlane(index, map) {
-    if (renderRiemannSurfaceIfEnabled(index, map)) {
+function renderNormalWPlane(index, map, options) {
+    if (renderRiemannSurfaceIfEnabled(index, map, options.renderRiemannSurface !== false)) {
         return;
     }
 
@@ -1437,7 +1438,7 @@ function renderNormalWPlane(index, map) {
     renderWCommonOverlays(index, map, isRiemannW);
 }
 
-function _renderSingleWPlaneMode(index, curFunc, isSpecialMode) {
+function _renderSingleWPlaneMode(index, curFunc, isSpecialMode, options) {
     withWPlaneScope(index, () => {
         if (!wCtx || !wPlaneParams) {
             return;
@@ -1448,11 +1449,11 @@ function _renderSingleWPlaneMode(index, curFunc, isSpecialMode) {
             return;
         }
 
-        renderNormalWPlane(index, curFunc);
+        renderNormalWPlane(index, curFunc, options);
     });
 }
 
-export function drawWPlaneContent() {
+export function drawWPlaneContent(options = {}) {
     syncRenderContext();
     context.riemannSurfaceContourPipeline = null;
 
@@ -1461,11 +1462,11 @@ export function drawWPlaneContent() {
     }
 
     if (state.fourierModeEnabled || state.laplaceModeEnabled) {
-        _renderSingleWPlaneMode(0, null, true);
+        _renderSingleWPlaneMode(0, null, true, options);
         return;
     }
 
     for (const [index, transform] of iterWPlaneTransforms()) {
-        _renderSingleWPlaneMode(index, transform, false);
+        _renderSingleWPlaneMode(index, transform, false, options);
     }
 }

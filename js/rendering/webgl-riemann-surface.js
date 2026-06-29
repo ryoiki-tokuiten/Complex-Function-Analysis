@@ -1441,6 +1441,11 @@ function collectUniformLocations(gl, program, appState) {
 
 function rebuildProgram(renderer, signature = getProgramSignature(state)) {
   const { gl } = renderer;
+  if (renderer.contextLost || gl.isContextLost?.()) {
+    renderer.contextLost = true;
+    return false;
+  }
+
   const program = createWebGLProgramShared(
     gl,
     buildVertexShader(state, signature),
@@ -1448,7 +1453,6 @@ function rebuildProgram(renderer, signature = getProgramSignature(state)) {
   );
 
   if (!program) {
-    renderer.failureReason = 'shader compilation failed';
     return false;
   }
 
@@ -1460,7 +1464,6 @@ function rebuildProgram(renderer, signature = getProgramSignature(state)) {
   const usage = PROGRAM_SIGNATURE_BY_STATE.get(state);
   renderer.formulaUsesPolynomial = Boolean(usage && usage.usesPolynomial);
   renderer.formulaUsesMobius = Boolean(usage && usage.usesMobius);
-  renderer.failureReason = '';
   renderer.forceUniformRefresh = true;
   renderer.modelViewDirty = true;
   renderer.projectionDirty = true;
@@ -1532,6 +1535,54 @@ function installInteraction(renderer) {
   );
 
   renderer.disposeInteraction = () => {
+    while (disposers.length) disposers.pop()();
+  };
+}
+
+function resetRendererGpuState(renderer) {
+  renderer.meshCache.clear();
+  Object.assign(renderer, {
+    program: null,
+    locations: null,
+    mesh: null,
+    drawStateConfigured: false,
+    activeProgram: null,
+    boundGridMesh: null,
+    boundGridProgram: null,
+    matrixProgram: null,
+    projectionProgram: null,
+    programSignature: null,
+    forceUniformRefresh: true,
+    modelViewDirty: true,
+    projectionDirty: true
+  });
+}
+
+function installContextRecovery(renderer) {
+  const disposers = [];
+  disposers.push(
+    addDisposableListener(renderer.canvas, 'webglcontextlost', event => {
+      event.preventDefault();
+      renderer.contextLost = true;
+      hideRenderer(renderer);
+    }),
+    addDisposableListener(renderer.canvas, 'webglcontextrestored', () => {
+      renderer.contextLost = false;
+      renderer.gl.getExtension('OES_standard_derivatives');
+      renderer.uint32ElementIndices = Boolean(renderer.gl.getExtension('OES_element_index_uint'));
+      const backendInfo = getWebGLBackendInfoShared(renderer.gl);
+      renderer.backendLabel = backendInfo.unmaskedRenderer || backendInfo.renderer || 'WebGL';
+      resetRendererGpuState(renderer);
+      if (state.riemannSurfaceEnabled && renderer.lastOptions) {
+        showRenderer(renderer);
+        if (!drawRenderer(renderer)) hideRenderer(renderer);
+      }
+    })
+  );
+
+  const disposeInteraction = renderer.disposeInteraction;
+  renderer.disposeInteraction = () => {
+    disposeInteraction?.();
     while (disposers.length) disposers.pop()();
   };
 }
@@ -1898,6 +1949,10 @@ function drawSurfaceSheet(renderer, branchIndex, sheetIndex, tintStep, cutWidth,
 
 function prepareRendererFrame(renderer, options, signature = getProgramSignature(state)) {
   if (!renderer || !options || !renderer.visible) return false;
+  if (renderer.contextLost || renderer.gl.isContextLost?.()) {
+    renderer.contextLost = true;
+    return false;
+  }
   renderer.lastOptions = options;
 
   return resizeRenderer(renderer) && ensureCurrentProgram(renderer, signature) && ensureMesh(renderer);
@@ -2085,15 +2140,16 @@ class RiemannSurfaceRendererFactory {
       lastPointerX: 0,
       lastPointerY: 0,
       lastOptions: null,
-      backendInfo: getWebGLBackendInfoShared(gl),
       uint32ElementIndices: Boolean(gl.getExtension('OES_element_index_uint')),
-      failureReason: '',
+      contextLost: false,
       disposeInteraction: null
     };
 
-    renderer.backendLabel = renderer.backendInfo.unmaskedRenderer || renderer.backendInfo.renderer || 'WebGL';
+    const backendInfo = getWebGLBackendInfoShared(gl);
+    renderer.backendLabel = backendInfo.unmaskedRenderer || backendInfo.renderer || 'WebGL';
 
     installInteraction(renderer);
+    installContextRecovery(renderer);
 
     if (!rebuildProgram(renderer)) {
       renderer.disposeInteraction();

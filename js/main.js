@@ -21,6 +21,47 @@ import {
 } from './rendering/draw-dynamic-plotting.js';
 
 const { controls } = context;
+const SURFACE_REDRAW_DELAY_MS = 90;
+const SURFACE_REDRAW_MAX_WAIT_MS = 240;
+let surfaceRedrawTimer = null;
+let surfaceRedrawFrame = null;
+let surfaceRedrawFirstRequestTime = 0;
+
+function runSurfaceRedraw() {
+    surfaceRedrawFrame = null;
+    surfaceRedrawFirstRequestTime = 0;
+    try {
+        if (state.riemannSurfaceEnabled && !state.realPlotsEnabled) {
+            drawWPlaneContent({ renderRiemannSurface: true });
+        }
+        if (state.realPlotsEnabled) drawRealPlot();
+        if (state.show2DContourPlot && (state.realPlotsEnabled || state.riemannSurfaceEnabled)) {
+            draw2DContourPlot(controls.contour2DCanvas);
+        }
+    } catch (error) {
+        console.error("Error during deferred surface redraw:", error);
+    }
+}
+
+function requestSurfaceRedraw() {
+    if (!state.realPlotsEnabled && !state.riemannSurfaceEnabled) return;
+
+    const now = typeof performance !== 'undefined' ? performance.now() : Date.now();
+    if (!surfaceRedrawFirstRequestTime) surfaceRedrawFirstRequestTime = now;
+    if (surfaceRedrawTimer) clearTimeout(surfaceRedrawTimer);
+    if (surfaceRedrawFrame) {
+        cancelAnimationFrame(surfaceRedrawFrame);
+        surfaceRedrawFrame = null;
+    }
+
+    const delay = now - surfaceRedrawFirstRequestTime >= SURFACE_REDRAW_MAX_WAIT_MS
+        ? 0
+        : SURFACE_REDRAW_DELAY_MS;
+    surfaceRedrawTimer = setTimeout(() => {
+        surfaceRedrawTimer = null;
+        surfaceRedrawFrame = requestAnimationFrame(runSurfaceRedraw);
+    }, delay);
+}
 
 function syncLaplaceSurfaceColumn() {
     const column = controls.laplace3DColumn;
@@ -95,7 +136,7 @@ export function requestRedrawAll() {
 
             if (!state.realPlotsEnabled) {
                 drawZPlaneContent();
-                drawWPlaneContent();
+                drawWPlaneContent({ renderRiemannSurface: !state.riemannSurfaceEnabled });
             }
             updateTitlesAndGlobalUI();
 
@@ -105,13 +146,7 @@ export function requestRedrawAll() {
             }
 
             syncRealPlotsColumn();
-            if (state.realPlotsEnabled && typeof drawRealPlot === 'function') {
-                drawRealPlot();
-            }
-
-            if (state.show2DContourPlot && (state.realPlotsEnabled || state.riemannSurfaceEnabled)) {
-                draw2DContourPlot(controls.contour2DCanvas);
-            }
+            requestSurfaceRedraw();
 
             context.domainColoringDirty = context.domainColoringDirtyQueued;
             context.redrawRequest = null;

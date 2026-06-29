@@ -134,12 +134,15 @@ bool evaluateInverseFunction(vec2 w, float functionId, vec2 mA, vec2 mB, vec2 mC
 
 
 export function createWebGLShaderShared(gl, shaderType, source) {
+    if (gl.isContextLost?.()) return null;
     const shader = gl.createShader(shaderType);
     if (!shader) return null;
     gl.shaderSource(shader, source);
     gl.compileShader(shader);
     if (!gl.getShaderParameter(shader, gl.COMPILE_STATUS)) {
-        console.warn('WebGL shader compile error:', gl.getShaderInfoLog(shader));
+        if (!gl.isContextLost?.()) {
+            console.warn('WebGL shader compile error:', gl.getShaderInfoLog(shader));
+        }
         gl.deleteShader(shader);
         return null;
     }
@@ -147,6 +150,7 @@ export function createWebGLShaderShared(gl, shaderType, source) {
 }
 
 export function createWebGLProgramShared(gl, vertexSource, fragmentSource) {
+    if (gl.isContextLost?.()) return null;
     const vertexShader = createWebGLShaderShared(gl, gl.VERTEX_SHADER, vertexSource);
     const fragmentShader = createWebGLShaderShared(gl, gl.FRAGMENT_SHADER, fragmentSource);
     if (!vertexShader || !fragmentShader) {
@@ -170,7 +174,9 @@ export function createWebGLProgramShared(gl, vertexSource, fragmentSource) {
     gl.deleteShader(fragmentShader);
 
     if (!gl.getProgramParameter(program, gl.LINK_STATUS)) {
-        console.warn('WebGL program link error:', gl.getProgramInfoLog(program));
+        if (!gl.isContextLost?.()) {
+            console.warn('WebGL program link error:', gl.getProgramInfoLog(program));
+        }
         gl.deleteProgram(program);
         return null;
     }

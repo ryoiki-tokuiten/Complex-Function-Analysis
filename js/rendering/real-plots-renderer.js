@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { state, zPlaneParams } from '../store/state.js';
-import { getChainedTransformFunction } from '../math-utils.js';
+import { buildMappedTransformProfileKey, getChainedTransformFunction } from '../math-utils.js';
 import { compileExpression } from '../math/expression/evaluator.js';
 import { POLE_MAGNITUDE_THRESHOLD } from '../constants/numerical.js';
 
@@ -495,6 +495,33 @@ function outputAxisLabel(component) {
     if (component === 'imag') return 'z = Im(f)';
     if (component === 'magnitude') return 'z = |f|';
     return 'z = Re(f)';
+}
+
+function realPlotSurfaceKey() {
+    const xRange = zPlaneParams.currentVisXRange || [];
+    const yRange = zPlaneParams.currentVisYRange || [];
+    return [
+        buildMappedTransformProfileKey(state.currentFunction),
+        buildMappedTransformProfileKey('mobius'),
+        buildMappedTransformProfileKey('polynomial'),
+        state.chainingEnabled ? 1 : 0,
+        state.chainCount,
+        state.chainingMode,
+        state.taylorSeriesEnabled ? 1 : 0,
+        state.taylorSeriesOrder,
+        state.taylorSeriesCenter?.re,
+        state.taylorSeriesCenter?.im,
+        state.realPlotsInputExpr,
+        state.realPlotsImagExpr,
+        state.realPlotsOutputComponent,
+        state.realPlotsPalette,
+        state.realPlotsColorMode,
+        state.realPlotsHeightScale,
+        xRange[0],
+        xRange[1],
+        yRange[0],
+        yRange[1]
+    ].join('|');
 }
 
 function isScalarInputType(type) {
@@ -1047,7 +1074,7 @@ class RealPlots3DRenderer {
         this.render();
     }
 
-    updateSurface(transformFunc) {
+    updateSurface(transformFunc, surfaceKey) {
         if (state.realPlotsCameraNeedsReset) {
             this.camera.position.x -= this.controls.target.x;
             this.camera.position.z -= this.controls.target.z;
@@ -1061,9 +1088,15 @@ class RealPlots3DRenderer {
         store.contourUniforms.uContourInterval.value = state.contourInterval !== undefined ? +state.contourInterval : 0.5;
         store.contourUniforms.uContourThickness.value = state.contourThickness !== undefined ? +state.contourThickness : 1.5;
 
+        if (surfaceKey && surfaceKey === this.surfaceKey) {
+            this.render();
+            return;
+        }
+
         this.#syncOutputLabel();
         this.#syncCoordinateLabels();
         this.#sampleSurface(transformFunc);
+        this.surfaceKey = surfaceKey;
         this.surfaceStore.markDirty();
         this.render();
     }
@@ -1133,7 +1166,7 @@ export function drawRealPlot() {
     }
 
     const transformFunc = getChainedTransformFunction(state.currentFunction);
-    active3DRenderer?.updateSurface(transformFunc);
+    active3DRenderer?.updateSurface(transformFunc, realPlotSurfaceKey());
 }
 
 export function disposeRealPlotsRenderer() {
