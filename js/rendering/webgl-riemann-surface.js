@@ -33,11 +33,11 @@ const LIMITS = Object.freeze({
   maxStage: 512,
   minResolution: 42,
   // WebGL1 UINT16 element indices top out at a 254x254 grid; renderers with
-  // OES_element_index_uint lift the surface to a much denser 510x510 lattice.
-  maxResolution: 510,
+  // OES_element_index_uint lift the surface to a much denser 1024x1024 lattice.
+  maxResolution: 1024,
   uint16MaxResolution: 254,
-  resolutionBase: 192,
-  resolutionScale: 10,
+  resolutionBase: 256,
+  resolutionScale: 16,
   minDistance: 0.001,
   maxDistance: 100,
   maxPixelRatio: 4,
@@ -138,9 +138,10 @@ const GRID_DATA_CACHE = new Map();
 // Shader libraries are pure for a program signature. Caching avoids compiling vertex and fragment
 // shaders from two independently regenerated copies of the same math code.
 const SHADER_LIBRARY_CACHE = new Map();
-const SHADER_LIBRARY_CACHE_LIMIT = 32;
+const SHADER_LIBRARY_CACHE_LIMIT = 256;
 
 const EMPTY_ARRAY = Object.freeze([]);
+const OBJECT_HAS_OWN = Object.prototype.hasOwnProperty;
 const ZERO_COMPLEX = Object.freeze({ re: 0, im: 0 });
 const UINT16_INDEX_LIMIT = 0xffff;
 
@@ -217,7 +218,7 @@ function finiteInteger(value, fallback = 0) {
 }
 
 function tableValue(table, key, fallback) {
-  return Object.prototype.hasOwnProperty.call(table, key) ? table[key] : fallback;
+  return OBJECT_HAS_OWN.call(table, key) ? table[key] : fallback;
 }
 
 function getChainModeId(mode) {
@@ -720,15 +721,10 @@ const VERTEX_SURFACE_GLSL = Object.freeze({
   float nz = mix(-1.0, 1.0, a_grid.y);
   vec3 localPosition = vec3(nx, height, nz);
 
-  vec2 mappedX = vec2(0.0);
-  vec2 mappedY = vec2(0.0);
-  float heightX = height;
-  float heightY = height;
-  bool okX = mapSurfacePoint(z + vec2(u_domainStep.x, 0.0), mappedX, heightX);
-  bool okY = mapSurfacePoint(z + vec2(0.0, u_domainStep.y), mappedY, heightY);
-  vec3 tangentX = vec3(u_normalizedStep.x, okX ? heightX - height : 0.0, 0.0);
-  vec3 tangentY = vec3(0.0, okY ? heightY - height : 0.0, u_normalizedStep.y);
-  vec3 localNormal = normalize(cross(tangentY, tangentX));
+  // Normal reconstruction is deferred to fragment derivatives. This removes
+  // two extra complex-surface evaluations per vertex while preserving a stable
+  // orientation vector for face-forwarding the geometric normal.
+  vec3 localNormal = vec3(0.0, 1.0, 0.0);
 
   vec4 viewPosition = u_modelView * vec4(localPosition, 1.0);
   v_viewPosition = viewPosition.xyz;
@@ -747,7 +743,7 @@ const FRAGMENT_GLSL = Object.freeze({
     source: `vec3 highQualityNormal(vec3 interpolatedNormal, vec3 viewPosition) {
   vec3 geometricNormal = normalize(cross(dFdx(viewPosition), dFdy(viewPosition)));
   if (dot(geometricNormal, interpolatedNormal) < 0.0) geometricNormal = -geometricNormal;
-  return normalize(mix(interpolatedNormal, geometricNormal, 0.72));
+  return geometricNormal;
 }`
   },
 
@@ -1002,7 +998,7 @@ function buildCachedRiemannSurfaceMathLibrary(appState, signature) {
 }
 
 export function buildRiemannSurfaceMathLibrary(appState) {
-  return buildRiemannSurfaceMathLibraryUncached(appState);
+  return buildCachedRiemannSurfaceMathLibrary(appState, getProgramSignature(appState));
 }
 
 function buildVertexShader(appState, signature = getProgramSignature(appState)) {
@@ -1104,15 +1100,21 @@ function writeProjectionMatrix(out, canvas) {
 
 function createGridVertices(resolution) {
   const side = resolution + 1;
-  const vertices = new Float32Array(side * side * 2);
-  let offset = 0;
+  const rowLength = side * 2;
+  const vertices = new Float32Array(side * rowLength);
+  const rowTemplate = new Float32Array(rowLength);
+  const invResolution = 1 / resolution;
 
-  for (let y = 0; y <= resolution; y++) {
-    const v = y / resolution;
+  for (let x = 0, offset = 0; x <= resolution; x++) {
+    rowTemplate[offset] = x * invResolution;
+    offset += 2;
+  }
 
-    for (let x = 0; x <= resolution; x++) {
-      vertices[offset++] = x / resolution;
-      vertices[offset++] = v;
+  for (let y = 0, rowOffset = 0; y <= resolution; y++, rowOffset += rowLength) {
+    vertices.set(rowTemplate, rowOffset);
+    const v = y * invResolution;
+    for (let offset = rowOffset + 1, end = rowOffset + rowLength; offset < end; offset += 2) {
+      vertices[offset] = v;
     }
   }
 
@@ -1123,18 +1125,21 @@ function createGridTriangles(resolution) {
   const side = resolution + 1;
   const triangles = new (gridIndexArrayType(resolution))(resolution * resolution * 6);
   let offset = 0;
+  let rowTop = 0;
 
-  for (let y = 0; y < resolution; y++) {
-    for (let x = 0; x < resolution; x++) {
-      const topLeft = y * side + x;
-      const bottomLeft = topLeft + side;
-
-      triangles[offset++] = topLeft;
-      triangles[offset++] = bottomLeft;
-      triangles[offset++] = topLeft + 1;
-      triangles[offset++] = topLeft + 1;
-      triangles[offset++] = bottomLeft;
-      triangles[offset++] = bottomLeft + 1;
+  for (let y = 0; y < resolution; y++, rowTop += side) {
+    let topLeft = rowTop;
+    let bottomLeft = rowTop + side;
+    for (let x = 0; x < resolution; x++, topLeft++, bottomLeft++) {
+      const topRight = topLeft + 1;
+      const bottomRight = bottomLeft + 1;
+      triangles[offset] = topLeft;
+      triangles[offset + 1] = bottomLeft;
+      triangles[offset + 2] = topRight;
+      triangles[offset + 3] = topRight;
+      triangles[offset + 4] = bottomLeft;
+      triangles[offset + 5] = bottomRight;
+      offset += 6;
     }
   }
 
@@ -1150,17 +1155,20 @@ function createGridLines(resolution) {
   let offset = 0;
 
   for (let x = 0; x <= resolution; x += stride) {
-    for (let y = 0; y < resolution; y++) {
-      indices[offset++] = y * side + x;
-      indices[offset++] = (y + 1) * side + x;
+    let top = x;
+    for (let y = 0; y < resolution; y++, top += side) {
+      indices[offset] = top;
+      indices[offset + 1] = top + side;
+      offset += 2;
     }
   }
 
-  for (let y = 0; y <= resolution; y += stride) {
-    const row = y * side;
+  for (let y = 0, row = 0; y <= resolution; y += stride, row = y * side) {
     for (let x = 0; x < resolution; x++) {
-      indices[offset++] = row + x;
-      indices[offset++] = row + x + 1;
+      const left = row + x;
+      indices[offset] = left;
+      indices[offset + 1] = left + 1;
+      offset += 2;
     }
   }
 
@@ -1269,16 +1277,26 @@ function formulaRefsFunction(algebraicTerms, dynamicTerms, algebraicZ, functionN
 
 function algebraicStructureSignature(algebraicTerms) {
   const terms = Array.isArray(algebraicTerms) ? algebraicTerms : EMPTY_ARRAY;
-  return JSON.stringify(terms.map(term => {
+  let signature = '[';
+
+  for (let termIndex = 0; termIndex < terms.length; termIndex++) {
+    if (termIndex) signature += ',';
+    signature += '{"factors":[';
+
+    const term = terms[termIndex];
     const factors = Array.isArray(term && term.factors) ? term.factors : EMPTY_ARRAY;
-    return {
-      factors: factors.map(factor => (
-        factor && factor.func && factor.func !== 'none'
-          ? { active: true }
-          : { func: 'none' }
-      ))
-    };
-  }));
+    for (let factorIndex = 0; factorIndex < factors.length; factorIndex++) {
+      if (factorIndex) signature += ',';
+      const factor = factors[factorIndex];
+      signature += factor && factor.func && factor.func !== 'none'
+        ? '{"active":true}'
+        : '{"func":"none"}';
+    }
+
+    signature += ']}';
+  }
+
+  return signature + ']';
 }
 
 function getProgramSignature(appState) {
@@ -1461,9 +1479,12 @@ function rebuildProgram(renderer, signature = getProgramSignature(state)) {
   renderer.program = program;
   renderer.locations = collectUniformLocations(gl, program, state);
   renderer.programSignature = signature;
-  const usage = PROGRAM_SIGNATURE_BY_STATE.get(state);
-  renderer.formulaUsesPolynomial = Boolean(usage && usage.usesPolynomial);
-  renderer.formulaUsesMobius = Boolean(usage && usage.usesMobius);
+  // Uniform buffers are always resident in the packed shader interface.
+  // Uploading the small polynomial/Möbius blocks unconditionally avoids an
+  // O(formula-size) dependency scan on every animation frame and remains safe
+  // when formulas mutate in place without forcing a program rebuild.
+  renderer.formulaUsesPolynomial = true;
+  renderer.formulaUsesMobius = true;
   renderer.forceUniformRefresh = true;
   renderer.modelViewDirty = true;
   renderer.projectionDirty = true;
@@ -1778,7 +1799,6 @@ function setCommonUniforms(renderer, options) {
   gl.uniform4f(locations.uViewBounds, xMin, xMax, yMin, yMax);
   uploadMatrices(renderer);
 
-  updateFormulaUniformUsage(renderer, state);
   const polyDegree = uploadComplexFunctionUniforms(gl, locations, state, renderer);
   uploadAlgebraicUniforms(gl, locations, state);
   setTaylorUniforms(renderer);
@@ -1865,7 +1885,7 @@ function ensureCurrentProgram(renderer, signature = getProgramSignature(state)) 
  * after first use instead of deleting and reallocating three large WebGL buffers.
  */
 function ensureMesh(renderer) {
-  const resolution = normalizeRendererResolution(state.gridDensity, renderer.uint32ElementIndices);
+  const resolution = normalizeRendererResolution(state.riemannSurfaceResolution, renderer.uint32ElementIndices);
 
   if (renderer.mesh && renderer.mesh.resolution === resolution) {
     return true;
@@ -2132,8 +2152,8 @@ class RiemannSurfaceRendererFactory {
       previousTaylorOrder: -1,
       currentTaylorUse: 0,
       currentTaylorOrder: 0,
-      formulaUsesPolynomial: false,
-      formulaUsesMobius: false,
+      formulaUsesPolynomial: true,
+      formulaUsesMobius: true,
       forceUniformRefresh: true,
       backendLabel: '',
       dragging: false,

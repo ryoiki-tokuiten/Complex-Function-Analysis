@@ -99,6 +99,7 @@ const DOMAIN_DIRTY_STATE_KEYS = new Set([
 
 const BASIC_SLIDER_BINDINGS = [
     ['gridDensitySlider', 'gridDensity', parseInteger],
+    ['riemannSurfaceResolutionSlider', 'riemannSurfaceResolution', parseInteger],
     ['neighborhoodSizeSlider', 'probeNeighborhoodSize'],
     ['vectorFieldScaleSlider', 'vectorFieldScale'],
     ['vectorArrowThicknessSlider', 'vectorArrowThickness'],

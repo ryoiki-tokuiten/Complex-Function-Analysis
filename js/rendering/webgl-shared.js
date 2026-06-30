@@ -297,6 +297,51 @@ export function generateDirectEvaluationGLSL(funcName, valVar, outVar, isSheet =
     }
 }
 
+
+const ALGEBRAIC_GLSL_MACROS = `#define EVAL_COS(V,O) O = complexCos(V); if (!isFiniteVec2Compat(O)) return false;
+#define EVAL_SIN(V,O) O = complexSin(V); if (!isFiniteVec2Compat(O)) return false;
+#define EVAL_TAN(V,O) { vec2 den = complexCos(V); if (dot(den, den) < 1.0e-18) return false; O = complexDiv(complexSin(V), den); if (!isFiniteVec2Compat(O)) return false; }
+#define EVAL_SEC(V,O) { vec2 den = complexCos(V); if (dot(den, den) < 1.0e-18) return false; O = complexDiv(vec2(1.0, 0.0), den); if (!isFiniteVec2Compat(O)) return false; }
+#define EVAL_EXP(V,O) O = complexExp(V); if (!isFiniteVec2Compat(O)) return false;
+#define EVAL_LN(V,O) if (dot(V, V) < 1.0e-20) return false; O = complexLn(V); if (!isFiniteVec2Compat(O)) return false;
+#define EVAL_RECIP(V,O) if (dot(V, V) < 1.0e-18) return false; O = complexDiv(vec2(1.0, 0.0), V); if (!isFiniteVec2Compat(O)) return false;
+#define EVAL_MOBIUS(V,O) { vec2 num = complexAdd(complexMul(mA, V), mB); vec2 den = complexAdd(complexMul(mC, V), mD); if (dot(den, den) < 1.0e-18) return false; O = complexDiv(num, den); if (!isFiniteVec2Compat(O)) return false; }
+#define EVAL_POLY(V,O) O = evalPolynomial(V, polyDeg, polyCoeffs); if (!isFiniteVec2Compat(O)) return false;
+#define EVAL_POINCARE(V,O) { if (V.y <= 1.0e-9) return false; float rootY = sqrt(max(V.y, 0.0)); if (!isFiniteFloatCompat(rootY) || rootY <= 1.0e-8) return false; O = vec2(V.x / rootY, rootY); if (!isFiniteVec2Compat(O)) return false; }
+#define EVAL_ZETA(V,O) if (!evaluateZeta(V, zetaCont, zetaRefl, O)) return false;
+#define EVAL_SINH(V,O) O = complexSinh(V); if (!isFiniteVec2Compat(O)) return false;
+#define EVAL_COSH(V,O) O = complexCosh(V); if (!isFiniteVec2Compat(O)) return false;
+#define EVAL_TANH(V,O) O = complexTanh(V); if (!isFiniteVec2Compat(O)) return false;
+#define EVAL_POWER(V,O) { if (dot(V, V) < 1.0e-20) { O = vec2(0.0); } else { vec2 lnZ = complexLn(V); O = complexExp(vec2(fracPower * lnZ.x, fracPower * lnZ.y)); } if (!isFiniteVec2Compat(O)) return false; }
+#define ALG_FACTOR_BEGIN { vec2 argZ = z; vec2 temp = vec2(0.0);
+#define ALG_FACTOR_POWER(P) { float fPower = P; if (abs(fPower - 1.0) >= 1.0e-9) { if (dot(argZ, argZ) < 1.0e-20) { argZ = vec2(0.0); } else { vec2 lnZ = complexLn(argZ); argZ = complexExp(vec2(fPower * lnZ.x, fPower * lnZ.y)); } } }
+#define ALG_FACTOR_RECIP if (dot(argZ, argZ) < 1.0e-18) return false; argZ = complexDiv(vec2(1.0, 0.0), argZ);
+#define ALG_FACTOR_LOG if (dot(argZ, argZ) < 1.0e-20) return false; argZ = complexLn(argZ);
+#define ALG_FACTOR_EXP argZ = complexExp(argZ);
+#define ALG_FACTOR_END termVal = complexMul(termVal, argZ); }
+`;
+
+function generateAlgebraicDirectEvaluationGLSL(funcName, valVar, outVar) {
+    switch (funcName) {
+        case 'cos': return `        EVAL_COS(${valVar}, ${outVar})\n`;
+        case 'sin': return `        EVAL_SIN(${valVar}, ${outVar})\n`;
+        case 'tan': return `        EVAL_TAN(${valVar}, ${outVar})\n`;
+        case 'sec': return `        EVAL_SEC(${valVar}, ${outVar})\n`;
+        case 'exp': return `        EVAL_EXP(${valVar}, ${outVar})\n`;
+        case 'ln': return `        EVAL_LN(${valVar}, ${outVar})\n`;
+        case 'reciprocal': return `        EVAL_RECIP(${valVar}, ${outVar})\n`;
+        case 'mobius': return `        EVAL_MOBIUS(${valVar}, ${outVar})\n`;
+        case 'polynomial': return `        EVAL_POLY(${valVar}, ${outVar})\n`;
+        case 'poincare': return `        EVAL_POINCARE(${valVar}, ${outVar})\n`;
+        case 'zeta': return `        EVAL_ZETA(${valVar}, ${outVar})\n`;
+        case 'sinh': return `        EVAL_SINH(${valVar}, ${outVar})\n`;
+        case 'cosh': return `        EVAL_COSH(${valVar}, ${outVar})\n`;
+        case 'tanh': return `        EVAL_TANH(${valVar}, ${outVar})\n`;
+        case 'power': return `        EVAL_POWER(${valVar}, ${outVar})\n`;
+        default: return '';
+    }
+}
+
 export function getWebGLDomainColorFunctionIdShared(functionName, ignoreDynamic = false) {
     if (!ignoreDynamic && isDynamicAggregateGLSLActive(state)) return 17;
     switch (functionName) {
@@ -348,44 +393,122 @@ export function setComplexFunctionUniformsShared(gl, locs, state) {
     if (locs.uZetaRefl !== undefined && locs.uZetaRefl !== null) gl.uniform1f(locs.uZetaRefl, typeof ZETA_REFLECTION_POINT_RE !== 'undefined' ? ZETA_REFLECTION_POINT_RE : 0.5);
     if (locs.uFracPower !== undefined && locs.uFracPower !== null) gl.uniform1f(locs.uFracPower, state.fractionalPowerN !== undefined ? state.fractionalPowerN : 0.5);
 
-    if (locs.algebraicTerms) {
+    const algebraicLocs = locs.algebraicTerms;
+    if (algebraicLocs) {
         const terms = state.algebraicChainingTerms || [];
-        terms.forEach((term, termIndex) => {
-            const tLoc = locs.algebraicTerms[termIndex];
-            if (tLoc) {
-                if (tLoc.coeff !== undefined && tLoc.coeff !== null) {
-                    gl.uniform2f(tLoc.coeff, term.coeff?.re || 0, term.coeff?.im || 0);
-                }
-                const factors = term.factors || [];
-                factors.forEach((f, factorIndex) => {
-                    const fLoc = tLoc.factors?.[factorIndex];
-                    if (fLoc && fLoc.power !== undefined && fLoc.power !== null) {
-                        gl.uniform1f(fLoc.power, f.power !== undefined ? f.power : 1.0);
-                    }
-                });
+        for (let termIndex = 0; termIndex < terms.length; termIndex++) {
+            const term = terms[termIndex];
+            const tLoc = algebraicLocs[termIndex];
+            if (!tLoc) continue;
+            if (tLoc.coeff !== undefined && tLoc.coeff !== null) {
+                gl.uniform2f(tLoc.coeff, term?.coeff?.re || 0, term?.coeff?.im || 0);
             }
-        });
+            const factors = term?.factors || [];
+            const factorLocs = tLoc.factors;
+            if (!factorLocs) continue;
+            for (let factorIndex = 0; factorIndex < factors.length; factorIndex++) {
+                const fLoc = factorLocs[factorIndex];
+                if (fLoc && fLoc.power !== undefined && fLoc.power !== null) {
+                    const f = factors[factorIndex];
+                    gl.uniform1f(fLoc.power, f?.power !== undefined ? f.power : 1.0);
+                }
+            }
+        }
     }
 }
 
+const hasOwn = Object.prototype.hasOwnProperty;
+
 export function collectAlgebraicUniformLocationsShared(gl, program, appState, locs) {
     if (!appState) return;
-    locs.algebraicTerms = (appState.algebraicChainingTerms || []).map((term, termIndex) => {
-        return {
+    const terms = appState.algebraicChainingTerms || [];
+    const algebraicTerms = new Array(terms.length);
+    for (let termIndex = 0; termIndex < terms.length; termIndex++) {
+        const term = terms[termIndex];
+        const factors = (term && term.factors) || [];
+        const factorLocs = new Array(factors.length);
+        for (let factorIndex = 0; factorIndex < factors.length; factorIndex++) {
+            factorLocs[factorIndex] = {
+                power: gl.getUniformLocation(program, `u_algFactorPower_${termIndex}_${factorIndex}`)
+            };
+        }
+        algebraicTerms[termIndex] = {
             coeff: gl.getUniformLocation(program, `u_algTermCoeff_${termIndex}`),
-            factors: (term.factors || []).map((factor, factorIndex) => {
-                return {
-                    power: gl.getUniformLocation(program, `u_algFactorPower_${termIndex}_${factorIndex}`)
-                };
-            })
+            factors: factorLocs
         };
-    });
+    }
+    locs.algebraicTerms = algebraicTerms;
 }
 
 
+
+const algebraicSignatureMemo = new WeakMap();
+const appStateLibraryMemo = new WeakMap();
+const WEBGL_SHARED_LIBRARY_CACHE_LIMIT = 512;
+const webglSharedLibraryCache = new Map();
+
+function snapshotAlgebraicTerms(terms) {
+    const list = Array.isArray(terms) ? terms : [];
+    const snapshot = [list.length];
+    for (let termIndex = 0; termIndex < list.length; termIndex++) {
+        const termPresent = hasOwn.call(list, termIndex);
+        snapshot.push(termPresent);
+        if (!termPresent) continue;
+        const term = list[termIndex];
+        const factors = Array.isArray(term && term.factors) ? term.factors : [];
+        snapshot.push(factors.length);
+        for (let factorIndex = 0; factorIndex < factors.length; factorIndex++) {
+            const factorPresent = hasOwn.call(factors, factorIndex);
+            snapshot.push(factorPresent);
+            if (!factorPresent) continue;
+            const factor = factors[factorIndex];
+            const active = !!(factor && factor.func && factor.func !== 'none');
+            snapshot.push(active);
+            if (active) {
+                snapshot.push(factor.func, factor.chainedFunc, !!factor.reciprocal, !!factor.log, !!factor.exp);
+            }
+        }
+    }
+    return snapshot;
+}
+
+function algebraicSnapshotMatches(terms, snapshot) {
+    const list = Array.isArray(terms) ? terms : [];
+    if (!snapshot || snapshot[0] !== list.length) return false;
+    let cursor = 1;
+    for (let termIndex = 0; termIndex < list.length; termIndex++) {
+        const termPresent = hasOwn.call(list, termIndex);
+        if (snapshot[cursor++] !== termPresent) return false;
+        if (!termPresent) continue;
+        const term = list[termIndex];
+        const factors = Array.isArray(term && term.factors) ? term.factors : [];
+        if (snapshot[cursor++] !== factors.length) return false;
+        for (let factorIndex = 0; factorIndex < factors.length; factorIndex++) {
+            const factorPresent = hasOwn.call(factors, factorIndex);
+            if (snapshot[cursor++] !== factorPresent) return false;
+            if (!factorPresent) continue;
+            const factor = factors[factorIndex];
+            const active = !!(factor && factor.func && factor.func !== 'none');
+            if (snapshot[cursor++] !== active) return false;
+            if (active) {
+                if (snapshot[cursor++] !== factor.func) return false;
+                if (snapshot[cursor++] !== factor.chainedFunc) return false;
+                if (snapshot[cursor++] !== !!factor.reciprocal) return false;
+                if (snapshot[cursor++] !== !!factor.log) return false;
+                if (snapshot[cursor++] !== !!factor.exp) return false;
+            }
+        }
+    }
+    return cursor === snapshot.length;
+}
+
 export function getAlgebraicStructureSignatureShared(terms) {
     const list = Array.isArray(terms) ? terms : [];
-    return JSON.stringify(list.map(term => {
+    if (list.length) {
+        const memo = algebraicSignatureMemo.get(list);
+        if (memo && algebraicSnapshotMatches(list, memo.snapshot)) return memo.signature;
+    }
+    const signature = JSON.stringify(list.map(term => {
         const factors = Array.isArray(term && term.factors) ? term.factors : [];
         return {
             factors: factors.map(factor => (
@@ -401,18 +524,76 @@ export function getAlgebraicStructureSignatureShared(terms) {
             ))
         };
     }));
+    if (list.length) {
+        algebraicSignatureMemo.set(list, { signature, snapshot: snapshotAlgebraicTerms(list) });
+    }
+    return signature;
 }
 
-const WEBGL_SHARED_LIBRARY_CACHE_LIMIT = 512;
-const webglSharedLibraryCache = new Map();
+function snapshotDynamicTerms(terms) {
+    const list = Array.isArray(terms) ? terms : [];
+    const snapshot = new Array(list.length * 3 + 1);
+    snapshot[0] = list.length;
+    let cursor = 1;
+    for (let i = 0; i < list.length; i++) {
+        const present = hasOwn.call(list, i);
+        snapshot[cursor++] = present;
+        if (present) {
+            const term = list[i];
+            snapshot[cursor++] = term && term.func;
+            snapshot[cursor++] = term && term.scale;
+        } else {
+            snapshot[cursor++] = undefined;
+            snapshot[cursor++] = undefined;
+        }
+    }
+    return snapshot;
+}
 
-function getGLSLComplexMathLibraryCacheKey(appState) {
+function dynamicSnapshotMatches(terms, snapshot) {
+    const list = Array.isArray(terms) ? terms : [];
+    if (!snapshot || snapshot[0] !== list.length) return false;
+    let cursor = 1;
+    for (let i = 0; i < list.length; i++) {
+        const present = hasOwn.call(list, i);
+        if (snapshot[cursor++] !== present) return false;
+        if (present) {
+            const term = list[i];
+            if (snapshot[cursor++] !== (term && term.func)) return false;
+            if (snapshot[cursor++] !== (term && term.scale)) return false;
+        } else {
+            cursor += 2;
+        }
+    }
+    return true;
+}
+
+function appStateMemoMatches(appState, memo, dynamicActive, zExpr) {
+    return memo &&
+        memo.dynamicActive === dynamicActive &&
+        memo.zExpr === zExpr &&
+        dynamicSnapshotMatches(appState.dynamicAggregateTerms || [], memo.dynamicTerms) &&
+        algebraicSnapshotMatches(appState.algebraicChainingTerms, memo.algebraicTerms);
+}
+
+function rememberAppStateLibrary(appState, dynamicActive, zExpr, cacheKey, source) {
+    if (appState && (typeof appState === 'object' || typeof appState === 'function')) {
+        appStateLibraryMemo.set(appState, {
+            dynamicActive,
+            zExpr,
+            cacheKey,
+            source,
+            dynamicTerms: snapshotDynamicTerms(appState.dynamicAggregateTerms || []),
+            algebraicTerms: algebraicSignatureMemo.get(appState.algebraicChainingTerms)?.snapshot ?? snapshotAlgebraicTerms(appState.algebraicChainingTerms)
+        });
+    }
+}
+
+function getGLSLComplexMathLibraryCacheKey(appState, dynamicActive = isDynamicAggregateGLSLActive(appState), zExpr = appState?.algebraicChainingZExpr || 'z') {
     if (!appState) return '';
     try {
-        const dynamicActive = isDynamicAggregateGLSLActive(appState);
         const dynamicSig = dynamicActive ? (appState.dynamicAggregateTerms || []).map(t => `${t.func}:${t.scale}`).join('|') : '';
         const algebraicSig = getAlgebraicStructureSignatureShared(appState.algebraicChainingTerms);
-        const zExpr = appState.algebraicChainingZExpr || 'z';
         return `d:${dynamicActive ? 1 : 0}:${dynamicSig}|z:${zExpr}|a:${algebraicSig}`;
     } catch {
         return null;
@@ -433,20 +614,25 @@ function buildGLSLComplexMathLibraryUncached(appState) {
         : 'z';
 
     let uniformDecls = '';
-    if (appState && appState.algebraicChainingTerms) {
-        appState.algebraicChainingTerms.forEach((term, termIndex) => {
+    const algebraicTerms = appState && appState.algebraicChainingTerms;
+    if (algebraicTerms) {
+        for (let termIndex = 0; termIndex < algebraicTerms.length; termIndex++) {
+            if (!hasOwn.call(algebraicTerms, termIndex)) continue;
+            const term = algebraicTerms[termIndex];
             uniformDecls += `uniform vec2 u_algTermCoeff_${termIndex};\n`;
-            if (term.factors) {
-                term.factors.forEach((f, factorIndex) => {
-                    if (f.func && f.func !== 'none') {
-                        uniformDecls += `uniform float u_algFactorPower_${termIndex}_${factorIndex};\n`;
-                    }
-                });
+            const factors = term && term.factors;
+            if (!factors) continue;
+            for (let factorIndex = 0; factorIndex < factors.length; factorIndex++) {
+                if (!hasOwn.call(factors, factorIndex)) continue;
+                const f = factors[factorIndex];
+                if (f.func && f.func !== 'none') {
+                    uniformDecls += `uniform float u_algFactorPower_${termIndex}_${factorIndex};\n`;
+                }
             }
-        });
+        }
     }
 
-    let algStr = uniformDecls + `bool evaluateMappedValueBase(vec2 z, vec2 c, float isWPlane, float functionId, vec2 mA, vec2 mB, vec2 mC, vec2 mD, int polyDeg, vec2 polyCoeffs[11], float zetaCont, float zetaRefl, float fracPower, out vec2 mapped) {\n`;
+    let algStr = uniformDecls + ALGEBRAIC_GLSL_MACROS + `bool evaluateMappedValueBase(vec2 z, vec2 c, float isWPlane, float functionId, vec2 mA, vec2 mB, vec2 mC, vec2 mD, int polyDeg, vec2 polyCoeffs[11], float zetaCont, float zetaRefl, float fracPower, out vec2 mapped) {\n`;
     algStr += `  if (isWPlane > 0.5 || isWPlane < 0.0) { mapped = z; return isFiniteVec2Compat(mapped); }\n`;
     algStr += `  float fId = floor(functionId + 0.5);\n`;
     if (dynamic.source && !dynamic.error) {
@@ -460,59 +646,51 @@ function buildGLSLComplexMathLibraryUncached(appState) {
     }
     algStr += `    vec2 sum = vec2(0.0);\n`;
 
-    if (appState && appState.algebraicChainingTerms && appState.algebraicChainingTerms.length > 0) {
-        appState.algebraicChainingTerms.forEach((term, termIndex) => {
+    if (algebraicTerms && algebraicTerms.length > 0) {
+        for (let termIndex = 0; termIndex < algebraicTerms.length; termIndex++) {
+            if (!hasOwn.call(algebraicTerms, termIndex)) continue;
+            const term = algebraicTerms[termIndex];
             algStr += `    {\n`;
             algStr += `      vec2 termVal = u_algTermCoeff_${termIndex};\n`;
-            if (term.factors) {
-                term.factors.forEach((f, factorIndex) => {
-                    if (!f.func || f.func === 'none') return;
-                    algStr += `      {\n`;
-                    algStr += `        vec2 argZ = z;\n`;
-                    algStr += `        vec2 temp = vec2(0.0);\n`;
+            const factors = term && term.factors;
+            if (factors) {
+                for (let factorIndex = 0; factorIndex < factors.length; factorIndex++) {
+                    if (!hasOwn.call(factors, factorIndex)) continue;
+                    const f = factors[factorIndex];
+                    if (!f.func || f.func === 'none') continue;
+                    algStr += `      ALG_FACTOR_BEGIN\n`;
                     if (f.chainedFunc && f.chainedFunc !== 'none') {
                         if (f.chainedFunc === 'c') {
                             algStr += `        argZ = c;\n`;
                         } else {
-                            algStr += generateDirectEvaluationGLSL(f.chainedFunc, 'argZ', 'temp', false);
+                            algStr += generateAlgebraicDirectEvaluationGLSL(f.chainedFunc, 'argZ', 'temp');
                             algStr += `        argZ = temp;\n`;
                         }
                     }
                     if (f.func === 'c') {
                         algStr += `        argZ = c;\n`;
                     } else {
-                        algStr += generateDirectEvaluationGLSL(f.func, 'argZ', 'temp', false);
+                        algStr += generateAlgebraicDirectEvaluationGLSL(f.func, 'argZ', 'temp');
                         algStr += `        argZ = temp;\n`;
                     }
 
-                    algStr += `        float fPower = u_algFactorPower_${termIndex}_${factorIndex};\n`;
-                    algStr += `        if (abs(fPower - 1.0) >= 1.0e-9) {\n`;
-                    algStr += `          if (dot(argZ, argZ) < 1.0e-20) {\n`;
-                    algStr += `            argZ = vec2(0.0);\n`;
-                    algStr += `          } else {\n`;
-                    algStr += `            vec2 lnZ = complexLn(argZ);\n`;
-                    algStr += `            argZ = complexExp(vec2(fPower * lnZ.x, fPower * lnZ.y));\n`;
-                    algStr += `          }\n`;
-                    algStr += `        }\n`;
+                    algStr += `        ALG_FACTOR_POWER(u_algFactorPower_${termIndex}_${factorIndex})\n`;
 
                     if (f.reciprocal) {
-                        algStr += `        if (dot(argZ, argZ) < 1.0e-18) return false;\n`;
-                        algStr += `        argZ = complexDiv(vec2(1.0, 0.0), argZ);\n`;
+                        algStr += `        ALG_FACTOR_RECIP\n`;
                     }
                     if (f.log) {
-                        algStr += `        if (dot(argZ, argZ) < 1.0e-20) return false;\n`;
-                        algStr += `        argZ = complexLn(argZ);\n`;
+                        algStr += `        ALG_FACTOR_LOG\n`;
                     }
                     if (f.exp) {
-                        algStr += `        argZ = complexExp(argZ);\n`;
+                        algStr += `        ALG_FACTOR_EXP\n`;
                     }
-                    algStr += `        termVal = complexMul(termVal, argZ);\n`;
-                    algStr += `      }\n`;
-                });
+                    algStr += `        ALG_FACTOR_END\n`;
+                }
             }
             algStr += `      sum = complexAdd(sum, termVal);\n`;
             algStr += `    }\n`;
-        });
+        }
     }
 
     algStr += `    mapped = sum;\n`;
@@ -525,17 +703,38 @@ function buildGLSLComplexMathLibraryUncached(appState) {
 }
 
 export function getGLSLComplexMathLibrary(appState) {
-    const cacheKey = getGLSLComplexMathLibraryCacheKey(appState);
+    let dynamicActive = false;
+    let zExpr = 'z';
+
+    if (appState && (typeof appState === 'object' || typeof appState === 'function')) {
+        try {
+            dynamicActive = isDynamicAggregateGLSLActive(appState);
+            zExpr = appState.algebraicChainingZExpr || 'z';
+            const memo = appStateLibraryMemo.get(appState);
+            if (appStateMemoMatches(appState, memo, dynamicActive, zExpr)) {
+                return memo.source;
+            }
+        } catch {
+            // The legacy path handled malformed state by falling through to an uncached build.
+        }
+    }
+
+    const cacheKey = getGLSLComplexMathLibraryCacheKey(appState, dynamicActive, zExpr);
     if (cacheKey !== null && cacheKey !== '') {
         const cached = webglSharedLibraryCache.get(cacheKey);
-        if (cached !== undefined) return cached;
+        if (cached !== undefined) {
+            rememberAppStateLibrary(appState, dynamicActive, zExpr, cacheKey, cached);
+            return cached;
+        }
     }
+
     const source = buildGLSLComplexMathLibraryUncached(appState);
     if (cacheKey !== null && cacheKey !== '') {
         if (webglSharedLibraryCache.size >= WEBGL_SHARED_LIBRARY_CACHE_LIMIT) {
             webglSharedLibraryCache.clear();
         }
         webglSharedLibraryCache.set(cacheKey, source);
+        rememberAppStateLibrary(appState, dynamicActive, zExpr, cacheKey, source);
     }
     return source;
 }

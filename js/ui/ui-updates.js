@@ -115,6 +115,7 @@ const FUNCTION_ARGUMENT_HTML = Object.freeze({
 
 const NORMAL_MODE_VALUE_BINDINGS = Object.freeze([
     { display: 'gridDensityValueDisplay', key: 'gridDensity' },
+    { display: 'riemannSurfaceResolutionValueDisplay', key: 'riemannSurfaceResolution' },
     { display: 'neighborhoodSizeValueDisplay', key: 'probeNeighborhoodSize', digits: 2 },
     { display: 'zPlaneZoomValueDisplay', get: () => formatZoomValue(state.zPlaneZoom) },
     { display: 'wPlaneZoomValueDisplay', get: () => formatZoomValue(state.wPlaneZoom) },

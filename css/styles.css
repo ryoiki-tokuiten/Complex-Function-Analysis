@@ -1495,6 +1495,13 @@ input[type="range"]:focus::-moz-range-thumb {
     margin-top: 0;
 }
 
+.graph-trace-toggle .custom-checkbox-visual::after {
+    left: 4px;
+    top: 1px;
+    width: 3px;
+    height: 7px;
+}
+
 #graph_column:not(.hidden) {
     min-height: 340px;
 }

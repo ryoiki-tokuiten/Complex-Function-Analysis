@@ -112,6 +112,8 @@ const DOM_BINDINGS = [
 
     { key: 'gridDensitySlider', id: 'grid_density_slider' },
     { key: 'gridDensityValueDisplay', id: 'grid_density_value_display' },
+    { key: 'riemannSurfaceResolutionSlider', id: 'riemann_surface_resolution_slider' },
+    { key: 'riemannSurfaceResolutionValueDisplay', id: 'riemann_surface_resolution_value_display' },
     { key: 'showZerosPolesCb', id: 'show_zeros_poles_cb' },
     { key: 'showCriticalPointsCb', id: 'show_critical_points_cb' },
     { key: 'neighborhoodSizeSlider', id: 'neighborhood_size_slider' },

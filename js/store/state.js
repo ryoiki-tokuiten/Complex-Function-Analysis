@@ -52,6 +52,7 @@ const rawState = {
     currentInputShape: 'grid_cartesian',
     domainColoringEnabled: false,
     gridDensity: 15,
+    riemannSurfaceResolution: 50,
     showZerosPoles: false,
     showCriticalPoints: false,
     probeActive: false,
