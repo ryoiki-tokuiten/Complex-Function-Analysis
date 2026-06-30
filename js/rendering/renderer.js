@@ -25,6 +25,7 @@ import { drawWindingVisualization, drawTimeDomainSignal } from './draw-fourier-w
 import { drawLaplaceWindingVisualization, drawLaplaceTimeDomain } from './draw-laplace-panels.js';
 import { ThreeRiemannRenderer } from './three-riemann-renderer.js';
 import { generateCurrentMappedInputShapePointSets, buildInputShapeGeometryConfig } from './shape-generators.js';
+import { drawGraphSelectionOverlay } from './transformation-graph.js';
 import { hideRiemannSurface, renderRiemannSurface } from './webgl-riemann-surface.js';
 import { drawAxes, drawGrid } from './canvas-primitives.js';
 import {
@@ -907,6 +908,17 @@ function renderZPlanarInputOverlays() {
     );
 }
 
+function renderZGraphSelectionOverlay() {
+    drawLayerWhen(
+        state.graphViewEnabled,
+        zCtx,
+        zPlaneParams,
+        'z',
+        layerCtx => drawGraphSelectionOverlay(layerCtx, zPlaneParams),
+        'raster'
+    );
+}
+
 function renderZConformalIndicatrices(map) {
     if (!state.conformalGridEnabled) return;
 
@@ -1017,6 +1029,7 @@ function renderZPlanar(map) {
         'raster'
     );
     renderZMarkers();
+    renderZGraphSelectionOverlay();
     renderZConformalIndicatrices(map);
     renderZTaylorOverlay();
     renderZProbeOverlay(map);

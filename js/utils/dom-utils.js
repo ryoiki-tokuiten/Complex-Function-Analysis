@@ -288,7 +288,13 @@ const DOM_BINDINGS = [
     { key: 'realPlotsContourIntervalSlider', id: 'real_plots_contour_interval_slider' },
     { key: 'realPlotsContourIntervalValueDisplay', id: 'real_plots_contour_interval_value_display' },
     { key: 'realPlotsContourThicknessSlider', id: 'real_plots_contour_thickness_slider' },
-    { key: 'realPlotsContourThicknessValueDisplay', id: 'real_plots_contour_thickness_value_display' }
+    { key: 'realPlotsContourThicknessValueDisplay', id: 'real_plots_contour_thickness_value_display' },
+    { key: 'enableGraphViewCb', id: 'enable_graph_view_cb' },
+    { key: 'enableGraphTraceCb', id: 'enable_graph_trace_cb' },
+    { key: 'graphColumn', id: 'graph_column' },
+    { key: 'graphContainer', id: 'graph_container' },
+    { key: 'graph3DContainer', id: 'graph_3d_container' },
+    { key: 'toggleFullscreenGraphBtn', id: 'toggle_fullscreen_graph_btn' }
 ];
 
 export function formatTaylorNumericValue(value) {

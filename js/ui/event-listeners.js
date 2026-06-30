@@ -32,6 +32,11 @@ import {
 import { domainColorForValue } from '../rendering/domain-coloring.js';
 import { resolveActiveMap } from '../math/active-map.js';
 import {
+    disposeTransformationGraphRenderer,
+    resizeTransformationGraphRenderer,
+    selectGraphInputFromCanvasPoint
+} from '../rendering/transformation-graph.js';
+import {
     generateTissotIndicatrices,
     selectStableTissotIndicatrices,
     getTissotViewportBounds
@@ -75,6 +80,8 @@ function createCanvasInteractionContext(planeType) {
     ctx.pendingMove = createPointerSnapshot();
     ctx.pendingWheel = createPointerSnapshot();
     ctx.pendingSphereMove = createPointerSnapshot();
+    ctx.clickStart = { x: 0, y: 0 };
+    ctx.hasDragged = false;
     ctx.hasFreshRect = false;
 
     if (ctx.canvas) canvasContextByElement.set(ctx.canvas, ctx);
@@ -251,6 +258,7 @@ const BINDERS = [
     bindThemeControls,
     bindDomainPaletteCirclePanelListeners,
     bindRealPlotsPaletteCirclePanelListeners,
+    bindGraphControls,
     bindRealPlotsControls,
     bindContourControls
 ];
@@ -570,6 +578,19 @@ function disableRealPlots() {
         refreshPlanes();
         setTimeout(refreshPlanes, 360);
     });
+}
+
+function disableGraphView() {
+    if (!state.graphViewEnabled) return;
+
+    if (state.isGraphFullScreen && controls.toggleFullscreenGraphBtn) {
+        controls.toggleFullscreenGraphBtn.click();
+    }
+
+    state.graphViewEnabled = false;
+    checked('enableGraphViewCb', false);
+    hidden(controls.graphColumn, true);
+    disposeTransformationGraphRenderer();
 }
 
 function syncChainingControlsFromState() {
@@ -1503,6 +1524,9 @@ function canvasPositionInsideCanvas(ctx, pos) {
 }
 
 function panPlane(ctx, pos) {
+    if (Math.hypot(pos.x - ctx.clickStart.x, pos.y - ctx.clickStart.y) > 3) {
+        ctx.hasDragged = true;
+    }
     ctx.params.origin.x = ctx.pan.panStartOrigin.x + (pos.x - ctx.pan.panStart.x);
     ctx.params.origin.y = ctx.pan.panStartOrigin.y + (pos.y - ctx.pan.panStart.y);
     updatePlaneViewportRanges(ctx.params);
@@ -1531,6 +1555,9 @@ function startPan(ctx, pos) {
     ctx.pan.isPanning = true;
     ctx.pan.panStart.x = pos.x;
     ctx.pan.panStart.y = pos.y;
+    ctx.clickStart.x = pos.x;
+    ctx.clickStart.y = pos.y;
+    ctx.hasDragged = false;
     ctx.pan.panStartOrigin.x = ctx.params.origin.x;
     ctx.pan.panStartOrigin.y = ctx.params.origin.y;
     ctx.canvas.style.cursor = 'grabbing';
@@ -1665,6 +1692,7 @@ function bindCanvasInteractions() {
         ctx.canvas.addEventListener('mouseup', onCanvasMouseUp, PASSIVE_LISTENER_OPTIONS);
         ctx.canvas.addEventListener('mouseleave', onCanvasMouseLeave, PASSIVE_LISTENER_OPTIONS);
         ctx.canvas.addEventListener('wheel', onCanvasWheel, ACTIVE_LISTENER_OPTIONS);
+        ctx.canvas.addEventListener('click', onCanvasClick, PASSIVE_LISTENER_OPTIONS);
     });
 
     // Wire up contour_2d_canvas organically to the z-plane transformation state
@@ -1727,6 +1755,22 @@ function onCanvasWheel(event) {
     if (ctx) handleCanvasWheel(ctx, event);
 }
 
+function onCanvasClick(event) {
+    const ctx = contextForCanvasEvent(event);
+    if (!ctx || !ctx.isZ || !state.graphViewEnabled || isSphereInteractionActive(ctx.isZ)) return;
+    if (ctx.hasDragged) {
+        ctx.hasDragged = false;
+        return;
+    }
+
+    refreshCanvasRect(ctx);
+    updatePointerSnapshot(ctx.pendingMove, event);
+    const pos = canvasPosition(ctx, ctx.pendingMove);
+    if (selectGraphInputFromCanvasPoint(pos.x, pos.y, ctx.params)) {
+        requestUiRedraw();
+    }
+}
+
 function fullscreenStyles(backgroundColor) {
     return {
         position: 'fixed',
@@ -1786,6 +1830,9 @@ function bindFullscreenControls() {
         if (state.isWFullScreen) handleFullScreenToggle('w', state.fullscreenWIndex || 0);
         if (state.isLaplace3DFullScreen && controls.toggleFullscreenLaplace3DBtn) {
             controls.toggleFullscreenLaplace3DBtn.click();
+        }
+        if (state.isGraphFullScreen && controls.toggleFullscreenGraphBtn) {
+            controls.toggleFullscreenGraphBtn.click();
         }
     });
 }
@@ -2855,6 +2902,57 @@ function bindRealPlotsPaletteCirclePanelListeners() {
     }
 }
 
+function bindGraphControls() {
+    checked('enableGraphTraceCb', state.graphTraceEnabled);
+
+    bindCheckbox('enableGraphViewCb', 'graphViewEnabled', (_event, enabled) => {
+        state.graphViewEnabled = enabled;
+
+        if (enabled) {
+            disableRealPlots();
+            state.graphSelectedShape = '';
+        } else {
+            disposeTransformationGraphRenderer();
+        }
+
+        requestUiRedraw();
+    });
+
+    bindCheckbox('enableGraphTraceCb', 'graphTraceEnabled', () => requestUiRedraw());
+    bindControlListener('toggleFullscreenGraphBtn', 'click', toggleGraphFullscreen);
+}
+
+function toggleGraphFullscreen() {
+    const container = controls.graphContainer;
+    const column = controls.graphColumn;
+    const shell = controls.fullscreenContainer;
+
+    if (!container || !shell) return;
+
+    state.isGraphFullScreen = !state.isGraphFullScreen;
+
+    if (state.isGraphFullScreen) {
+        state.originalGraphParent = container.parentElement;
+        setStyles(shell, fullscreenStyles('#000'));
+        attachCloseButton(shell, () => controls.toggleFullscreenGraphBtn.click());
+        setStyles(container, { width: '100%', height: '100%' });
+        shell.appendChild(container);
+        document.body.appendChild(shell);
+        shell.classList.remove('hidden');
+        if (column) column.classList.add('hidden-visually');
+    } else {
+        if (state.originalGraphParent) state.originalGraphParent.appendChild(container);
+        setStyles(container, { width: '100%', height: '100%' });
+        resetFullscreenShell(shell);
+        if (column) column.classList.remove('hidden-visually');
+    }
+
+    laterFrame(() => {
+        resizeTransformationGraphRenderer();
+        requestUiRedraw();
+    }, state.isGraphFullScreen ? 150 : 100);
+}
+
 function bindRealPlotsControls() {
     bindCheckbox('enableRealPlotsCb', 'realPlotsEnabled', (event, val) => {
         state.realPlotsEnabled = val;
@@ -2862,6 +2960,7 @@ function bindRealPlotsControls() {
         hidden(controls.realPlotsColumn, !val);
 
         if (val) {
+            disableGraphView();
             disableRiemannSurface();
             const rpContainer = controls.realPlotsControlsContainer;
             const algParams = document.getElementById('algebraic_chaining_params');

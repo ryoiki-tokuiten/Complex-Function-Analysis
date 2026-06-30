@@ -1865,6 +1865,15 @@
                                         surface.</span>
                                 </span>
                             </label>
+                            <label for="enable_graph_view_cb" class="control-label tooltip-label viz-toggle-card">
+                                <input type="checkbox" id="enable_graph_view_cb" class="control-checkbox"
+                                    data-tooltip="Plot the selected input line as Re and Im output curves">
+                                <span class="custom-checkbox-visual"></span>
+                                <span class="viz-toggle-card-content">
+                                    <span class="viz-toggle-card-title">View Graph</span>
+                                    <span class="viz-toggle-card-copy">Input z, Re, Im.</span>
+                                </span>
+                            </label>
                         </div>
                         <div id="riemann_surface_options_div"
                             class="dependent-settings-block hidden control-group-indent">
@@ -2459,6 +2468,28 @@
                         </div>
                         <div id="cauchy_integral_results_info" class="cauchy-info-overlay hidden"
                             style="font-size: 0.8rem; line-height:1.3;"></div>
+                    </div>
+                </div>
+                <div id="graph_column" class="hidden">
+                    <div class="canvas-header-line">
+                        <h2 class="section-title"><span id="graph_title_label">Graph</span></h2>
+                        <div class="canvas-header-controls">
+                            <label for="enable_graph_trace_cb" class="viz-toggle-card graph-trace-toggle tooltip-label"
+                                data-tooltip="Show the combined 3D Re/Im trace">
+                                <input type="checkbox" id="enable_graph_trace_cb" class="control-checkbox">
+                                <span class="custom-checkbox-visual"></span>
+                                <span>Trace</span>
+                            </label>
+                            <button id="toggle_fullscreen_graph_btn" class="icon-button canvas-icon-button"
+                                type="button" data-tooltip="Toggle fullscreen view for Graph"
+                                aria-label="Toggle fullscreen view for Graph">
+                                <i data-lucide="maximize-2" aria-hidden="true"></i>
+                                <span class="hidden-visually">Toggle fullscreen view for Graph</span>
+                            </button>
+                        </div>
+                    </div>
+                    <div id="graph_container" style="flex: 1; position: relative;">
+                        <div id="graph_3d_container" style="width: 100%; height: 100%; position: relative;"></div>
                     </div>
                 </div>
                 <div id="laplace_3d_column" class="hidden" style="flex: 1; display: flex; flex-direction: column;">

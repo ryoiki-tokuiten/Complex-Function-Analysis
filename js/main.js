@@ -7,6 +7,11 @@ import { drawZPlaneContent, drawWPlaneContent } from './rendering/renderer.js';
 import { updateTitlesAndGlobalUI } from './ui/ui-updates.js';
 import { drawLaplace3DSurface } from './rendering/laplace-3d-surface.js';
 import { drawRealPlot } from './rendering/real-plots-renderer.js';
+import {
+    disposeTransformationGraphRenderer,
+    drawTransformationGraph,
+    isGraphViewSupported
+} from './rendering/transformation-graph.js';
 import { draw2DContourPlot } from './rendering/contour-2d.js';
 import { setupDOMReferences, setupVisualParameters } from './utils/dom-utils.js';
 import { initializePolynomialCoeffs, generatePolynomialCoeffSliders } from './ui/polynomial-ui.js';
@@ -103,6 +108,29 @@ function syncRealPlotsColumn() {
     });
 }
 
+function syncGraphColumn() {
+    const column = controls.graphColumn;
+    if (!column) return;
+
+    const shouldHide = !state.graphViewEnabled || state.realPlotsEnabled || !isGraphViewSupported();
+    const changed = column.classList.contains('hidden') !== shouldHide;
+    if (!changed) return;
+    column.classList.toggle('hidden', shouldHide);
+
+    if (shouldHide) {
+        disposeTransformationGraphRenderer();
+    }
+
+    const refreshPlanes = () => {
+        setupVisualParameters(false, false);
+        requestRedrawAll();
+    };
+    requestAnimationFrame(() => {
+        refreshPlanes();
+        setTimeout(refreshPlanes, 360);
+    });
+}
+
 export function requestRedrawAll() {
     if (context.redrawRequest) {
         context.redrawQueued = true;
@@ -147,6 +175,11 @@ export function requestRedrawAll() {
 
             syncRealPlotsColumn();
             requestSurfaceRedraw();
+
+            syncGraphColumn();
+            if (state.graphViewEnabled && !state.realPlotsEnabled) {
+                drawTransformationGraph();
+            }
 
             context.domainColoringDirty = context.domainColoringDirtyQueued;
             context.redrawRequest = null;

@@ -967,7 +967,8 @@ hr.panel-separator {
 
 #canvases_section .plane-column,
 #laplace_3d_column,
-#real_plots_column {
+#real_plots_column,
+#graph_column {
     display: flex;
     flex-direction: column;
     min-height: 0;
@@ -1070,7 +1071,8 @@ hr.panel-separator {
 /* Styling for the direct container of each canvas. */
 #canvases_section .plane-column>div:not(.canvas-header-line):not(.collapsed-placeholder-content),
 #laplace_3d_column>div:not(.canvas-header-line):not(.collapsed-placeholder-content),
-#real_plots_column>div:not(.canvas-header-line):not(.collapsed-placeholder-content) {
+#real_plots_column>div:not(.canvas-header-line):not(.collapsed-placeholder-content),
+#graph_column>div:not(.canvas-header-line):not(.collapsed-placeholder-content) {
     flex-grow: 1;
     /* Allows this container to take up available space in the column */
     min-height: 0;
@@ -1418,10 +1420,10 @@ input[type="range"]:focus::-moz-range-thumb {
     min-width: 400px;
 }
 
-/* When a plane is collapsed in the main z/w section (and there are exactly two planes), let the remaining panel fill freely */
-#canvases_section .two-column-layout:not(:has([id^="w_plane_column_"])):has(#laplace_3d_column.hidden):has(.plane-collapsed) > .plane-column:not(.plane-collapsed) {
-    flex: 1 1 0%;
-    min-width: 0;
+/* When a z/w plane is collapsed, let every remaining visible panel fill the row. */
+#canvases_section .two-column-layout:has(.plane-collapsed) > div:not(.hidden):not(.plane-collapsed) {
+    flex: 1 1 0% !important;
+    max-width: none !important;
 }
 
 /* Domain Palette View Guide Button */
@@ -1463,6 +1465,52 @@ input[type="range"]:focus::-moz-range-thumb {
     flex: 1 1 100% !important;
     width: 100% !important;
     max-width: 100% !important;
+}
+
+/* Three-column layout for the transformation graph beside z/w */
+.two-column-layout:has(#graph_column:not(.hidden)):not(:has(#real_plots_column:not(.hidden))):not(:has(#laplace_3d_column:not(.hidden))) > div:not(.hidden) {
+    flex: 0 0 calc(33.333% - 1rem);
+    min-width: 320px;
+}
+
+/* Four-column layout when Graph and Laplace 3D are both visible */
+.two-column-layout:has(#graph_column:not(.hidden)):has(#laplace_3d_column:not(.hidden)) > div:not(.hidden) {
+    flex: 0 0 calc(25% - 1.125rem);
+    min-width: 300px;
+}
+
+.graph-trace-toggle {
+    align-items: center !important;
+    min-height: 34px;
+    padding: 0.35rem 0.65rem;
+    border-radius: 8px;
+    gap: 0.45rem;
+    font-size: 0.72rem;
+}
+
+.graph-trace-toggle .custom-checkbox-visual {
+    width: 14px;
+    height: 14px;
+    flex: 0 0 14px;
+    margin-top: 0;
+}
+
+#graph_column:not(.hidden) {
+    min-height: 340px;
+}
+
+#graph_container {
+    min-height: 260px;
+}
+
+#graph_3d_container {
+    background: #06070c;
+}
+
+#graph_3d_container canvas {
+    display: block;
+    width: 100% !important;
+    height: 100% !important;
 }
 
 /* Output Chaining Grid View Override */
@@ -1534,6 +1582,15 @@ input[type="range"]:focus::-moz-range-thumb {
         flex: 1 1 auto;
         width: 100%;
         min-width: 0;
+    }
+
+    #graph_column:not(.hidden) {
+        flex: 0 0 380px !important;
+        min-height: 380px;
+    }
+
+    #graph_container {
+        min-height: 300px;
     }
 }
 
