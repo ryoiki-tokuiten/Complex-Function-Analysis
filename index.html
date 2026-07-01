@@ -518,18 +518,22 @@
                             </div>
 
                             <div class="control-group">
-                                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.25rem;">
-                                    <label for="real_plots_height_scale_slider" style="font-size: 0.8rem; color: var(--text-secondary-color); margin: 0;">Height Scale:</label>
-                                    <output id="real_plots_height_scale_value_display" style="font-size: 0.8rem; font-family: monospace; color: var(--accent-purple);">1.00</output>
+                                <div
+                                    style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.25rem;">
+                                    <label for="real_plots_height_scale_slider"
+                                        style="font-size: 0.8rem; color: var(--text-secondary-color); margin: 0;">Height
+                                        Scale:</label>
+                                    <output id="real_plots_height_scale_value_display"
+                                        style="font-size: 0.8rem; font-family: monospace; color: var(--accent-purple);">1.00</output>
                                 </div>
-                                <input type="range" id="real_plots_height_scale_slider" min="0.15" max="10.0" step="0.05" value="1.0" class="control-slider">
+                                <input type="range" id="real_plots_height_scale_slider" min="0.15" max="10.0"
+                                    step="0.05" value="1.0" class="control-slider">
                             </div>
 
                             <div class="control-group" style="margin-top: 0.5rem;">
                                 <label for="real_plots_contours_cb" class="control-label tooltip-label"
                                     data-tooltip="Overlay level contour lines onto the 3D real surface plot">
-                                    <input type="checkbox" id="real_plots_contours_cb"
-                                        class="control-checkbox">
+                                    <input type="checkbox" id="real_plots_contours_cb" class="control-checkbox">
                                     <span class="custom-checkbox-visual"></span>
                                     Contour Lines
                                 </label>
@@ -540,17 +544,20 @@
                                         <label for="real_plots_contour_interval_slider">Contour Interval:</label>
                                         <output id="real_plots_contour_interval_value_display">0.50</output>
                                     </div>
-                                    <input type="range" id="real_plots_contour_interval_slider" min="0.05" max="3.00" step="0.05" value="0.50" class="control-slider">
+                                    <input type="range" id="real_plots_contour_interval_slider" min="0.05" max="3.00"
+                                        step="0.05" value="0.50" class="control-slider">
                                 </div>
                                 <div class="control-group contour-slider-field">
                                     <div class="contour-slider-label">
                                         <label for="real_plots_contour_thickness_slider">Contour Thickness:</label>
                                         <output id="real_plots_contour_thickness_value_display">1.5</output>
                                     </div>
-                                    <input type="range" id="real_plots_contour_thickness_slider" min="0.5" max="5.0" step="0.1" value="1.5" class="control-slider">
+                                    <input type="range" id="real_plots_contour_thickness_slider" min="0.5" max="5.0"
+                                        step="0.1" value="1.5" class="control-slider">
                                 </div>
                                 <div class="contour-action-row">
-                                    <button id="real_plots_show_2d_contour_btn" class="contour-2d-toggle-btn" type="button">
+                                    <button id="real_plots_show_2d_contour_btn" class="contour-2d-toggle-btn"
+                                        type="button">
                                         <i data-lucide="image"></i>
                                         <span>Show 2D Contour Plot</span>
                                     </button>
@@ -620,10 +627,11 @@
 
                         <div id="algebraic_chaining_controls_container" style="display: none;">
                             <div style="margin-bottom: 0.5rem; display: flex; flex-direction: column; gap: 0.25rem;">
-                                <label style="font-size: 0.8rem; color: var(--text-secondary-color);">Custom z expression (optional):</label>
+                                <label style="font-size: 0.8rem; color: var(--text-secondary-color);">Custom z
+                                    expression (optional):</label>
                                 <input type="text" id="algebraic_chaining_z_input" class="dynamic-formula-input"
-                                    style="font-size: 0.8rem; padding: 0.25rem;" placeholder="e.g. z^2 + 1"
-                                    value="z" spellcheck="false" autocomplete="off">
+                                    style="font-size: 0.8rem; padding: 0.25rem;" placeholder="e.g. z^2 + 1" value="z"
+                                    spellcheck="false" autocomplete="off">
                                 <div id="algebraic_chaining_z_math" class="dynamic-math-display"
                                     style="font-size: 0.8rem; margin: 0; padding: 0.25rem; background: rgba(0,0,0,0.2); border-radius: 4px; min-height: 1.5rem; display: flex; align-items: center; justify-content: center;">
                                 </div>
@@ -1311,7 +1319,7 @@
                                         <option value="2">2x</option>
                                     </select>
                                 </div>
-                             </div>
+                            </div>
                         </div>
                     </div>
 
@@ -1894,8 +1902,9 @@
                                         <output id="riemann_surface_resolution_value_display">50</output>
                                     </label>
                                     <div class="slider-container">
-                                        <input type="range" id="riemann_surface_resolution_slider" min="5" max="50" step="1"
-                                            value="50" data-tooltip="Geometric detail of the Riemann surface mesh">
+                                        <input type="range" id="riemann_surface_resolution_slider" min="5" max="50"
+                                            step="1" value="50"
+                                            data-tooltip="Geometric detail of the Riemann surface mesh">
                                     </div>
                                 </div>
                                 <div class="control-group">
@@ -1957,29 +1966,33 @@
                                         Contour Lines
                                     </label>
                                 </div>
-                                <div id="riemann_surface_contours_details" class="contour-controls-panel contour-controls-panel--grid viz-control-span-2 hidden">
+                                <div id="riemann_surface_contours_details"
+                                    class="contour-controls-panel contour-controls-panel--grid viz-control-span-2 hidden">
                                     <div class="control-group contour-slider-field">
                                         <div class="contour-slider-label">
-                                            <label for="riemann_surface_contour_interval_slider">Contour Interval:</label>
+                                            <label for="riemann_surface_contour_interval_slider">Contour
+                                                Interval:</label>
                                             <output id="riemann_surface_contour_interval_value_display">0.50</output>
                                         </div>
                                         <div class="slider-container">
-                                            <input type="range" id="riemann_surface_contour_interval_slider" min="0.05" max="3.00"
-                                                step="0.05" value="0.50" class="control-slider">
+                                            <input type="range" id="riemann_surface_contour_interval_slider" min="0.05"
+                                                max="3.00" step="0.05" value="0.50" class="control-slider">
                                         </div>
                                     </div>
                                     <div class="control-group contour-slider-field">
                                         <div class="contour-slider-label">
-                                            <label for="riemann_surface_contour_thickness_slider">Contour Thickness:</label>
+                                            <label for="riemann_surface_contour_thickness_slider">Contour
+                                                Thickness:</label>
                                             <output id="riemann_surface_contour_thickness_value_display">1.5</output>
                                         </div>
                                         <div class="slider-container">
-                                            <input type="range" id="riemann_surface_contour_thickness_slider" min="0.5" max="5.0"
-                                                step="0.1" value="1.5" class="control-slider">
+                                            <input type="range" id="riemann_surface_contour_thickness_slider" min="0.5"
+                                                max="5.0" step="0.1" value="1.5" class="control-slider">
                                         </div>
                                     </div>
                                     <div class="contour-action-row">
-                                        <button id="riemann_surface_show_2d_contour_btn" class="contour-2d-toggle-btn" type="button">
+                                        <button id="riemann_surface_show_2d_contour_btn" class="contour-2d-toggle-btn"
+                                            type="button">
                                             <i data-lucide="image"></i>
                                             <span>Show 2D Contour Plot</span>
                                         </button>
@@ -2014,7 +2027,8 @@
                                     </div>
                                 </div>
                                 <div class="control-group" id="orbit_coloring_mode_group">
-                                    <label for="orbit_coloring_mode_select" style="font-size:0.8rem;">Orbit Coloring:</label>
+                                    <label for="orbit_coloring_mode_select" style="font-size:0.8rem;">Orbit
+                                        Coloring:</label>
                                     <select id="orbit_coloring_mode_select" class="control-select"
                                         data-tooltip="Choose which orbit observable colors recursive output chains">
                                         <option value="value">Final Value</option>
@@ -2567,8 +2581,6 @@
         </section>
     </main>
 
-    <!-- Core Libraries -->
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/mathjs/12.4.0/math.js"></script>
 
     <!-- Entry Point -->
     <script type="module" src="js/main.js"></script>
@@ -2669,7 +2681,8 @@
             </div>
             <div class="dynamic-intro-copy"
                 style="font-size: 0.75rem; margin-bottom: 0.75rem; color: var(--text-muted);">
-                Shows current magnitude lightness shading on a representative active-palette hue (from |z| = 0 to 10¹², logarithmic).
+                Shows current magnitude lightness shading on a representative active-palette hue (from |z| = 0 to 10¹²,
+                logarithmic).
             </div>
             <div
                 style="position: relative; background: rgba(0, 0, 0, 0.25); border: 1px solid var(--border-color); border-radius: 8px; padding: 1rem 1.25rem 0.75rem;">

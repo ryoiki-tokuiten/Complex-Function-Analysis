@@ -19,7 +19,7 @@ There is no build step or backend required. All calculations and rendering happe
 
 The core mathematical operations live in the `js/analysis/` and `js/math-utils.js` modules:
 
-*   **Complex Arithmetic:** Powered by `math.js`, handling the evaluation of functions like $w = \cos(z)$, $w = e^z$, Möbius transformations, polynomials, and analytic continuations of the Riemann Zeta function.
+*   **Complex Arithmetic:** Custom JIT-optimized evaluation engine handling functions like $w = \cos(z)$, $w = e^z$, Möbius transformations, polynomials, and analytic continuations of the Riemann Zeta function for maximum performance.
 *   **Feature Detection:** Algorithms in `feature-detection.js` and `root-finding.js` sample grids to approximate bounds and locate zeros (roots), poles (singularities), and critical points ($f'(z) = 0$).
 *   **Transform Analysis:** Specific modules construct the matrices and summations required for continuous/discrete Fourier transforms (analyzing winding frequencies and center of mass) and Laplace transforms (s-plane pole/zero plotting and region of convergence).
 *   **Calculus Operations:** Approximations of Taylor Series around custom origin points and computation of contour integrals (Cauchy's integral theorem and residues) evaluate continuously based on user-drawn paths or probe placements.
